@@ -10,3 +10,5 @@ __pycache__/
 .env
 .venv-basilisk/
 vite.config.js.timestamp-*.mjs
+!src/file_registry_frontend/dist/
+!src/file_registry_frontend/dist/**
