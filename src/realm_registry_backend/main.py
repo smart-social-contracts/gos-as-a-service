@@ -458,11 +458,28 @@ def claim_slug(
     realm_id: text = "",
     portal_base_url: text = "",
     pretty_hostname: text = "",
+    gos_implementation: Opt[text] = None,
+    gos_version: Opt[text] = None,
+    ggg_conformance: Opt[text] = None,
+    loader_profile: Opt[text] = None,
 ) -> GenericResult:
     try:
         result = claim_slug_by_caller(
-            slug, frontend_canister_id, realm_id,
-            portal_base_url, pretty_hostname,
+            slug,
+            frontend_canister_id,
+            realm_id,
+            portal_base_url,
+            pretty_hostname,
+            gos_implementation=gos_implementation or ""
+            if gos_implementation is not None
+            else "",
+            gos_version=gos_version or "" if gos_version is not None else "",
+            ggg_conformance=ggg_conformance or ""
+            if ggg_conformance is not None
+            else "",
+            loader_profile=loader_profile or ""
+            if loader_profile is not None
+            else "",
         )
         if result["success"]:
             return {"Ok": json.dumps(result)}

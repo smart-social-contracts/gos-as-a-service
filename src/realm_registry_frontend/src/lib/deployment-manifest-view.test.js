@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { brandingAssetsFromManifest } from './deployment-manifest-view.js';
+import { brandingAssetsFromManifest, summarizeManifest } from './deployment-manifest-view.js';
 
 const manifest = {
   branding: {
@@ -30,4 +30,20 @@ test('branding prefers realm URLs after registration', () => {
   });
   assert.match(assets[0].primaryUrl, /^https:\/\/fe-canister/);
   assert.equal(assets[0].primarySource, 'realm');
+});
+
+test('summarizeManifest exposes GOS implementation and version', () => {
+  const summary = summarizeManifest({
+    name: 'Test',
+    deploy_version: '0.4.0',
+    gos: {
+      implementation: 'realms-gos',
+      version: '0.4.0',
+      ggg_conformance: '1.0',
+      loader_profile: 'realms-iframe-v1',
+    },
+  });
+
+  assert.equal(summary.gosImplementation, 'realms-gos');
+  assert.equal(summary.gosVersion, '0.4.0');
 });

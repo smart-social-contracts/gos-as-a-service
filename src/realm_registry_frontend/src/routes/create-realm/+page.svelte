@@ -14,6 +14,11 @@
   import codicesConfig from '$lib/codices-config.json';
   import AuthControls from '$lib/components/AuthControls.svelte';
   import { buildRealmDeploymentManifest } from '$lib/deployment-manifest.js';
+  import {
+    GOS_IMPLEMENTATIONS,
+    getGosImplementation,
+    visibleWizardSteps,
+  } from '$lib/gos-implementations.js';
   import { getAuthenticatedRegistryActor } from '$lib/canisters.js';
   import { uploadBrandingFiles, brandingNamespaceFor } from '$lib/branding-upload.js';
   import { resolveDeployBranding } from '$lib/realm-branding-generator.js';
@@ -86,10 +91,12 @@
           if (urlStep != null && urlStep !== '') {
             const stepNum = parseInt(urlStep, 10);
             if (Number.isFinite(stepNum)) {
-              currentStep = Math.min(Math.max(stepNum, 0), STEPS.length - 1);
+              const maxStep = visibleWizardSteps(formData.gos_implementation).length - 1;
+              currentStep = Math.min(Math.max(stepNum, 0), maxStep);
             }
           } else {
-            currentStep = Math.min(Math.max(loaded.currentStep || 0, 0), STEPS.length - 1);
+            const maxStep = visibleWizardSteps(formData.gos_implementation).length - 1;
+            currentStep = Math.min(Math.max(loaded.currentStep || 0, 0), maxStep);
           }
           if (editingAfterFailure && draftId) {
             const { clearDraftDeploymentLink } = await import('$lib/wizard-drafts.js');
@@ -549,16 +556,19 @@
     }
   }
 
-  // Wizard steps. Extensions and initial data are codex-driven (issue #242):
-  // the codex package defines what gets installed; extensions can be added
-  // and citizens imported from inside the deployed realm.
-  const STEPS = [
-    { id: 'codex', label: 'Codex' },
-    { id: 'token', label: 'Token' },
-    { id: 'basics', label: 'Basics' },
-    { id: 'branding', label: 'Branding' },
-    { id: 'deploy', label: 'Deploy' }
-  ];
+  // Wizard steps — filtered by GOS implementation (see visibleSteps).
+  // Extensions and initial data are codex-driven (issue #242).
+  $: visibleSteps = visibleWizardSteps(formData.gos_implementation);
+  $: currentStepId = visibleSteps[currentStep]?.id ?? 'platform';
+  $: if (currentStep >= visibleSteps.length) {
+    currentStep = Math.max(0, visibleSteps.length - 1);
+  }
+
+  function selectGosImplementation(id) {
+    const impl = getGosImplementation(id);
+    if (!impl?.available) return;
+    formData.gos_implementation = id;
+  }
 
   // Available languages with translated placeholders
   const AVAILABLE_LANGUAGES = [
@@ -632,6 +642,7 @@
 
   // Form data
   let formData = {
+    gos_implementation: 'realms-gos',
     name: '',
     manifestos: { en: '' }, // Language-keyed manifestos
     languages: ['en'], // Default to English
@@ -671,9 +682,21 @@
 
   function validateStep(step) {
     errors = {};
-    
-    // Step 0: Codex
-    if (step === 0) {
+    const stepId = visibleSteps[step]?.id;
+
+    if (stepId === 'platform') {
+      if (!formData.gos_implementation?.trim()) {
+        errors.gos_implementation = 'Please select a platform';
+      } else {
+        const impl = getGosImplementation(formData.gos_implementation);
+        if (impl && !impl.available) {
+          errors.gos_implementation = 'This platform is not yet available';
+        }
+      }
+    }
+
+    // Codex
+    if (stepId === 'codex') {
       if (!formData.codex_package_name.trim()) {
         errors.codex_package_name = 'Please select a codex';
       }
@@ -691,8 +714,8 @@
       }
     }
     
-    // Step 1: Token (skipped when the codex pins the currency)
-    if (step === 1 && !selectedCodexDetails?.currency) {
+    // Token (skipped when the codex pins the currency)
+    if (stepId === 'token' && !selectedCodexDetails?.currency) {
       if (formData.token_mode === 'new') {
         if (!formData.token_name.trim()) {
           errors.token_name = 'Token name is required';
@@ -705,8 +728,8 @@
       }
     }
     
-    // Step 2: Basics
-    if (step === 2) {
+    // Basics
+    if (stepId === 'basics') {
       if (!formData.name.trim()) {
         errors.name = 'Realm name is required';
       } else if (formData.name.length < 3) {
@@ -726,8 +749,8 @@
       }
     }
     
-    // Step 3: Branding
-    if (step === 3) {
+    // Branding
+    if (stepId === 'branding') {
       // Validate welcome messages for each language
       for (const langCode of formData.languages) {
         const msg = formData.welcome_messages[langCode] || '';
@@ -742,7 +765,7 @@
 
   function nextStep() {
     if (validateStep(currentStep)) {
-      if (currentStep < STEPS.length - 1) {
+      if (currentStep < visibleSteps.length - 1) {
         currentStep++;
       }
     }
@@ -988,7 +1011,7 @@
   <!-- Progress Steps -->
   <div class="steps-container">
     <div class="steps">
-      {#each STEPS as step, index}
+      {#each visibleSteps as step, index}
         <button 
           class="step" 
           class:active={currentStep === index}
@@ -1007,7 +1030,7 @@
           </div>
           <span class="step-label">{step.label}</span>
         </button>
-        {#if index < STEPS.length - 1}
+        {#if index < visibleSteps.length - 1}
           <div class="step-connector" class:completed={currentStep > index}></div>
         {/if}
       {/each}
@@ -1027,7 +1050,7 @@
       <div></div>
     {/if}
 
-    {#if currentStep < STEPS.length - 1}
+    {#if currentStep < visibleSteps.length - 1}
       <button class="btn btn-primary" on:click={nextStep}>
         Continue
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1041,8 +1064,8 @@
 
   <!-- Form Content -->
   <div class="form-container">
-    {#if currentStep === 2}
-      <!-- Step 3: Basics -->
+    {#if currentStepId === 'basics'}
+      <!-- Basics -->
       <div class="form-step">
         <h2>Basic Information</h2>
         <p class="step-description">Give your realm a unique identity</p>
@@ -1191,8 +1214,8 @@
         </div>
       </div>
 
-    {:else if currentStep === 3}
-      <!-- Step 4: Branding -->
+    {:else if currentStepId === 'branding'}
+      <!-- Branding -->
       <div class="form-step">
         <h2>Branding & Welcome</h2>
         <p class="step-description">Customize how your realm looks and feels</p>
@@ -1300,8 +1323,8 @@
         </div>
       </div>
 
-    {:else if currentStep === 1}
-      <!-- Step 2: Token -->
+    {:else if currentStepId === 'token'}
+      <!-- Token -->
       <div class="form-step">
         <h2>Realm Token</h2>
         {#if selectedCodexDetails?.currency}
@@ -1429,8 +1452,60 @@
         {/if}
       </div>
 
-    {:else if currentStep === 0}
-      <!-- Step 1: Codex -->
+    {:else if currentStepId === 'platform'}
+      <!-- Platform -->
+      <div class="form-step">
+        <h2>Choose Platform</h2>
+        <p class="step-description">Select the Governance Operating System implementation for your realm</p>
+
+        <div class="form-group">
+          <label>GOS Implementation</label>
+          <div class="codex-options">
+            {#each GOS_IMPLEMENTATIONS as impl}
+              {#if impl.available}
+                <button
+                  type="button"
+                  class="codex-card"
+                  class:selected={formData.gos_implementation === impl.id}
+                  on:click={() => selectGosImplementation(impl.id)}
+                >
+                  <div class="codex-radio">
+                    {#if formData.gos_implementation === impl.id}
+                      <div class="codex-radio-dot"></div>
+                    {/if}
+                  </div>
+                  <div class="codex-info">
+                    <span class="codex-name">{impl.name}</span>
+                    <span class="codex-tagline">{impl.tagline}</span>
+                    <span class="codex-desc">{impl.description}</span>
+                  </div>
+                </button>
+              {:else}
+                <div
+                  class="codex-card disabled"
+                  aria-disabled="true"
+                >
+                  <div class="codex-radio"></div>
+                  <div class="codex-info">
+                    <span class="codex-name">
+                      {impl.name}
+                      <span class="coming-soon-badge">Coming soon</span>
+                    </span>
+                    <span class="codex-tagline">{impl.tagline}</span>
+                    <span class="codex-desc">{impl.description}</span>
+                  </div>
+                </div>
+              {/if}
+            {/each}
+          </div>
+          {#if errors.gos_implementation}
+            <span class="error-message">{errors.gos_implementation}</span>
+          {/if}
+        </div>
+      </div>
+
+    {:else if currentStepId === 'codex'}
+      <!-- Codex -->
       <div class="form-step">
         <h2>Codex Configuration <span class="info-tooltip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg><span class="info-tooltip-text">A codex is a set of governance rules implemented in Python code. It defines how your realm operates — including taxation, budgets, voting, and more.</span></span></h2>
         <p class="step-description">Configure the governance rules for your realm</p>
@@ -1626,8 +1701,8 @@
           {/if}
       </div>
 
-    {:else if currentStep === 4}
-      <!-- Step 5: Deploy -->
+    {:else if currentStepId === 'deploy'}
+      <!-- Deploy -->
       <div class="form-step">
         <h2>Deploy Your Realm</h2>
         <p class="step-description">Choose how you want to deploy your governance system</p>
@@ -2888,6 +2963,37 @@
   .codex-card.selected {
     background: #F0FDF4;
     border-color: #22C55E;
+  }
+
+  .codex-card.disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
+    background: #FAFAFA;
+  }
+
+  .codex-card.disabled:hover {
+    border-color: #E5E5E5;
+  }
+
+  .codex-tagline {
+    font-size: 0.8125rem;
+    color: #737373;
+    line-height: 1.4;
+  }
+
+  .coming-soon-badge {
+    display: inline-block;
+    margin-left: 0.5rem;
+    padding: 0.125rem 0.5rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #525252;
+    background: #F5F5F5;
+    border: 1px solid #E5E5E5;
+    border-radius: 9999px;
+    vertical-align: middle;
   }
 
   .codex-radio {

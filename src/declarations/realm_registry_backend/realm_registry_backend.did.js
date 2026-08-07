@@ -76,7 +76,17 @@ export const idlFactory = ({ IDL }) => {
       ),
     'billing_status' : IDL.Func([], [GetBillingStatusResult], ['query']),
     'claim_slug' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+        [
+          IDL.Text,
+          IDL.Text,
+          IDL.Text,
+          IDL.Text,
+          IDL.Text,
+          IDL.Opt(IDL.Text),
+          IDL.Opt(IDL.Text),
+          IDL.Opt(IDL.Text),
+          IDL.Opt(IDL.Text),
+        ],
         [GenericResult],
         [],
       ),

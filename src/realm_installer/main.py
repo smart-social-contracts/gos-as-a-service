@@ -9,6 +9,8 @@ import hashlib
 import json
 import traceback
 
+from claim_args import build_claim_slug_args
+
 from basilisk import (
     Async, CallResult, Duration, Opt, Principal, Record, Service,
     StableBTreeMap, Variant, Vec, ic, init, int8, match, nat, nat32,
@@ -780,8 +782,8 @@ def schedule_registration(job_id_val: str):
             slug = (fed.get("slug") or "").strip()
             if slug and backend_id and frontend_id:
                 try:
-                    claim_arg = (
-                        f'("{slug}", "{frontend_id}", "{backend_id}", "", "")'
+                    claim_arg = build_claim_slug_args(
+                        slug, frontend_id, backend_id, manifest,
                     )
                     claim_result: CallResult = yield ic.call_raw(
                         Principal.from_str(reg_id), "claim_slug",

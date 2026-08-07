@@ -153,7 +153,7 @@ service : {
   "get_realm" : (text) -> (GetRealmResult) query;
   "remove_realm" : (text) -> (AddRealmResult);
   "realm_count" : () -> (nat64) query;
-  "claim_slug" : (text, text, text, text, text) -> (GenericResult);
+  "claim_slug" : (text, text, text, text, text, opt text, opt text, opt text, opt text) -> (GenericResult);
   "resolve_slug" : (text) -> (GenericResult);
   "list_pending_pretty_hostnames" : () -> (text) query;
   "set_pretty_hostname_status" : (text, text) -> (GenericResult);

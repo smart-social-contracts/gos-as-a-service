@@ -45,6 +45,12 @@
       {#if summary.network}
         <div><dt>Network</dt><dd>{summary.network}</dd></div>
       {/if}
+      {#if summary.gosImplementation}
+        <div>
+          <dt>GOS</dt>
+          <dd>{summary.gosImplementation}{summary.gosVersion ? `@${summary.gosVersion}` : ''}</dd>
+        </div>
+      {/if}
       <div>
         <dt>Registration</dt>
         <dd>{summary.openRegistration ? 'Open' : 'Invitation only'}</dd>

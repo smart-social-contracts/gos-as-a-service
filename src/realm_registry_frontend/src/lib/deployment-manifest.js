@@ -1,4 +1,5 @@
 import { CONFIG } from './config.js';
+import { buildGosManifestBlock } from './gos-implementations.js';
 
 const REALMS_RELEASE_BASE =
   'https://github.com/smart-social-contracts/realms/releases/download';
@@ -212,12 +213,16 @@ export async function buildRealmDeploymentManifest(
     realm.config_overrides = options.configOverrides;
   }
 
+  const gosImplId = formData.gos_implementation || 'realms-gos';
+  const normalizedVersion = normalizeDeployVersion(deployVersion);
+
   const manifest = {
     name,
     network: network || 'staging',
     deploy_mode: 'install',
     deploy_scope: 'both',
-    deploy_version: normalizeDeployVersion(deployVersion),
+    deploy_version: normalizedVersion,
+    gos: buildGosManifestBlock(gosImplId, deployVersion),
     realm,
   };
 
