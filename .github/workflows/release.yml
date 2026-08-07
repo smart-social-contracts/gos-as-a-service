@@ -75,6 +75,12 @@ jobs:
           cp .basilisk/realm_installer/realm_installer.wasm.gz ./realm_installer.wasm.gz
           cp src/realm_installer/realm_installer.did ./realm_installer.did
 
+          export CANISTER_CANDID_PATH="$(pwd)/src/file_registry/file_registry.did"
+          python -m basilisk file_registry src/file_registry/main.py
+          gzip -kf .basilisk/file_registry/file_registry.wasm
+          cp .basilisk/file_registry/file_registry.wasm.gz ./file_registry.wasm.gz
+          cp src/file_registry/file_registry.did ./file_registry.did
+
       - name: Build frontend
         run: |
           npm ci --legacy-peer-deps
@@ -89,6 +95,7 @@ jobs:
           echo "# SHA-256 checksums for release assets" > checksums.txt
           for f in realm_registry_backend.wasm.gz realm_registry_backend.did \
                    realm_installer.wasm.gz realm_installer.did \
+                   file_registry.wasm.gz file_registry.did \
                    realm_registry_frontend.tar.gz; do
             [ -f "$f" ] && sha256sum "$f" >> checksums.txt
           done
@@ -105,5 +112,7 @@ jobs:
             realm_registry_backend.did
             realm_installer.wasm.gz
             realm_installer.did
+            file_registry.wasm.gz
+            file_registry.did
             realm_registry_frontend.tar.gz
             checksums.txt

@@ -5,6 +5,8 @@ import {
   buildGosManifestBlock,
   getGosImplementation,
   normalizeGosDeployVersion,
+  shouldShowVersionPicker,
+  soleDeployVersionOption,
   visibleWizardSteps,
   WIZARD_STEPS,
 } from './gos-implementations.js';
@@ -65,4 +67,30 @@ test('buildGosManifestBlock version reflects deploy_version', () => {
 test('normalizeGosDeployVersion strips leading v and maps latest to main', () => {
   assert.equal(normalizeGosDeployVersion('v0.5.1'), '0.5.1');
   assert.equal(normalizeGosDeployVersion('latest'), 'main');
+});
+
+test('shouldShowVersionPicker is true only when multiple options exist', () => {
+  assert.equal(shouldShowVersionPicker([]), false);
+  assert.equal(shouldShowVersionPicker([{ value: 'main', label: 'main' }]), false);
+  assert.equal(
+    shouldShowVersionPicker([
+      { value: 'main', label: 'main' },
+      { value: '0.4.0', label: '0.4.0' },
+    ]),
+    true,
+  );
+  assert.equal(shouldShowVersionPicker(null), false);
+});
+
+test('soleDeployVersionOption returns the single option or null', () => {
+  const only = { value: 'main', label: 'main (latest from file registry)' };
+  assert.deepEqual(soleDeployVersionOption([only]), only);
+  assert.equal(soleDeployVersionOption([]), null);
+  assert.equal(
+    soleDeployVersionOption([
+      { value: 'main', label: 'main' },
+      { value: '0.4.0', label: '0.4.0' },
+    ]),
+    null,
+  );
 });

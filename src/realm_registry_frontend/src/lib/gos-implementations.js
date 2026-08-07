@@ -54,6 +54,26 @@ export function visibleWizardSteps(gosImplementationId) {
   return WIZARD_STEPS.filter((step) => !step.realmsOnly || isRealms);
 }
 
+/**
+ * Whether the wizard should render a version `<select>` (multiple choices).
+ *
+ * @param {Array<{ value: string, label: string }>} [options]
+ */
+export function shouldShowVersionPicker(options) {
+  return Array.isArray(options) && options.length > 1;
+}
+
+/**
+ * When exactly one version is available, return that option for read-only display.
+ *
+ * @param {Array<{ value: string, label: string }>} [options]
+ * @returns {{ value: string, label: string }|null}
+ */
+export function soleDeployVersionOption(options) {
+  if (!Array.isArray(options) || options.length !== 1) return null;
+  return options[0];
+}
+
 /** Normalize version for GOS manifest: semver without leading v, or `main`. */
 export function normalizeGosDeployVersion(version) {
   const v = (version || '').trim();

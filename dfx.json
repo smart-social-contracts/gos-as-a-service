@@ -30,6 +30,36 @@
       "type": "custom",
       "wasm": ".basilisk/realm_installer/realm_installer.wasm"
     },
+    "file_registry": {
+      "build": "python -m basilisk file_registry src/file_registry/main.py",
+      "candid": "src/file_registry/file_registry.did",
+      "declarations": {
+        "node_compatibility": true
+      },
+      "gzip": true,
+      "metadata": [
+        {
+          "name": "candid:service"
+        }
+      ],
+      "remote": {
+        "id": {
+          "demo": "vi64l-3aaaa-aaaae-qj4va-cai",
+          "staging": "iebdk-kqaaa-aaaau-agoxq-cai",
+          "test": "uq2mu-kaaaa-aaaah-avqcq-cai"
+        }
+      },
+      "tech_stack": {
+        "cdk": {
+          "basilisk": {}
+        },
+        "language": {
+          "python": {}
+        }
+      },
+      "type": "custom",
+      "wasm": ".basilisk/file_registry/file_registry.wasm"
+    },
     "realm_registry_backend": {
       "build": "python -m basilisk realm_registry_backend src/realm_registry_backend/main.py",
       "candid": "src/realm_registry_backend/realm_registry_backend.did",
@@ -98,19 +128,27 @@
       "type": "ephemeral"
     },
     "staging": {
-      "providers": ["https://icp0.io"],
+      "providers": [
+        "https://icp0.io"
+      ],
       "type": "persistent"
     },
     "demo": {
-      "providers": ["https://icp0.io"],
+      "providers": [
+        "https://icp0.io"
+      ],
       "type": "persistent"
     },
     "test": {
-      "providers": ["https://icp0.io"],
+      "providers": [
+        "https://icp0.io"
+      ],
       "type": "persistent"
     },
     "ic": {
-      "providers": ["https://icp0.io"],
+      "providers": [
+        "https://icp0.io"
+      ],
       "type": "persistent"
     }
   },

@@ -11,6 +11,7 @@ GOS-as-a-Service (GaaS) is the platform behind [gos.earth](https://gos.earth): a
 | Registry backend | `src/realm_registry_backend/` | Credits, slug claims, deployment requests |
 | Registry frontend | `src/realm_registry_frontend/` | Create-realm wizard + federation portal at `*.gos.earth` |
 | Realm installer | `src/realm_installer/` | Deployment queue, WASM verification, provisioning orchestration |
+| File registry | `src/file_registry/` | Platform artifact store — WASM/frontend files of supported GOS implementations, branding assets |
 | Casals (external) | [smart-social-contracts/casals](https://github.com/smart-social-contracts/casals) | Platform provisioner — on-chain canister lifecycle orchestrator |
 
 Casals is an **external platform component**, not built from this repo. The realm installer reaches a Casals conductor at runtime via `InstallerConfig` on the installer canister: `casals_canister_id`, `casals_section`, and `provision_via_casals`. Any conforming Casals conductor can serve a network; today the **realms** fleet operates the conductors per network:

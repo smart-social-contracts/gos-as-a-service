@@ -10,6 +10,7 @@ Agent guidance for the GOS-as-a-Service platform (registry + installer + wizard 
 src/realm_registry_backend/   # Registry canister (Basilisk/Python)
 src/realm_registry_frontend/  # Wizard + portal (SvelteKit)
 src/realm_installer/            # Deployment queue + Casals provisioning
+src/file_registry/               # Platform artifact store (GOS wasms, branding)
 src/declarations/               # Vendored candid bindings for frontend build
 tests/backend/                  # Unit tests (no replica)
 tests/integration/              # Live-replica installer API tests
@@ -23,6 +24,7 @@ scripts/infra_dev_deploy.sh     # Fast dfx deploy (registry | installer)
 | realm_registry_backend | `yhw3g-fyaaa-aaaas-qgorq-cai` | `rhw4p-gqaaa-aaaac-qbw7q-cai` | `7wzxh-wyaaa-aaaau-aggyq-cai` |
 | realm_registry_frontend | `qtank-3qaaa-aaaaa-qhb6q-cai` | `2zaor-5yaaa-aaaac-qbxaa-cai` | `77243-aqaaa-aaaau-aggza-cai` |
 | realm_installer | `fltjm-tyaaa-aaaap-qunhq-cai` | `2s4td-daaaa-aaaao-bazmq-cai` | `lusjm-wqaaa-aaaau-ago7q-cai` |
+| file_registry | `uq2mu-kaaaa-aaaah-avqcq-cai` | `vi64l-3aaaa-aaaae-qj4va-cai` | `iebdk-kqaaa-aaaau-agoxq-cai` |
 
 Casals conductors (external platform provisioner; operated by realms fleet ops):
 

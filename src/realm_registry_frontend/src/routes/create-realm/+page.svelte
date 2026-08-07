@@ -17,6 +17,8 @@
   import {
     GOS_IMPLEMENTATIONS,
     getGosImplementation,
+    shouldShowVersionPicker,
+    soleDeployVersionOption,
     visibleWizardSteps,
   } from '$lib/gos-implementations.js';
   import { getAuthenticatedRegistryActor } from '$lib/canisters.js';
@@ -563,6 +565,10 @@
   $: if (currentStep >= visibleSteps.length) {
     currentStep = Math.max(0, visibleSteps.length - 1);
   }
+  $: soleDeployVersion = soleDeployVersionOption(deployVersionOptions);
+  $: if (soleDeployVersion && formData.deploy_version !== soleDeployVersion.value) {
+    formData.deploy_version = soleDeployVersion.value;
+  }
 
   function selectGosImplementation(id) {
     const impl = getGosImplementation(id);
@@ -692,6 +698,16 @@
         if (impl && !impl.available) {
           errors.gos_implementation = 'This platform is not yet available';
         }
+      }
+      if (loadingDeployVersions) {
+        errors.deploy_version = 'Loading available versions…';
+      } else if (!formData.deploy_version?.trim()) {
+        errors.deploy_version = 'Please select a software version';
+      } else if (
+        deployVersionOptions.length > 0 &&
+        !deployVersionOptions.some((opt) => opt.value === formData.deploy_version)
+      ) {
+        errors.deploy_version = 'Please select a valid software version';
       }
     }
 
@@ -1502,6 +1518,24 @@
             <span class="error-message">{errors.gos_implementation}</span>
           {/if}
         </div>
+
+        <div class="deploy-version-card">
+          <label for="deploy-version">Software version</label>
+          {#if loadingDeployVersions}
+            <p class="field-hint">Loading available versions…</p>
+          {:else if shouldShowVersionPicker(deployVersionOptions)}
+            <select id="deploy-version" bind:value={formData.deploy_version} class="deploy-version-select">
+              {#each deployVersionOptions as opt}
+                <option value={opt.value}>{opt.label}</option>
+              {/each}
+            </select>
+          {:else if soleDeployVersion}
+            <p class="deploy-version-value" id="deploy-version">{soleDeployVersion.label}</p>
+          {/if}
+          {#if errors.deploy_version}
+            <span class="error-message">{errors.deploy_version}</span>
+          {/if}
+        </div>
       </div>
 
     {:else if currentStepId === 'codex'}
@@ -1708,19 +1742,6 @@
         <p class="step-description">Choose how you want to deploy your governance system</p>
 
         <div class="deploy-options">
-          <div class="deploy-version-card">
-            <label for="deploy-version">Realm software version</label>
-            {#if loadingDeployVersions}
-              <p class="field-hint">Loading available versions…</p>
-            {:else}
-              <select id="deploy-version" bind:value={formData.deploy_version} class="deploy-version-select">
-                {#each deployVersionOptions as opt}
-                  <option value={opt.value}>{opt.label}</option>
-                {/each}
-              </select>
-            {/if}
-          </div>
-
           <!-- Option 1: Automatic Deployment -->
           <div 
             class="deploy-option" 
@@ -3489,6 +3510,18 @@
     border-radius: 8px;
     font-size: 0.95rem;
     background: var(--bg-primary, #fff);
+  }
+
+  .deploy-version-value {
+    margin: 0;
+    font-size: 0.95rem;
+    color: #404040;
+  }
+
+  .field-hint {
+    margin: 0;
+    font-size: 0.875rem;
+    color: #737373;
   }
 
   /* Deploy Step */
