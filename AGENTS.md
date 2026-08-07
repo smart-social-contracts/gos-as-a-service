@@ -24,6 +24,14 @@ scripts/infra_dev_deploy.sh     # Fast dfx deploy (registry | installer)
 | realm_registry_frontend | `qtank-3qaaa-aaaaa-qhb6q-cai` | `2zaor-5yaaa-aaaac-qbxaa-cai` | `77243-aqaaa-aaaau-aggza-cai` |
 | realm_installer | `fltjm-tyaaa-aaaap-qunhq-cai` | `2s4td-daaaa-aaaao-bazmq-cai` | `lusjm-wqaaa-aaaau-ago7q-cai` |
 
+Casals conductors (external platform provisioner; operated by realms fleet ops):
+
+| Network | Conductor |
+|---|---|
+| test | `qthgp-3yaaa-aaaae-agveq-cai` |
+| demo | `jo3cj-faaaa-aaaac-bffea-cai` |
+| staging | `jj2e5-iyaaa-aaaac-bffeq-cai` |
+
 Portal hosts: `test.gos.earth`, `demo.gos.earth`, `staging.gos.earth`.
 
 ## Registry / wizard UI (staging)
@@ -183,6 +191,22 @@ Returns JSON with `job_id`, `credits_held`, `status`.
 | `cancel_deployment(job_id)` | update | Cancel queued job |
 
 The off-chain **realms-deployer** worker polls pending jobs, downloads release artifacts, runs `dfx` installs, and reports back. Casals path is triggered when `provision_via_casals` is enabled and the job enters `provisioning` status.
+
+#### Platform provisioner (Casals)
+
+Casals is the GaaS **platform provisioner** — an external on-chain orchestrator ([smart-social-contracts/casals](https://github.com/smart-social-contracts/casals)), not a canister built from this repo.
+
+The installer → Casals contract is **runtime, by canister ID**. `InstallerConfig` on the realm_installer canister holds:
+
+| Field | Role |
+|---|---|
+| `provision_via_casals` | Opt-in switch (`0` = off-Casals path, the default) |
+| `casals_canister_id` | Conductor canister the installer calls |
+| `casals_section` | Casals section name (default `Deployments`) |
+
+When enabled, the registry schedules `provision_via_casals(job_id)` after enqueue. **realms** fleet ops operate the Casals conductors per network (see table above); any conforming conductor can serve a network.
+
+Local development can run with `provision_via_casals = 0` (off-Casals path) so contributors need not deploy a local Casals conductor.
 
 Full queue E2E test: `scripts/test_queue_deployment_e2e.sh --network staging`.
 

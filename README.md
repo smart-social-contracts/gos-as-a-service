@@ -4,17 +4,24 @@ GOS-as-a-Service (GaaS) is the platform behind [gos.earth](https://gos.earth): a
 
 **Realms GOS** ([smart-social-contracts/realms](https://github.com/smart-social-contracts/realms)) is the first (and currently only) GOS implementation. That repo consumes **prebuilt WASM and frontend tarballs** from this repo's GitHub Releases — it no longer builds registry/installer artifacts itself.
 
-## What lives here
-
-| Component | Path | Role |
-|---|---|---|
-| Registry backend | `src/realm_registry_backend/` | Realm catalog, credits, slug claims, `request_deployment` |
-| Registry frontend | `src/realm_registry_frontend/` | Wizard UI, deployment progress, portal at `*.gos.earth` |
-| Realm installer | `src/realm_installer/` | Deployment queue, WASM verification, Casals provisioning |
-
-Canister IDs are **unchanged** from the realms era — the same live canisters on test/demo/staging; only build provenance moves to this repository.
-
 ## Architecture
+
+| Component | Path / repo | Role |
+|---|---|---|
+| Registry backend | `src/realm_registry_backend/` | Credits, slug claims, deployment requests |
+| Registry frontend | `src/realm_registry_frontend/` | Create-realm wizard + federation portal at `*.gos.earth` |
+| Realm installer | `src/realm_installer/` | Deployment queue, WASM verification, provisioning orchestration |
+| Casals (external) | [smart-social-contracts/casals](https://github.com/smart-social-contracts/casals) | Platform provisioner — on-chain canister lifecycle orchestrator |
+
+Casals is an **external platform component**, not built from this repo. The realm installer reaches a Casals conductor at runtime via `InstallerConfig` on the installer canister: `casals_canister_id`, `casals_section`, and `provision_via_casals`. Any conforming Casals conductor can serve a network; today the **realms** fleet operates the conductors per network:
+
+| Network | Casals conductor |
+|---|---|
+| test | `qthgp-3yaaa-aaaae-agveq-cai` |
+| demo | `jo3cj-faaaa-aaaac-bffea-cai` |
+| staging | `jj2e5-iyaaa-aaaac-bffeq-cai` |
+
+GaaS canister IDs are **unchanged** from the realms era — the same live canisters on test/demo/staging; only build provenance moves to this repository.
 
 ```mermaid
 flowchart LR
@@ -35,7 +42,7 @@ flowchart LR
 2. Frontend calls `request_deployment` on the registry backend with a manifest (GOS implementation, release tag, artifacts).
 3. Registry checks credit balance (**5 credits** per deploy), holds credits, and forwards to the installer.
 4. Installer enqueues the job; optionally triggers `provision_via_casals` for on-chain stand creation.
-5. Off-chain worker (realms-deployer) or Casals completes WASM + asset install.
+5. Off-chain worker (realms-deployer) or the configured Casals conductor completes WASM + asset install.
 6. Installer notifies registry via `deployment_succeeded` (capture hold) or `deployment_failed` (release hold).
 7. Slug is claimed so the realm is reachable at `{slug}.gos.earth` → `/r/{slug}`.
 
@@ -86,6 +93,13 @@ python3 -m pytest tests/backend/ -q
    - `realm_registry_frontend.tar.gz` (dist tarball)
 3. GitHub Release attaches these artifacts plus `checksums.txt`.
 4. Release workflow updates `src/realm_registry_frontend/src/lib/config.js` with the tag and WASM checksums.
+
+## Related repositories
+
+| Repository | Role |
+|---|---|
+| [smart-social-contracts/casals](https://github.com/smart-social-contracts/casals) | Platform provisioner (on-chain canister lifecycle) |
+| [smart-social-contracts/realms](https://github.com/smart-social-contracts/realms) | First GOS implementation + fleet operator (Casals conductors per network) |
 
 ## Relationship to Realms GOS
 
