@@ -90,7 +90,7 @@ def test_health_returns_ok():
 def test_list_deployment_jobs_returns_structured_payload():
     """``list_deployment_jobs`` returns a Candid ``Ok`` payload with ``jobs``."""
     print("  - test_list_deployment_jobs_returns_structured_payload...", end=" ")
-    out, code, err = _dfx_call("list_deployment_jobs", "()", query=True)
+    out, code, err = _dfx_call("list_deployment_jobs", "(null, null)", query=True)
     assert code == 0, f"list_deployment_jobs failed: {err}"
     body = json.loads(out)
     assert "Ok" in body, f"expected variant Ok, got: {body}"
