@@ -1,0 +1,99 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dfx
+        run: |
+          DFX_VERSION=0.32.0
+          curl -fsSL "https://github.com/dfinity/sdk/releases/download/${DFX_VERSION}/dfx-${DFX_VERSION}-x86_64-linux.tar.gz" -o /tmp/dfx.tar.gz
+          tar -xzf /tmp/dfx.tar.gz -C /usr/local/bin
+          rm /tmp/dfx.tar.gz
+          dfx --version
+
+      - name: Basilisk venv
+        run: |
+          python3 -m venv .venv-basilisk
+          .venv-basilisk/bin/pip install --upgrade pip
+          .venv-basilisk/bin/pip install \
+            ic-basilisk==0.14.2 ic-basilisk-toolkit==0.5.3 \
+            ic-python-db==0.11.0 ic-python-logging==0.3.4
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          echo "version=${TAG}" >> "$GITHUB_OUTPUT"
+          sed -i "s#deploy_release_tag: viteEnv.VITE_DEPLOY_RELEASE_TAG || 'v[^']*'#deploy_release_tag: viteEnv.VITE_DEPLOY_RELEASE_TAG || 'v${TAG}'#" \
+            src/realm_registry_frontend/src/lib/config.js
+
+      - name: Build backend WASMs
+        run: |
+          export PATH="$PWD/.venv-basilisk/bin:$PATH"
+          export CANISTER_CANDID_PATH="$(pwd)/src/realm_registry_backend/realm_registry_backend.did"
+          python -m basilisk realm_registry_backend src/realm_registry_backend/main.py
+          gzip -kf .basilisk/realm_registry_backend/realm_registry_backend.wasm
+          cp .basilisk/realm_registry_backend/realm_registry_backend.wasm.gz ./realm_registry_backend.wasm.gz
+          cp src/realm_registry_backend/realm_registry_backend.did ./realm_registry_backend.did
+
+          export CANISTER_CANDID_PATH="$(pwd)/src/realm_installer/realm_installer.did"
+          python -m basilisk realm_installer src/realm_installer/main.py
+          gzip -kf .basilisk/realm_installer/realm_installer.wasm
+          cp .basilisk/realm_installer/realm_installer.wasm.gz ./realm_installer.wasm.gz
+          cp src/realm_installer/realm_installer.did ./realm_installer.did
+
+      - name: Build frontend
+        run: |
+          npm ci --legacy-peer-deps
+          dfx generate realm_registry_backend
+          dfx generate realm_installer
+          npm run build --workspace=realm_registry_frontend
+          tar czf realm_registry_frontend.tar.gz -C src/realm_registry_frontend/dist .
+          echo "Frontend tarball: $(stat -c%s realm_registry_frontend.tar.gz) bytes"
+
+      - name: Compute release asset checksums
+        run: |
+          echo "# SHA-256 checksums for release assets" > checksums.txt
+          for f in realm_registry_backend.wasm.gz realm_registry_backend.did \
+                   realm_installer.wasm.gz realm_installer.did \
+                   realm_registry_frontend.tar.gz; do
+            [ -f "$f" ] && sha256sum "$f" >> checksums.txt
+          done
+          cat checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            realm_registry_backend.wasm.gz
+            realm_registry_backend.did
+            realm_installer.wasm.gz
+            realm_installer.did
+            realm_registry_frontend.tar.gz
+            checksums.txt

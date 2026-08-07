@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.svelte-kit/
+.basilisk/
+.dfx/
+.external-wasms/
+.external-assets/
+__pycache__/
+*.pyc
+.env
+.venv-basilisk/

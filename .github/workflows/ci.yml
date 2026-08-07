@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.10"
+  NODE_VERSION: "20"
+  DFX_VERSION: "0.32.0"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Black --check
+        run: pip install black && black --check src/ tests/ scripts/
+
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install Python test deps
+        run: pip install -r requirements-dev.txt
+      - name: Backend unit tests
+        run: python3 -m pytest tests/backend/ -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Install dfx
+        run: |
+          curl -fsSL "https://github.com/dfinity/sdk/releases/download/${DFX_VERSION}/dfx-${DFX_VERSION}-x86_64-linux.tar.gz" -o /tmp/dfx.tar.gz
+          tar -xzf /tmp/dfx.tar.gz -C /usr/local/bin
+          rm /tmp/dfx.tar.gz
+          dfx --version
+      - name: Install npm deps
+        run: npm ci --legacy-peer-deps
+      - name: Generate candid declarations
+        run: |
+          dfx generate realm_registry_backend
+          dfx generate realm_installer
+      - name: Frontend unit tests
+        run: npm test --workspace=realm_registry_frontend
+      - name: Frontend build
+        run: npm run build --workspace=realm_registry_frontend
+
+  integration:
+    needs: [unit, frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dfx
+        run: |
+          curl -fsSL "https://github.com/dfinity/sdk/releases/download/${DFX_VERSION}/dfx-${DFX_VERSION}-x86_64-linux.tar.gz" -o /tmp/dfx.tar.gz
+          tar -xzf /tmp/dfx.tar.gz -C /usr/local/bin
+          rm /tmp/dfx.tar.gz
+          dfx --version
+      - name: Basilisk venv
+        run: |
+          python3 -m venv .venv-basilisk
+          .venv-basilisk/bin/pip install --upgrade pip
+          .venv-basilisk/bin/pip install \
+            ic-basilisk==0.14.2 ic-basilisk-toolkit==0.5.3 \
+            ic-python-db==0.11.0 ic-python-logging==0.3.4
+      - name: Start local replica
+        run: |
+          dfx start --background --clean --host 127.0.0.1:4943
+          sleep 3
+          dfx ping
+      - name: Deploy registry stack
+        run: |
+          export PATH="$PWD/.venv-basilisk/bin:$PATH"
+          dfx deploy realm_registry_backend realm_installer --yes
+      - name: realm_installer API tests
+        run: python3 tests/integration/test_realm_installer_api.py
+      - name: Stop local replica
+        if: always()
+        run: dfx stop || true

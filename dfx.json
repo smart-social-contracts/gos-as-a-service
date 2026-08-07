@@ -1,0 +1,124 @@
+{
+  "canisters": {
+    "realm_installer": {
+      "build": "python -m basilisk realm_installer src/realm_installer/main.py",
+      "candid": "src/realm_installer/realm_installer.did",
+      "declarations": {
+        "node_compatibility": true
+      },
+      "gzip": true,
+      "metadata": [
+        {
+          "name": "candid:service"
+        }
+      ],
+      "remote": {
+        "id": {
+          "demo": "2s4td-daaaa-aaaao-bazmq-cai",
+          "staging": "lusjm-wqaaa-aaaau-ago7q-cai",
+          "test": "fltjm-tyaaa-aaaap-qunhq-cai"
+        }
+      },
+      "tech_stack": {
+        "cdk": {
+          "basilisk": {}
+        },
+        "language": {
+          "python": {}
+        }
+      },
+      "type": "custom",
+      "wasm": ".basilisk/realm_installer/realm_installer.wasm"
+    },
+    "realm_registry_backend": {
+      "build": "python -m basilisk realm_registry_backend src/realm_registry_backend/main.py",
+      "candid": "src/realm_registry_backend/realm_registry_backend.did",
+      "declarations": {
+        "node_compatibility": true
+      },
+      "gzip": true,
+      "metadata": [
+        {
+          "name": "candid:service"
+        }
+      ],
+      "remote": {
+        "id": {
+          "demo": "rhw4p-gqaaa-aaaac-qbw7q-cai",
+          "staging": "7wzxh-wyaaa-aaaau-aggyq-cai",
+          "test": "yhw3g-fyaaa-aaaas-qgorq-cai"
+        }
+      },
+      "tech_stack": {
+        "cdk": {
+          "basilisk": {}
+        },
+        "language": {
+          "python": {}
+        }
+      },
+      "type": "custom",
+      "wasm": ".basilisk/realm_registry_backend/realm_registry_backend.wasm"
+    },
+    "realm_registry_frontend": {
+      "source": [
+        "src/realm_registry_frontend/dist"
+      ],
+      "type": "assets",
+      "workspace": "realm_registry_frontend",
+      "remote": {
+        "id": {
+          "demo": "2zaor-5yaaa-aaaac-qbxaa-cai",
+          "staging": "77243-aqaaa-aaaau-aggza-cai",
+          "test": "qtank-3qaaa-aaaaa-qhb6q-cai"
+        }
+      }
+    },
+    "internet_identity": {
+      "candid": "https://github.com/dfinity/internet-identity/releases/download/release-2026-03-09/internet_identity.did",
+      "frontend": {},
+      "remote": {
+        "id": {
+          "ic": "rdmx6-jaaaa-aaaaa-aaadq-cai"
+        }
+      },
+      "type": "custom",
+      "wasm": "https://github.com/dfinity/internet-identity/releases/download/release-2026-03-09/internet_identity_dev.wasm.gz"
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": ""
+    }
+  },
+  "networks": {
+    "local": {
+      "bind": "127.0.0.1:4943",
+      "type": "ephemeral"
+    },
+    "staging": {
+      "providers": ["https://icp0.io"],
+      "type": "persistent"
+    },
+    "demo": {
+      "providers": ["https://icp0.io"],
+      "type": "persistent"
+    },
+    "test": {
+      "providers": ["https://icp0.io"],
+      "type": "persistent"
+    },
+    "ic": {
+      "providers": ["https://icp0.io"],
+      "type": "persistent"
+    }
+  },
+  "metadata": [
+    {
+      "name": "candid:service"
+    }
+  ],
+  "output_env_file": ".env",
+  "version": 1
+}

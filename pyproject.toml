@@ -1,0 +1,26 @@
+[tool.black]
+line-length = 88
+target-version = ['py38']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | __pycache__
+  | venv
+  | build
+  | dist
+  | .venv-basilisk
+  | .basilisk
+  | .dfx
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+skip_glob = [
+    "**/venv/**",
+    "**/build/**",
+    "**/dist/**",
+    "**/.venv-basilisk/**"
+]

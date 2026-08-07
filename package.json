@@ -1,0 +1,43 @@
+{
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=7.0.0"
+  },
+  "name": "gos-as-a-service",
+  "private": true,
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "prebuild": "npm run prebuild --workspaces --if-present",
+    "pretest": "npm run prebuild --workspaces --if-present",
+    "start": "npm start --workspaces --if-present",
+    "test": "npm test --workspaces --if-present"
+  },
+  "type": "module",
+  "workspaces": [
+    "src/realm_registry_frontend"
+  ],
+  "dependencies": {
+    "@dfinity/agent": "^3.4.3",
+    "@dfinity/auth-client": "^3.4.3",
+    "@dfinity/candid": "^3.4.3",
+    "@dfinity/identity": "^3.4.3",
+    "@dfinity/principal": "^3.4.3",
+    "svelte-markdown": "^0.4.1"
+  },
+  "devDependencies": {
+    "@sveltejs/kit": "^2.27.0"
+  },
+  "overrides": {
+    "rollup": "^4.59.0",
+    "esbuild": "0.21.5",
+    "flatted": "^3.4.2",
+    "immutable": "^5.1.6",
+    "vite": {
+      "esbuild": "0.21.5",
+      "rollup": "^4.59.0"
+    },
+    "svelte-i18n": {
+      "esbuild": "0.28.1"
+    }
+  }
+}

@@ -1,0 +1,10 @@
+ic-basilisk==0.14.2
+    # via
+    #   -r src/realm_registry_backend/requirements.in
+    #   ic-basilisk-toolkit
+ic-basilisk-toolkit==0.5.3
+    # via -r src/realm_registry_backend/requirements.in
+ic-python-db==0.11.0
+    # via ic-basilisk-toolkit
+ic-python-logging==0.3.4
+    # via ic-basilisk-toolkit

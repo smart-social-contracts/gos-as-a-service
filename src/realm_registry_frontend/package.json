@@ -1,0 +1,39 @@
+{
+  "name": "realm_registry_frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "setup": "npm i && dfx canister create realm_registry_backend && dfx generate realm_registry_backend && dfx deploy",
+    "start": "vite --port 3000",
+    "prebuild": "cd ../.. && dfx generate realm_registry_backend && dfx generate realm_installer",
+    "build": "vite build",
+    "test:unit": "node --test src/lib/deployment-progress.test.js",
+    "format": "prettier --write \"src/**/*.{json,js,jsx,ts,tsx,css,scss}\""
+  },
+  "dependencies": {
+    "@dfinity/agent": "^3.2.4",
+    "@dfinity/auth-client": "^3.2.4",
+    "@dfinity/candid": "^3.2.4",
+    "@dfinity/identity": "^3.2.4",
+    "@dfinity/principal": "^3.2.4",
+    "@types/qrcode": "^1.5.5",
+    "driver.js": "^1.6.0",
+    "h3-js": "^4.1.0",
+    "maplibre-gl": "^5.24.0",
+    "qrcode": "^1.5.4",
+    "svelte-i18n": "^3.7.4"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-static": "^3.0.4",
+    "@sveltejs/kit": "^2.5.26",
+    "@sveltejs/vite-plugin-svelte": "^3.1.2",
+    "dotenv": "^16.3.1",
+    "sass": "^1.63.6",
+    "svelte": "^4.2.19",
+    "svelte-check": "^4.0.1",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.3",
+    "vite-plugin-environment": "^1.1.3"
+  }
+}

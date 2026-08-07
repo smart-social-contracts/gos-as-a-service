@@ -1,0 +1,64 @@
+[
+    {
+        // Explicitly allow .well-known directory for domain verification
+        "match": ".well-known",
+        "ignore": false
+    },
+    {
+        "match": ".well-known/*",
+        "ignore": false,
+        "headers": {
+            "Content-Type": "text/plain",
+        }
+    },
+    {
+        // Internet Identity fetches this to validate `derivationOrigin` claims from
+        // realm frontends. Must be JSON + CORS-readable by the II canister. This rule
+        // is placed AFTER `.well-known/*` because dfx applies matching header rules
+        // last-match-wins, so the JSON content-type must override the text/plain above.
+        "match": ".well-known/ii-alternative-origins",
+        "ignore": false,
+        "headers": {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+        }
+    },
+    {
+        // SvelteKit hashed assets — safe to cache forever (filename changes each build).
+        "match": "_app/immutable/**",
+        "headers": {
+            "Cache-Control": "public, max-age=31536000, immutable"
+        }
+    },
+    {
+        // HTML shell must revalidate so deploys never reference missing chunks.
+        "match": "**/*.{html,json}",
+        "headers": {
+            "Cache-Control": "no-cache, must-revalidate"
+        }
+    },
+    {
+        // SVG files need explicit content-type for proper certification
+        "match": "**/*.svg",
+        "headers": {
+            "Content-Type": "image/svg+xml",
+            "Cache-Control": "public, max-age=31536000, immutable"
+        }
+    },
+    {
+        "match": "**/*",
+
+        // Disabled: dfx "standard" certifies a large Permissions-Policy /
+        // X-XSS-Protection / X-Frame-Options set that custom-domain gateways
+        // intermittently fail to verify (HTTP 503 Response Verification Error
+        // on staging.gos.earth). Explicit headers below are certified instead.
+        "security_policy": "disabled",
+
+        "headers": {
+            "Content-Security-Policy": "default-src 'self';script-src 'self' 'unsafe-eval' 'unsafe-inline' blob:;worker-src 'self' blob:;child-src 'self' blob:;connect-src 'self' http://localhost:* http://*.localhost:* https://icp0.io https://*.icp0.io https://icp-api.io https://*.ic0.app https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com https://tiles.openfreemap.org https://*.openfreemap.org https://billing.realmsgos.dev https://geister-api.realmsgos.dev https://geister-mcp.realmsgos.dev https://raw.githubusercontent.com;img-src 'self' data: blob: http://*.localhost:* https://*.icp0.io https://*.ic0.app https://api.dicebear.com https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com https://tiles.openfreemap.org https://*.openfreemap.org;style-src * 'unsafe-inline';style-src-elem * 'unsafe-inline';font-src * data:;object-src 'none';base-uri 'self';frame-src https://*.icp0.io https://*.raw.icp0.io https://*.ic0.app http://*.localhost:*;frame-ancestors 'none';form-action 'self';upgrade-insecure-requests;",
+            "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+            "X-Content-Type-Options": "nosniff",
+            "Referrer-Policy": "same-origin",
+        },
+    },
+]
