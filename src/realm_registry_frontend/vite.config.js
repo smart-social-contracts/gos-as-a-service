@@ -61,8 +61,23 @@ function getCanisterIdDefines() {
   return defines;
 }
 
+// Inject the full canister_ids.json map for runtime resolution (single tarball, multi-env deploy).
+function getCanisterIdsDefine() {
+  const idsPath = '../../canister_ids.json';
+  if (!existsSync(idsPath)) return {};
+
+  try {
+    const allIds = JSON.parse(readFileSync(idsPath, 'utf-8'));
+    return { '__CANISTER_IDS__': JSON.stringify(allIds) };
+  } catch (e) {
+    console.warn('Failed to read canister_ids.json for __CANISTER_IDS__:', e.message);
+    return {};
+  }
+}
+
 const buildValues = getBuildTimeValues();
 const canisterDefines = getCanisterIdDefines();
+const canisterIdsDefine = getCanisterIdsDefine();
 
 export default defineConfig({
   build: {
@@ -81,6 +96,7 @@ export default defineConfig({
     '__BUILD_VERSION__': JSON.stringify(buildValues.version),
     '__BUILD_COMMIT__': JSON.stringify(buildValues.commitHash),
     '__BUILD_TIME__': JSON.stringify(buildValues.buildTime),
+    ...canisterIdsDefine,
     ...canisterDefines,
   },
   optimizeDeps: {

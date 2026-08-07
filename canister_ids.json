@@ -13,5 +13,15 @@
     "demo": "2zaor-5yaaa-aaaac-qbxaa-cai",
     "staging": "77243-aqaaa-aaaau-aggza-cai",
     "test": "qtank-3qaaa-aaaaa-qhb6q-cai"
+  },
+  "file_registry": {
+    "demo": "vi64l-3aaaa-aaaae-qj4va-cai",
+    "staging": "iebdk-kqaaa-aaaau-agoxq-cai",
+    "test": "uq2mu-kaaaa-aaaah-avqcq-cai"
+  },
+  "marketplace_backend": {
+    "demo": "ehyfg-wyaaa-aaaae-qg3qq-cai",
+    "staging": "jji3o-uyaaa-aaaah-qreja-cai",
+    "test": "2wldc-niaaa-aaaad-qlxga-cai"
   }
 }

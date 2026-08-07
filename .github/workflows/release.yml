@@ -50,6 +50,16 @@ jobs:
           sed -i "s#deploy_release_tag: viteEnv.VITE_DEPLOY_RELEASE_TAG || 'v[^']*'#deploy_release_tag: viteEnv.VITE_DEPLOY_RELEASE_TAG || 'v${TAG}'#" \
             src/realm_registry_frontend/src/lib/config.js
 
+          # Stamp version/commit placeholders so canister status() reports real values
+          COMMIT="$(git rev-parse --short HEAD)"
+          NOW="$(date -u '+%Y-%m-%d %H:%M:%S')"
+          echo "${TAG}" > version.txt
+          for f in src/realm_registry_backend/api/status.py src/realm_installer/main.py; do
+            sed -i "s/VERSION_PLACEHOLDER/${TAG}/g; s/COMMIT_HASH_PLACEHOLDER/${COMMIT}/g; s/COMMIT_DATETIME_PLACEHOLDER/${NOW}/g" "$f"
+          done
+          sed -i "s/BASILISK_VERSION_PLACEHOLDER/0.14.2/g; s/IC_PYTHON_DB_VERSION_PLACEHOLDER/0.11.0/g; s/IC_PYTHON_LOGGING_VERSION_PLACEHOLDER/0.3.4/g" \
+            src/realm_registry_backend/api/status.py
+
       - name: Build backend WASMs
         run: |
           export PATH="$PWD/.venv-basilisk/bin:$PATH"

@@ -8,6 +8,7 @@
 // until get_runtime_flags loads; after that the backend is authoritative.
 
 import { getRegistryRuntimeFlagsSnapshot } from '$lib/stores/registryRuntimeFlags.js';
+import { detectNetwork, getCanisterId } from './network.js';
 
 const viteEnv = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {};
 
@@ -19,7 +20,7 @@ const PORTAL_HOSTS = {
 	production: 'https://registry.realmsgos.org'
 };
 
-const network = viteEnv.VITE_DEPLOY_QUEUE_NETWORK || 'staging';
+const network = detectNetwork();
 
 export const CONFIG = {
 	internet_identity_url: viteEnv.VITE_INTERNET_IDENTITY_URL || 'https://identity.ic0.app/',
@@ -33,7 +34,10 @@ export const CONFIG = {
 	deploy_queue_network: network,
 	billing_service_url: viteEnv.VITE_BILLING_SERVICE_URL || 'https://billing.realmsgos.dev',
 	realm_installer_canister_id:
-		viteEnv.VITE_REALM_INSTALLER_CANISTER_ID || viteEnv.CANISTER_ID_REALM_INSTALLER || '',
+		getCanisterId('realm_installer') ||
+		viteEnv.VITE_REALM_INSTALLER_CANISTER_ID ||
+		viteEnv.CANISTER_ID_REALM_INSTALLER ||
+		'',
 	default_deploy_queue_network: network,
 	deploy_release_tag: viteEnv.VITE_DEPLOY_RELEASE_TAG || 'v0.4.0',
 	default_deploy_version: viteEnv.VITE_DEFAULT_DEPLOY_VERSION || 'main',
@@ -48,9 +52,15 @@ export const CONFIG = {
 	},
 	deploy_service_url: viteEnv.VITE_DEPLOY_SERVICE_URL || 'https://deploy.realmsgos.dev',
 	file_registry_canister_id:
-		viteEnv.VITE_FILE_REGISTRY_CANISTER_ID || viteEnv.CANISTER_ID_FILE_REGISTRY || '',
+		getCanisterId('file_registry') ||
+		viteEnv.VITE_FILE_REGISTRY_CANISTER_ID ||
+		viteEnv.CANISTER_ID_FILE_REGISTRY ||
+		'',
 	marketplace_canister_id:
-		viteEnv.VITE_MARKETPLACE_CANISTER_ID || viteEnv.CANISTER_ID_MARKETPLACE_BACKEND || ''
+		getCanisterId('marketplace_backend') ||
+		viteEnv.VITE_MARKETPLACE_CANISTER_ID ||
+		viteEnv.CANISTER_ID_MARKETPLACE_BACKEND ||
+		''
 };
 
 function _readFlag(envKey, urlParam) {

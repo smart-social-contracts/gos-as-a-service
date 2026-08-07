@@ -8,7 +8,7 @@
     "start": "vite --port 3000",
     "prebuild": "cd ../.. && dfx generate realm_registry_backend && dfx generate realm_installer",
     "build": "vite build",
-    "test:unit": "node --test src/lib/deployment-progress.test.js src/lib/deployment-manifest-view.test.js src/lib/gos-implementations.test.js",
+    "test:unit": "node --test src/lib/deployment-progress.test.js src/lib/deployment-manifest-view.test.js src/lib/gos-implementations.test.js src/lib/network.test.js",
     "format": "prettier --write \"src/**/*.{json,js,jsx,ts,tsx,css,scss}\""
   },
   "dependencies": {

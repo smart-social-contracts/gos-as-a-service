@@ -30,8 +30,14 @@ async function createBackendActor() {
     }
 
     // Dynamically import to avoid SSR issues
-    const { createActor, canisterId } = await import('declarations/realm_registry_backend');
+    const { createActor, canisterId: declaredCanisterId } = await import('declarations/realm_registry_backend');
+    const { getCanisterId } = await import('$lib/network.js');
     const { HttpAgent } = await import('@dfinity/agent');
+
+    const resolvedCanisterId = getCanisterId('realm_registry_backend') || declaredCanisterId;
+    if (!resolvedCanisterId) {
+        throw new Error('CANISTER_ID_REALM_REGISTRY_BACKEND is not set');
+    }
 
     // Create an agent
     const agent = new HttpAgent();
@@ -49,7 +55,7 @@ async function createBackendActor() {
     }
 
     // Create actor with the agent
-    return createActor(canisterId, { agent });
+    return createActor(resolvedCanisterId, { agent });
 }
 
 /** Lazy so merely importing this module during prerender does not start actor setup. */
@@ -82,7 +88,8 @@ export async function getAuthenticatedRegistryActor() {
     if (!identity) {
         throw new Error('Not authenticated');
     }
-    const { createActor, canisterId } = await import('declarations/realm_registry_backend');
+    const { createActor, canisterId: declaredCanisterId } = await import('declarations/realm_registry_backend');
+    const { getCanisterId } = await import('$lib/network.js');
     const { HttpAgent } = await import('@dfinity/agent');
     const agent = new HttpAgent({ identity });
     if (isLocalDevelopment()) {
@@ -92,8 +99,9 @@ export async function getAuthenticatedRegistryActor() {
             console.warn('fetchRootKey failed:', e);
         }
     }
-    if (!canisterId) {
+    const resolvedCanisterId = getCanisterId('realm_registry_backend') || declaredCanisterId;
+    if (!resolvedCanisterId) {
         throw new Error('CANISTER_ID_REALM_REGISTRY_BACKEND is not set');
     }
-    return createActor(canisterId, { agent });
+    return createActor(resolvedCanisterId, { agent });
 }

@@ -88,7 +88,7 @@
       <div class="center-meta">
         <div class="meta-icons">
           <a
-            href="https://github.com/smart-social-contracts/realms"
+            href="https://github.com/smart-social-contracts/gos-as-a-service"
             target="_blank"
             rel="noopener noreferrer"
             class="meta-link"

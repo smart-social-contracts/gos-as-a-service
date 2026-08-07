@@ -1,0 +1,81 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { detectNetwork, getCanisterId } from './network.js';
+
+const CANISTER_MAP = {
+	realm_registry_backend: {
+		demo: 'rhw4p-gqaaa-aaaac-qbw7q-cai',
+		staging: '7wzxh-wyaaa-aaaau-aggyq-cai',
+		test: 'yhw3g-fyaaa-aaaas-qgorq-cai'
+	},
+	file_registry: {
+		test: 'uq2mu-kaaaa-aaaah-avqcq-cai'
+	}
+};
+
+test('detectNetwork maps known hostnames', () => {
+	assert.equal(detectNetwork('test.gos.earth'), 'test');
+	assert.equal(detectNetwork('staging.gos.earth'), 'staging');
+	assert.equal(detectNetwork('demo.gos.earth'), 'demo');
+	assert.equal(detectNetwork('gos.earth'), 'ic');
+	assert.equal(detectNetwork('registry.realmsgos.org'), 'ic');
+	assert.equal(detectNetwork('localhost'), 'local');
+	assert.equal(detectNetwork('127.0.0.1'), 'local');
+	assert.equal(detectNetwork('realm_registry_frontend.localhost'), 'local');
+});
+
+test('detectNetwork defaults unknown hostnames to staging', () => {
+	assert.equal(detectNetwork('unknown.example.com'), 'staging');
+});
+
+test('getCanisterId resolves from injected map by network', () => {
+	assert.equal(
+		getCanisterId('realm_registry_backend', {
+			hostname: 'test.gos.earth',
+			canisterIdsMap: CANISTER_MAP
+		}),
+		'yhw3g-fyaaa-aaaas-qgorq-cai'
+	);
+	assert.equal(
+		getCanisterId('realm_registry_backend', {
+			hostname: 'staging.gos.earth',
+			canisterIdsMap: CANISTER_MAP
+		}),
+		'7wzxh-wyaaa-aaaau-aggyq-cai'
+	);
+	assert.equal(
+		getCanisterId('realm_registry_backend', {
+			hostname: 'demo.gos.earth',
+			canisterIdsMap: CANISTER_MAP
+		}),
+		'rhw4p-gqaaa-aaaac-qbw7q-cai'
+	);
+});
+
+test('getCanisterId falls back to env for local network', () => {
+	assert.equal(
+		getCanisterId('realm_registry_backend', {
+			hostname: 'localhost',
+			canisterIdsMap: CANISTER_MAP,
+			envOverride: { CANISTER_ID_REALM_REGISTRY_BACKEND: 'local-canister-id' }
+		}),
+		'local-canister-id'
+	);
+});
+
+test('getCanisterId returns undefined when nothing resolves', () => {
+	assert.equal(
+		getCanisterId('nonexistent_canister', {
+			hostname: 'test.gos.earth',
+			canisterIdsMap: CANISTER_MAP
+		}),
+		undefined
+	);
+	assert.equal(
+		getCanisterId('file_registry', {
+			hostname: 'demo.gos.earth',
+			canisterIdsMap: CANISTER_MAP
+		}),
+		undefined
+	);
+});
