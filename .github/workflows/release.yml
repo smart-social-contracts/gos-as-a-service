@@ -89,6 +89,8 @@ jobs:
           npm run build --workspace=realm_registry_frontend
           tar czf realm_registry_frontend.tar.gz -C src/realm_registry_frontend/dist .
           echo "Frontend tarball: $(stat -c%s realm_registry_frontend.tar.gz) bytes"
+          tar czf file_registry_frontend.tar.gz -C src/file_registry_frontend/dist .
+          echo "File registry frontend tarball: $(stat -c%s file_registry_frontend.tar.gz) bytes"
 
       - name: Compute release asset checksums
         run: |
@@ -96,7 +98,8 @@ jobs:
           for f in realm_registry_backend.wasm.gz realm_registry_backend.did \
                    realm_installer.wasm.gz realm_installer.did \
                    file_registry.wasm.gz file_registry.did \
-                   realm_registry_frontend.tar.gz; do
+                   realm_registry_frontend.tar.gz \
+                   file_registry_frontend.tar.gz; do
             [ -f "$f" ] && sha256sum "$f" >> checksums.txt
           done
           cat checksums.txt
@@ -115,4 +118,5 @@ jobs:
             file_registry.wasm.gz
             file_registry.did
             realm_registry_frontend.tar.gz
+            file_registry_frontend.tar.gz
             checksums.txt

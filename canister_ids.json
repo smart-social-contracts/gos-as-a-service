@@ -19,6 +19,11 @@
     "staging": "iebdk-kqaaa-aaaau-agoxq-cai",
     "test": "uq2mu-kaaaa-aaaah-avqcq-cai"
   },
+  "file_registry_frontend": {
+    "demo": "7ja5c-dqaaa-aaaae-qj5oa-cai",
+    "staging": "rbex3-xyaaa-aaaah-qumma-cai",
+    "test": "2no7h-xqaaa-aaaad-qlxeq-cai"
+  },
   "marketplace_backend": {
     "demo": "ehyfg-wyaaa-aaaae-qg3qq-cai",
     "staging": "jji3o-uyaaa-aaaah-qreja-cai",

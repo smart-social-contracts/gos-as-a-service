@@ -14,7 +14,8 @@
   },
   "type": "module",
   "workspaces": [
-    "src/realm_registry_frontend"
+    "src/realm_registry_frontend",
+    "src/file_registry_frontend"
   ],
   "dependencies": {
     "@dfinity/agent": "^3.4.3",

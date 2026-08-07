@@ -12,6 +12,7 @@ GOS-as-a-Service (GaaS) is the platform behind [gos.earth](https://gos.earth): a
 | Registry frontend | `src/realm_registry_frontend/` | Create-realm wizard + federation portal at `*.gos.earth` |
 | Realm installer | `src/realm_installer/` | Deployment queue, WASM verification, provisioning orchestration |
 | File registry | `src/file_registry/` | Platform artifact store — WASM/frontend files of supported GOS implementations, branding assets |
+| File registry frontend | `src/file_registry_frontend/` | Static admin UI for the file registry; deployed per-env from release tarballs |
 | Casals (external) | [smart-social-contracts/casals](https://github.com/smart-social-contracts/casals) | Platform provisioner — on-chain canister lifecycle orchestrator |
 
 Casals is an **external platform component**, not built from this repo. The realm installer reaches a Casals conductor at runtime via `InstallerConfig` on the installer canister: `casals_canister_id`, `casals_section`, and `provision_via_casals`. Any conforming Casals conductor can serve a network; today the **realms** fleet operates the conductors per network:
@@ -92,6 +93,7 @@ python3 -m pytest tests/backend/ -q
    - `realm_registry_backend.wasm.gz` + `.did`
    - `realm_installer.wasm.gz` + `.did`
    - `realm_registry_frontend.tar.gz` (dist tarball)
+   - `file_registry_frontend.tar.gz` (static admin UI dist tarball)
 3. GitHub Release attaches these artifacts plus `checksums.txt`.
 4. Release workflow updates `src/realm_registry_frontend/src/lib/config.js` with the tag and WASM checksums.
 

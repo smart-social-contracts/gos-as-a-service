@@ -1,0 +1,11 @@
+{
+  "name": "file_registry_frontend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Static admin UI for the file_registry canister. Files in dist/ are deployed as-is. The dist/dfinity.js bundle is pre-built (see scripts/build-dfinity-bundle.sh) and checked into the repo so dfx deploy stays trivial — re-run that script when the @dfinity/* deps need bumping.",
+  "scripts": {
+    "build": "echo 'no build needed (dist/ is shipped as-is); see scripts/build-dfinity-bundle.sh to regenerate dfinity.js'",
+    "prebuild": "echo 'no prebuild for file_registry_frontend'",
+    "rebuild-dfinity-bundle": "bash scripts/build-dfinity-bundle.sh"
+  }
+}

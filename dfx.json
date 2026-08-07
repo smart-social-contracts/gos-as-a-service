@@ -60,6 +60,19 @@
       "type": "custom",
       "wasm": ".basilisk/file_registry/file_registry.wasm"
     },
+    "file_registry_frontend": {
+      "source": [
+        "src/file_registry_frontend/dist"
+      ],
+      "type": "assets",
+      "remote": {
+        "id": {
+          "demo": "7ja5c-dqaaa-aaaae-qj5oa-cai",
+          "staging": "rbex3-xyaaa-aaaah-qumma-cai",
+          "test": "2no7h-xqaaa-aaaad-qlxeq-cai"
+        }
+      }
+    },
     "realm_registry_backend": {
       "build": "python -m basilisk realm_registry_backend src/realm_registry_backend/main.py",
       "candid": "src/realm_registry_backend/realm_registry_backend.did",

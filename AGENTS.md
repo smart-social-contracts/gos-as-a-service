@@ -11,6 +11,7 @@ src/realm_registry_backend/   # Registry canister (Basilisk/Python)
 src/realm_registry_frontend/  # Wizard + portal (SvelteKit)
 src/realm_installer/            # Deployment queue + Casals provisioning
 src/file_registry/               # Platform artifact store (GOS wasms, branding)
+src/file_registry_frontend/      # File registry admin UI (static assets; release tarballs)
 src/declarations/               # Vendored candid bindings for frontend build
 tests/backend/                  # Unit tests (no replica)
 tests/integration/              # Live-replica installer API tests
