@@ -95,7 +95,8 @@ jobs:
       - name: Deploy registry stack
         run: |
           export PATH="$PWD/.venv-basilisk/bin:$PATH"
-          dfx deploy realm_registry_backend realm_installer --yes
+          dfx deploy realm_registry_backend --yes
+          dfx deploy realm_installer --yes
       - name: realm_installer API tests
         run: python3 tests/integration/test_realm_installer_api.py
       - name: Stop local replica
