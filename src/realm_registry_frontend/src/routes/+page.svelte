@@ -4,6 +4,7 @@
   import { browser } from '$app/environment';
   import { _ } from 'svelte-i18n';
   import MapView from '$lib/components/MapView.svelte';
+  import { getCanisterId } from '$lib/network.js';
   import RegistryHeader from '$lib/components/RegistryHeader.svelte';
   import RegistryEdgeTabs from '$lib/components/RegistryEdgeTabs.svelte';
   import RegistryKpiLine from '$lib/components/RegistryKpiLine.svelte';
@@ -72,10 +73,10 @@
     }, 420);
   }
 
-  const marketplaceCanisterId = import.meta.env.CANISTER_ID_MARKETPLACE_FRONTEND || '';
-  const casalsCanisterId = import.meta.env.CANISTER_ID_CASALS_FRONTEND || '';
-  // Fallback so the Architecture rail link always resolves (local builds often lack the env id).
-  const CASALS_FALLBACK_URL = 'https://mcqbx-hyaaa-aaaaj-qsarq-cai.icp0.io';
+  const marketplaceCanisterId =
+    import.meta.env.CANISTER_ID_MARKETPLACE_FRONTEND || getCanisterId('marketplace_frontend') || '';
+  const casalsCanisterId =
+    import.meta.env.CANISTER_ID_CASALS_FRONTEND || getCanisterId('casals_frontend') || '';
 
   $: marketplaceUrl = isLocalDevelopment()
     ? `http://localhost:${(typeof window !== 'undefined' && window.location.port) || '4943'}/?canisterId=marketplace_frontend`
@@ -83,9 +84,7 @@
       ? `https://${marketplaceCanisterId}.icp0.io`
       : '';
 
-  $: casalsUrl = casalsCanisterId
-    ? `https://${casalsCanisterId}.icp0.io`
-    : CASALS_FALLBACK_URL;
+  $: casalsUrl = casalsCanisterId ? `https://${casalsCanisterId}.icp0.io` : '';
 
   function isLocalDevelopment() {
     return (

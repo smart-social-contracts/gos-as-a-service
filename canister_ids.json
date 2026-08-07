@@ -28,5 +28,15 @@
     "demo": "ehyfg-wyaaa-aaaae-qg3qq-cai",
     "staging": "jji3o-uyaaa-aaaah-qreja-cai",
     "test": "2wldc-niaaa-aaaad-qlxga-cai"
+  },
+  "marketplace_frontend": {
+    "demo": "ulsvn-pyaaa-aaaae-qj4tq-cai",
+    "staging": "joj52-zaaaa-aaaah-qrejq-cai",
+    "test": "mxyd5-3qaaa-aaaao-ba2xq-cai"
+  },
+  "casals_frontend": {
+    "demo": "hvwpv-aiaaa-aaaam-ajddq-cai",
+    "staging": "mcqbx-hyaaa-aaaaj-qsarq-cai",
+    "test": "qic2k-baaaa-aaaae-agvga-cai"
   }
 }
