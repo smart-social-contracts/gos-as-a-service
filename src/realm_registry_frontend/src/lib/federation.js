@@ -31,12 +31,24 @@ export function realmFrontendOrigin(
 	return `https://${id}.icp0.io`;
 }
 
+/**
+ * Map internal extension bundle paths to user-facing realm routes for iframe src.
+ * Bad portal history entries may contain `/ext/{id}/…/index.html`; the realm
+ * frontend serves those only as static assets, not as SPA routes.
+ */
+export function normalizeRealmIframePath(subPath = '') {
+	const p = subPath.startsWith('/') ? subPath : subPath ? `/${subPath}` : '';
+	const extMatch = p.match(/^\/ext\/([^/]+)(?:\/.*)?$/);
+	if (extMatch) return `/extensions/${extMatch[1]}`;
+	return p || '/';
+}
+
 export function realmIframeUrl(frontendCanisterId, slug, subPath = '') {
 	const base = realmFrontendOrigin(frontendCanisterId, CONFIG.deploy_queue_network, {
 		portalIframe: true,
 	});
 	if (!base) return '';
-	const path = subPath.startsWith('/') ? subPath : subPath ? `/${subPath}` : '';
+	const path = normalizeRealmIframePath(subPath);
 	const q = new URLSearchParams({ portal: '1', slug: slug || '' });
 	return `${base}${path}?${q.toString()}`;
 }

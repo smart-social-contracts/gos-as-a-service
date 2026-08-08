@@ -15,8 +15,20 @@ def test_legacy_manifest_five_arg_form():
     assert result == '("my-realm", "fe-id", "be-id", "", "")'
 
 
+def test_portal_base_from_federation_portal_url():
+    manifest = {
+        "federation": {
+            "slug": "my-realm",
+            "portal_url": "https://test.gos.earth/r/my-realm",
+        },
+    }
+    result = build_claim_slug_args("my-realm", "fe-id", "be-id", manifest)
+    assert result == '("my-realm", "fe-id", "be-id", "https://test.gos.earth", "")'
+
+
 def test_full_gos_block_nine_arg_form():
     manifest = {
+        "federation": {"portal_url": "https://test.gos.earth/r/my-realm"},
         "gos": {
             "implementation": "realms-gos",
             "version": "0.4.0",
@@ -26,7 +38,7 @@ def test_full_gos_block_nine_arg_form():
     }
     result = build_claim_slug_args("my-realm", "fe-id", "be-id", manifest)
     assert result == (
-        '("my-realm", "fe-id", "be-id", "", "", '
+        '("my-realm", "fe-id", "be-id", "https://test.gos.earth", "", '
         'opt "realms-gos", opt "0.4.0", opt "1.0", opt "realms-iframe-v1")'
     )
 

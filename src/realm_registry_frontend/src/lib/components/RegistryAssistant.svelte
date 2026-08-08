@@ -346,7 +346,7 @@
     }
   }
 
-  async function ensureRealmContext(slug) {
+  async function ensureRealmContext(slug, { attempt = 0 } = {}) {
     const key = (slug || '').trim().toLowerCase();
     if (!key) {
       contextRealmId = null;
@@ -361,7 +361,7 @@
     }
     try {
       const { resolveSlug } = await import('$lib/slug-resolver.js');
-      const data = await resolveSlug(key);
+      const data = await resolveSlug(key, { force: attempt > 0 });
       const backend = data.backend_canister_id || null;
       const frontend = data.frontend_canister_id || null;
       if (backend) realmCache[key] = { backend, frontend: frontend || '' };
@@ -370,6 +370,15 @@
         frontendCanisterId = frontend;
       }
     } catch (e) {
+      // Slug claims land at the very end of an installer job; a realm page
+      // opened right after wizard completion can race registration. Retry
+      // quietly before surfacing a console warning.
+      const msg = String(e?.message || e);
+      if (msg.includes('Unknown slug') && attempt < 3 && portalSlug === slug) {
+        await new Promise((r) => setTimeout(r, 5000 * (attempt + 1)));
+        if (portalSlug === slug) return ensureRealmContext(slug, { attempt: attempt + 1 });
+        return;
+      }
       console.warn('[RegistryAssistant] resolveSlug failed:', e);
       if (portalSlug === slug) {
         contextRealmId = null;

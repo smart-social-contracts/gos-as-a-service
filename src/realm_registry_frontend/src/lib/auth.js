@@ -20,6 +20,9 @@ if (DERIVATION_ORIGIN) {
   console.log(`Using II derivationOrigin: ${DERIVATION_ORIGIN}`);
 }
 
+/** Match Realms portal: 7-day II delegation, no idle logout. */
+const SESSION_MAX_TTL_NS = BigInt(7 * 24 * 60 * 60 * 1_000_000_000);
+
 let authClient;
 
 let _testIdentity = null;
@@ -135,7 +138,10 @@ export async function initializeAuthClient() {
     return authClient;
   }
   if (!authClient) {
-    authClient = await AuthClient.create();
+    authClient = await AuthClient.create({
+      keyType: 'Ed25519',
+      idleOptions: { disableIdle: true },
+    });
   }
   return authClient;
 }
@@ -177,6 +183,7 @@ export async function login({ identityIndex = null } = {}) {
   return new Promise((resolve) => {
     const loginOpts = {
       identityProvider: II_URL,
+      maxTimeToLive: SESSION_MAX_TTL_NS,
       onSuccess: () => {
         const identity = client.getIdentity();
         const principal = identity.getPrincipal();
