@@ -94,11 +94,25 @@ function networkInfra(network) {
 }
 
 /**
- * Staging/demo test flags for wizard-deployed realms — same as mundus layered
- * descriptors (real Internet Identity, Terms step; no II bypass).
+ * Per-network test flags for wizard-deployed realms — mirrors the mundus
+ * layered descriptors.
+ *
+ * test: skip real Internet Identity (deterministic local test identities) so
+ *       realm sign-in works inside the portal iframe without a passkey, plus
+ *       demo data and no Terms gate. This is the non-production playground.
+ * staging/demo: real Internet Identity, Terms step; no II bypass.
  */
 function networkTestFlags(network) {
   const net = (network || 'staging').toLowerCase();
+  if (net === 'test') {
+    return {
+      test_mode: true,
+      user_self_registration: true,
+      demo_data: true,
+      ii_bypass: true,
+      skip_terms: true,
+    };
+  }
   if (net === 'staging') {
     return {
       test_mode: true,
