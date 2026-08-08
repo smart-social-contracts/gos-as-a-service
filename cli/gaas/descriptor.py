@@ -16,6 +16,7 @@ from gaas.known import (
     DEFAULT_CASALS_VERSION,
     DEFAULT_PLATFORM_RELEASE_REPO,
     GOS_IMPLEMENTATIONS,
+    GosCatalog,
     KNOWN_CANISTER_NAMES,
 )
 from gaas.versions import VERSION_TAG_RE, validate_descriptor_version
@@ -54,12 +55,47 @@ class GosArtifacts(BaseModel):
         )
 
 
+class GosCatalogConfig(BaseModel):
+    codices_repo_suffix: str
+    extensions_repo_suffix: str
+
+    @field_validator("codices_repo_suffix", "extensions_repo_suffix")
+    @classmethod
+    def validate_repo_suffix(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized or "/" in normalized:
+            raise ValueError(
+                "catalog repo suffix must be a non-empty repo name without '/'"
+            )
+        return normalized
+
+    def to_gos_catalog(self) -> GosCatalog:
+        return GosCatalog(
+            codices_repo_suffix=self.codices_repo_suffix,
+            extensions_repo_suffix=self.extensions_repo_suffix,
+        )
+
+
 class GosEntry(BaseModel):
     implementation: str
     version: str
     release_repo: str
     artifacts: GosArtifacts
     loader_profile: str
+    catalog: GosCatalogConfig | None = None
+
+    def resolved_catalog(self) -> GosCatalog | None:
+        """Effective codex/extension catalog for seeding.
+
+        Absent ``catalog`` in the descriptor uses the known implementation default.
+        Explicit ``null`` disables seeding. A non-null object overrides the default.
+        """
+        if "catalog" in self.model_fields_set:
+            if self.catalog is None:
+                return None
+            return self.catalog.to_gos_catalog()
+        impl = GOS_IMPLEMENTATIONS.get(self.implementation)
+        return impl.catalog if impl else None
 
     @field_validator("version")
     @classmethod

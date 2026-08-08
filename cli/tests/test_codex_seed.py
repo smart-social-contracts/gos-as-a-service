@@ -19,8 +19,12 @@ from gaas.codex_seed import (
     seed_codex_catalog,
 )
 from gaas.descriptor import Descriptor
+from gaas.known import GOS_IMPLEMENTATIONS
 from gaas.phases import DeployContext, phase_seed_file_registry
 from tests.conftest import SAMPLE_DESCRIPTOR, VALID_CANISTER_ID
+
+REALMS_CATALOG = GOS_IMPLEMENTATIONS["realms-gos"].catalog
+assert REALMS_CATALOG is not None
 
 
 def _write_unified_codex(root: Path, codex_id: str, version: str) -> Path:
@@ -230,6 +234,7 @@ def test_seed_codex_catalog_hard_fails_on_codex_error(
             tmp_path / "work",
             "local",
             identity="deployer",
+            catalog=REALMS_CATALOG,
         )
 
 
@@ -266,4 +271,75 @@ def test_phase_seed_file_registry_wires_codex_catalog(
     kwargs = mock_seed_catalog.call_args.kwargs
     assert args[0] == VALID_CANISTER_ID
     assert args[1] == "smart-social-contracts/realms"
-    assert kwargs["implementation"] == "realms-gos"
+    assert kwargs["catalog"] == REALMS_CATALOG
+
+
+@patch("gaas.phases.seed_codex_catalog")
+@patch("gaas.phases.ensure_version_catalog_entry", return_value="skipped")
+@patch("gaas.phases.namespace_published", return_value=True)
+@patch("gaas.phases.fetch_namespace_hashes")
+def test_phase_seed_file_registry_skips_without_catalog(
+    mock_hashes: MagicMock,
+    _mock_published: MagicMock,
+    _mock_version_catalog: MagicMock,
+    mock_seed_catalog: MagicMock,
+    tmp_path: Path,
+) -> None:
+    mock_hashes.return_value = {"realm_backend.wasm.gz": "abc"}
+
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["gos"] = [{**data["gos"][0], "catalog": None, "implementation": "chora-gos"}]
+    data["canisters"] = {
+        "file_registry": VALID_CANISTER_ID,
+        "realm_registry_backend": VALID_CANISTER_ID,
+    }
+    descriptor = Descriptor.model_validate(data)
+    ctx = DeployContext(
+        identity="deployer",
+        network="local",
+        work_dir=tmp_path / "work",
+        yes=True,
+    )
+
+    phase_seed_file_registry(descriptor, ctx)
+
+    mock_seed_catalog.assert_not_called()
+
+
+@patch("gaas.phases.seed_codex_catalog")
+@patch("gaas.phases.ensure_version_catalog_entry", return_value="skipped")
+@patch("gaas.phases.namespace_published", return_value=True)
+@patch("gaas.phases.fetch_namespace_hashes")
+def test_phase_seed_file_registry_honors_catalog_override(
+    mock_hashes: MagicMock,
+    _mock_published: MagicMock,
+    _mock_version_catalog: MagicMock,
+    mock_seed_catalog: MagicMock,
+    tmp_path: Path,
+) -> None:
+    mock_hashes.return_value = {"realm_backend.wasm.gz": "abc"}
+
+    override = {
+        "codices_repo_suffix": "custom-codices",
+        "extensions_repo_suffix": "custom-extensions",
+    }
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["gos"] = [{**data["gos"][0], "catalog": override}]
+    data["canisters"] = {
+        "file_registry": VALID_CANISTER_ID,
+        "realm_registry_backend": VALID_CANISTER_ID,
+    }
+    descriptor = Descriptor.model_validate(data)
+    ctx = DeployContext(
+        identity="deployer",
+        network="local",
+        work_dir=tmp_path / "work",
+        yes=True,
+    )
+
+    phase_seed_file_registry(descriptor, ctx)
+
+    mock_seed_catalog.assert_called_once()
+    catalog = mock_seed_catalog.call_args.kwargs["catalog"]
+    assert catalog.codices_repo_suffix == "custom-codices"
+    assert catalog.extensions_repo_suffix == "custom-extensions"

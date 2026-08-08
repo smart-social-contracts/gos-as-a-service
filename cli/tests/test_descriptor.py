@@ -184,3 +184,55 @@ def test_casals_commanders_rejects_empty_entry() -> None:
     with pytest.raises(ValidationError, match="non-empty"):
         Descriptor.model_validate(data)
 
+
+def test_gos_catalog_inherits_from_known() -> None:
+    desc = Descriptor.model_validate(SAMPLE_DESCRIPTOR)
+    entry = desc.gos[0]
+    assert "catalog" not in entry.model_fields_set
+    catalog = entry.resolved_catalog()
+    assert catalog is not None
+    assert catalog.codices_repo_suffix == "realms-codices"
+    assert catalog.extensions_repo_suffix == "realms-extensions"
+
+
+def test_gos_catalog_explicit_null_disables_seeding() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["gos"] = [{**data["gos"][0], "catalog": None}]
+    desc = Descriptor.model_validate(data)
+    entry = desc.gos[0]
+    assert "catalog" in entry.model_fields_set
+    assert entry.resolved_catalog() is None
+
+
+def test_gos_catalog_override() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["gos"] = [
+        {
+            **data["gos"][0],
+            "catalog": {
+                "codices_repo_suffix": "my-codices",
+                "extensions_repo_suffix": "my-extensions",
+            },
+        }
+    ]
+    desc = Descriptor.model_validate(data)
+    catalog = desc.gos[0].resolved_catalog()
+    assert catalog is not None
+    assert catalog.codices_repo_suffix == "my-codices"
+    assert catalog.extensions_repo_suffix == "my-extensions"
+
+
+def test_gos_catalog_rejects_invalid_suffix() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["gos"] = [
+        {
+            **data["gos"][0],
+            "catalog": {
+                "codices_repo_suffix": "org/repo",
+                "extensions_repo_suffix": "realms-extensions",
+            },
+        }
+    ]
+    with pytest.raises(ValidationError, match="without '/'"):
+        Descriptor.model_validate(data)
+

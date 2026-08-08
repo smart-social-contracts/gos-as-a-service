@@ -519,7 +519,13 @@ def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None
                 )
 
         catalog_key = (entry.release_repo, resolved.descriptor_version)
-        if catalog_key not in seeded_catalog_sources:
+        catalog_spec = entry.resolved_catalog()
+        if catalog_spec is None:
+            console.print(
+                f"  skip codex/extension catalog seed for {entry.implementation} "
+                f"(no catalog declared)"
+            )
+        elif catalog_key not in seeded_catalog_sources:
             seed_codex_catalog(
                 registry_id,
                 entry.release_repo,
@@ -527,7 +533,7 @@ def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None
                 work,
                 ctx.network,
                 identity=ctx.identity,
-                implementation=entry.implementation,
+                catalog=catalog_spec,
                 existing_realms_checkout=existing_realms_checkout
                 if existing_realms_checkout.is_dir()
                 else None,

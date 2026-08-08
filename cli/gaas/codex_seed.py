@@ -27,9 +27,7 @@ console = Console()
 SKIP_EXTENSION_IDS = frozenset({"_shared"})
 SKIP_CODEX_IDS = frozenset({"_common", "common"})
 
-REALMS_GOS_IMPLEMENTATION = "realms-gos"
-DEFAULT_CODICES_REPO_SUFFIX = "realms-codices"
-DEFAULT_EXTENSIONS_REPO_SUFFIX = "realms-extensions"
+from gaas.known import GosCatalog
 
 
 class CodexSeedError(RuntimeError):
@@ -418,13 +416,15 @@ def _ensure_codices_root(
     release_repo: str,
     work_dir: Path,
     ref: str,
+    *,
+    catalog: GosCatalog,
 ) -> Path:
     found = resolve_codices_root(realms_root)
     if found is not None:
         return found
 
     org = _org_from_release_repo(release_repo)
-    codices_repo = f"{org}/{DEFAULT_CODICES_REPO_SUFFIX}"
+    codices_repo = f"{org}/{catalog.codices_repo_suffix}"
     slug = codices_repo.replace("/", "_")
     dest = work_dir / "codices-clone" / slug / ref.replace("/", "_")
     console.print(
@@ -449,6 +449,7 @@ def _try_seed_extensions(
     network: str,
     *,
     identity: str | None,
+    catalog: GosCatalog,
 ) -> None:
     extensions_repo_root: Path | None = None
     nested = realms_root / "extensions"
@@ -461,7 +462,7 @@ def _try_seed_extensions(
 
     if extensions_repo_root is None:
         org = _org_from_release_repo(release_repo)
-        ext_repo = f"{org}/{DEFAULT_EXTENSIONS_REPO_SUFFIX}"
+        ext_repo = f"{org}/{catalog.extensions_repo_suffix}"
         slug = ext_repo.replace("/", "_")
         dest = work_dir / "extensions-clone" / slug / ref.replace("/", "_")
         try:
@@ -511,15 +512,11 @@ def seed_codex_catalog(
     network: str,
     *,
     identity: str | None = None,
-    implementation: str = REALMS_GOS_IMPLEMENTATION,
+    catalog: GosCatalog,
     existing_realms_checkout: Path | None = None,
     session=None,
 ) -> None:
     """Publish codex (and best-effort extension) catalogs for one GOS source tree."""
-    if implementation != REALMS_GOS_IMPLEMENTATION:
-        console.print(f"  skip codex seed for unsupported implementation {implementation!r}")
-        return
-
     ref = _clone_ref_for_version(version, release_repo, session=session)
     realms_root = resolve_realms_checkout(
         release_repo,
@@ -528,7 +525,9 @@ def seed_codex_catalog(
         existing_checkout=existing_realms_checkout,
         session=session,
     )
-    codices_root = _ensure_codices_root(realms_root, release_repo, work_dir, ref)
+    codices_root = _ensure_codices_root(
+        realms_root, release_repo, work_dir, ref, catalog=catalog
+    )
     codex_dirs = list_codices(codices_root)
     if not codex_dirs:
         raise CodexSeedError(f"no codex packages under {codices_root}")
@@ -557,4 +556,5 @@ def seed_codex_catalog(
         ref,
         network,
         identity=identity,
+        catalog=catalog,
     )

@@ -22,6 +22,7 @@ from gaas.phases import (
     phase_domain_wiring,
     phase_grant_commanders,
     phase_seed_conductor,
+    phase_seed_file_registry,
     run_phases,
 )
 from gaas.gaas_env import build_gaas_env
@@ -45,6 +46,49 @@ def test_phases_order() -> None:
         "grant_commanders",
         "controller_topology",
     ]
+
+
+@patch("gaas.phases.seed_codex_catalog")
+@patch("gaas.phases.ensure_version_catalog_entry", return_value="skipped")
+@patch("gaas.phases.namespace_published", return_value=True)
+@patch("gaas.phases.fetch_namespace_hashes")
+def test_phase_seed_file_registry_skips_undeclared_catalog(
+    mock_hashes: MagicMock,
+    _mock_published: MagicMock,
+    _mock_version_catalog: MagicMock,
+    mock_seed_catalog: MagicMock,
+    tmp_path: Path,
+) -> None:
+    mock_hashes.return_value = {"chora_backend.wasm.gz": "abc"}
+
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["gos"] = [
+        {
+            "implementation": "chora-gos",
+            "version": "v0.1.0",
+            "release_repo": "smart-social-contracts/chora",
+            "artifacts": {
+                "backend_wasm_key": "chora-backend",
+                "frontend_wasm_key": "chora-assets",
+            },
+            "loader_profile": "chora-iframe-v1",
+        }
+    ]
+    data["canisters"] = {
+        "file_registry": VALID_CANISTER_ID,
+        "realm_registry_backend": VALID_CANISTER_ID,
+    }
+    descriptor = Descriptor.model_validate(data)
+    ctx = DeployContext(
+        identity="deployer",
+        network="local",
+        work_dir=tmp_path / "work",
+        yes=True,
+    )
+
+    phase_seed_file_registry(descriptor, ctx)
+
+    mock_seed_catalog.assert_not_called()
 
 
 @patch("gaas.phases.run_preflight")

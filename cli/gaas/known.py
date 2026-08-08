@@ -63,6 +63,14 @@ class GosArtifactKeys:
 
 
 @dataclass(frozen=True)
+class GosCatalog:
+    """Declares codex/extension catalog seeding for a GOS implementation."""
+
+    codices_repo_suffix: str
+    extensions_repo_suffix: str
+
+
+@dataclass(frozen=True)
 class GosImplementation:
     id: str
     label: str
@@ -70,6 +78,7 @@ class GosImplementation:
     release_repo: str
     artifacts: GosArtifactKeys
     loader_profile: str
+    catalog: GosCatalog | None = None
     available: bool = True
     unavailable_reason: str | None = None
 
@@ -87,6 +96,10 @@ GOS_IMPLEMENTATIONS: Final[dict[str, GosImplementation]] = {
             frontend_asset="realm_frontend.tar.gz",
         ),
         loader_profile="realms-iframe-v1",
+        catalog=GosCatalog(
+            codices_repo_suffix="realms-codices",
+            extensions_repo_suffix="realms-extensions",
+        ),
         available=True,
     ),
     "chora-gos": GosImplementation(
