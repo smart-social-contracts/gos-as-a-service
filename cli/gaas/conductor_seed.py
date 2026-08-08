@@ -366,6 +366,51 @@ def ensure_sheet_and_deploy_multisig(
         console.print(f"  multisig: adopt {multisig_id}")
 
 
+DEPLOYMENTS_COMMANDER_PERMISSIONS = [
+    "stand.create",
+    "stand.rename",
+    "stand.delete",
+    "canister.create",
+    "canister.deploy",
+    "canister.delete",
+    "canister.lifecycle",
+    "canister.topup",
+    "commander.assign",
+    "orchestration.baton.create",
+    "orchestration.baton.upgrade",
+    "orchestration.baton.hand_off",
+    "orchestration.managed_upgrade.run",
+]
+
+
+def ensure_deployments_commander(
+    casals_id: str,
+    installer_id: str,
+    network: str,
+    *,
+    identity: str | None = None,
+) -> None:
+    """Grant the installer section-commander rights on Deployments.
+
+    The sheet format has no commander syntax, so this runs as a separate
+    set_commander call. Section commander permissions cascade to stands, and
+    set_commander adds-or-updates without removing others, so this is safely
+    idempotent.
+    """
+    _casals_call(
+        casals_id,
+        "set_commander",
+        {
+            "section": "Deployments",
+            "commander_principal": installer_id,
+            "permissions": DEPLOYMENTS_COMMANDER_PERMISSIONS,
+        },
+        network,
+        identity=identity,
+    )
+    console.print(f"  Deployments commander: {installer_id}")
+
+
 def configure_multisig_signers(
     multisig_id: str,
     signers: list[str],

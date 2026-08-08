@@ -50,6 +50,7 @@ from gaas.platform import (
 from gaas.conductor_seed import (
     authorize_gos_entry,
     configure_multisig_signers,
+    ensure_deployments_commander,
     ensure_sheet_and_deploy_multisig,
     get_tree,
     seed_orchestration_templates,
@@ -787,6 +788,12 @@ def phase_seed_conductor(descriptor: Descriptor, ctx: DeployContext) -> None:
         )
     ensure_sheet_and_deploy_multisig(
         casals_id, ctx.network, identity=ctx.identity
+    )
+    installer_id = descriptor.canisters.get("realm_installer")
+    if not installer_id:
+        raise RuntimeError("realm_installer ID required")
+    ensure_deployments_commander(
+        casals_id, installer_id, ctx.network, identity=ctx.identity
     )
 
 
