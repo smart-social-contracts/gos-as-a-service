@@ -1,4 +1,13 @@
-"""Cycles requirement estimation and balance verification for deploy preflight."""
+"""Cycles requirement estimation and balance verification for deploy preflight.
+
+The conductor (casals_backend) creates realm canisters at 2T each (its
+``create_cycles`` setting) and pays for orchestration work (wasm pulls, bundle
+uploads, inter-canister calls). A single realm deployment creates backend +
+frontend + baton (3 canisters) plus ~1T ops margin. We price the conductor for
+``REALMS_PER_DEPLOY_ASSUMPTION`` realm deployments on top of its 1T treasury
+reserve. The file_registry seeds platform wasms at deploy time and serves every
+realm install thereafter, so it carries a higher headroom than other backends.
+"""
 
 from __future__ import annotations
 
@@ -18,10 +27,16 @@ WALLET_INITIAL_FUNDING: int = 500_000_000_000  # 0.5T — headroom for first ins
 
 # Minimum in-canister balances before deploy steps that consume cycles.
 CANISTER_HEADROOM_DEFAULT: int = 200_000_000_000  # 0.2T — backends/frontends
-CANISTER_HEADROOM_FILE_REGISTRY: int = 500_000_000_000  # 0.5T — heavy WASM/asset seeding
+CANISTER_HEADROOM_FILE_REGISTRY: int = 2_000_000_000_000  # 2T — platform WASM seed + realm bundle writes
 CANISTER_HEADROOM_REALM_INSTALLER: int = 300_000_000_000  # 0.3T — realm provisioning installs
-CANISTER_HEADROOM_CASALS_BACKEND: int = 1_000_000_000_000  # 1T — treasury reserve + orchestration
+CANISTER_HEADROOM_CASALS_BACKEND: int = 1_000_000_000_000  # 1T — treasury reserve (orchestration float)
 MULTISIG_CREATE_CYCLES: int = 2_000_000_000_000  # 2T — conductor creates multisig when absent
+
+# Conductor realm-provisioning budget (observed on test.gos.earth: ~2T/create_canister).
+REALM_CREATE_CYCLES_PER_CANISTER: int = 2_000_000_000_000  # 2T — conductor create_cycles per realm canister
+REALM_OPS_MARGIN_CYCLES: int = 1_000_000_000_000  # 1T — wasm pulls, bundle upload, inter-canister calls
+REALMS_PER_DEPLOY_ASSUMPTION: int = 2  # price conductor for a couple of realm deployments
+REALM_CANISTERS_PER_DEPLOY: int = 3  # backend + frontend + baton
 
 ICP_TO_CYCLES: int = 1_000_000_000_000  # ~1 ICP ≈ 1T cycles for convert remediation
 
@@ -58,14 +73,28 @@ class CyclesPlan:
         return 0
 
 
+def _realm_provisioning_budget() -> int:
+    """Cycles the conductor spends provisioning one realm (3 creates + ops)."""
+    return (
+        REALM_CANISTERS_PER_DEPLOY * REALM_CREATE_CYCLES_PER_CANISTER
+        + REALM_OPS_MARGIN_CYCLES
+    )
+
+
+def _casals_backend_required(descriptor: Descriptor) -> int:
+    """Treasury reserve plus budget for assumed realm deployments."""
+    multisig_extra = 0 if descriptor.multisig.backend_id else MULTISIG_CREATE_CYCLES
+    realm_budget = REALMS_PER_DEPLOY_ASSUMPTION * _realm_provisioning_budget()
+    return CANISTER_HEADROOM_CASALS_BACKEND + realm_budget + multisig_extra
+
+
 def _canister_headroom(name: str, descriptor: Descriptor) -> int:
     if name == "file_registry":
         return CANISTER_HEADROOM_FILE_REGISTRY
     if name == "realm_installer":
         return CANISTER_HEADROOM_REALM_INSTALLER
     if name == "casals_backend":
-        extra = 0 if descriptor.multisig.backend_id else MULTISIG_CREATE_CYCLES
-        return CANISTER_HEADROOM_CASALS_BACKEND + extra
+        return _casals_backend_required(descriptor)
     return CANISTER_HEADROOM_DEFAULT
 
 
@@ -190,8 +219,10 @@ def render_cycles_plan_table(plan: CyclesPlan) -> Table:
         )
         shortfall = _format_cycles(item.shortfall) if item.shortfall else "—"
         label = item.label
+        if item.label == "casals_backend":
+            label = "casals_backend (treasury + realm provisioning)"
         if item.canister_id:
-            label = f"{item.label}\n{item.canister_id}"
+            label = f"{label}\n{item.canister_id}"
         table.add_row(
             label,
             _format_cycles(item.required),

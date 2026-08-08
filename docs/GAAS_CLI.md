@@ -180,7 +180,7 @@ Optional governance multisig canister. When `backend_id` is omitted, gaas create
 |---|---|---|---|
 | `billing_url` | no | `null` | HTTPS URL for the credits / Stripe billing service. **When present, credits are enforced.** When absent, the environment runs in **open mode** (no credit gate). |
 | `deploy_url` | no | `null` | HTTPS URL for the off-chain deploy worker API. |
-| `monitor_url` | no | `null` | HTTPS URL for the off-chain Casals cycle monitor. When set, gaas enables monitor fields on the conductor via `set_settings`. |
+| `monitor_url` | no | `null` | HTTPS URL for the off-chain cycles/health monitor service the conductor reports to. When set, gaas passes `monitor_service_url` and `monitor_enabled: true` to the conductor via `set_settings`. `monitor_principal` is not set by gaas — configure it separately on the conductor if needed. |
 
 Both service URLs must use `https://`. Empty strings are treated as absent.
 

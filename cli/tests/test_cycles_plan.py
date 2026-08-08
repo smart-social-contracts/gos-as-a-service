@@ -14,8 +14,13 @@ from gaas.cycles_plan import (
     CANISTER_HEADROOM_FILE_REGISTRY,
     CANISTER_HEADROOM_REALM_INSTALLER,
     MULTISIG_CREATE_CYCLES,
+    REALM_CREATE_CYCLES_PER_CANISTER,
+    REALM_OPS_MARGIN_CYCLES,
+    REALMS_PER_DEPLOY_ASSUMPTION,
     WALLET_CREATE_CYCLES,
     WALLET_INITIAL_FUNDING,
+    _casals_backend_required,
+    _realm_provisioning_budget,
     build_cycles_plan,
     print_cycles_plan,
     remediation_canister_top_up,
@@ -58,7 +63,12 @@ def test_wallet_required_partial_create_mix() -> None:
         wallet_balance=5_000_000_000_000,
         canister_balances={
             "file_registry": CANISTER_HEADROOM_FILE_REGISTRY,
-            "casals_backend": CANISTER_HEADROOM_CASALS_BACKEND + MULTISIG_CREATE_CYCLES,
+            "casals_backend": _casals_backend_required(
+                _descriptor(
+                    canisters=canisters,
+                    multisig=MultisigConfig(backend_id=None),
+                )
+            ),
         },
     )
     wallet = next(item for item in plan.items if item.label == "wallet")
@@ -69,6 +79,9 @@ def test_wallet_required_partial_create_mix() -> None:
 
 def test_canister_headrooms_and_multisig_extra() -> None:
     canisters = {name: VALID_CANISTER_ID for name in KNOWN_CANISTER_NAMES}
+    realm_budget = REALMS_PER_DEPLOY_ASSUMPTION * _realm_provisioning_budget()
+    conductor_base = CANISTER_HEADROOM_CASALS_BACKEND + realm_budget
+
     plan_no_multisig = build_cycles_plan(
         _descriptor(canisters=canisters, multisig=MultisigConfig(backend_id=None)),
         "ic",
@@ -76,7 +89,10 @@ def test_canister_headrooms_and_multisig_extra() -> None:
         canister_balances={name: 10_000_000_000_000 for name in canisters},
     )
     casals = next(item for item in plan_no_multisig.items if item.label == "casals_backend")
-    assert casals.required == CANISTER_HEADROOM_CASALS_BACKEND + MULTISIG_CREATE_CYCLES
+    assert casals.required == conductor_base + MULTISIG_CREATE_CYCLES
+    assert casals.required == _casals_backend_required(
+        _descriptor(canisters=canisters, multisig=MultisigConfig(backend_id=None))
+    )
 
     plan_with_multisig = build_cycles_plan(
         _descriptor(
@@ -90,7 +106,7 @@ def test_canister_headrooms_and_multisig_extra() -> None:
     casals_ok = next(
         item for item in plan_with_multisig.items if item.label == "casals_backend"
     )
-    assert casals_ok.required == CANISTER_HEADROOM_CASALS_BACKEND
+    assert casals_ok.required == conductor_base
 
     file_reg = next(item for item in plan_no_multisig.items if item.label == "file_registry")
     installer = next(
@@ -102,6 +118,21 @@ def test_canister_headrooms_and_multisig_extra() -> None:
     assert file_reg.required == CANISTER_HEADROOM_FILE_REGISTRY
     assert installer.required == CANISTER_HEADROOM_REALM_INSTALLER
     assert frontend.required == CANISTER_HEADROOM_DEFAULT
+
+
+def test_conductor_includes_realm_provisioning_budget() -> None:
+    per_realm = 3 * REALM_CREATE_CYCLES_PER_CANISTER + REALM_OPS_MARGIN_CYCLES
+    assert _realm_provisioning_budget() == per_realm
+    assert per_realm == 7_000_000_000_000
+
+    desc = _descriptor(
+        canisters={"casals_backend": VALID_CANISTER_ID},
+        multisig=MultisigConfig(backend_id="aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa"),
+    )
+    assert _casals_backend_required(desc) == CANISTER_HEADROOM_CASALS_BACKEND + (
+        REALMS_PER_DEPLOY_ASSUMPTION * per_realm
+    )
+    assert _casals_backend_required(desc) == 15_000_000_000_000
 
 
 def test_shortfall_detection_wallet_and_canister() -> None:

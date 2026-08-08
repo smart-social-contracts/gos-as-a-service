@@ -243,7 +243,17 @@ def test_casals_settings_json_monitor_url() -> None:
     payload = json.loads(_casals_settings_json(desc, "deployer-principal"))
     assert payload["monitor_enabled"] is True
     assert payload["monitor_service_url"] == "https://monitor.example.com"
-    assert payload["monitor_principal"] == "deployer-principal"
+    assert "monitor_principal" not in payload
+
+
+def test_casals_settings_json_no_monitor_url() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {"file_registry": VALID_CANISTER_ID}
+    desc = Descriptor.model_validate(data)
+    payload = json.loads(_casals_settings_json(desc, "deployer-principal"))
+    assert payload["monitor_enabled"] is False
+    assert "monitor_service_url" not in payload
+    assert "monitor_principal" not in payload
 
 
 def test_infra_canister_names() -> None:
