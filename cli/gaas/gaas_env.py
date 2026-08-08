@@ -23,8 +23,10 @@ def build_gaas_env(descriptor: Descriptor, network: str) -> dict:
         "domain": descriptor.domain,
         "network": network,
         "services": {},
+        # network.js resolves gaasEnv.canisters[name][network] — name-first.
         "canisters": {
-            "ic": dict(descriptor.canisters),
+            name: {network: canister_id}
+            for name, canister_id in descriptor.canisters.items()
         },
         "gos": [
             {
