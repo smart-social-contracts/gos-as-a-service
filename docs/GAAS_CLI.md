@@ -152,7 +152,7 @@ Leave a key out (or omit the entire `canisters` object) to create that canister 
 |---|---|---|---|
 | `version` | **yes** | — | Casals release tag `vX.Y.Z`, `latest`, or `main` (same semantics as `gos[].version`). Default pin: `v0.3.0`. |
 | `release_repo` | no | `smart-social-contracts/Casals` | GitHub repo for Casals release artifacts. |
-| `commanders` | no | `[]` | IC principals granted all-permissions section-commander rights on every orchestra section during conductor seeding. This unlocks the Casals web UI for those principals (the UI requires section- or stand-level commander access). |
+| `commanders` | no | `[]` | IC principals granted all-permissions section-commander rights on every orchestra section during conductor seeding (non-interactive). This unlocks the Casals web UI for those principals (the UI requires section- or stand-level commander access). You can also grant commanders interactively at the end of deploy — see [Granting Casals commanders (interactive)](#granting-casals-commanders-interactive). |
 
 Example with extra UI admins:
 
@@ -165,6 +165,21 @@ Example with extra UI admins:
   ]
 }
 ```
+
+### Granting Casals commanders (interactive)
+
+After smoke checks and **before** controller topology, an interactive deploy prompts for Casals UI principals to grant as section commanders on every orchestra section. This works in production as well as test mode: the deployer identity is still a direct controller of the Casals backend until the final controller-topology phase hands control to the multisig.
+
+The Casals UI principal is Internet-Identity-derived and depends on the frontend origin, so it cannot be known before the Casals frontend is deployed. When the prompt appears:
+
+1. Open `https://<casals_frontend>.icp0.io` (gaas prints the URL from your descriptor).
+2. Log in with Internet Identity.
+3. If an access-denied modal appears, copy the principal it shows.
+4. Paste each principal at the CLI prompt; press Enter on an empty line when done.
+
+Each valid principal is granted commander rights via the conductor and appended to `casals.commanders` in the descriptor file (deduplicated). Invalid input is rejected with a warning; grant failures print an error and the prompt continues without aborting deploy.
+
+Non-interactive runs (`--yes` or no TTY stdin) skip this step with a one-line note. Re-run `gaas new` interactively to grant commanders later (while the deployer still controls the Casals backend).
 
 ### `multisig`
 
@@ -190,7 +205,7 @@ Our live environments use `https://billing.realmsgos.dev` and `https://deploy.re
 
 ### Controller topology (final phase)
 
-After smoke checks, gaas applies IC controller sets (production vs test mode via `flags.open_mode`):
+After smoke checks and the optional interactive commander-grant step, gaas applies IC controller sets (production vs test mode via `flags.open_mode`):
 
 | Canister group | Production controllers | Test mode (`open_mode: true`) |
 |---|---|---|

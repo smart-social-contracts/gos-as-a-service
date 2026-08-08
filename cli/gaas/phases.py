@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 import time
@@ -19,7 +20,7 @@ from rich.table import Table
 
 from gaas import dfx
 from gaas.artifacts import fetch_release_assets
-from gaas.descriptor import Descriptor
+from gaas.descriptor import CANISTER_ID_RE, Descriptor
 from gaas.dns import render_dns_records, wait_for_dns
 from gaas.domain_reg import attempt_domain_registration
 from gaas.file_registry_client import (
@@ -513,6 +514,10 @@ def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None
                 )
 
 
+def _is_interactive(ctx: DeployContext) -> bool:
+    return not ctx.yes and sys.stdin.isatty()
+
+
 def _confirm_reinstall(ctx: DeployContext) -> None:
     if ctx.yes or ctx.network != "ic":
         return
@@ -920,6 +925,63 @@ def phase_controller_topology(descriptor: Descriptor, ctx: DeployContext) -> Non
         console.print("  production: gaas deployer no longer controls platform canisters")
 
 
+def phase_grant_commanders(descriptor: Descriptor, ctx: DeployContext) -> None:
+    casals_id = descriptor.canisters.get("casals_backend")
+    if not casals_id:
+        console.print("  skip: no casals_backend canister ID")
+        return
+
+    tree = get_tree(casals_id, ctx.network, identity=ctx.identity)
+    sections = sorted(_section_names(tree) - {""})
+    if not sections:
+        console.print("  skip: no orchestra sections found")
+        return
+
+    if not _is_interactive(ctx):
+        console.print(
+            "  skip: grant Casals commanders interactively "
+            "(re-run without --yes on a TTY)"
+        )
+        return
+
+    casals_frontend_id = descriptor.canisters.get("casals_frontend")
+    if casals_frontend_id:
+        ui_url = f"https://{casals_frontend_id}.icp0.io"
+        console.print(f"  Open {ui_url} in your browser.")
+        console.print(
+            "  Log in with Internet Identity. If an access-denied modal appears, "
+            "copy the principal it shows."
+        )
+
+    while True:
+        principal = console.input(
+            "[yellow]Principal to grant commander rights on all orchestra sections "
+            "(empty to finish): [/yellow]"
+        ).strip()
+        if not principal:
+            break
+        if not CANISTER_ID_RE.match(principal):
+            console.print(
+                f"[yellow]Warning: {principal!r} does not look like an IC principal; "
+                "try again.[/yellow]"
+            )
+            continue
+        try:
+            ensure_section_commanders(
+                casals_id,
+                sections,
+                [principal],
+                ctx.network,
+                identity=ctx.identity,
+            )
+        except Exception as exc:
+            console.print(f"[red]Error granting commander: {exc}[/red]")
+            continue
+        if principal not in descriptor.casals.commanders:
+            descriptor.casals.commanders.append(principal)
+            _save_descriptor(descriptor, ctx)
+
+
 PHASES: list[tuple[str, str, PhaseFunc]] = [
     ("validate", "Validating descriptor, identity, cycles", phase_validate),
     ("create_canisters", "Creating canisters", phase_create_canisters),
@@ -931,6 +993,7 @@ PHASES: list[tuple[str, str, PhaseFunc]] = [
     ("install_frontends", "Building + installing frontends", phase_install_frontends),
     ("domain_wiring", "Domain wiring", phase_domain_wiring),
     ("smoke_checks", "Smoke checks", phase_smoke_checks),
+    ("grant_commanders", "Granting Casals commanders", phase_grant_commanders),
     ("controller_topology", "Applying controller topology", phase_controller_topology),
 ]
 

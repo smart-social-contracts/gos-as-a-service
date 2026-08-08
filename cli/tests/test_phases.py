@@ -20,6 +20,7 @@ from gaas.phases import (
     phase_controller_topology,
     phase_create_canisters,
     phase_domain_wiring,
+    phase_grant_commanders,
     phase_seed_conductor,
     run_phases,
 )
@@ -41,6 +42,7 @@ def test_phases_order() -> None:
         "install_frontends",
         "domain_wiring",
         "smoke_checks",
+        "grant_commanders",
         "controller_topology",
     ]
 
@@ -417,3 +419,134 @@ def test_phase_seed_conductor_registers_platform_canisters(
         ("file-registry", "ddddd-ddddd-ddddd-ddddd-ddddd-ddd", "backend"),
         ("file-registry-frontend", "eeeee-eeeee-eeeee-eeeee-eeeee-eee", "frontend"),
     ]
+
+
+PRINCIPAL_A = "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa"
+PRINCIPAL_B = "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb"
+CASALS_BACKEND_ID = "fffff-fffff-fffff-fffff-fffff-fff"
+CASALS_FRONTEND_ID = "ggggg-ggggg-ggggg-ggggg-ggggg-ggg"
+MOCK_TREE = {"sections": [{"name": "Infra"}, {"name": "Deployments"}]}
+
+
+def _grant_commanders_descriptor(tmp_path: Path | None = None) -> tuple[Descriptor, DeployContext]:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        "casals_backend": CASALS_BACKEND_ID,
+        "casals_frontend": CASALS_FRONTEND_ID,
+    }
+    desc = Descriptor.model_validate(data)
+    path = None
+    if tmp_path is not None:
+        path = tmp_path / "env.gaas.json"
+        desc.save(path)
+    ctx = DeployContext(
+        identity="deployer",
+        network="ic",
+        descriptor_path=path,
+    )
+    return desc, ctx
+
+
+@patch("gaas.phases.ensure_section_commanders")
+@patch("gaas.phases.get_tree", return_value=MOCK_TREE)
+@patch("gaas.phases.sys.stdin")
+def test_phase_grant_commanders_non_interactive(
+    mock_stdin,
+    _get_tree,
+    mock_ensure,
+) -> None:
+    mock_stdin.isatty.return_value = False
+    desc, ctx = _grant_commanders_descriptor()
+    ctx.yes = False
+
+    phase_grant_commanders(desc, ctx)
+
+    mock_ensure.assert_not_called()
+
+
+@patch("gaas.phases.ensure_section_commanders")
+@patch("gaas.phases.get_tree", return_value=MOCK_TREE)
+@patch("gaas.phases.sys.stdin")
+def test_phase_grant_commanders_non_interactive_yes_flag(
+    mock_stdin,
+    _get_tree,
+    mock_ensure,
+) -> None:
+    mock_stdin.isatty.return_value = True
+    desc, ctx = _grant_commanders_descriptor()
+    ctx.yes = True
+
+    phase_grant_commanders(desc, ctx)
+
+    mock_ensure.assert_not_called()
+
+
+@patch("gaas.phases._save_descriptor")
+@patch("gaas.phases.console.input")
+@patch("gaas.phases.ensure_section_commanders")
+@patch("gaas.phases.get_tree", return_value=MOCK_TREE)
+@patch("gaas.phases.sys.stdin")
+def test_phase_grant_commanders_interactive_grants_and_persists(
+    mock_stdin,
+    _get_tree,
+    mock_ensure,
+    mock_input,
+    mock_save,
+    tmp_path: Path,
+) -> None:
+    mock_stdin.isatty.return_value = True
+    mock_input.side_effect = [PRINCIPAL_A, PRINCIPAL_B, ""]
+    desc, ctx = _grant_commanders_descriptor(tmp_path)
+
+    phase_grant_commanders(desc, ctx)
+
+    assert mock_ensure.call_count == 2
+    for call in mock_ensure.call_args_list:
+        assert call[0][0] == CASALS_BACKEND_ID
+        assert call[0][1] == ["Deployments", "Infra"]
+        assert len(call[0][2]) == 1
+    assert mock_ensure.call_args_list[0][0][2] == [PRINCIPAL_A]
+    assert mock_ensure.call_args_list[1][0][2] == [PRINCIPAL_B]
+    assert desc.casals.commanders == [PRINCIPAL_A, PRINCIPAL_B]
+    assert mock_save.call_count == 2
+
+
+@patch("gaas.phases.console.input")
+@patch("gaas.phases.ensure_section_commanders")
+@patch("gaas.phases.get_tree", return_value=MOCK_TREE)
+@patch("gaas.phases.sys.stdin")
+def test_phase_grant_commanders_invalid_principal_reprompts(
+    mock_stdin,
+    _get_tree,
+    mock_ensure,
+    mock_input,
+) -> None:
+    mock_stdin.isatty.return_value = True
+    mock_input.side_effect = ["not-a-principal", PRINCIPAL_A, ""]
+    desc, ctx = _grant_commanders_descriptor()
+
+    phase_grant_commanders(desc, ctx)
+
+    mock_ensure.assert_called_once()
+    assert mock_ensure.call_args[0][2] == [PRINCIPAL_A]
+
+
+@patch("gaas.phases.console.input")
+@patch("gaas.phases.ensure_section_commanders")
+@patch("gaas.phases.get_tree", return_value=MOCK_TREE)
+@patch("gaas.phases.sys.stdin")
+def test_phase_grant_commanders_grant_error_continues(
+    mock_stdin,
+    _get_tree,
+    mock_ensure,
+    mock_input,
+) -> None:
+    mock_stdin.isatty.return_value = True
+    mock_input.side_effect = [PRINCIPAL_A, PRINCIPAL_B, ""]
+    mock_ensure.side_effect = [RuntimeError("grant failed"), None]
+    desc, ctx = _grant_commanders_descriptor()
+
+    phase_grant_commanders(desc, ctx)
+
+    assert mock_ensure.call_count == 2
+    assert mock_ensure.call_args_list[1][0][2] == [PRINCIPAL_B]
