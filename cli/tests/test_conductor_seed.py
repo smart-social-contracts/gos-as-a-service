@@ -212,7 +212,7 @@ def test_authorize_gos_entry_frontend_uses_assetstorage_wasm(
     assert payload["registry_path"] == "realms-assetstorage.wasm.gz"
     assert payload["kind"] == "frontend"
     assert "certified-assets wasm" in payload["description"]
-    assert "bundle_namespace" not in payload
+    assert payload["bundle_namespace"] == "frontend/realm-assets/0.3.1"
 
 
 def test_authorize_gos_entry_frontend_works_without_bundle_namespace(

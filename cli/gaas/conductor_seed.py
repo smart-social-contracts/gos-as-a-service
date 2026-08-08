@@ -297,6 +297,7 @@ def authorize_gos_entry(
     resolved = resolve_deploy_version(entry.version, entry.release_repo, session=session)
     version = resolved.catalog_version
     backend_ns = f"wasm/{entry.artifacts.backend_wasm_key}/{version}"
+    frontend_ns = f"frontend/{entry.artifacts.frontend_wasm_key}/{version}"
     backend_path = entry.artifacts.resolved_backend_asset(entry.implementation)
 
     backend_hashes = fetch_namespace_hashes(
@@ -338,27 +339,31 @@ def authorize_gos_entry(
         identity=identity,
         repo_root=repo_root,
     )
-    if existing.get(frontend_key) != fe_hash:
-        console.print(f"  authorizing {frontend_key} from {fe_ns}...")
-        _casals_call(
-            casals_id,
-            "add_authorized_wasm",
-            {
-                "key": entry.artifacts.frontend_wasm_key,
-                "version": version,
-                "registry_namespace": fe_ns,
-                "registry_path": fe_path,
-                "wasm_hash": fe_hash,
-                "kind": "frontend",
-                "wasm_type": "assets",
-                "description": (
-                    f"GaaS {entry.implementation} frontend {version} "
-                    "(certified-assets wasm)"
-                ),
-            },
-            network,
-            identity=identity,
-        )
+    # Always upsert: the hash-only check cannot detect drift in fields like
+    # bundle_namespace on an existing entry, and the conductor's upsert is
+    # idempotent. bundle_namespace points at the seeded dist bundle so the
+    # conductor uploads it right after installing the assetstorage wasm.
+    console.print(f"  authorizing {frontend_key} from {fe_ns}...")
+    _casals_call(
+        casals_id,
+        "add_authorized_wasm",
+        {
+            "key": entry.artifacts.frontend_wasm_key,
+            "version": version,
+            "registry_namespace": fe_ns,
+            "registry_path": fe_path,
+            "wasm_hash": fe_hash,
+            "kind": "frontend",
+            "wasm_type": "assets",
+            "bundle_namespace": frontend_ns,
+            "description": (
+                f"GaaS {entry.implementation} frontend {version} "
+                "(certified-assets wasm)"
+            ),
+        },
+        network,
+        identity=identity,
+    )
 
 
 def ensure_sheet_and_deploy_multisig(
