@@ -72,7 +72,7 @@ gaas new environments/test.json --identity deployer --network ic
     "realm_installer": "fltjm-tyaaa-aaaap-qunhq-cai",
     "file_registry": "uq2mu-kaaaa-aaaah-avqcq-cai",
     "file_registry_frontend": "2no7h-xqaaa-aaaad-qlxeq-cai",
-    "casals_conductor": "qthgp-3yaaa-aaaae-agveq-cai",
+    "casals_backend": "qthgp-3yaaa-aaaae-agveq-cai",
     "casals_frontend": "qic2k-baaaa-aaaae-agvga-cai"
   },
   "casals": {
@@ -141,7 +141,7 @@ Only these names are accepted:
 | `realm_installer` | Deployment queue + Casals provisioning |
 | `file_registry` | Platform artifact store |
 | `file_registry_frontend` | File registry admin UI |
-| `casals_conductor` | External Casals orchestrator canister ID |
+| `casals_backend` | Casals orchestrator backend (conductor) canister ID |
 | `casals_frontend` | Casals orchestration UI (standalone assets canister) |
 
 Leave a key out (or omit the entire `canisters` object) to create that canister during deploy. The file registry backend ID is generated at build time when created fresh.
@@ -153,16 +153,39 @@ Leave a key out (or omit the entire `canisters` object) to create that canister 
 | `version` | **yes** | — | Casals release tag `vX.Y.Z`, `latest`, or `main` (same semantics as `gos[].version`). Default pin: `v0.3.0`. |
 | `release_repo` | no | `smart-social-contracts/Casals` | GitHub repo for Casals release artifacts. |
 
+### `multisig`
+
+Optional governance multisig canister. When `backend_id` is omitted, gaas creates the multisig via the conductor sheet deploy and writes the ID back to the descriptor.
+
+| Field | Required | Default | Description |
+|---|---|---|---|
+| `backend_id` | no | `null` | Existing orchestration-multisig canister ID to adopt. |
+
 ### `services`
 
 | Field | Required | Default | Description |
 |---|---|---|---|
 | `billing_url` | no | `null` | HTTPS URL for the credits / Stripe billing service. **When present, credits are enforced.** When absent, the environment runs in **open mode** (no credit gate). |
 | `deploy_url` | no | `null` | HTTPS URL for the off-chain deploy worker API. |
+| `monitor_url` | no | `null` | HTTPS URL for the off-chain Casals cycle monitor. When set, gaas enables monitor fields on the conductor via `set_settings`. |
 
-Both URLs must use `https://`. Empty strings are treated as absent.
+Both service URLs must use `https://`. Empty strings are treated as absent.
+
+`services.open_mode` is a deprecated alias for `flags.open_mode` (see [Open mode vs billing](#open-mode-vs-billing)).
 
 Our live environments use `https://billing.realmsgos.dev` and `https://deploy.realmsgos.dev` (confirmed in `src/realm_registry_frontend/src/lib/config-resolvers.js` defaults).
+
+### Controller topology (final phase)
+
+After smoke checks, gaas applies IC controller sets (production vs test mode via `flags.open_mode`):
+
+| Canister group | Production controllers | Test mode (`open_mode: true`) |
+|---|---|---|
+| `casals_backend`, `casals_frontend` | multisig | multisig + deployer identity |
+| Infra (`realm_registry_*`, `realm_installer`, `file_registry*`) | `casals_backend` | `casals_backend` + deployer |
+| Baton / realm canisters (created by conductor) | baton / multisig per role | + deployer via conductor `extra_controller_principals` |
+
+In production (no test mode), gaas loses IC control after this phase — it must remain last.
 
 ### `dns`
 
@@ -307,11 +330,14 @@ gaas new [DESCRIPTOR] [OPTIONS]
 1. Validating descriptor, identity, cycles
 2. Creating canisters
 3. Installing backends
-4. Configuring backends
+4. Configuring backends (registry, installer, casals `set_settings`)
 5. Seeding file registry
-6. Building + installing frontends
-7. Domain wiring (DNS verify + IC registration)
-8. Smoke checks
+6. Seeding conductor orchestra (templates, authorized WASMs, sheet, multisig deploy)
+7. Configuring multisig signers
+8. Building + installing frontends
+9. Domain wiring (DNS verify + IC registration)
+10. Smoke checks
+11. Applying controller topology (final — gaas may lose control in production)
 
 If a phase is not yet implemented, the pipeline pauses and prints a resume command.
 

@@ -80,3 +80,26 @@ def test_deploy_assets_does_not_retry_permanent_errors(tmp_path, monkeypatch):
     (tmp_path / "canister_ids.json").write_text("{}", encoding="utf-8")
     with pytest.raises(dfx.DfxError):
         dfx.deploy_assets_canister("casals_frontend", "qic2k-baaaa-aaaae-agvga-cai", "ic", repo_root=tmp_path)
+
+
+def test_update_canister_settings_passes_controllers(monkeypatch) -> None:
+    from gaas import dfx
+
+    captured: dict = {}
+
+    def fake_run(args, **kwargs):
+        captured["args"] = args
+
+    monkeypatch.setattr(dfx, "_run", fake_run)
+    dfx.update_canister_settings(
+        "yhw3g-fyaaa-aaaas-qgorq-cai",
+        ["multisig-id", "deployer-id"],
+        "ic",
+        identity="deployer",
+    )
+    args = captured["args"]
+    assert "update-settings" in args
+    assert args.count("--set-controller") == 2
+    assert "multisig-id" in args
+    assert "deployer-id" in args
+

@@ -47,6 +47,14 @@ from gaas.platform import (
     resolve_casals_wasm,
     resolve_platform_backend_wasm,
 )
+from gaas.conductor_seed import (
+    authorize_gos_entry,
+    configure_multisig_signers,
+    ensure_sheet_and_deploy_multisig,
+    get_tree,
+    seed_orchestration_templates,
+    _find_canister_id,
+)
 from gaas.preflight import PreflightReport, run_preflight
 from gaas.source_build import resolve_gos_artifacts
 from gaas.versions import normalize_catalog_version, resolve_deploy_version
@@ -141,11 +149,49 @@ def _installer_config_json(descriptor: Descriptor) -> str:
     payload = {
         "registry_backend_id": canisters.get("realm_registry_backend", ""),
         "file_registry_id": canisters.get("file_registry", ""),
-        "casals_canister_id": canisters.get("casals_conductor", ""),
+        "casals_canister_id": canisters.get("casals_backend", ""),
         "casals_section": DEFAULT_CASALS_SECTION,
         "portal_url": _portal_url(descriptor),
+        "provision_via_casals": True,
+        "create_stand_baton": True,
     }
     return json.dumps(payload)
+
+
+def _casals_settings_json(descriptor: Descriptor, deployer_principal: str) -> str:
+    canisters = descriptor.canisters
+    payload: dict = {
+        "file_registry_canister_id": canisters.get("file_registry", ""),
+        "file_registry_frontend_canister_id": canisters.get("file_registry_frontend", ""),
+        "casals_frontend_canister_id": canisters.get("casals_frontend", ""),
+        "realm_installer_canister_id": canisters.get("realm_installer", ""),
+        "default_min_cycles": 500_000_000_000,
+        "default_topup_cycles": 1_000_000_000_000,
+        "treasury_reserve": 1_000_000_000_000,
+        "create_cycles": 2_000_000_000_000,
+        "monitor_enabled": False,
+    }
+    if descriptor.services.monitor_url:
+        payload["monitor_enabled"] = True
+        payload["monitor_service_url"] = descriptor.services.monitor_url
+        payload["monitor_principal"] = deployer_principal
+    if _resolve_open_mode(descriptor):
+        payload["extra_controller_principals"] = [deployer_principal]
+    return json.dumps(payload)
+
+
+def _parse_casals_settings_response(raw: str) -> dict:
+    return json.loads(raw)
+
+
+def _infra_canister_names() -> tuple[str, ...]:
+    return (
+        "realm_registry_backend",
+        "realm_registry_frontend",
+        "realm_installer",
+        "file_registry",
+        "file_registry_frontend",
+    )
 
 
 def _opt_text_init_arg(config_json: str) -> str:
@@ -250,7 +296,7 @@ def phase_install_backends(descriptor: Descriptor, ctx: DeployContext) -> None:
         "realm_registry_backend": _registry_config_json(descriptor),
         "realm_installer": _installer_config_json(descriptor),
         "file_registry": "",
-        "casals_conductor": "",
+        "casals_backend": "",
     }
 
     for canister, init_json in backends.items():
@@ -258,7 +304,7 @@ def phase_install_backends(descriptor: Descriptor, ctx: DeployContext) -> None:
         if not canister_id:
             raise RuntimeError(f"missing canister ID for {canister}")
 
-        if canister == "casals_conductor":
+        if canister == "casals_backend":
             wasm = resolve_casals_wasm(
                 descriptor.casals.version,
                 descriptor.casals.release_repo,
@@ -364,6 +410,24 @@ def phase_configure_backends(descriptor: Descriptor, ctx: DeployContext) -> None
             f"{inst_cfg.get('registry_backend_id')!r} != {expected_registry!r}"
         )
     console.print("  registry + installer configure verified")
+
+    casals_id = descriptor.canisters.get("casals_backend")
+    if not casals_id:
+        raise RuntimeError("casals_backend canister ID required before set_settings")
+
+    deployer = dfx.get_principal(ctx.identity)
+    settings_json = _casals_settings_json(descriptor, deployer)
+    settings_raw = dfx.canister_call(
+        casals_id,
+        "set_settings",
+        dfx.candid_text_arg(settings_json),
+        ctx.network,
+        identity=ctx.identity,
+    )
+    settings_result = _parse_casals_settings_response(settings_raw)
+    if not settings_result.get("ok", True):
+        raise RuntimeError(f"casals set_settings failed: {settings_result}")
+    console.print("  casals_backend set_settings verified")
 
 
 def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None:
@@ -546,7 +610,7 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
             work / "casals" / "frontend",
             casals_src=ctx.casals_src,
             session=ctx.http,
-            conductor_canister_id=descriptor.canisters.get("casals_conductor", ""),
+            conductor_canister_id=descriptor.canisters.get("casals_backend", ""),
             frontend_canister_id=casals_frontend_id,
         )
         if casals_staging.exists():
@@ -698,15 +762,132 @@ def phase_smoke_checks(descriptor: Descriptor, ctx: DeployContext) -> None:
     console.print(table)
 
 
+def phase_seed_conductor(descriptor: Descriptor, ctx: DeployContext) -> None:
+    casals_id = descriptor.canisters.get("casals_backend")
+    registry_id = descriptor.canisters.get("file_registry")
+    if not casals_id or not registry_id:
+        raise RuntimeError("casals_backend and file_registry IDs required")
+
+    seed_orchestration_templates(
+        casals_id,
+        registry_id,
+        ctx.network,
+        identity=ctx.identity,
+        casals_src=ctx.casals_src,
+    )
+    for entry in descriptor.gos:
+        authorize_gos_entry(
+            casals_id,
+            registry_id,
+            descriptor,
+            entry,
+            ctx.network,
+            identity=ctx.identity,
+            session=ctx.http,
+        )
+    ensure_sheet_and_deploy_multisig(
+        casals_id, ctx.network, identity=ctx.identity
+    )
+
+
+def phase_configure_multisig(descriptor: Descriptor, ctx: DeployContext) -> None:
+    casals_id = descriptor.canisters.get("casals_backend")
+    if not casals_id:
+        raise RuntimeError("casals_backend ID required")
+
+    deployer = dfx.get_principal(ctx.identity)
+    multisig_id = (descriptor.multisig.backend_id or "").strip()
+
+    if multisig_id:
+        console.print(f"  multisig: adopt {multisig_id}")
+    else:
+        tree = get_tree(casals_id, ctx.network, identity=ctx.identity)
+        multisig_id = _find_canister_id(tree, "multisig")
+        if not multisig_id:
+            raise RuntimeError(
+                "multisig not found in conductor tree; run seed_conductor first"
+            )
+        descriptor.set_multisig_backend_id(multisig_id)
+        _save_descriptor(descriptor, ctx)
+        console.print(f"  multisig: created {multisig_id}")
+
+    configure_multisig_signers(
+        multisig_id,
+        [deployer],
+        ctx.network,
+        identity=ctx.identity,
+        threshold=1,
+    )
+
+
+def phase_controller_topology(descriptor: Descriptor, ctx: DeployContext) -> None:
+    multisig_id = (descriptor.multisig.backend_id or "").strip()
+    if not multisig_id:
+        casals_id = descriptor.canisters.get("casals_backend", "")
+        if casals_id:
+            tree = get_tree(casals_id, ctx.network, identity=ctx.identity)
+            multisig_id = _find_canister_id(tree, "multisig")
+    if not multisig_id:
+        raise RuntimeError("multisig backend_id required for controller topology")
+
+    deployer = dfx.get_principal(ctx.identity)
+    test_mode = _resolve_open_mode(descriptor)
+    casals_backend_id = descriptor.canisters.get("casals_backend", "")
+
+    def controllers(base: list[str]) -> list[str]:
+        if test_mode and deployer not in base:
+            return base + [deployer]
+        return base
+
+    casals_pair = ("casals_backend", "casals_frontend")
+    for name in casals_pair:
+        canister_id = descriptor.canisters.get(name)
+        if not canister_id:
+            raise RuntimeError(f"missing canister ID for {name}")
+        target = controllers([multisig_id])
+        console.print(f"  {name}: controllers -> {', '.join(target)}")
+        dfx.update_canister_settings(
+            canister_id, target, ctx.network, identity=ctx.identity
+        )
+        status = dfx.canister_status(canister_id, ctx.network, identity=ctx.identity)
+        if set(status.controllers) != set(target):
+            raise RuntimeError(
+                f"{name} controller verify failed: {status.controllers} != {target}"
+            )
+
+    for name in _infra_canister_names():
+        canister_id = descriptor.canisters.get(name)
+        if not canister_id:
+            raise RuntimeError(f"missing canister ID for {name}")
+        target = controllers([casals_backend_id])
+        console.print(f"  {name}: controllers -> {', '.join(target)}")
+        dfx.update_canister_settings(
+            canister_id, target, ctx.network, identity=ctx.identity
+        )
+        status = dfx.canister_status(canister_id, ctx.network, identity=ctx.identity)
+        if set(status.controllers) != set(target):
+            raise RuntimeError(
+                f"{name} controller verify failed: {status.controllers} != {target}"
+            )
+
+    if test_mode:
+        console.print("  test mode: deployer retained as co-controller on platform canisters")
+    else:
+        console.print("  production: gaas deployer no longer controls platform canisters")
+
+
 PHASES: list[tuple[str, str, PhaseFunc]] = [
     ("validate", "Validating descriptor, identity, cycles", phase_validate),
     ("create_canisters", "Creating canisters", phase_create_canisters),
     ("install_backends", "Installing backends", phase_install_backends),
     ("configure_backends", "Configuring backends", phase_configure_backends),
     ("seed_file_registry", "Seeding file registry", phase_seed_file_registry),
+    ("seed_conductor", "Seeding conductor orchestra", phase_seed_conductor),
+    ("configure_multisig", "Configuring multisig signers", phase_configure_multisig),
     ("install_frontends", "Building + installing frontends", phase_install_frontends),
     ("domain_wiring", "Domain wiring", phase_domain_wiring),
     ("smoke_checks", "Smoke checks", phase_smoke_checks),
+    ("controller_topology", "Applying controller topology", phase_controller_topology),
 ]
 
 

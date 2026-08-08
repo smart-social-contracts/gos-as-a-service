@@ -16,7 +16,7 @@ import requests
 
 from gaas.artifacts import ArtifactError, fetch_release_assets
 from gaas.known import (
-    CASALS_CONDUCTOR_WASM_ASSET,
+    CASALS_BACKEND_WASM_ASSET,
     CASALS_FRONTEND_ARCHIVE,
     DEFAULT_CASALS_RELEASE_REPO,
     DFX_CANISTER_NAMES,
@@ -88,14 +88,14 @@ def _basilisk_python(casals_root: Path) -> Path:
     if not py.is_file():
         raise PlatformError(
             f"Casals basilisk venv not found at {venv}; "
-            "create it per Casals README before building casals_conductor locally"
+            "create it per Casals README before building casals_backend locally"
         )
     return py
 
 
 def build_casals_wasm(casals_root: Path, dest: Path) -> Path:
     dest.mkdir(parents=True, exist_ok=True)
-    output = dest / "casals_conductor.wasm"
+    output = dest / "casals_backend.wasm"
     if output.is_file():
         return output
     built = casals_root / ".basilisk" / "casals_backend" / "casals_backend.wasm"
@@ -129,14 +129,14 @@ def fetch_casals_wasm(
     paths = fetch_release_assets(
         release_repo,
         version,
-        ["checksums.txt", CASALS_CONDUCTOR_WASM_ASSET],
+        ["checksums.txt", CASALS_BACKEND_WASM_ASSET],
         dest,
         session=session,
     )
     for path in paths:
-        if path.name == CASALS_CONDUCTOR_WASM_ASSET:
+        if path.name == CASALS_BACKEND_WASM_ASSET:
             return _ensure_uncompressed_wasm(path)
-    raise ArtifactError(f"{CASALS_CONDUCTOR_WASM_ASSET} missing from {release_repo} {version}")
+    raise ArtifactError(f"{CASALS_BACKEND_WASM_ASSET} missing from {release_repo} {version}")
 
 
 def build_casals_frontend(
@@ -279,7 +279,7 @@ def resolve_casals_wasm(
     session: requests.Session | None = None,
 ) -> Path:
     dest.mkdir(parents=True, exist_ok=True)
-    cached = dest / "casals_conductor.wasm"
+    cached = dest / "casals_backend.wasm"
     if cached.is_file():
         return cached
 
@@ -296,7 +296,7 @@ def resolve_casals_wasm(
         src = resolve_casals_src(casals_src)
         if src is None:
             raise PlatformError(
-                f"Casals release {release_repo}@{version} has no {CASALS_CONDUCTOR_WASM_ASSET}; "
+                f"Casals release {release_repo}@{version} has no {CASALS_BACKEND_WASM_ASSET}; "
                 "provide --casals-src, set CASALS_SRC, or place a checkout at /srv/dev/Casals"
             ) from None
         return build_casals_wasm(src, dest)

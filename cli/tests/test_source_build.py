@@ -94,7 +94,7 @@ def test_phase_seed_file_registry_main_namespace_and_catalog(
 def test_resolve_casals_wasm_main_clones_and_builds(tmp_path: Path) -> None:
     from gaas.platform import resolve_casals_wasm
 
-    wasm_path = tmp_path / "casals_conductor.wasm"
+    wasm_path = tmp_path / "casals_backend.wasm"
     wasm_path.write_bytes(b"wasm")
 
     with patch("gaas.platform.clone_repo") as clone_mock, patch(

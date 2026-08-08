@@ -139,7 +139,7 @@ def build_casals_release_artifacts(
         conductor_canister_id=conductor_canister_id,
     )
 
-    backend_out = dest_dir / "casals_conductor.wasm.gz"
+    backend_out = dest_dir / "casals_backend.wasm.gz"
     with gzip.open(backend_out, "wb") as gz, wasm_path.open("rb") as src:
         shutil.copyfileobj(src, gz)
 

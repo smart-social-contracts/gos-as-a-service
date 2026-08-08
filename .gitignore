@@ -11,8 +11,8 @@ __pycache__/
 .venv-basilisk/
 vite.config.js.timestamp-*.mjs
 # gaas CLI local deploy artifacts (generated; CI builds them from the Casals checkout)
-/casals_conductor.wasm
-/casals_conductor.did
+/casals_backend.wasm
+/casals_backend.did
 /casals_frontend_dist/
 /gaas-env.json
 .venv/

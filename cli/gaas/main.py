@@ -136,7 +136,7 @@ def new_command(
     casals_src: Optional[Path] = typer.Option(
         None,
         "--casals-src",
-        help="Local Casals checkout for building casals_conductor when release assets are missing",
+        help="Local Casals checkout for building casals_backend when release assets are missing",
     ),
     dns_timeout_min: int = typer.Option(
         20,

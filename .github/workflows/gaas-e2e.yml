@@ -7,7 +7,7 @@ on:
       - "environments/**"
       - "src/**"
       - "dfx.json"
-      - "casals_conductor.did"
+      - "casals_backend.did"
       - ".github/workflows/gaas-e2e.yml"
   workflow_dispatch:
 
@@ -70,8 +70,8 @@ jobs:
           export PATH="$PWD/.venv-basilisk/bin:$PATH"
           export CANISTER_CANDID_PATH="$(pwd)/casals_backend.did"
           python -m basilisk casals_backend src/main.py
-          cp casals_backend.did ../casals_conductor.did
-          cp .basilisk/casals_backend/casals_backend.wasm ../casals_conductor.wasm
+          cp casals_backend.did ../casals_backend.did
+          cp .basilisk/casals_backend/casals_backend.wasm ../casals_backend.wasm
 
       - name: Install npm deps
         run: npm ci --legacy-peer-deps

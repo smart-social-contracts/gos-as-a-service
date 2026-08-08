@@ -8,13 +8,16 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from gaas.descriptor import Descriptor, PlatformConfig, ServicesConfig
+from gaas.descriptor import Descriptor, MultisigConfig, PlatformConfig, ServicesConfig
 from gaas.phases import (
     PHASES,
     DeployContext,
     _installer_config_json,
+    _casals_settings_json,
+    _infra_canister_names,
     _opt_text_init_arg,
     _registry_config_json,
+    phase_controller_topology,
     phase_create_canisters,
     phase_domain_wiring,
     run_phases,
@@ -32,9 +35,12 @@ def test_phases_order() -> None:
         "install_backends",
         "configure_backends",
         "seed_file_registry",
+        "seed_conductor",
+        "configure_multisig",
         "install_frontends",
         "domain_wiring",
         "smoke_checks",
+        "controller_topology",
     ]
 
 
@@ -179,7 +185,7 @@ def test_installer_config_json_includes_ids() -> None:
     data["canisters"] = {
         "realm_registry_backend": VALID_CANISTER_ID,
         "file_registry": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aab",
-        "casals_conductor": "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+        "casals_backend": "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
     }
     desc = Descriptor.model_validate(data)
     payload = json.loads(_installer_config_json(desc))
@@ -187,6 +193,102 @@ def test_installer_config_json_includes_ids() -> None:
     assert payload["file_registry_id"] == "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aab"
     assert payload["casals_canister_id"] == "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb"
     assert payload["portal_url"] == "https://test.gos.earth"
+    assert payload["provision_via_casals"] is True
+    assert payload["create_stand_baton"] is True
+
+
+def test_installer_config_json_casals_backend_key() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {"casals_backend": VALID_CANISTER_ID}
+    desc = Descriptor.model_validate(data)
+    payload = json.loads(_installer_config_json(desc))
+    assert payload["casals_canister_id"] == VALID_CANISTER_ID
+
+
+def test_casals_settings_json_defaults_and_test_mode() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        "file_registry": VALID_CANISTER_ID,
+        "file_registry_frontend": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aab",
+        "casals_frontend": "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+        "realm_installer": "ccccc-ccccc-ccccc-ccccc-ccccc-ccc",
+    }
+    desc = Descriptor.model_validate(data)
+    billed = desc.model_copy(
+        update={
+            "services": ServicesConfig(
+                billing_url="https://billing.example.com",
+            ),
+            "flags": {},
+        }
+    )
+    closed = json.loads(_casals_settings_json(billed, "deployer-principal"))
+    assert closed["monitor_enabled"] is False
+    assert closed["default_min_cycles"] == 500_000_000_000
+    assert "extra_controller_principals" not in closed
+
+    open_desc = desc.model_copy(update={"flags": {"open_mode": True}})
+    open_payload = json.loads(_casals_settings_json(open_desc, "deployer-principal"))
+    assert open_payload["extra_controller_principals"] == ["deployer-principal"]
+
+
+def test_casals_settings_json_monitor_url() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {"file_registry": VALID_CANISTER_ID}
+    data["services"] = {"monitor_url": "https://monitor.example.com"}
+    desc = Descriptor.model_validate(data)
+    payload = json.loads(_casals_settings_json(desc, "deployer-principal"))
+    assert payload["monitor_enabled"] is True
+    assert payload["monitor_service_url"] == "https://monitor.example.com"
+    assert payload["monitor_principal"] == "deployer-principal"
+
+
+def test_infra_canister_names() -> None:
+    names = _infra_canister_names()
+    assert "realm_registry_backend" in names
+    assert "file_registry_frontend" in names
+    assert "casals_backend" not in names
+
+
+@patch("gaas.phases.dfx.canister_status")
+@patch("gaas.phases.dfx.update_canister_settings")
+@patch("gaas.phases.dfx.get_principal")
+def test_controller_topology_test_mode(
+    mock_principal,
+    mock_update,
+    mock_status,
+) -> None:
+    mock_principal.return_value = "deployer-principal"
+    multisig_id = "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aac"
+    casals_backend_id = "eeeee-eeeee-eeeee-eeeee-eeeee-eee"
+
+    def status_side_effect(canister_id, network, *, identity=None):
+        if canister_id in (casals_backend_id, "fffff-fffff-fffff-fffff-fffff-fff"):
+            controllers = (multisig_id, "deployer-principal")
+        else:
+            controllers = (casals_backend_id, "deployer-principal")
+        return MagicMock(status="running", controllers=controllers)
+
+    mock_status.side_effect = status_side_effect
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["flags"] = {"open_mode": True}
+    data["canisters"] = {
+        "realm_registry_backend": VALID_CANISTER_ID,
+        "realm_registry_frontend": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aab",
+        "realm_installer": "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+        "file_registry": "ccccc-ccccc-ccccc-ccccc-ccccc-ccc",
+        "file_registry_frontend": "ddddd-ddddd-ddddd-ddddd-ddddd-ddd",
+        "casals_backend": "eeeee-eeeee-eeeee-eeeee-eeeee-eee",
+        "casals_frontend": "fffff-fffff-fffff-fffff-fffff-fff",
+    }
+    data["multisig"] = {"backend_id": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aac"}
+    desc = Descriptor.model_validate(data)
+    ctx = DeployContext(identity="deployer", network="ic")
+    phase_controller_topology(desc, ctx)
+    assert mock_update.call_count == 7
+    first_call = mock_update.call_args_list[0]
+    assert first_call[0][1] == ["aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aac", "deployer-principal"]
+
 
 
 def test_opt_text_init_arg() -> None:

@@ -86,12 +86,13 @@ class CasalsConfig(BaseModel):
 class ServicesConfig(BaseModel):
     billing_url: str | None = None
     deploy_url: str | None = None
+    monitor_url: str | None = None
     # Lives on ServicesConfig (with billing_url) — open_mode controls whether the
     # registry skips credit holds during realm deploy/upgrade, independent of whether
     # a billing URL is configured for the frontend.
     open_mode: bool | None = None
 
-    @field_validator("billing_url", "deploy_url")
+    @field_validator("billing_url", "deploy_url", "monitor_url")
     @classmethod
     def validate_https_url(cls, value: str | None) -> str | None:
         if value is None or value == "":
@@ -113,6 +114,19 @@ class PlatformConfig(BaseModel):
         return value
 
 
+class MultisigConfig(BaseModel):
+    backend_id: str | None = None
+
+    @field_validator("backend_id")
+    @classmethod
+    def validate_backend_id(cls, value: str | None) -> str | None:
+        if value is None or value == "":
+            return None
+        if not CANISTER_ID_RE.match(value):
+            raise ValueError(f"multisig.backend_id: invalid canister ID {value!r}")
+        return value
+
+
 class DnsConfig(BaseModel):
     provider: str = "manual"
 
@@ -124,6 +138,7 @@ class Descriptor(BaseModel):
     gos: list[GosEntry]
     canisters: dict[str, str] = Field(default_factory=dict)
     casals: CasalsConfig
+    multisig: MultisigConfig = Field(default_factory=MultisigConfig)
     platform: PlatformConfig | None = None
     services: ServicesConfig = Field(default_factory=ServicesConfig)
     flags: dict[str, bool] = Field(default_factory=dict)
@@ -225,6 +240,11 @@ class Descriptor(BaseModel):
         if not CANISTER_ID_RE.match(canister_id):
             raise ValueError(f"invalid canister ID: {canister_id!r}")
         self.canisters[name] = canister_id
+
+    def set_multisig_backend_id(self, canister_id: str) -> None:
+        if not CANISTER_ID_RE.match(canister_id):
+            raise ValueError(f"invalid multisig backend ID: {canister_id!r}")
+        self.multisig.backend_id = canister_id
 
     def to_pretty_json(self) -> str:
         return json.dumps(

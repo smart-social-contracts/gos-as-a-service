@@ -138,3 +138,15 @@ def test_atomic_save_replaces_existing(tmp_path: Path) -> None:
     desc = Descriptor.model_validate(SAMPLE_DESCRIPTOR)
     desc.save(path)
     assert "name" in json.loads(path.read_text())
+
+
+def test_multisig_config_optional(tmp_path: Path) -> None:
+    desc = Descriptor.model_validate(SAMPLE_DESCRIPTOR)
+    assert desc.multisig.backend_id is None
+    desc.set_multisig_backend_id(VALID_CANISTER_ID)
+    assert desc.multisig.backend_id == VALID_CANISTER_ID
+    path = tmp_path / "multisig.gaas.json"
+    desc.save(path)
+    loaded = Descriptor.load(path)
+    assert loaded.multisig.backend_id == VALID_CANISTER_ID
+

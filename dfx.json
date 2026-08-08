@@ -117,10 +117,10 @@
         }
       }
     },
-    "casals_conductor": {
-      "candid": "casals_conductor.did",
+    "casals_backend": {
+      "candid": "casals_backend.did",
       "type": "custom",
-      "wasm": "casals_conductor.wasm"
+      "wasm": "casals_backend.wasm"
     },
     "casals_frontend": {
       "source": [

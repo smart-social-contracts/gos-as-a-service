@@ -316,13 +316,42 @@ def create_canister_local(
         "--network",
         network,
         "create",
-        "casals_conductor",
+        "casals_backend",
         "--no-wallet",
     ]
     if identity:
         args.extend(["--identity", identity])
     result = _run(args, check=True)
     return _parse_created_canister_id(result)
+
+
+def update_canister_settings(
+    canister_id: str,
+    controllers: list[str],
+    network: str,
+    *,
+    identity: str | None = None,
+) -> None:
+    """Replace the IC controller set for a canister."""
+    if not controllers:
+        raise DfxError(
+            "update_canister_settings requires at least one controller",
+            command=[],
+            stderr="empty controllers",
+        )
+    args = [
+        "dfx",
+        "canister",
+        "--network",
+        network,
+        "update-settings",
+        canister_id,
+    ]
+    if identity:
+        args.extend(["--identity", identity])
+    for controller in controllers:
+        args.extend(["--set-controller", controller])
+    _run(args, check=True)
 
 
 def install_wasm(
