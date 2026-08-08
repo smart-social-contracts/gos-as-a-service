@@ -29,6 +29,7 @@ from gaas.file_registry_client import (
 )
 from gaas.gaas_env import frontend_ic_origin, remove_gaas_env, write_gaas_env
 from gaas.known import (
+    DEFAULT_CANISTER_COUNT,
     DEFAULT_CASALS_SECTION,
     DEFAULT_CYCLES_PER_CANISTER,
     DEFAULT_PLATFORM_RELEASE_REPO,
@@ -40,6 +41,7 @@ from gaas.platform import (
     fetch_platform_frontend_archive,
     find_gos_repo_root,
     frontend_dist_dir,
+    resolve_casals_frontend_dist,
     resolve_casals_wasm,
     resolve_platform_backend_wasm,
 )
@@ -127,7 +129,7 @@ def phase_validate(descriptor: Descriptor, ctx: DeployContext) -> None:
         descriptor,
         ctx.identity,
         ctx.network,
-        required_cycles=ctx.required_cycles or DEFAULT_CYCLES_PER_CANISTER * 6,
+        required_cycles=ctx.required_cycles or DEFAULT_CYCLES_PER_CANISTER * DEFAULT_CANISTER_COUNT,
     )
     ctx.preflight = report
     if not report.ok:
@@ -372,6 +374,7 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
     platform_version, release_repo = _platform_release(descriptor)
     repo_root = find_gos_repo_root(ctx.descriptor_path.parent if ctx.descriptor_path else None)
     gaas_env_path: Path | None = None
+    casals_staging = repo_root / "casals_frontend_dist"
 
     try:
         gaas_env_path = write_gaas_env(repo_root, descriptor, ctx.network)
@@ -446,9 +449,36 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
                 mode="reinstall",
                 yes=True,
             )
+
+        casals_frontend_id = descriptor.canisters.get("casals_frontend")
+        if not casals_frontend_id:
+            raise RuntimeError("missing canister ID for casals_frontend")
+
+        casals_dist = resolve_casals_frontend_dist(
+            descriptor.casals.version,
+            descriptor.casals.release_repo,
+            work / "casals" / "frontend",
+            casals_src=ctx.casals_src,
+            session=ctx.http,
+        )
+        if casals_staging.exists():
+            shutil.rmtree(casals_staging)
+        shutil.copytree(casals_dist, casals_staging)
+        console.print(f"  casals_frontend: reinstall assets to {casals_frontend_id}")
+        dfx.deploy_assets_canister(
+            "casals_frontend",
+            casals_frontend_id,
+            ctx.network,
+            repo_root=repo_root,
+            identity=ctx.identity,
+            mode="reinstall",
+            yes=True,
+        )
     finally:
         if gaas_env_path and not ctx.keep_env_file:
             remove_gaas_env(repo_root)
+        if casals_staging.exists():
+            shutil.rmtree(casals_staging)
 
 
 def phase_domain_wiring(descriptor: Descriptor, ctx: DeployContext) -> None:
@@ -552,11 +582,17 @@ def phase_smoke_checks(descriptor: Descriptor, ctx: DeployContext) -> None:
         if ic_status != 200 or descriptor.domain not in ic_body:
             raise RuntimeError("ic-domains well-known check failed")
     else:
-        frontend_id = descriptor.canisters["realm_registry_frontend"]
-        local_url = f"http://{frontend_id}.localhost:4943/"
-        status, _body = _http_get(local_url)
-        if status != 200:
-            console.print(f"  [yellow]local frontend HTTP check returned {status} for {local_url}[/yellow]")
+        for frontend_name in ("realm_registry_frontend", "casals_frontend"):
+            frontend_id = descriptor.canisters.get(frontend_name)
+            if not frontend_id:
+                raise RuntimeError(f"missing canister ID for {frontend_name}")
+            local_url = f"http://{frontend_id}.localhost:4943/"
+            status, _body = _http_get(local_url)
+            if status != 200:
+                console.print(
+                    f"  [yellow]local {frontend_name} HTTP check returned "
+                    f"{status} for {local_url}[/yellow]"
+                )
 
     table = Table(title="Deployment summary")
     table.add_column("Field")

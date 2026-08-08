@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 from gaas import dfx
 from gaas.descriptor import Descriptor
-from gaas.known import DEFAULT_REQUIRED_CYCLES
+from gaas.known import DEFAULT_CANISTER_COUNT, DEFAULT_REQUIRED_CYCLES
 
 
 @dataclass
@@ -111,7 +111,7 @@ def run_preflight(
                         detail=(
                             f"insufficient cycles: have {balance:,}, "
                             f"need ~{required_cycles:,} "
-                            f"(6 canisters × 1T + 2T install buffer)"
+                            f"({DEFAULT_CANISTER_COUNT} canisters × 1T + 2T install buffer)"
                         ),
                     )
                 )

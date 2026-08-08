@@ -12,6 +12,7 @@ KNOWN_CANISTER_NAMES: Final[tuple[str, ...]] = (
     "file_registry",
     "file_registry_frontend",
     "casals_conductor",
+    "casals_frontend",
 )
 
 DEFAULT_CASALS_VERSION: Final[str] = "v0.3.0"
@@ -28,6 +29,7 @@ DFX_CANISTER_NAMES: Final[dict[str, str | None]] = {
     "file_registry": "file_registry",
     "file_registry_frontend": "file_registry_frontend",
     "casals_conductor": None,
+    "casals_frontend": "casals_frontend",
 }
 
 PLATFORM_BACKEND_WASMS: Final[dict[str, str]] = {
@@ -42,9 +44,10 @@ PLATFORM_FRONTEND_ARCHIVES: Final[dict[str, str]] = {
 }
 
 CASALS_CONDUCTOR_WASM_ASSET: Final[str] = "casals_conductor.wasm.gz"
+CASALS_FRONTEND_ARCHIVE: Final[str] = "casals_frontend.tar.gz"
 
 DEFAULT_CYCLES_PER_CANISTER: Final[int] = 1_000_000_000_000  # 1T
-DEFAULT_CANISTER_COUNT: Final[int] = 6
+DEFAULT_CANISTER_COUNT: Final[int] = 7
 DEFAULT_INSTALL_BUFFER_CYCLES: Final[int] = 2_000_000_000_000  # 2T
 DEFAULT_REQUIRED_CYCLES: Final[int] = (
     DEFAULT_CANISTER_COUNT * DEFAULT_CYCLES_PER_CANISTER + DEFAULT_INSTALL_BUFFER_CYCLES

@@ -72,7 +72,8 @@ gaas new environments/test.json --identity deployer --network ic
     "realm_installer": "fltjm-tyaaa-aaaap-qunhq-cai",
     "file_registry": "uq2mu-kaaaa-aaaah-avqcq-cai",
     "file_registry_frontend": "2no7h-xqaaa-aaaad-qlxeq-cai",
-    "casals_conductor": "qthgp-3yaaa-aaaae-agveq-cai"
+    "casals_conductor": "qthgp-3yaaa-aaaae-agveq-cai",
+    "casals_frontend": "qic2k-baaaa-aaaae-agvga-cai"
   },
   "casals": {
     "version": "v0.3.0",
@@ -139,6 +140,7 @@ Only these names are accepted:
 | `file_registry` | Platform artifact store |
 | `file_registry_frontend` | File registry admin UI |
 | `casals_conductor` | External Casals orchestrator canister ID |
+| `casals_frontend` | Casals orchestration UI (standalone assets canister) |
 
 Leave a key out (or omit the entire `canisters` object) to create that canister during deploy. The file registry backend ID is generated at build time when created fresh.
 
@@ -175,7 +177,7 @@ Our live environments use `https://billing.realmsgos.dev` and `https://deploy.re
 
 ### Cycles estimate (`known.py`)
 
-Default required cycles: **8 trillion** (`6 canisters × 1T + 2T install buffer`).
+Default required cycles: **9 trillion** (`7 canisters × 1T + 2T install buffer`).
 
 ## Prerequisites
 
@@ -183,7 +185,7 @@ Default required cycles: **8 trillion** (`6 canisters × 1T + 2T install buffer`
 |---|---|
 | **dfx** | DFINITY SDK installed and on `PATH`. gaas sets `TERM=xterm` and `DFX_WARNING=-mainnet_plaintext_identity`. |
 | **dfx identity** | Named identity with controller access to target canisters. Create with `dfx identity new <name>`. |
-| **Cycles (IC mainnet)** | ~8T cycles recommended. Check balance: `dfx cycles balance --network ic`. Top up via the [cycles ledger](https://internetcomputer.org/docs/current/developer-docs/setup/cycles/cycles-wallet) or IC faucet for test principals. |
+| **Cycles (IC mainnet)** | ~9T cycles recommended. Check balance: `dfx cycles balance --network ic`. Top up via the [cycles ledger](https://internetcomputer.org/docs/current/developer-docs/setup/cycles/cycles-wallet) or IC faucet for test principals. |
 | **Local replica** | For `--network local`: `dfx start --background` before deploy. Preflight runs `dfx ping local`. |
 | **Node.js / npm** | Required for registry and file-registry frontend builds during the install-frontends phase. |
 | **Casals checkout (fallback)** | If Casals release artifacts are unavailable, gaas may fall back to a local Casals repo checkout. Keep a clone of [smart-social-contracts/Casals](https://github.com/smart-social-contracts/Casals) handy. |
@@ -267,7 +269,7 @@ gaas descriptors are designed for **any domain** — nothing hardcodes `gos.eart
 | Realm deploy pulls wrong GOS version | Pin drift across repos | Single `gos[].version` pin in the descriptor; file registry seeded from that release |
 | Empty `file_registry` canister ID | ID is assigned at first `dfx canister create` | Omit `file_registry` from `canisters` on fresh deploy; gaas writes the generated ID back to state |
 | DNS verify loop times out | Registrar propagation delay or wrong host labels | Run `gaas dns-records <file>` and compare; re-run deploy after fixing records |
-| Preflight: insufficient cycles | Wallet below 8T estimate | `dfx cycles balance --network ic`; top up via cycles ledger |
+| Preflight: insufficient cycles | Wallet below 9T estimate | `dfx cycles balance --network ic`; top up via cycles ledger |
 | Preflight: identity not found | Wrong `--identity` | `dfx identity list`; create or select the correct identity |
 | Casals artifact fetch fails | Release missing or network error | Ensure `casals.version` tag exists on GitHub; keep a local Casals checkout as fallback |
 

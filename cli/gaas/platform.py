@@ -6,6 +6,7 @@ import gzip
 import os
 import shutil
 import subprocess
+import tarfile
 from pathlib import Path
 
 import requests
@@ -13,6 +14,7 @@ import requests
 from gaas.artifacts import ArtifactError, fetch_release_assets
 from gaas.known import (
     CASALS_CONDUCTOR_WASM_ASSET,
+    CASALS_FRONTEND_ARCHIVE,
     DEFAULT_CASALS_RELEASE_REPO,
     DFX_CANISTER_NAMES,
     PLATFORM_BACKEND_WASMS,
@@ -114,6 +116,75 @@ def fetch_casals_wasm(
         if path.name == CASALS_CONDUCTOR_WASM_ASSET:
             return _ensure_uncompressed_wasm(path)
     raise ArtifactError(f"{CASALS_CONDUCTOR_WASM_ASSET} missing from {release_repo} {version}")
+
+
+def build_casals_frontend(casals_root: Path, work_dir: Path) -> Path:
+    dest = work_dir / "casals_frontend_dist"
+    if dest.is_dir() and any(dest.iterdir()):
+        return dest
+    frontend_dir = casals_root / "frontend"
+    subprocess.run(["npm", "ci"], cwd=frontend_dir, check=True)
+    subprocess.run(["npm", "run", "build"], cwd=frontend_dir, check=True)
+    built = casals_root / "dist"
+    if not built.is_dir() or not any(built.iterdir()):
+        raise PlatformError(f"Casals frontend build did not produce {built}")
+    if dest.exists():
+        shutil.rmtree(dest)
+    shutil.copytree(built, dest)
+    return dest
+
+
+def fetch_casals_frontend_archive(
+    version: str,
+    release_repo: str,
+    dest: Path,
+    *,
+    session: requests.Session | None = None,
+) -> Path:
+    paths = fetch_release_assets(
+        release_repo,
+        version,
+        ["checksums.txt", CASALS_FRONTEND_ARCHIVE],
+        dest,
+        session=session,
+    )
+    for path in paths:
+        if path.name == CASALS_FRONTEND_ARCHIVE:
+            return path
+    raise ArtifactError(
+        f"{CASALS_FRONTEND_ARCHIVE} missing from {release_repo} {version}"
+    )
+
+
+def resolve_casals_frontend_dist(
+    version: str,
+    release_repo: str,
+    dest: Path,
+    *,
+    casals_src: Path | None = None,
+    session: requests.Session | None = None,
+) -> Path:
+    dest.mkdir(parents=True, exist_ok=True)
+    cached = dest / "dist"
+    if cached.is_dir() and any(cached.iterdir()):
+        return cached
+    try:
+        archive = fetch_casals_frontend_archive(
+            version, release_repo, dest, session=session
+        )
+        cached.mkdir(parents=True, exist_ok=True)
+        with tarfile.open(archive, "r:gz") as tar:
+            tar.extractall(cached)
+        return cached
+    except ArtifactError:
+        src = resolve_casals_src(casals_src)
+        if src is None:
+            raise PlatformError(
+                f"Casals release {release_repo}@{version} has no "
+                f"{CASALS_FRONTEND_ARCHIVE}; provide --casals-src, set CASALS_SRC, "
+                "or place a checkout at /srv/dev/Casals"
+            ) from None
+        return build_casals_frontend(src, dest)
 
 
 def resolve_casals_wasm(

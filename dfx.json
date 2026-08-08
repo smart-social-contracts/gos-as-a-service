@@ -122,6 +122,19 @@
       "type": "custom",
       "wasm": "casals_conductor.wasm"
     },
+    "casals_frontend": {
+      "source": [
+        "casals_frontend_dist"
+      ],
+      "type": "assets",
+      "remote": {
+        "id": {
+          "demo": "hvwpv-aiaaa-aaaam-ajddq-cai",
+          "staging": "mcqbx-hyaaa-aaaaj-qsarq-cai",
+          "test": "qic2k-baaaa-aaaae-agvga-cai"
+        }
+      }
+    },
     "internet_identity": {
       "candid": "https://github.com/dfinity/internet-identity/releases/download/release-2026-03-09/internet_identity.did",
       "frontend": {},

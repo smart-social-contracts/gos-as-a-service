@@ -20,7 +20,8 @@
     "realm_installer": "lusjm-wqaaa-aaaau-ago7q-cai",
     "file_registry": "iebdk-kqaaa-aaaau-agoxq-cai",
     "file_registry_frontend": "rbex3-xyaaa-aaaah-qumma-cai",
-    "casals_conductor": "jj2e5-iyaaa-aaaac-bffeq-cai"
+    "casals_conductor": "jj2e5-iyaaa-aaaac-bffeq-cai",
+    "casals_frontend": "mcqbx-hyaaa-aaaaj-qsarq-cai"
   },
   "casals": {
     "version": "v0.3.0",

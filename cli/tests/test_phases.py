@@ -90,6 +90,7 @@ def test_create_canisters_adopt_vs_create(
         "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
         "ccccc-ccccc-ccccc-ccccc-ccccc-ccc",
         "ddddd-ddddd-ddddd-ddddd-ddddd-ddd",
+        "fffff-fffff-fffff-fffff-fffff-fff",
     ]
     mock_ledger_create.return_value = "eeeee-eeeee-eeeee-eeeee-eeeee-eee"
 
@@ -108,7 +109,7 @@ def test_create_canisters_adopt_vs_create(
 
     mock_create.assert_called()
     assert desc.canisters["realm_registry_backend"] == VALID_CANISTER_ID
-    assert len(desc.canisters) == 6
+    assert len(desc.canisters) == 7
 
 
 def test_registry_init_json_open_mode() -> None:
