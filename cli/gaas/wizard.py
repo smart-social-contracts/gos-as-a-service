@@ -10,6 +10,7 @@ from questionary import Choice
 from rich.console import Console
 
 from gaas.descriptor import (
+    VERSION_TAG_RE,
     CasalsConfig,
     Descriptor,
     DnsConfig,
@@ -112,6 +113,12 @@ def _validate_canister_id(value: str) -> bool | str:
         )
     except Exception as exc:
         return str(exc)
+    return True
+
+
+def _validate_version(value: str) -> bool | str:
+    if not VERSION_TAG_RE.match(value.strip()):
+        return f"version must match vX.Y.Z (got {value.strip()!r})"
     return True
 
 
@@ -233,6 +240,7 @@ def run_wizard(
         version = prompt.text(
             f"{impl.label} version:",
             default=impl.default_version,
+            validate=_validate_version,
         ).ask()
         if version is None:
             raise SystemExit(0)
@@ -266,6 +274,7 @@ def run_wizard(
     casals_version = prompt.text(
         "Casals version:",
         default=DEFAULT_CASALS_VERSION,
+        validate=_validate_version,
     ).ask()
     if casals_version is None:
         raise SystemExit(0)

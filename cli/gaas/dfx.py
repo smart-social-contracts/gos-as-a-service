@@ -23,7 +23,7 @@ _DFX_ENV = {
 }
 
 _CANISTER_ID_OUTPUT_RE = re.compile(
-    r"([a-z0-9]{5}(?:-[a-z0-9]{5}){3,10}-[a-z]{3})"
+    r"([a-z0-9]{5}(?:-[a-z0-9]{5}){3,10}-[a-z0-9]{3})"
 )
 _CYCLES_BALANCE_RE = re.compile(
     r"([\d,]+(?:\.\d+)?)\s*(?:TC|Trillion|T)?\s*cycles?", re.I

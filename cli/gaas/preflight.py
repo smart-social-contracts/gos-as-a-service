@@ -6,7 +6,12 @@ from dataclasses import dataclass, field
 
 from gaas import dfx
 from gaas.descriptor import Descriptor
-from gaas.known import DEFAULT_CANISTER_COUNT, DEFAULT_REQUIRED_CYCLES
+from gaas.known import (
+    DEFAULT_CYCLES_PER_CANISTER,
+    DEFAULT_INSTALL_BUFFER_CYCLES,
+    DEFAULT_REQUIRED_CYCLES,
+    KNOWN_CANISTER_NAMES,
+)
 
 
 @dataclass
@@ -36,7 +41,15 @@ def run_preflight(
     *,
     required_cycles: int = DEFAULT_REQUIRED_CYCLES,
 ) -> PreflightReport:
-    del descriptor  # reserved for future descriptor-specific checks
+    # Only canisters absent from the descriptor need creation cycles; adopted
+    # canisters pay for their own installs from their existing balances.
+    to_create = [n for n in KNOWN_CANISTER_NAMES if n not in descriptor.canisters]
+    if to_create:
+        required_cycles = (
+            len(to_create) * DEFAULT_CYCLES_PER_CANISTER + DEFAULT_INSTALL_BUFFER_CYCLES
+        )
+    else:
+        required_cycles = 0
     report = PreflightReport(
         identity=identity,
         network=network,
@@ -111,7 +124,7 @@ def run_preflight(
                         detail=(
                             f"insufficient cycles: have {balance:,}, "
                             f"need ~{required_cycles:,} "
-                            f"({DEFAULT_CANISTER_COUNT} canisters × 1T + 2T install buffer)"
+                            f"({len(to_create)} canisters to create × 1T + 2T install buffer)"
                         ),
                     )
                 )
