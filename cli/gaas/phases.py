@@ -188,12 +188,25 @@ def _platform_release(descriptor: Descriptor) -> tuple[str | None, str]:
     return None, DEFAULT_PLATFORM_RELEASE_REPO
 
 
+def _find_repo_root(ctx: DeployContext) -> Path:
+    """Locate the gos-as-a-service checkout: prefer cwd, then the descriptor's dir."""
+    starts = [Path.cwd()]
+    if ctx.descriptor_path is not None:
+        starts.append(ctx.descriptor_path.parent)
+    for start in starts:
+        try:
+            return find_gos_repo_root(start)
+        except PlatformError:
+            continue
+    return find_gos_repo_root(starts[0])  # raise the canonical error
+
+
 def phase_install_backends(descriptor: Descriptor, ctx: DeployContext) -> None:
     platform_version, release_repo = _platform_release(descriptor)
     work = _work_dir(ctx)
     repo_root = None
     try:
-        repo_root = find_gos_repo_root(ctx.descriptor_path.parent if ctx.descriptor_path else None)
+        repo_root = _find_repo_root(ctx)
     except PlatformError:
         if platform_version is None:
             raise
@@ -372,7 +385,7 @@ def _confirm_reinstall(ctx: DeployContext) -> None:
 
 def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
     platform_version, release_repo = _platform_release(descriptor)
-    repo_root = find_gos_repo_root(ctx.descriptor_path.parent if ctx.descriptor_path else None)
+    repo_root = _find_repo_root(ctx)
     gaas_env_path: Path | None = None
     casals_staging = repo_root / "casals_frontend_dist"
 

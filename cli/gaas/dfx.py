@@ -67,9 +67,12 @@ def _run(
     check: bool = True,
     cwd: str | Path | None = None,
     timeout: int | None = None,
+    env_extra: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env.update(_DFX_ENV)
+    if env_extra:
+        env.update(env_extra)
     try:
         result = subprocess.run(
             args,
@@ -88,8 +91,12 @@ def _run(
         ) from exc
 
     if check and result.returncode != 0:
+        message = f"dfx command failed (exit {result.returncode}): {' '.join(args)}"
+        detail = result.stderr.strip() or result.stdout.strip()
+        if detail:
+            message += f"\n{detail[-1500:]}"
         raise DfxError(
-            f"dfx command failed (exit {result.returncode}): {' '.join(args)}",
+            message,
             command=args,
             stderr=result.stderr.strip(),
             stdout=result.stdout.strip(),
@@ -368,8 +375,19 @@ def candid_text_arg(payload: str) -> str:
     return f'("{escaped}")'
 
 
-def build_canister(name: str, network: str, *, cwd: Path) -> None:
-    _run(["dfx", "build", name, "--network", network], check=True, cwd=cwd)
+def build_canister(
+    name: str,
+    network: str,
+    *,
+    cwd: Path,
+    env_extra: dict[str, str] | None = None,
+) -> None:
+    _run(
+        ["dfx", "build", name, "--network", network],
+        check=True,
+        cwd=cwd,
+        env_extra=env_extra,
+    )
 
 
 def find_assetstorage_wasm() -> Path:

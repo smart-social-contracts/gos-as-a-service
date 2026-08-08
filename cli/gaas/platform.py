@@ -222,13 +222,21 @@ def _ensure_uncompressed_wasm(path: Path) -> Path:
     return path
 
 
+def _basilisk_env(repo_root: Path) -> dict[str, str] | None:
+    """Put the repo's .venv-basilisk first on PATH so `python -m basilisk` uses it."""
+    venv_bin = repo_root / ".venv-basilisk" / "bin"
+    if venv_bin.is_dir():
+        return {"PATH": f"{venv_bin}{os.pathsep}{os.environ.get('PATH', '')}"}
+    return None
+
+
 def _local_backend_wasm(repo_root: Path, canister: str) -> Path:
     from gaas import dfx
 
     dfx_name = DFX_CANISTER_NAMES.get(canister)
     if not dfx_name:
         raise PlatformError(f"no local dfx build mapping for {canister}")
-    dfx.build_canister(dfx_name, "local", cwd=repo_root)
+    dfx.build_canister(dfx_name, "local", cwd=repo_root, env_extra=_basilisk_env(repo_root))
     gz = repo_root / ".dfx" / "local" / "canisters" / dfx_name / f"{dfx_name}.wasm.gz"
     if gz.is_file():
         return _ensure_uncompressed_wasm(gz)
