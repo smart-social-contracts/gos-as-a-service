@@ -27,6 +27,7 @@ _CANISTER_ID_OUTPUT_RE = re.compile(
     r"([a-z0-9]{5}(?:-[a-z0-9]{5}){3,10}-[a-z0-9]{3})"
 )
 _MODULE_HASH_NONE_RE = re.compile(r"module\s*hash:\s*none", re.I)
+_MODULE_HASH_RE = re.compile(r"module\s*hash:\s*(0x[0-9a-f]+|none)", re.I)
 _CONTROLLERS_RE = re.compile(r"controllers:\s*(.+)", re.I)
 
 _CERTIFIED_ASSETS_WASM_URL = (
@@ -123,6 +124,19 @@ def parse_controllers(status_raw: str) -> tuple[str, ...]:
         if match:
             return tuple(_CANISTER_ID_OUTPUT_RE.findall(match.group(1)))
     return ()
+
+
+def parse_module_hash(status_raw: str) -> str | None:
+    """Return module hash from `dfx canister status` output, or None if absent."""
+    for line in status_raw.splitlines():
+        match = _MODULE_HASH_RE.search(line)
+        if not match:
+            continue
+        value = match.group(1)
+        if value.lower() == "none":
+            return None
+        return value.lower()
+    return None
 
 
 def identity_exists(name: str) -> bool:

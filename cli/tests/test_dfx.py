@@ -1,6 +1,6 @@
 """Parsing tests for dfx output helpers."""
 
-from gaas.dfx import parse_controllers, parse_cycles_balance
+from gaas.dfx import parse_controllers, parse_cycles_balance, parse_module_hash
 
 
 def test_parse_controllers_principal_ending_in_digits():
@@ -21,6 +21,15 @@ def test_parse_controllers_principal_ending_in_digits():
 
 def test_parse_controllers_empty():
     assert parse_controllers("Status: Running\n") == ()
+
+
+def test_parse_module_hash_hex():
+    raw = "Status: Running\nModule hash: 0xabc123\n"
+    assert parse_module_hash(raw) == "0xabc123"
+
+
+def test_parse_module_hash_none():
+    assert parse_module_hash("Module hash: none\n") is None
 
 
 def test_parse_cycles_balance_trillion_format():
