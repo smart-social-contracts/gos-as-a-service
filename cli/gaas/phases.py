@@ -23,9 +23,11 @@ from gaas.descriptor import Descriptor
 from gaas.dns import render_dns_records, wait_for_dns
 from gaas.domain_reg import attempt_domain_registration
 from gaas.file_registry_client import (
+    ensure_version_catalog_entry,
     fetch_namespace_hashes,
     namespace_published,
     seed_gos_entry,
+    sha256_file,
 )
 from gaas.gaas_env import frontend_ic_origin, remove_gaas_env, write_gaas_env
 from gaas.known import (
@@ -91,10 +93,16 @@ def _portal_url(descriptor: Descriptor) -> str:
     return f"https://{descriptor.domain}"
 
 
+def _resolve_open_mode(descriptor: Descriptor) -> bool:
+    if descriptor.services.open_mode is not None:
+        return descriptor.services.open_mode
+    return descriptor.services.billing_url is None
+
+
 def _registry_config_json(descriptor: Descriptor) -> str:
     payload = {
         "portal_url": _portal_url(descriptor),
-        "open_mode": descriptor.services.billing_url is None,
+        "open_mode": _resolve_open_mode(descriptor),
     }
     if descriptor.services.billing_url:
         payload["billing_url"] = descriptor.services.billing_url
@@ -333,6 +341,7 @@ def phase_configure_backends(descriptor: Descriptor, ctx: DeployContext) -> None
 
 def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None:
     registry_id = descriptor.canisters.get("file_registry")
+    registry_backend_id = descriptor.canisters.get("realm_registry_backend")
     if not registry_id:
         raise RuntimeError("file_registry canister ID required")
 
@@ -341,36 +350,67 @@ def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None
         version = _normalize_version(entry.version)
         backend_ns = f"wasm/{entry.artifacts.backend_wasm_key}/{version}"
         frontend_ns = f"frontend/{entry.artifacts.frontend_wasm_key}/{version}"
+        backend_asset = entry.artifacts.resolved_backend_asset(entry.implementation)
+        backend_path = backend_asset
+        backend_hash = ""
 
+        already_seeded = False
         if namespace_published(registry_id, backend_ns, ctx.network, identity=ctx.identity):
             hashes = fetch_namespace_hashes(
                 registry_id, backend_ns, ctx.network, identity=ctx.identity
             )
             if hashes:
-                console.print(f"  {entry.implementation}@{entry.version}: already seeded ({backend_ns})")
-                continue
+                already_seeded = True
+                backend_hash = hashes.get(backend_path, "")
+                console.print(
+                    f"  {entry.implementation}@{entry.version}: already seeded ({backend_ns})"
+                )
 
-        backend_asset = entry.artifacts.resolved_backend_asset(entry.implementation)
-        frontend_asset = entry.artifacts.resolved_frontend_asset(entry.implementation)
-        assets = fetch_release_assets(
-            entry.release_repo,
-            entry.version,
-            ["checksums.txt", backend_asset, frontend_asset],
-            work / "gos" / entry.implementation / entry.version,
-            session=ctx.http,
-        )
-        backend_path = next(p for p in assets if p.name == backend_asset)
-        frontend_path = next(p for p in assets if p.name == frontend_asset)
-        console.print(f"  seeding {entry.implementation}@{entry.version} → {backend_ns}, {frontend_ns}")
-        seed_gos_entry(
-            registry_id,
-            backend_ns,
-            frontend_ns,
-            backend_path,
-            frontend_path,
-            ctx.network,
-            identity=ctx.identity,
-        )
+        if not already_seeded:
+            frontend_asset = entry.artifacts.resolved_frontend_asset(entry.implementation)
+            assets = fetch_release_assets(
+                entry.release_repo,
+                entry.version,
+                ["checksums.txt", backend_asset, frontend_asset],
+                work / "gos" / entry.implementation / entry.version,
+                session=ctx.http,
+            )
+            backend_file = next(p for p in assets if p.name == backend_asset)
+            frontend_file = next(p for p in assets if p.name == frontend_asset)
+            console.print(
+                f"  seeding {entry.implementation}@{entry.version} → {backend_ns}, {frontend_ns}"
+            )
+            seed_gos_entry(
+                registry_id,
+                backend_ns,
+                frontend_ns,
+                backend_file,
+                frontend_file,
+                ctx.network,
+                identity=ctx.identity,
+            )
+            backend_hash = sha256_file(backend_file)
+
+        if registry_backend_id:
+            status = ensure_version_catalog_entry(
+                registry_backend_id,
+                registry_id,
+                version,
+                backend_ns,
+                frontend_ns,
+                backend_path,
+                backend_hash,
+                ctx.network,
+                identity=ctx.identity,
+            )
+            if status == "published":
+                console.print(
+                    f"  published {entry.implementation}@{entry.version} to version catalog"
+                )
+            elif status == "skipped":
+                console.print(
+                    f"  {entry.implementation}@{entry.version}: already in version catalog"
+                )
 
 
 def _confirm_reinstall(ctx: DeployContext) -> None:

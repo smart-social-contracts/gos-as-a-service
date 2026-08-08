@@ -55,6 +55,7 @@ def test_wizard_builds_descriptor(tmp_path: Path, monkeypatch) -> None:
     assert desc.gos[0].version == "v0.3.1"
     assert desc.casals.version == "v0.3.0"
     assert desc.dns.provider == "manual"
+    assert desc.services.open_mode is True
     assert identity == "deployer"
     assert network == "ic"
     assert output_path == tmp_path / "myenv.gaas.json"

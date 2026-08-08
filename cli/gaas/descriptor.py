@@ -84,6 +84,10 @@ class CasalsConfig(BaseModel):
 class ServicesConfig(BaseModel):
     billing_url: str | None = None
     deploy_url: str | None = None
+    # Lives on ServicesConfig (with billing_url) — open_mode controls whether the
+    # registry skips credit holds during realm deploy/upgrade, independent of whether
+    # a billing URL is configured for the frontend.
+    open_mode: bool | None = None
 
     @field_validator("billing_url", "deploy_url")
     @classmethod

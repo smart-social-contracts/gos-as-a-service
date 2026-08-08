@@ -286,6 +286,16 @@ def run_wizard(
     if billing_url is None:
         raise SystemExit(0)
 
+    open_mode = True
+    if billing_url.strip():
+        open_mode_answer = prompt.confirm(
+            "Open mode (skip credit holds for realm deployments)?",
+            default=False,
+        ).ask()
+        if open_mode_answer is None:
+            raise SystemExit(0)
+        open_mode = bool(open_mode_answer)
+
     deploy_url = prompt.text(
         "Deploy service URL (optional, https):",
         validate=_validate_https_optional,
@@ -315,6 +325,7 @@ def run_wizard(
         services=ServicesConfig(
             billing_url=billing_url.strip() or None,
             deploy_url=deploy_url.strip() or None,
+            open_mode=open_mode,
         ),
         dns=DnsConfig(provider="manual"),
     )

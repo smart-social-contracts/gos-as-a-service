@@ -271,3 +271,87 @@ def seed_gos_entry(
 
     publish_namespace(registry_id, backend_ns, network, identity=identity)
     publish_namespace(registry_id, frontend_ns, network, identity=identity)
+
+
+def _parse_upgrade_result(raw: str) -> dict:
+    raw = raw.strip()
+    if raw.startswith("("):
+        raw = raw[1:-1].strip() if raw.endswith(")") else raw[1:].strip()
+    if "Ok = " in raw:
+        inner = raw.split("Ok = ", 1)[1].rstrip(" })").strip()
+        if inner.startswith('"') and inner.endswith('"'):
+            inner = inner[1:-1].replace('\\"', '"')
+        return json.loads(inner)
+    if "Err = " in raw:
+        err = raw.split("Err = ", 1)[1].rstrip(" })").strip('"')
+        raise RuntimeError(f"publish_version failed: {err}")
+    return json.loads(raw)
+
+
+def list_catalog_versions(
+    registry_backend_id: str,
+    network: str,
+    *,
+    identity: str | None = None,
+) -> set[str]:
+    try:
+        raw = dfx.canister_call(
+            registry_backend_id,
+            "list_versions",
+            dfx.candid_text_arg(""),
+            network,
+            identity=identity,
+            query=True,
+        )
+        data = json.loads(raw)
+        if isinstance(data, dict) and data.get("success") and isinstance(data.get("versions"), list):
+            return {
+                str(item.get("version", "")).strip()
+                for item in data["versions"]
+                if item.get("version")
+            }
+    except (json.JSONDecodeError, dfx.DfxError, RuntimeError):
+        pass
+    return set()
+
+
+def ensure_version_catalog_entry(
+    registry_backend_id: str,
+    file_registry_id: str,
+    version: str,
+    backend_ns: str,
+    frontend_ns: str,
+    backend_path: str,
+    backend_hash: str,
+    network: str,
+    *,
+    identity: str | None = None,
+) -> str:
+    """Publish a GOS version to the registry catalog if not already listed.
+
+    Returns ``published``, ``skipped``, or ``failed``.
+    """
+    if version in list_catalog_versions(registry_backend_id, network, identity=identity):
+        return "skipped"
+
+    payload = json.dumps(
+        {
+            "version": version,
+            "backend_wasm_url": f"fileregistry://{file_registry_id}/{backend_ns}/{backend_path}",
+            "frontend_tar_url": f"fileregistry://{file_registry_id}/{frontend_ns}",
+            "backend_wasm_hash": backend_hash,
+            "frontend_tar_hash": "",
+        }
+    )
+    raw = dfx.canister_call(
+        registry_backend_id,
+        "publish_version",
+        dfx.candid_text_arg(payload),
+        network,
+        identity=identity,
+        timeout=120,
+    )
+    result = _parse_upgrade_result(raw)
+    if result.get("success"):
+        return "published"
+    raise RuntimeError(f"publish_version({version}) failed: {result}")

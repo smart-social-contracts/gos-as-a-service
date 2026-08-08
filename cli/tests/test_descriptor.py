@@ -69,6 +69,16 @@ def test_services_https_validation() -> None:
         Descriptor.model_validate(data)
 
 
+def test_services_open_mode_parses() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["services"] = {
+        "billing_url": "https://billing.example.com",
+        "open_mode": True,
+    }
+    desc = Descriptor.model_validate(data)
+    assert desc.services.open_mode is True
+
+
 def test_gos_artifact_defaults() -> None:
     desc = Descriptor.model_validate(SAMPLE_DESCRIPTOR)
     entry = desc.gos[0]

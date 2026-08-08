@@ -155,8 +155,9 @@ Leave a key out (or omit the entire `canisters` object) to create that canister 
 
 | Field | Required | Default | Description |
 |---|---|---|---|
-| `billing_url` | no | `null` | HTTPS URL for the credits / Stripe billing service. **When present, credits are enforced.** When absent, the environment runs in **open mode** (no credit gate). |
+| `billing_url` | no | `null` | HTTPS URL for the credits / Stripe billing service. When present, credits are enforced unless `open_mode` is explicitly `true`. |
 | `deploy_url` | no | `null` | HTTPS URL for the off-chain deploy worker API. |
+| `open_mode` | no | derived | When `true`, the registry skips credit holds for realm deploy/upgrade. When `false`, credits are enforced. When omitted, defaults to `true` if `billing_url` is absent, otherwise `false`. Set explicitly on environments that use a billing URL but should not gate deployments (e.g. test/staging). |
 
 Both URLs must use `https://`. Empty strings are treated as absent.
 
@@ -247,12 +248,14 @@ Completed phases are skipped; gaas resumes where it left off.
 
 ## Open mode vs billing
 
-| `services.billing_url` | Behaviour |
-|---|---|
-| **Present** (HTTPS URL) | Registry enforces the credits system (5 credits per realm deploy, holds/capture via Stripe billing service). |
-| **Absent or null** | **Open mode** — deployments proceed without credit checks. Suitable for private or dev environments. |
+| `services.open_mode` | `services.billing_url` | Behaviour |
+|---|---|---|
+| `true` | any | **Open mode** — deployments proceed without credit checks. |
+| `false` | present | Credits enforced (5 credits per realm deploy, holds/capture via billing service). |
+| omitted | present | Credits enforced (same as `open_mode: false`). |
+| omitted | absent | **Open mode** — no billing URL and no explicit flag. |
 
-`deploy_url` is independent: it points the registry frontend at an off-chain worker for legacy deploy paths. Omit both for fully self-contained environments.
+`deploy_url` is independent: it points the registry frontend at an off-chain worker for legacy deploy paths. Omit both billing URLs for fully self-contained environments.
 
 ## Third-party self-hosting
 
