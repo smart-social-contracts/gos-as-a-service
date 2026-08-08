@@ -450,6 +450,37 @@ def ensure_deployments_commander(
     console.print(f"  Deployments commander: {installer_id}")
 
 
+def ensure_section_commanders(
+    casals_id: str,
+    sections: list[str] | set[str],
+    principals: list[str],
+    network: str,
+    *,
+    identity: str | None = None,
+) -> None:
+    """Grant all-permissions section commander rights on every orchestra section.
+
+    Omitting ``permissions`` in set_commander grants full commander rights, which
+    unlocks the Casals web UI for those principals. set_commander adds-or-updates,
+    so repeated calls are safely idempotent.
+    """
+    if not principals:
+        return
+    for section in sections:
+        for principal in principals:
+            _casals_call(
+                casals_id,
+                "set_commander",
+                {
+                    "section": section,
+                    "commander_principal": principal,
+                },
+                network,
+                identity=identity,
+            )
+            console.print(f"  {section} commander: {principal}")
+
+
 def configure_multisig_signers(
     multisig_id: str,
     signers: list[str],

@@ -140,6 +140,27 @@ def _validate_https_optional(value: str) -> bool | str:
     return True
 
 
+def _parse_commanders(value: str) -> list[str]:
+    if not value.strip():
+        return []
+    return [part.strip() for part in value.split(",") if part.strip()]
+
+
+def _validate_commanders_optional(value: str) -> bool | str:
+    if not value.strip():
+        return True
+    try:
+        CasalsConfig.model_validate(
+            {
+                "version": DEFAULT_CASALS_VERSION,
+                "commanders": _parse_commanders(value),
+            }
+        )
+    except Exception as exc:
+        return str(exc)
+    return True
+
+
 def _gos_choices() -> list[Choice]:
     choices: list[Choice] = []
     for impl in GOS_IMPLEMENTATIONS.values():
@@ -287,6 +308,13 @@ def run_wizard(
     if casals_version is None:
         raise SystemExit(0)
 
+    commanders_raw = prompt.text(
+        "Additional Casals UI admin principals (comma-separated, optional):",
+        validate=_validate_commanders_optional,
+    ).ask()
+    if commanders_raw is None:
+        raise SystemExit(0)
+
     billing_url = prompt.text(
         "Billing service URL (optional, https):",
         validate=_validate_https_optional,
@@ -330,6 +358,7 @@ def run_wizard(
         casals=CasalsConfig(
             version=casals_version.strip(),
             release_repo=DEFAULT_CASALS_RELEASE_REPO,
+            commanders=_parse_commanders(commanders_raw),
         ),
         services=ServicesConfig(
             billing_url=billing_url.strip() or None,

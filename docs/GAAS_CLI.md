@@ -152,6 +152,19 @@ Leave a key out (or omit the entire `canisters` object) to create that canister 
 |---|---|---|---|
 | `version` | **yes** | — | Casals release tag `vX.Y.Z`, `latest`, or `main` (same semantics as `gos[].version`). Default pin: `v0.3.0`. |
 | `release_repo` | no | `smart-social-contracts/Casals` | GitHub repo for Casals release artifacts. |
+| `commanders` | no | `[]` | IC principals granted all-permissions section-commander rights on every orchestra section during conductor seeding. This unlocks the Casals web UI for those principals (the UI requires section- or stand-level commander access). |
+
+Example with extra UI admins:
+
+```json
+"casals": {
+  "version": "v0.3.0",
+  "commanders": [
+    "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
+    "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb"
+  ]
+}
+```
 
 ### `multisig`
 

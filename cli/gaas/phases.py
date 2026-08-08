@@ -51,10 +51,12 @@ from gaas.conductor_seed import (
     authorize_gos_entry,
     configure_multisig_signers,
     ensure_deployments_commander,
+    ensure_section_commanders,
     ensure_sheet_and_deploy_multisig,
     get_tree,
     seed_orchestration_templates,
     _find_canister_id,
+    _section_names,
 )
 from gaas.preflight import PreflightReport, run_preflight
 from gaas.source_build import resolve_gos_artifacts
@@ -802,6 +804,16 @@ def phase_seed_conductor(descriptor: Descriptor, ctx: DeployContext) -> None:
     ensure_deployments_commander(
         casals_id, installer_id, ctx.network, identity=ctx.identity
     )
+    if descriptor.casals.commanders:
+        tree = get_tree(casals_id, ctx.network, identity=ctx.identity)
+        sections = sorted(_section_names(tree) - {""})
+        ensure_section_commanders(
+            casals_id,
+            sections,
+            descriptor.casals.commanders,
+            ctx.network,
+            identity=ctx.identity,
+        )
 
 
 def phase_configure_multisig(descriptor: Descriptor, ctx: DeployContext) -> None:

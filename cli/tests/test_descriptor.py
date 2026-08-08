@@ -150,3 +150,37 @@ def test_multisig_config_optional(tmp_path: Path) -> None:
     loaded = Descriptor.load(path)
     assert loaded.multisig.backend_id == VALID_CANISTER_ID
 
+
+def test_casals_commanders_round_trip(tmp_path: Path) -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["casals"] = {
+        **data["casals"],
+        "commanders": [
+            "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
+            "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+        ],
+    }
+    desc = Descriptor.model_validate(data)
+    assert desc.casals.commanders == [
+        "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
+        "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+    ]
+    path = tmp_path / "commanders.gaas.json"
+    desc.save(path)
+    loaded = Descriptor.load(path)
+    assert loaded.casals.commanders == desc.casals.commanders
+
+
+def test_casals_commanders_rejects_invalid_principal() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["casals"] = {**data["casals"], "commanders": ["not-a-principal"]}
+    with pytest.raises(ValidationError, match="invalid principal"):
+        Descriptor.model_validate(data)
+
+
+def test_casals_commanders_rejects_empty_entry() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["casals"] = {**data["casals"], "commanders": ["aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa", ""]}
+    with pytest.raises(ValidationError, match="non-empty"):
+        Descriptor.model_validate(data)
+

@@ -30,6 +30,7 @@ def test_wizard_builds_descriptor(tmp_path: Path, monkeypatch) -> None:
             "v0.3.0",
             "",
             "",
+            "",
             False,
             str(tmp_path / "myenv.gaas.json"),
         ]
@@ -81,6 +82,7 @@ def test_wizard_honors_flag_overrides() -> None:
             "v0.3.0",
             "",
             "",
+            "",
             False,
             "./flagenv.gaas.json",
         ]
@@ -130,6 +132,7 @@ def test_wizard_open_mode_prompt_sets_flag(tmp_path: Path, monkeypatch) -> None:
             "v0.3.0",
             "",
             "",
+            "",
             True,
             str(tmp_path / "openenv.gaas.json"),
         ]
@@ -150,3 +153,50 @@ def test_wizard_open_mode_prompt_sets_flag(tmp_path: Path, monkeypatch) -> None:
 
     assert desc.flags.get("open_mode") is True
     prompt.confirm.assert_called()
+
+
+def test_wizard_parses_casals_commanders(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    answers = iter(
+        [
+            "cmdenv",
+            "cmd.gos.earth",
+            "ic",
+            "deployer",
+            "Build from local gos-as-a-service checkout",
+            ["realms-gos"],
+            "v0.3.1",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "v0.3.0",
+            "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa, bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+            "",
+            "",
+            False,
+            str(tmp_path / "cmdenv.gaas.json"),
+        ]
+    )
+
+    def fake_ask(*args, **kwargs):
+        method = MagicMock()
+        method.ask.return_value = next(answers)
+        return method
+
+    prompt = MagicMock()
+    prompt.text.side_effect = fake_ask
+    prompt.select.side_effect = fake_ask
+    prompt.checkbox.side_effect = fake_ask
+    prompt.confirm.side_effect = fake_ask
+
+    desc, _identity, _network, _output_path = run_wizard(ask=prompt)
+
+    assert desc.casals.commanders == [
+        "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
+        "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+    ]

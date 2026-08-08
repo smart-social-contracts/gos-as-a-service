@@ -58,6 +58,75 @@ def test_ensure_deployments_commander_grants_installer(monkeypatch) -> None:
         assert required in perms
 
 
+def test_ensure_section_commanders_grants_all_sections(monkeypatch) -> None:
+    calls: list[tuple[str, dict]] = []
+    monkeypatch.setattr(
+        conductor_seed,
+        "_casals_call",
+        lambda _cid, method, payload, _net, **_: calls.append((method, payload))
+        or {"ok": True},
+    )
+    principals = [
+        "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
+        "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+    ]
+    conductor_seed.ensure_section_commanders(
+        "qthgp-3yaaa-aaaae-agveq-cai",
+        ["Deployments", "Infra"],
+        principals,
+        "ic",
+    )
+    assert calls == [
+        (
+            "set_commander",
+            {
+                "section": "Deployments",
+                "commander_principal": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
+            },
+        ),
+        (
+            "set_commander",
+            {
+                "section": "Deployments",
+                "commander_principal": "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+            },
+        ),
+        (
+            "set_commander",
+            {
+                "section": "Infra",
+                "commander_principal": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
+            },
+        ),
+        (
+            "set_commander",
+            {
+                "section": "Infra",
+                "commander_principal": "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+            },
+        ),
+    ]
+    assert all("permissions" not in payload for _, payload in calls)
+
+
+def test_ensure_section_commanders_noop_when_empty(monkeypatch) -> None:
+    called = False
+
+    def _unexpected(*_a, **_k):
+        nonlocal called
+        called = True
+        return {"ok": True}
+
+    monkeypatch.setattr(conductor_seed, "_casals_call", _unexpected)
+    conductor_seed.ensure_section_commanders(
+        "qthgp-3yaaa-aaaae-agveq-cai",
+        ["Deployments"],
+        [],
+        "ic",
+    )
+    assert called is False
+
+
 def _write_assetstorage_wasm(repo_root: Path, canister: str = "realm_registry_frontend") -> Path:
     wasm_dir = repo_root / ".dfx" / "ic" / "canisters" / canister
     wasm_dir.mkdir(parents=True, exist_ok=True)

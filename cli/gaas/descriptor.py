@@ -73,6 +73,7 @@ class GosEntry(BaseModel):
 class CasalsConfig(BaseModel):
     version: str
     release_repo: str = DEFAULT_CASALS_RELEASE_REPO
+    commanders: list[str] = Field(default_factory=list)
 
     @field_validator("version")
     @classmethod
@@ -81,6 +82,21 @@ class CasalsConfig(BaseModel):
             return validate_descriptor_version(value)
         except ValueError as exc:
             raise ValueError(f"casals.version: {exc}") from exc
+
+    @field_validator("commanders")
+    @classmethod
+    def validate_commanders(cls, value: list[str]) -> list[str]:
+        normalized: list[str] = []
+        for index, entry in enumerate(value):
+            principal = entry.strip() if isinstance(entry, str) else ""
+            if not principal:
+                raise ValueError(f"casals.commanders[{index}]: principal must be non-empty")
+            if not CANISTER_ID_RE.match(principal):
+                raise ValueError(
+                    f"casals.commanders[{index}]: invalid principal {entry!r}"
+                )
+            normalized.append(principal)
+        return normalized
 
 
 class ServicesConfig(BaseModel):
