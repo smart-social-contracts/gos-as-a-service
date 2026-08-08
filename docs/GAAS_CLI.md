@@ -363,6 +363,8 @@ gaas new [DESCRIPTOR] [OPTIONS]
 6. Seeding conductor orchestra (templates, authorized WASMs, sheet, multisig deploy)
 
    For each GOS entry, the conductor authorizes the **backend realm WASM** from `wasm/<backend_wasm_key>/<version>/` and the **frontend certified-assets canister WASM** (`realms-assetstorage.wasm.gz` under `wasm/realm-assetstorage/<version>/`). The frontend dist bundle remains in `frontend/<frontend_wasm_key>/<version>/` for the realm installer to sync after canister install; it is not registered as an installable WASM module.
+
+   After the sheet and governance multisig are in place, gaas registers the five platform canisters (realm registry, realm installer, file registry — backends and frontends) under **Infra/platform** in the conductor orchestra. Only canisters tracked in the orchestra tree are monitored by the conductor's cycles autopilot (`cycles_autopilot`, default minimum 0.5T, default top-up 1T); this registration ensures those platform canisters receive automatic cycle monitoring and top-ups.
 7. Configuring multisig signers
 8. Building + installing frontends
 9. Domain wiring (DNS verify + IC registration)

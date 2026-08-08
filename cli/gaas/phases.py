@@ -51,6 +51,7 @@ from gaas.conductor_seed import (
     authorize_gos_entry,
     configure_multisig_signers,
     ensure_deployments_commander,
+    ensure_platform_stand,
     ensure_section_commanders,
     ensure_sheet_and_deploy_multisig,
     get_tree,
@@ -797,6 +798,24 @@ def phase_seed_conductor(descriptor: Descriptor, ctx: DeployContext) -> None:
         )
     ensure_sheet_and_deploy_multisig(
         casals_id, ctx.network, identity=ctx.identity
+    )
+    platform_canisters: list[tuple[str, str, str]] = []
+    for name, key, kind in (
+        ("realm-registry-backend", "realm_registry_backend", "backend"),
+        ("realm-registry-frontend", "realm_registry_frontend", "frontend"),
+        ("realm-installer", "realm_installer", "backend"),
+        ("file-registry", "file_registry", "backend"),
+        ("file-registry-frontend", "file_registry_frontend", "frontend"),
+    ):
+        canister_id = descriptor.canisters.get(key)
+        if not canister_id:
+            raise RuntimeError(f"{key} ID required for platform stand registration")
+        platform_canisters.append((name, canister_id, kind))
+    ensure_platform_stand(
+        casals_id,
+        platform_canisters,
+        ctx.network,
+        identity=ctx.identity,
     )
     installer_id = descriptor.canisters.get("realm_installer")
     if not installer_id:

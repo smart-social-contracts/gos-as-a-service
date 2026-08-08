@@ -336,3 +336,204 @@ def test_authorize_gos_entry_frontend_works_without_bundle_namespace(
     ]
     assert len(frontend_calls) == 1
     assert frontend_calls[0]["registry_namespace"] == "wasm/realm-assetstorage/main"
+
+
+def test_canister_names_collects_all_registered() -> None:
+    tree = {
+        "sections": [
+            {
+                "name": "Infra",
+                "stands": [
+                    {
+                        "name": "governance",
+                        "canisters": [{"name": "multisig", "canister_id": "aaa"}],
+                    },
+                    {
+                        "name": "platform",
+                        "canisters": [
+                            {"name": "file-registry", "canister_id": "bbb"},
+                        ],
+                    },
+                ],
+            }
+        ]
+    }
+    assert conductor_seed._canister_names(tree) == {"multisig", "file-registry"}
+
+
+def test_ensure_platform_stand_creates_stand_and_registers(monkeypatch) -> None:
+    calls: list[tuple[str, dict]] = []
+    trees = [
+        {"sections": [{"name": "Infra", "stands": []}]},
+        {
+            "sections": [
+                {
+                    "name": "Infra",
+                    "stands": [
+                        {
+                            "name": "platform",
+                            "canisters": [
+                                {
+                                    "name": "realm-registry-backend",
+                                    "canister_id": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
+                                },
+                                {
+                                    "name": "realm-registry-frontend",
+                                    "canister_id": "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ]
+        },
+    ]
+
+    def fake_casals(_cid, method, payload, _net, **_):
+        calls.append((method, payload))
+        return {"ok": True}
+
+    def fake_tree(*_a, **_k):
+        return trees.pop(0) if trees else trees[-1]
+
+    monkeypatch.setattr(conductor_seed, "_casals_call", fake_casals)
+    monkeypatch.setattr(conductor_seed, "get_tree", fake_tree)
+
+    platform = [
+        ("realm-registry-backend", "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa", "backend"),
+        ("realm-registry-frontend", "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb", "frontend"),
+        ("realm-installer", "ccccc-ccccc-ccccc-ccccc-ccccc-ccc", "backend"),
+    ]
+    conductor_seed.ensure_platform_stand(
+        "qthgp-3yaaa-aaaae-agveq-cai", platform, "ic"
+    )
+
+    assert calls[0] == (
+        "create_stand",
+        {
+            "section": "Infra",
+            "name": "platform",
+            "description": (
+                "GaaS platform canisters (registry, installer, file registry)"
+            ),
+        },
+    )
+    register_calls = [payload for method, payload in calls if method == "register_canister"]
+    assert register_calls == [
+        {
+            "stand": "platform",
+            "name": "realm-registry-backend",
+            "canister_id": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
+            "kind": "backend",
+        },
+        {
+            "stand": "platform",
+            "name": "realm-registry-frontend",
+            "canister_id": "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+            "kind": "frontend",
+        },
+        {
+            "stand": "platform",
+            "name": "realm-installer",
+            "canister_id": "ccccc-ccccc-ccccc-ccccc-ccccc-ccc",
+            "kind": "backend",
+        },
+    ]
+
+
+def test_ensure_platform_stand_tolerates_existing_stand(monkeypatch) -> None:
+    calls: list[tuple[str, dict]] = []
+
+    def fake_casals(_cid, method, payload, _net, **_):
+        if method == "create_stand":
+            raise RuntimeError("stand platform already exists in section Infra")
+        calls.append((method, payload))
+        return {"ok": True}
+
+    monkeypatch.setattr(conductor_seed, "_casals_call", fake_casals)
+    monkeypatch.setattr(
+        conductor_seed,
+        "get_tree",
+        lambda *_a, **_k: {
+            "sections": [{"name": "Infra", "stands": [{"name": "platform", "canisters": []}]}]
+        },
+    )
+
+    conductor_seed.ensure_platform_stand(
+        "qthgp-3yaaa-aaaae-agveq-cai",
+        [("file-registry", "ddddd-ddddd-ddddd-ddddd-ddddd-ddd", "backend")],
+        "ic",
+    )
+    assert calls == [
+        (
+            "register_canister",
+            {
+                "stand": "platform",
+                "name": "file-registry",
+                "canister_id": "ddddd-ddddd-ddddd-ddddd-ddddd-ddd",
+                "kind": "backend",
+            },
+        )
+    ]
+
+
+def test_ensure_platform_stand_skips_existing_canisters(monkeypatch) -> None:
+    calls: list[tuple[str, dict]] = []
+
+    monkeypatch.setattr(
+        conductor_seed,
+        "_casals_call",
+        lambda _cid, method, payload, _net, **_: (
+            calls.append((method, payload)) or {"ok": True}
+            if method != "create_stand"
+            else (_ for _ in ()).throw(
+                RuntimeError("stand platform already exists in section Infra")
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        conductor_seed,
+        "get_tree",
+        lambda *_a, **_k: {
+            "sections": [
+                {
+                    "name": "Infra",
+                    "stands": [
+                        {
+                            "name": "platform",
+                            "canisters": [
+                                {
+                                    "name": "realm-registry-backend",
+                                    "canister_id": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
+                                },
+                                {
+                                    "name": "file-registry",
+                                    "canister_id": "ddddd-ddddd-ddddd-ddddd-ddddd-ddd",
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+
+    conductor_seed.ensure_platform_stand(
+        "qthgp-3yaaa-aaaae-agveq-cai",
+        [
+            ("realm-registry-backend", "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa", "backend"),
+            ("file-registry-frontend", "eeeee-eeeee-eeeee-eeeee-eeeee-eee", "frontend"),
+        ],
+        "ic",
+    )
+    assert calls == [
+        (
+            "register_canister",
+            {
+                "stand": "platform",
+                "name": "file-registry-frontend",
+                "canister_id": "eeeee-eeeee-eeeee-eeeee-eeeee-eee",
+                "kind": "frontend",
+            },
+        )
+    ]

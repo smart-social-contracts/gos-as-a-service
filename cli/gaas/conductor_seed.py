@@ -123,6 +123,17 @@ def _find_canister_id(tree: dict[str, Any], name: str) -> str:
     return ""
 
 
+def _canister_names(tree: dict[str, Any]) -> set[str]:
+    names: set[str] = set()
+    for sec in tree.get("sections") or []:
+        for stand in sec.get("stands") or []:
+            for canister in stand.get("canisters") or []:
+                name = (canister.get("name") or "").strip()
+                if name:
+                    names.add(name)
+    return names
+
+
 def list_authorized_keys(
     casals_id: str,
     network: str,
@@ -403,6 +414,55 @@ def ensure_sheet_and_deploy_multisig(
             raise RuntimeError("deploy_sheet completed but multisig not found in get_tree")
     else:
         console.print(f"  multisig: adopt {multisig_id}")
+
+
+def ensure_platform_stand(
+    casals_id: str,
+    platform_canisters: list[tuple[str, str, str]],
+    network: str,
+    *,
+    identity: str | None = None,
+) -> None:
+    """Ensure Infra/platform stand exists and register platform canisters."""
+    try:
+        _casals_call(
+            casals_id,
+            "create_stand",
+            {
+                "section": "Infra",
+                "name": "platform",
+                "description": (
+                    "GaaS platform canisters (registry, installer, file registry)"
+                ),
+            },
+            network,
+            identity=identity,
+        )
+        console.print("  create_stand (Infra/platform)...")
+    except RuntimeError as exc:
+        if "already exists" not in str(exc).lower():
+            raise
+        console.print("  platform stand: already exists")
+
+    tree = get_tree(casals_id, network, identity=identity)
+    existing = _canister_names(tree)
+    for name, canister_id, kind in platform_canisters:
+        if name in existing:
+            console.print(f"  {name}: skip (already registered)")
+            continue
+        console.print(f"  {name}: register {canister_id} ({kind})")
+        _casals_call(
+            casals_id,
+            "register_canister",
+            {
+                "stand": "platform",
+                "name": name,
+                "canister_id": canister_id,
+                "kind": kind,
+            },
+            network,
+            identity=identity,
+        )
 
 
 DEPLOYMENTS_COMMANDER_PERMISSIONS = [

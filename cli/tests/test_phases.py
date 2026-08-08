@@ -20,6 +20,7 @@ from gaas.phases import (
     phase_controller_topology,
     phase_create_canisters,
     phase_domain_wiring,
+    phase_seed_conductor,
     run_phases,
 )
 from gaas.gaas_env import build_gaas_env
@@ -365,3 +366,44 @@ def test_platform_descriptor_optional() -> None:
     )
     assert with_platform.platform is not None
     assert with_platform.platform.version == "v0.3.1"
+
+
+@patch("gaas.phases.ensure_section_commanders")
+@patch("gaas.phases.ensure_deployments_commander")
+@patch("gaas.phases.ensure_platform_stand")
+@patch("gaas.phases.ensure_sheet_and_deploy_multisig")
+@patch("gaas.phases.authorize_gos_entry")
+@patch("gaas.phases.seed_orchestration_templates")
+def test_phase_seed_conductor_registers_platform_canisters(
+    _seed_templates,
+    _authorize,
+    _sheet,
+    mock_platform_stand,
+    _deployments_commander,
+    _section_commanders,
+) -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        "realm_registry_backend": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
+        "realm_registry_frontend": "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+        "realm_installer": "ccccc-ccccc-ccccc-ccccc-ccccc-ccc",
+        "file_registry": "ddddd-ddddd-ddddd-ddddd-ddddd-ddd",
+        "file_registry_frontend": "eeeee-eeeee-eeeee-eeeee-eeeee-eee",
+        "casals_backend": "fffff-fffff-fffff-fffff-fffff-fff",
+    }
+    desc = Descriptor.model_validate(data)
+    ctx = DeployContext(identity="deployer", network="ic")
+    phase_seed_conductor(desc, ctx)
+
+    mock_platform_stand.assert_called_once()
+    args = mock_platform_stand.call_args[0]
+    assert args[0] == "fffff-fffff-fffff-fffff-fffff-fff"
+    assert args[2] == "ic"
+    assert mock_platform_stand.call_args[1]["identity"] == "deployer"
+    assert args[1] == [
+        ("realm-registry-backend", "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa", "backend"),
+        ("realm-registry-frontend", "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb", "frontend"),
+        ("realm-installer", "ccccc-ccccc-ccccc-ccccc-ccccc-ccc", "backend"),
+        ("file-registry", "ddddd-ddddd-ddddd-ddddd-ddddd-ddd", "backend"),
+        ("file-registry-frontend", "eeeee-eeeee-eeeee-eeeee-eeeee-eee", "frontend"),
+    ]
