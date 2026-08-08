@@ -95,9 +95,18 @@ def build_realms_gos_artifacts(repo_root: Path, dest_dir: Path) -> tuple[Path, P
         shutil.copytree(decl_src, decl_dest)
 
     fe_dir = repo_root / "src" / "realm_frontend"
+    # Realms is an npm workspace: install at the root so shared deps (vite)
+    # are hoisted; installing inside src/realm_frontend leaves a partial tree.
     subprocess.run(
         ["npm", "install", "--legacy-peer-deps"],
-        cwd=fe_dir,
+        cwd=repo_root,
+        check=True,
+    )
+    # Workspace packages ship source only; realm_frontend imports
+    # @realmsgos/extension-bridge which must be compiled (tsc) first.
+    subprocess.run(
+        ["npm", "run", "build", "-w", "packages/extension-bridge", "--if-present"],
+        cwd=repo_root,
         check=True,
     )
     subprocess.run(["npm", "run", "build"], cwd=fe_dir, check=True)
