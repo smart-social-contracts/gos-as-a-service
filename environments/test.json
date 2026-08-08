@@ -27,10 +27,16 @@
     "version": "main",
     "release_repo": "smart-social-contracts/Casals"
   },
+  "multisig": {
+    "backend_id": "3iqx7-eyaaa-aaaae-agyxq-cai"
+  },
   "services": {
     "billing_url": "https://billing.realmsgos.dev"
   },
   "flags": {
     "open_mode": true
+  },
+  "dns": {
+    "provider": "manual"
   }
 }
