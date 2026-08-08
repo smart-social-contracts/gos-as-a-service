@@ -571,23 +571,6 @@ def billing_status() -> GetBillingStatusResult:
 
 # ── Deployment queue endpoints ─────────────────────────────────────────
 
-def _schedule_casals_provision(installer_id: str, job_id: str):
-    """Kick the installer's on-chain Casals provisioning for a freshly enqueued
-    job (registry -> installer trigger, CASALS_ROLLOUT.md §9 cutover). Runs on a
-    zero-delay timer so the user-facing request_deployment reply is not blocked
-    by the minutes-long provisioning call; the installer settles credits back
-    through deployment_succeeded/deployment_failed either way."""
-    def _cb():
-        try:
-            installer = RealmInstallerService(Principal.from_str(installer_id))
-            result: CallResult = yield installer.provision_via_casals(job_id)
-            logger.info(f"provision_via_casals({job_id}) triggered: {str(result)[:300]}")
-        except Exception as e:
-            logger.error(f"provision_via_casals({job_id}) trigger failed: {e}")
-
-    ic.set_timer(Duration(0), _cb)
-
-
 @update
 def request_deployment(manifest_json: text) -> Async[text]:
     try:
@@ -651,9 +634,6 @@ def request_deployment(manifest_json: text) -> Async[text]:
         else:
             result["credits_held"] = 0
             result["open_mode"] = True
-
-        if (result.get("status") or "") == "provisioning":
-            _schedule_casals_provision(installer_id, job_id)
 
         result["caller"] = caller
         return json.dumps(result)

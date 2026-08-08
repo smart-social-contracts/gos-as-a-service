@@ -25,6 +25,10 @@ from cycles_preflight import (
 )
 from provision_kick import (
     PROVISION_HEARTBEAT_INTERVAL_S,
+    ProvisionAlreadyInProgress,
+    claim_provision_lock,
+    clear_provision_lock,
+    provision_kick_runner,
     provisioning_job_ids_for_heartbeat,
     schedule_provision_kick as _schedule_provision_kick_impl,
     should_kick_provision_on_enqueue,
@@ -171,6 +175,7 @@ class DeploymentJob(Entity, TimestampedMixin):
     baton_pending = Integer(default=0)
     baton_canister_id = String(max_length=64, default="")
     baton_handoff_json = String(max_length=2048, default="")
+    provision_active_at = Integer(default=0)
     error = String(max_length=2000)
     created_at = Integer(default=0)
     completed_at = Integer(default=0)
@@ -2578,11 +2583,13 @@ def _mark_provision_failed(job_id: str, reason: str):
 
 def _schedule_provision_kick(job_id: str, delay_s: int = 0):
     def _kick_runner(kick_job_id: str):
-        try:
-            yield from _provision_via_casals_gen(kick_job_id)
-        except Exception as e:
-            _mark_provision_failed(kick_job_id, str(e))
-            jlog(kick_job_id).error(f"provision kick failed: {e}")
+        yield from provision_kick_runner(
+            kick_job_id,
+            run_gen=_provision_via_casals_gen,
+            mark_failed=_mark_provision_failed,
+            log_info=lambda msg: jlog(kick_job_id).info(msg),
+            log_error=lambda msg: jlog(kick_job_id).error(msg),
+        )
 
     _schedule_provision_kick_impl(
         job_id,
@@ -2605,6 +2612,7 @@ def _arm_provision_heartbeat(delay_s: int = 0):
                 for job_id in provisioning_job_ids_for_heartbeat(
                     DeploymentJob.instances(),
                     terminal_statuses=_JOB_TERMINAL_STATUSES,
+                    now_s=now_s(),
                 ):
                     _schedule_provision_kick(job_id, 0)
         except Exception as e:
@@ -2630,6 +2638,14 @@ def _provision_via_casals_gen(job_id: str):
     if (job.status or "pending") not in ("pending", "provisioning"):
         raise RuntimeError(f"job in '{job.status}', expected 'pending' or 'provisioning'")
 
+    claim_provision_lock(job, now_s=now_s())
+    try:
+        yield from _provision_via_casals_body(job_id, job, cfg, casals_id)
+    finally:
+        clear_provision_lock(job)
+
+
+def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerConfig, casals_id: str):
     manifest = json.loads(job.manifest_json or "{}")
     cas = manifest.get("casals", {}) or {}
     realm_info = manifest.get("realm", {}) or {}
@@ -2841,6 +2857,8 @@ def provision_via_casals(job_id: text) -> Async[ResultProvision]:
             return ResultProvision(Err=ie("unauthorized: controller or configured registry only"))
         result = yield from _provision_via_casals_gen(job_id)
         return ResultProvision(Ok=result)
+    except ProvisionAlreadyInProgress as e:
+        return ResultProvision(Err=ie(str(e)))
     except Exception as e:
         _mark_provision_failed(job_id, str(e))
         return ResultProvision(Err=ie(str(e), traceback.format_exc()[-1500:]))
