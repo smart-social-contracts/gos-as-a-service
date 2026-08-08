@@ -481,6 +481,7 @@ def _build_canister_ids_js(
     file_registry_id: str = "",
     derivation_origin: str = "",
     portal_url: str = "",
+    test_mode_ii_bypass: bool = False,
 ) -> str:
     """Build the /canister_ids.js runtime config for a realm frontend.
 
@@ -495,6 +496,12 @@ def _build_canister_ids_js(
     redirects direct-visit sign-ins to the portal, where the single II login is
     bridged into the embedded realm (the raw icp0.io origin cannot II-login —
     it is not in the registry's capped ii-alternative-origins list).
+
+    ``test_mode_ii_bypass`` tells the realm frontend to skip real Internet
+    Identity and use a deterministic local test identity instead. Without this
+    field the frontend always boots a real-II AuthClient, so realms deployed in
+    test mode would still force a real passkey login (which stalls inside the
+    portal iframe).
     """
     fields = {
         "realm_backend": backend_id,
@@ -507,6 +514,8 @@ def _build_canister_ids_js(
     if portal_url:
         fields["portal_url"] = portal_url
     body = ",".join(f'{k}:"{v}"' for k, v in fields.items())
+    if test_mode_ii_bypass:
+        body += ",test_mode_ii_bypass:true"
     return "globalThis.__CANISTER_IDS={" + body + "};"
 
 
@@ -567,7 +576,14 @@ def schedule_registration(job_id_val: str):
                 deriv_origin = infra_early.get("ii_derivation_origin", "") or ""
                 federation = manifest.get("federation") or {}
                 portal_url = (federation.get("portal_url") or "").strip()
-                js = _build_canister_ids_js(backend_id, fr_js, deriv_origin, portal_url)
+                test_flags_reg = manifest.get("test_flags") or {}
+                # manifest uses short keys (mapped to test_mode_* in the realm
+                # backend _FLAG_MAP): "ii_bypass" -> test_mode_ii_bypass.
+                ii_bypass = bool(
+                    test_flags_reg.get("ii_bypass")
+                    or test_flags_reg.get("test_mode_ii_bypass")
+                )
+                js = _build_canister_ids_js(backend_id, fr_js, deriv_origin, portal_url, ii_bypass)
                 installer_id = ic.id().to_str()
                 for principal in (installer_id, backend_id):
                     grant_res = yield from _grant_frontend_commit(frontend_id, principal)
