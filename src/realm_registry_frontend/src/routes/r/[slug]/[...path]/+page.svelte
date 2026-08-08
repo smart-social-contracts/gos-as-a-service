@@ -8,6 +8,7 @@
   import { portalDocumentFocus } from '$lib/portal-focus.js';
   import { requestAssistantOpen } from '$lib/assistant-open.js';
   import { login } from '$lib/auth.js';
+  import { authSession } from '$lib/stores/authSession.js';
   import { CONFIG } from '$lib/config.js';
   import { fetchRealmRuntimeFlags } from '$lib/realm-runtime-flags.js';
 
@@ -30,12 +31,21 @@
   $: slug = $page.params.slug;
   $: subPath = $page.url.pathname.replace(new RegExp(`^/r/${slug}`), '') || '/';
 
+  let unsubAuth = () => {};
+
   onMount(async () => {
     if (!browser) return;
+    // If the portal session is (or becomes) available after the iframe's
+    // first silent probe was answered with auth:pending, push the delegation
+    // without requiring the user to click anything.
+    unsubAuth = authSession.subscribe((s) => {
+      if (s?.isLoggedIn) void bridge?.refreshDelegation?.();
+    });
     await loadRealm();
   });
 
   onDestroy(() => {
+    unsubAuth();
     bridge?.dispose?.();
     portalDocumentFocus.set(null);
   });
