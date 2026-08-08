@@ -170,7 +170,7 @@ def test_build_gaas_env_includes_ii_origin() -> None:
     env = build_gaas_env(desc, "ic")
     assert env["domain"] == "test.gos.earth"
     assert env["ii_alternative_origins"] == [f"https://{VALID_CANISTER_ID}.icp0.io"]
-    assert env["canisters"]["ic"]["realm_registry_frontend"] == VALID_CANISTER_ID
+    assert env["canisters"]["realm_registry_frontend"]["ic"] == VALID_CANISTER_ID
 
 
 @patch("gaas.phases.wait_for_dns", return_value=False)
