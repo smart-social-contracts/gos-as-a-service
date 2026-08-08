@@ -25,9 +25,6 @@ _DFX_ENV = {
 _CANISTER_ID_OUTPUT_RE = re.compile(
     r"([a-z0-9]{5}(?:-[a-z0-9]{5}){3,10}-[a-z0-9]{3})"
 )
-_CYCLES_BALANCE_RE = re.compile(
-    r"([\d,]+(?:\.\d+)?)\s*(?:TC|Trillion|T)?\s*cycles?", re.I
-)
 _MODULE_HASH_NONE_RE = re.compile(r"module\s*hash:\s*none", re.I)
 _CONTROLLERS_RE = re.compile(r"controllers:\s*(.+)", re.I)
 
@@ -200,13 +197,24 @@ def cycles_balance(network: str, *, identity: str | None = None) -> int | None:
             stderr=result.stderr.strip(),
             stdout=result.stdout.strip(),
         )
-    match = _CYCLES_BALANCE_RE.search(result.stdout)
-    if not match:
-        digits = re.sub(r"[^\d]", "", result.stdout)
-        if digits:
-            return int(digits)
-        return None
-    return int(match.group(1).replace(",", "").split(".")[0])
+    return parse_cycles_balance(result.stdout)
+
+
+def parse_cycles_balance(text: str) -> int | None:
+    """Parse `dfx cycles balance` output like '0.281 TC (trillion cycles).'
+
+    dfx prints either a scaled form ('3.10 TC (trillion cycles)') or a raw
+    count ('3_072_815_616 cycles'); both must scale to an integer cycle count.
+    """
+    match = re.search(r"([\d_,]+(?:\.\d+)?)\s*TC\b", text, re.I)
+    if match:
+        value = float(match.group(1).replace(",", "").replace("_", ""))
+        return int(value * 1_000_000_000_000)
+    match = re.search(r"([\d_,]+(?:\.\d+)?)\s*cycles?\b", text, re.I)
+    if match:
+        value = match.group(1).replace(",", "").replace("_", "")
+        return int(float(value))
+    return None
 
 
 def ping_local() -> bool:

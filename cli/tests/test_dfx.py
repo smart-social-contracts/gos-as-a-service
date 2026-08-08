@@ -1,6 +1,6 @@
 """Parsing tests for dfx output helpers."""
 
-from gaas.dfx import parse_controllers
+from gaas.dfx import parse_controllers, parse_cycles_balance
 
 
 def test_parse_controllers_principal_ending_in_digits():
@@ -21,3 +21,17 @@ def test_parse_controllers_principal_ending_in_digits():
 
 def test_parse_controllers_empty():
     assert parse_controllers("Status: Running\n") == ()
+
+
+def test_parse_cycles_balance_trillion_format():
+    assert parse_cycles_balance("0.281 TC (trillion cycles).\n") == 281_000_000_000
+    assert parse_cycles_balance("3.10 TC (trillion cycles)") == 3_100_000_000_000
+
+
+def test_parse_cycles_balance_raw_format():
+    assert parse_cycles_balance("3_072_815_616 cycles") == 3_072_815_616
+    assert parse_cycles_balance("9,000,000,000,000 cycles") == 9_000_000_000_000
+
+
+def test_parse_cycles_balance_unparseable():
+    assert parse_cycles_balance("no balance here") is None
