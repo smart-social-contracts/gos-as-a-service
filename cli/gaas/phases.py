@@ -23,6 +23,19 @@ from gaas.artifacts import fetch_release_assets
 from gaas.descriptor import CANISTER_ID_RE, Descriptor
 from gaas.dns import render_dns_records, wait_for_dns
 from gaas.domain_reg import attempt_domain_registration
+from gaas.codex_seed import seed_codex_catalog
+from gaas.conductor_seed import (
+    authorize_gos_entry,
+    configure_multisig_signers,
+    ensure_deployments_commander,
+    ensure_platform_stand,
+    ensure_section_commanders,
+    ensure_sheet_and_deploy_multisig,
+    get_tree,
+    seed_orchestration_templates,
+    _find_canister_id,
+    _section_names,
+)
 from gaas.file_registry_client import (
     ensure_version_catalog_entry,
     fetch_namespace_hashes,
@@ -47,18 +60,6 @@ from gaas.platform import (
     resolve_casals_frontend_dist,
     resolve_casals_wasm,
     resolve_platform_backend_wasm,
-)
-from gaas.conductor_seed import (
-    authorize_gos_entry,
-    configure_multisig_signers,
-    ensure_deployments_commander,
-    ensure_platform_stand,
-    ensure_section_commanders,
-    ensure_sheet_and_deploy_multisig,
-    get_tree,
-    seed_orchestration_templates,
-    _find_canister_id,
-    _section_names,
 )
 from gaas.preflight import PreflightReport, run_preflight
 from gaas.source_build import resolve_gos_artifacts
@@ -441,6 +442,7 @@ def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None
         raise RuntimeError("file_registry canister ID required")
 
     work = _work_dir(ctx)
+    seeded_catalog_sources: set[tuple[str, str]] = set()
     for entry in descriptor.gos:
         resolved = resolve_deploy_version(
             entry.version, entry.release_repo, session=ctx.http
@@ -465,6 +467,9 @@ def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None
                     f"  {entry.implementation}@{version_label}: already seeded ({backend_ns})"
                 )
 
+        clone_parent = work / "src-clone"
+        existing_realms_checkout = clone_parent / entry.release_repo.replace("/", "_")
+
         if needs_seed:
             frontend_asset = entry.artifacts.resolved_frontend_asset(entry.implementation)
             artifact_dir = work / "gos" / entry.implementation / resolved.descriptor_version
@@ -475,7 +480,7 @@ def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None
                 backend_asset=backend_asset,
                 frontend_asset=frontend_asset,
                 dest_dir=artifact_dir,
-                clone_parent=work / "src-clone",
+                clone_parent=clone_parent,
                 session=ctx.http,
             )
             console.print(
@@ -512,6 +517,23 @@ def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None
                 console.print(
                     f"  {entry.implementation}@{version_label}: already in version catalog"
                 )
+
+        catalog_key = (entry.release_repo, resolved.descriptor_version)
+        if catalog_key not in seeded_catalog_sources:
+            seed_codex_catalog(
+                registry_id,
+                entry.release_repo,
+                entry.version,
+                work,
+                ctx.network,
+                identity=ctx.identity,
+                implementation=entry.implementation,
+                existing_realms_checkout=existing_realms_checkout
+                if existing_realms_checkout.is_dir()
+                else None,
+                session=ctx.http,
+            )
+            seeded_catalog_sources.add(catalog_key)
 
 
 def _is_interactive(ctx: DeployContext) -> bool:

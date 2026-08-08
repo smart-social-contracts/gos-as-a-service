@@ -45,6 +45,27 @@ def clone_repo(release_repo: str, dest_parent: Path) -> Path:
     return dest
 
 
+def clone_repo_at_ref(release_repo: str, dest: Path, ref: str) -> Path:
+    """Shallow-clone *release_repo* at *ref* into *dest* and return the checkout path."""
+    if (dest / ".git").is_dir():
+        return dest
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        [
+            "git",
+            "clone",
+            "--depth",
+            "1",
+            "--branch",
+            ref,
+            f"https://github.com/{release_repo}.git",
+            str(dest),
+        ],
+        check=True,
+    )
+    return dest
+
+
 def ensure_basilisk_python(repo_root: Path) -> Path:
     """Return an isolated basilisk venv Python for *repo_root*, creating it if needed."""
     venv = repo_root / ".venv-basilisk"

@@ -147,7 +147,7 @@ type RealmInstallerService = service { enqueue_deployment : (text) -> (RResultEn
 type RealmTargetService = service { install_extension_from_registry : (text) -> (text); install_codex_from_registry : (text) -> (text) };
 type RealmRegistryService = service { register_realm : (text, text, text, text, text) -> (text); remove_realm : (text) -> (text); deployment_failed : (text, text, text) -> (text); deployment_succeeded : (text, text) -> (text) };
 type FileRegistryService = service { get_extension_manifest : (text) -> (text) query };
-type CasalsService = service { get_tree : () -> (text) query; create_stand : (text) -> (text); create_canister : (text) -> (text); set_commander : (text) -> (text); upgrade_to : (text) -> (text); orchestration_hand_to_baton : (text) -> (text); orchestration_configure_baton : (text) -> (text); destroy_realm_stand : (text) -> (text) };
+type CasalsService = service { get_tree : () -> (text) query; get_cycles_cached : () -> (text) query; create_stand : (text) -> (text); create_canister : (text) -> (text); set_commander : (text) -> (text); upgrade_to : (text) -> (text); orchestration_hand_to_baton : (text) -> (text); orchestration_configure_baton : (text) -> (text); destroy_realm_stand : (text) -> (text) };
 
 service : (text) -> {
   "status" : () -> (GetStatusResult) query;

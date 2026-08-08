@@ -75,6 +75,8 @@ def test_phase_seed_file_registry_main_namespace_and_catalog(
         "gaas.phases.resolve_gos_artifacts",
         return_value=(backend_file, frontend_file),
     ), patch("gaas.phases.seed_gos_entry") as seed_mock, patch(
+        "gaas.phases.seed_codex_catalog"
+    ) as codex_mock, patch(
         "gaas.phases.ensure_version_catalog_entry", return_value="published"
     ) as catalog_mock, patch(
         "gaas.phases.sha256_file", return_value="abc123"
@@ -89,6 +91,7 @@ def test_phase_seed_file_registry_main_namespace_and_catalog(
 
     catalog_args = catalog_mock.call_args[0]
     assert catalog_args[2] == "main"
+    codex_mock.assert_called_once()
 
 
 def test_resolve_casals_wasm_main_clones_and_builds(tmp_path: Path) -> None:

@@ -130,6 +130,8 @@ Schema is enforced by `cli/gaas/descriptor.py` and `cli/gaas/known.py`.
 
 **Version pins:** Semver tags (`vX.Y.Z`) fetch fixed GitHub release assets and seed the file registry under the bare version (`0.4.0`). `latest` resolves the newest GitHub release at deploy time (cached for the process) and uses the resolved tag for fetching while catalog namespaces stay semver-clean. `main` shallow-clones upstream HEAD and builds WASM/frontend from source (mirroring each repo's release CI); artifacts are seeded under the `main` namespace. `main` and `latest` are accepted case-insensitively; semver tags are not. Prefer pinned semver tags for staging/production; use `main` only for test/local iteration.
 
+During **seed file registry**, gaas also publishes the Realms **codex catalog** and (best effort) **extension catalog** into the environment's `file_registry` canister so realm creation can install packages such as `syntropia@latest`. For each `gos[]` entry whose implementation is `realms-gos`, gaas resolves a Realms source checkout (reusing the clone from a `main` source build when available, otherwise shallow-cloning the pinned release tag). Codex packages are uploaded from `codices/codices/` when the Realms checkout includes that tree; if submodules were not initialized (typical for shallow clones), gaas shallow-clones `realms-codices` at the same ref. Unified codices (`kind: codex` with a `backend/` tree) publish to `ext/<id>/<manifest.version>/…` (manifest, `backend/**/*.py`, `backend/**/*.json`, optional frontend bundle/i18n). Legacy codices publish to the deprecated `codex/<id>/<manifest.version>/…` namespace. Extension bundles publish to `ext/<id>/<manifest.version>/…` from the Realms `extensions/` submodule when present, otherwise from a shallow clone of `realms-extensions`; a missing extensions repo logs a warning and does not abort deploy, but codex publish failures do abort.
+
 ### `canisters` keys
 
 Only these names are accepted:
@@ -374,7 +376,7 @@ gaas new [DESCRIPTOR] [OPTIONS]
 2. Creating canisters
 3. Installing backends
 4. Configuring backends (registry, installer, casals `set_settings`)
-5. Seeding file registry
+5. Seeding file registry (GOS WASM/frontend bundles, version catalog entries, and codex/extension packages from the Realms source tree)
 6. Seeding conductor orchestra (templates, authorized WASMs, sheet, multisig deploy)
 
    For each GOS entry, the conductor authorizes the **backend realm WASM** from `wasm/<backend_wasm_key>/<version>/` and the **frontend certified-assets canister WASM** (`realms-assetstorage.wasm.gz` under `wasm/realm-assetstorage/<version>/`). The frontend dist bundle remains in `frontend/<frontend_wasm_key>/<version>/` for the realm installer to sync after canister install; it is not registered as an installable WASM module.
