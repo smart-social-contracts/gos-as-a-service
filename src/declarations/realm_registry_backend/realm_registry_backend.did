@@ -99,6 +99,9 @@ type RealmRecord = record { id : text; name : text; url : text; backend_url : te
 type StatusRecord = record { version : text; commit : text; commit_datetime : text; status : text; realms_count : nat64; dependencies : vec text; python_version : text };
 type BillingStatusRecord = record { users_count : nat64; total_balance : nat64; total_purchased : nat64; total_spent : nat64 };
 type VersionInfoRecord = record { version : text; backend_wasm_url : text; frontend_tar_url : text; backend_wasm_hash : text; frontend_tar_hash : text; published_at : float64 };
+type Header = record { 0 : text; 1 : text };
+type HttpRequest = record { method : text; url : text; headers : vec Header; body : blob };
+type HttpResponseIncoming = record { status_code : nat16; headers : vec Header; body : blob; streaming_strategy : opt text; upgrade : opt bool };
 type InstallerError = record { message : text; traceback : text };
 type DeploymentJobView = record { job_id : text; status : text; realm_name : text; caller_principal : text; network : text; backend_canister_id : text; frontend_canister_id : text; expected_wasm_hash : text; actual_wasm_hash : text; wasm_verified : int8; assets_verified : int8; frontend_wasm_verified : int8; ext_deploy_task_id : text; expected_step_count : nat32; registry_canister_id : text; error : text; created_at : nat64; completed_at : nat64 };
 type DeployStepView = record { idx : nat32; kind : text; label : text; status : text; error : text };
@@ -146,7 +149,7 @@ type RealmRegistryService = service { register_realm : (text, text, text, text, 
 type FileRegistryService = service { get_extension_manifest : (text) -> (text) query };
 type CasalsService = service { get_tree : () -> (text) query; create_stand : (text) -> (text); create_canister : (text) -> (text); set_commander : (text) -> (text); upgrade_to : (text) -> (text); orchestration_hand_to_baton : (text) -> (text); orchestration_configure_baton : (text) -> (text); destroy_realm_stand : (text) -> (text) };
 
-service : {
+service : (text) -> {
   "status" : () -> (GetStatusResult) query;
   "list_realms" : () -> (vec RealmRecord) query;
   "register_realm" : (text, text, text, text, text) -> (AddRealmResult);
@@ -178,6 +181,8 @@ service : {
   "deactivate_principal" : (text) -> (GenericResult);
   "list_invitation_codes" : () -> (text) query;
   "list_activated_principals" : () -> (text) query;
+  "configure" : (text) -> (GenericResult);
+  "get_env_config" : () -> (text) query;
   "get_runtime_flags" : () -> (text) query;
   "set_canister_config_json" : (text) -> (text);
   "set_test_flags_json" : (text) -> (text);

@@ -79,3 +79,30 @@ test('getCanisterId returns undefined when nothing resolves', () => {
 		undefined
 	);
 });
+
+test('detectNetwork resolves gaas-env domain to configured network', () => {
+	const gaasEnv = { domain: 'partner.example', network: 'custom-net' };
+	assert.equal(detectNetwork('partner.example', gaasEnv), 'custom-net');
+	assert.equal(detectNetwork('localhost', gaasEnv), 'local');
+	assert.equal(detectNetwork('test.gos.earth', gaasEnv), 'test');
+});
+
+test('getCanisterId prefers gaas-env canisters map when present', () => {
+	const gaasEnv = {
+		domain: 'partner.example',
+		network: 'partner',
+		canisters: {
+			realm_registry_backend: {
+				partner: 'gaas-canister-id'
+			}
+		}
+	};
+	assert.equal(
+		getCanisterId('realm_registry_backend', {
+			hostname: 'partner.example',
+			canisterIdsMap: CANISTER_MAP,
+			gaasEnvOverride: gaasEnv
+		}),
+		'gaas-canister-id'
+	);
+});

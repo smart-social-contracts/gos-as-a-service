@@ -10,6 +10,15 @@ import json
 import traceback
 
 from claim_args import build_claim_slug_args
+from ic_assets import ensure_frame_ancestor, portal_url_to_origin
+from installer_config import (
+    InstallerConfig,
+    apply_installer_config,
+    configured_file_registry_id,
+    configured_portal_base,
+    get_config,
+    installer_config_payload,
+)
 
 from basilisk import (
     Async, CallResult, Duration, Opt, Principal, Record, Service,
@@ -149,34 +158,8 @@ class DeploymentJobRef(Entity):
     caller_principal = String(max_length=64)
     created_at = Integer(default=0)
 
-class InstallerConfig(Entity):
-    """Singleton config (alias 'singleton'). Holds the opt-in switch + pointers for
-    the on-chain Casals provisioning path. When `provision_via_casals` is 0 (the
-    default), the installer behaves exactly as before (off-chain deployer drives
-    provisioning), so this entity is fully non-breaking."""
-    __alias__ = "key"
-    key = String(max_length=16, default="singleton")
-    provision_via_casals = Integer(default=0)
-    casals_canister_id = String(max_length=64, default="")
-    casals_section = String(max_length=64, default="Deployments")
-    # Principal allowed to call provision_via_casals in addition to canister
-    # controllers (intended: the realm_registry_backend canister). Empty => only
-    # controllers may trigger on-chain provisioning.
-    registry_principal = String(max_length=64, default="")
-    # Opt-in per-realm Baton governance: when 1, every provisioned stand gets an
-    # orchestration-baton canister, the realm canisters are handed to it, and a
-    # 2-of-2 (casals-backend + realm-backend) upgrade approval policy is set.
-    # Requires the Casals catalog to carry the `orchestration-baton` template
-    # and the installer to hold the orchestration.* section permissions.
-    create_stand_baton = Integer(default=0)
-    baton_wasm_key = String(max_length=64, default="orchestration-baton")
-
-def _config() -> "InstallerConfig":
-    list(InstallerConfig.instances())
-    cfg = InstallerConfig["singleton"]
-    if cfg is None:
-        cfg = InstallerConfig(key="singleton")
-    return cfg
+def _config() -> InstallerConfig:
+    return get_config()
 
 # ── Candid types ───────────────────────────────────────────────────────
 
@@ -546,6 +529,94 @@ def _store_canister_ids_js(frontend_id: str, js: str):
     return store_result
 
 
+_DEFAULT_REALM_IC_ASSETS = """[
+    {
+        "match": "**/*",
+        "security_policy": "disabled",
+        "headers": {
+            "Content-Security-Policy": "default-src 'self'; frame-ancestors 'none';"
+        }
+    }
+]"""
+
+
+def _get_asset_file(frontend_id: str, key: str):
+    """Read a file from a certified-assets frontend canister (query)."""
+    escaped_key = key.replace("\\", "\\\\").replace('"', '\\"')
+    candid_arg = f'(record {{ key = "{escaped_key}" }})'
+    get_result: CallResult = yield ic.call_raw(
+        Principal.from_str(frontend_id), "get",
+        ic.candid_encode(candid_arg), 1,
+    )
+    return get_result
+
+
+def _decode_asset_blob(raw) -> str:
+    if raw is None:
+        return ""
+    if isinstance(raw, (bytes, bytearray)):
+        raw = ic.candid_decode(raw)
+    if isinstance(raw, dict):
+        content = raw.get("content")
+        if content is None and raw.get("Ok") is not None:
+            inner = raw["Ok"]
+            content = inner.get("content") if isinstance(inner, dict) else getattr(inner, "content", None)
+        if isinstance(content, (bytes, bytearray)):
+            return bytes(content).decode("utf-8", errors="replace")
+        if isinstance(content, str):
+            return content
+    if hasattr(raw, "content"):
+        content = raw.content
+        if isinstance(content, (bytes, bytearray)):
+            return bytes(content).decode("utf-8", errors="replace")
+    return ""
+
+
+def _store_ic_assets_json5(frontend_id: str, body: str):
+    escaped = body.replace("\\", "\\\\").replace('"', '\\"')
+    candid_arg = (
+        '(record { key = "/.ic-assets.json5"; content_type = "application/json"; '
+        'content_encoding = "identity"; content = blob "' + escaped + '"; sha256 = null })'
+    )
+    store_result: CallResult = yield ic.call_raw(
+        Principal.from_str(frontend_id), "store",
+        ic.candid_encode(candid_arg), 0,
+    )
+    return store_result
+
+
+def _patch_ic_assets_frame_ancestor(frontend_id: str, job_id_val: str, portal_origin: str):
+    """Best-effort CSP frame-ancestors patch — never raises."""
+    try:
+        origin = portal_url_to_origin(portal_origin)
+        if not origin:
+            jlog(job_id_val).info("ic-assets patch skipped: no portal origin")
+            return
+        current = _DEFAULT_REALM_IC_ASSETS
+        try:
+            get_result = yield from _get_asset_file(frontend_id, "/.ic-assets.json5")
+            decoded = _decode_asset_blob(get_result)
+            if decoded.strip():
+                current = decoded
+        except Exception as read_err:
+            jlog(job_id_val).warning(
+                f"ic-assets read failed, using template (non-fatal): {read_err}"
+            )
+        patched = ensure_frame_ancestor(current, origin)
+        if patched == current:
+            jlog(job_id_val).info(f"ic-assets frame-ancestors already includes {origin}")
+            return
+        store_result = yield from _store_ic_assets_json5(frontend_id, patched)
+        if isinstance(store_result, dict) and store_result.get("Err"):
+            jlog(job_id_val).warning(
+                f"ic-assets upload failed (non-fatal): {store_result['Err']}"
+            )
+        else:
+            jlog(job_id_val).info(f"ic-assets frame-ancestors patched with {origin}")
+    except Exception as e:
+        jlog(job_id_val).warning(f"ic-assets frame-ancestor patch failed (non-fatal): {e}")
+
+
 def schedule_registration(job_id_val: str):
     def _register_cb():
         try:
@@ -596,6 +667,8 @@ def schedule_registration(job_id_val: str):
                     jlog(job_id_val).error(f"canister_ids.js upload failed: {store_result['Err']}")
                 else:
                     jlog(job_id_val).info("canister_ids.js uploaded to frontend")
+                patch_origin = portal_url or configured_portal_base(manifest)
+                yield from _patch_ic_assets_frame_ancestor(frontend_id, job_id_val, patch_origin)
 
             if backend_id and realm_info:
                 # Identity fields only. When a codex package is installed,
@@ -1170,12 +1243,6 @@ def _schedule_step_runner(task_id: str, delay_s: int = 0):
     ic.set_timer(Duration(int(delay_s)), _cb)
 
 
-_FILE_REGISTRY_IDS = {
-    "staging": "iebdk-kqaaa-aaaau-agoxq-cai",
-    "demo": "vi64l-3aaaa-aaaae-qj4va-cai",
-    "test": "uq2mu-kaaaa-aaaah-avqcq-cai",
-}
-
 # Shared land-NFT backend per network (Casals infra stand "nft", not per-realm).
 _SHARED_NFT_CANISTERS = {
     "staging": "27sff-mqaaa-aaaah-quntq-cai",
@@ -1393,7 +1460,7 @@ def _fetch_codex_dependency_ids(registry_id: str, codex_id: str, version=None) -
 def _start_extensions_for_job(job, manifest: dict) -> Async[None]:
     realm_info = manifest.get("realm", {})
     network = (manifest.get("network") or "").strip()
-    registry_id = manifest.get("file_registry_canister_id", "") or _FILE_REGISTRY_IDS.get(network, "")
+    registry_id = manifest.get("file_registry_canister_id", "") or configured_file_registry_id(network)
 
     jlog(job.name).info(f"starting extension install: network={network}, file_registry={registry_id}")
     jlog(job.name).info(f"realm_info keys: {list(realm_info.keys())}")
@@ -1663,7 +1730,13 @@ def backfill_job_refs_batch() -> text:
 # ── Endpoints ──────────────────────────────────────────────────────────
 
 @init
-def _on_init() -> None:
+def _on_init(config_json: text = "") -> None:
+    if config_json and config_json.strip():
+        try:
+            apply_installer_config(json.loads(config_json))
+            _log.info(f"init installer config: {installer_config_payload()}")
+        except Exception as e:
+            _log.error(f"init installer config failed: {e}")
     _log.info("init")
 
 @post_upgrade
@@ -2278,6 +2351,30 @@ def _setup_stand_baton(casals, job_id: str, stand: str, casals_id: str,
 
 
 @update
+def configure(args: text) -> text:
+    """Controller-only descriptor config: registry_backend_id, file_registry_id,
+    casals_canister_id, casals_section, portal_url (+ optional casals toggles)."""
+    try:
+        if not ic.is_controller(ic.caller()):
+            return json.dumps({"success": False, "error": "Only controllers can configure the installer"})
+        params = json.loads(args) if args else {}
+        apply_installer_config(params)
+        payload = installer_config_payload()
+        _log.info(f"configure: {payload}")
+        return json.dumps(payload)
+    except Exception as e:
+        return json.dumps({"success": False, "error": str(e)})
+
+
+@query
+def get_installer_config() -> text:
+    try:
+        return json.dumps(installer_config_payload())
+    except Exception as e:
+        return json.dumps({"success": False, "error": str(e)})
+
+
+@update
 def set_casals_config(args: text) -> ResultCasalsConfig:
     """Controller-only. Configure (and enable/disable) the on-chain Casals
     provisioning path. Args (JSON):
@@ -2287,19 +2384,8 @@ def set_casals_config(args: text) -> ResultCasalsConfig:
         if not ic.is_controller(ic.caller()):
             return ResultCasalsConfig(Err=ie("unauthorized: controller only"))
         params = json.loads(args) if args else {}
+        apply_installer_config(params)
         cfg = _config()
-        if "provision_via_casals" in params:
-            cfg.provision_via_casals = 1 if params["provision_via_casals"] else 0
-        if "casals_canister_id" in params:
-            cfg.casals_canister_id = (params.get("casals_canister_id") or "").strip()
-        if "casals_section" in params:
-            cfg.casals_section = (params.get("casals_section") or "Deployments").strip()
-        if "registry_principal" in params:
-            cfg.registry_principal = (params.get("registry_principal") or "").strip()
-        if "create_stand_baton" in params:
-            cfg.create_stand_baton = 1 if params["create_stand_baton"] else 0
-        if "baton_wasm_key" in params:
-            cfg.baton_wasm_key = (params.get("baton_wasm_key") or "orchestration-baton").strip()
         return ResultCasalsConfig(Ok=_casals_config_view(cfg))
     except Exception as e:
         return ResultCasalsConfig(Err=ie(str(e), traceback.format_exc()[-1500:]))
@@ -2466,7 +2552,7 @@ def provision_via_casals(job_id: text) -> Async[ResultProvision]:
             network = (manifest.get("network") or "").strip()
             registry_id = (manifest.get("file_registry_canister_id") or
                            manifest.get("infra", {}).get("file_registry_canister_id") or
-                           _FILE_REGISTRY_IDS.get(network, "") or "").strip()
+                           configured_file_registry_id(network) or "").strip()
             casals_config = {
                 "stand": stand,
                 "backend_wasm_key": backend_wasm_key,

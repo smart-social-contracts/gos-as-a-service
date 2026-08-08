@@ -173,6 +173,7 @@ export const idlFactory = ({ IDL }) => {
     '__get_candid_interface_tmp_hack' : IDL.Func([], [IDL.Text], ['query']),
     'backfill_job_refs_batch' : IDL.Func([], [IDL.Text], []),
     'cancel_deployment' : IDL.Func([IDL.Text], [ResultJobCancel], []),
+    'configure' : IDL.Func([IDL.Text], [IDL.Text], []),
     'delete_deployment_job' : IDL.Func([IDL.Text], [ResultJobCancel], []),
     'destroy_realm_job' : IDL.Func([IDL.Text], [ResultJobCancel], []),
     'enqueue_deployment' : IDL.Func([IDL.Text], [ResultEnqueue], []),
@@ -202,6 +203,7 @@ export const idlFactory = ({ IDL }) => {
         [ResultJobManifest],
         ['query'],
       ),
+    'get_installer_config' : IDL.Func([], [IDL.Text], ['query']),
     'get_pending_deployments' : IDL.Func([], [ResultPendingJobs], ['query']),
     'health' : IDL.Func([], [HealthView], ['query']),
     'list_deployment_jobs' : IDL.Func(
@@ -231,4 +233,4 @@ export const idlFactory = ({ IDL }) => {
       ),
   });
 };
-export const init = ({ IDL }) => { return []; };
+export const init = ({ IDL }) => { return [IDL.Text]; };

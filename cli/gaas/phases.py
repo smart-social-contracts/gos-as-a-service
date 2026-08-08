@@ -1,0 +1,605 @@
+"""Deployment phase runner."""
+
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import subprocess
+import tarfile
+import tempfile
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Callable, Protocol
+
+import requests
+from rich.console import Console
+from rich.table import Table
+
+from gaas import dfx
+from gaas.artifacts import fetch_release_assets
+from gaas.descriptor import Descriptor
+from gaas.dns import render_dns_records, wait_for_dns
+from gaas.domain_reg import attempt_domain_registration
+from gaas.file_registry_client import (
+    fetch_namespace_hashes,
+    namespace_published,
+    seed_gos_entry,
+)
+from gaas.gaas_env import frontend_ic_origin, remove_gaas_env, write_gaas_env
+from gaas.known import (
+    DEFAULT_CASALS_SECTION,
+    DEFAULT_CYCLES_PER_CANISTER,
+    DEFAULT_PLATFORM_RELEASE_REPO,
+    DFX_CANISTER_NAMES,
+    KNOWN_CANISTER_NAMES,
+)
+from gaas.platform import (
+    PlatformError,
+    fetch_platform_frontend_archive,
+    find_gos_repo_root,
+    frontend_dist_dir,
+    resolve_casals_wasm,
+    resolve_platform_backend_wasm,
+)
+from gaas.preflight import PreflightReport, run_preflight
+
+console = Console()
+
+
+@dataclass
+class DeployContext:
+    identity: str
+    network: str
+    required_cycles: int | None = None
+    preflight: PreflightReport | None = None
+    stopped: bool = False
+    completed_phases: list[str] = field(default_factory=list)
+    descriptor_path: Path | None = None
+    yes: bool = False
+    casals_src: Path | None = None
+    dns_timeout_min: int = 20
+    skip_dns_wait: bool = False
+    keep_env_file: bool = False
+    work_dir: Path | None = None
+    http: requests.Session | None = None
+
+
+class PhaseFunc(Protocol):
+    def __call__(self, descriptor: Descriptor, ctx: DeployContext) -> None: ...
+
+
+def _work_dir(ctx: DeployContext) -> Path:
+    if ctx.work_dir is None:
+        ctx.work_dir = Path(tempfile.mkdtemp(prefix="gaas-deploy-"))
+    return ctx.work_dir
+
+
+def _save_descriptor(descriptor: Descriptor, ctx: DeployContext) -> None:
+    if ctx.descriptor_path:
+        descriptor.save(ctx.descriptor_path)
+
+
+def _normalize_version(version: str) -> str:
+    return version.lstrip("v")
+
+
+def _portal_url(descriptor: Descriptor) -> str:
+    return f"https://{descriptor.domain}"
+
+
+def _registry_config_json(descriptor: Descriptor) -> str:
+    payload = {
+        "portal_url": _portal_url(descriptor),
+        "open_mode": descriptor.services.billing_url is None,
+    }
+    if descriptor.services.billing_url:
+        payload["billing_url"] = descriptor.services.billing_url
+    return json.dumps(payload)
+
+
+def _installer_config_json(descriptor: Descriptor) -> str:
+    canisters = descriptor.canisters
+    payload = {
+        "registry_backend_id": canisters.get("realm_registry_backend", ""),
+        "file_registry_id": canisters.get("file_registry", ""),
+        "casals_canister_id": canisters.get("casals_conductor", ""),
+        "casals_section": DEFAULT_CASALS_SECTION,
+        "portal_url": _portal_url(descriptor),
+    }
+    return json.dumps(payload)
+
+
+def _opt_text_init_arg(config_json: str) -> str:
+    if not config_json:
+        return "(null)"
+    escaped = config_json.replace("\\", "\\\\").replace('"', '\\"')
+    return f'(opt "{escaped}")'
+
+
+def phase_validate(descriptor: Descriptor, ctx: DeployContext) -> None:
+    errors = descriptor.validate_descriptor()
+    if errors:
+        raise RuntimeError("descriptor validation failed:\n  - " + "\n  - ".join(errors))
+
+    report = run_preflight(
+        descriptor,
+        ctx.identity,
+        ctx.network,
+        required_cycles=ctx.required_cycles or DEFAULT_CYCLES_PER_CANISTER * 6,
+    )
+    ctx.preflight = report
+    if not report.ok:
+        failed = [c.detail for c in report.checks if not c.passed]
+        raise RuntimeError("preflight failed:\n  - " + "\n  - ".join(failed))
+
+
+def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
+    dfx.use_identity(ctx.identity)
+    principal = dfx.get_principal(ctx.identity)
+    cycles = DEFAULT_CYCLES_PER_CANISTER if ctx.network == "ic" else None
+
+    for name in KNOWN_CANISTER_NAMES:
+        existing_id = descriptor.canisters.get(name)
+        if existing_id:
+            status = dfx.canister_status(existing_id, ctx.network, identity=ctx.identity)
+            controllers = status.controllers
+            if controllers and principal not in controllers:
+                raise RuntimeError(
+                    f"identity {principal!r} is not a controller of adopted canister "
+                    f"{name} ({existing_id}); controllers: {', '.join(controllers)}"
+                )
+            console.print(f"  {name}: adopt {existing_id} ({status.status})")
+            continue
+
+        dfx_name = DFX_CANISTER_NAMES.get(name)
+        if dfx_name:
+            canister_id = dfx.create_canister(
+                dfx_name,
+                ctx.network,
+                identity=ctx.identity,
+                with_cycles=cycles,
+            )
+        else:
+            canister_id = dfx.create_canister_via_ledger(
+                ctx.network,
+                identity=ctx.identity,
+                controller=principal,
+            )
+            if cycles and ctx.network == "ic":
+                dfx.top_up_canister(
+                    canister_id,
+                    cycles,
+                    ctx.network,
+                    identity=ctx.identity,
+                )
+
+        descriptor.set_canister_id(name, canister_id)
+        _save_descriptor(descriptor, ctx)
+        console.print(f"  {name}: created {canister_id}")
+
+
+def _platform_release(descriptor: Descriptor) -> tuple[str | None, str]:
+    if descriptor.platform:
+        return descriptor.platform.version, descriptor.platform.release_repo
+    return None, DEFAULT_PLATFORM_RELEASE_REPO
+
+
+def phase_install_backends(descriptor: Descriptor, ctx: DeployContext) -> None:
+    platform_version, release_repo = _platform_release(descriptor)
+    work = _work_dir(ctx)
+    repo_root = None
+    try:
+        repo_root = find_gos_repo_root(ctx.descriptor_path.parent if ctx.descriptor_path else None)
+    except PlatformError:
+        if platform_version is None:
+            raise
+
+    backends = {
+        "realm_registry_backend": _registry_config_json(descriptor),
+        "realm_installer": _installer_config_json(descriptor),
+        "file_registry": "",
+        "casals_conductor": "",
+    }
+
+    for canister, init_json in backends.items():
+        canister_id = descriptor.canisters.get(canister)
+        if not canister_id:
+            raise RuntimeError(f"missing canister ID for {canister}")
+
+        if canister == "casals_conductor":
+            wasm = resolve_casals_wasm(
+                descriptor.casals.version,
+                descriptor.casals.release_repo,
+                work / "casals",
+                casals_src=ctx.casals_src,
+                session=ctx.http,
+            )
+        else:
+            wasm = resolve_platform_backend_wasm(
+                canister,
+                platform_version=platform_version,
+                release_repo=release_repo,
+                work_dir=work,
+                repo_root=repo_root,
+                session=ctx.http,
+            )
+
+        mode = dfx.detect_install_mode(canister_id, ctx.network, identity=ctx.identity)
+        init_arg = _opt_text_init_arg(init_json) if init_json else "(null)"
+        console.print(f"  {canister}: {mode} ({wasm.name})")
+        dfx.install_wasm(
+            canister_id,
+            str(wasm),
+            ctx.network,
+            mode,
+            init_arg,
+            identity=ctx.identity,
+            yes=ctx.yes,
+        )
+
+
+def _parse_registry_configure(raw: str) -> dict:
+    raw = raw.strip()
+    if raw.startswith("("):
+        raw = raw[1:-1].strip() if raw.endswith(")") else raw[1:].strip()
+    if "Ok = " in raw:
+        inner = raw.split("Ok = ", 1)[1].rstrip(" })").strip()
+        if inner.startswith('"') and inner.endswith('"'):
+            inner = inner[1:-1].replace('\\"', '"')
+        return json.loads(inner)
+    if raw.startswith("(variant { Err") or raw.startswith("variant { Err"):
+        err = raw.split("Err = ", 1)[1].rstrip(" })").strip('"')
+        raise RuntimeError(f"configure failed: {err}")
+    return json.loads(raw)
+
+
+def phase_configure_backends(descriptor: Descriptor, ctx: DeployContext) -> None:
+    registry_id = descriptor.canisters.get("realm_registry_backend")
+    installer_id = descriptor.canisters.get("realm_installer")
+    if not registry_id or not installer_id:
+        raise RuntimeError("registry/installer canister IDs required before configure")
+
+    registry_json = _registry_config_json(descriptor)
+    installer_json = _installer_config_json(descriptor)
+
+    registry_raw = dfx.canister_call(
+        registry_id,
+        "configure",
+        dfx.candid_text_arg(registry_json),
+        ctx.network,
+        identity=ctx.identity,
+    )
+    _parse_registry_configure(registry_raw)
+
+    installer_raw = dfx.canister_call(
+        installer_id,
+        "configure",
+        dfx.candid_text_arg(installer_json),
+        ctx.network,
+        identity=ctx.identity,
+    )
+    installer_result = json.loads(installer_raw)
+    if not installer_result.get("success", True):
+        raise RuntimeError(f"installer configure failed: {installer_result}")
+
+    env_raw = dfx.canister_call(
+        registry_id,
+        "get_env_config",
+        dfx.candid_text_arg(""),
+        ctx.network,
+        identity=ctx.identity,
+        query=True,
+    )
+    env_cfg = json.loads(env_raw)
+    if env_cfg.get("portal_url", "").rstrip("/") != _portal_url(descriptor):
+        raise RuntimeError(
+            f"registry get_env_config portal_url mismatch: {env_cfg.get('portal_url')!r}"
+        )
+
+    inst_cfg_raw = dfx.canister_call(
+        installer_id,
+        "get_installer_config",
+        dfx.candid_text_arg(""),
+        ctx.network,
+        identity=ctx.identity,
+        query=True,
+    )
+    inst_cfg = json.loads(inst_cfg_raw)
+    expected_registry = descriptor.canisters.get("realm_registry_backend", "")
+    if inst_cfg.get("registry_backend_id") != expected_registry:
+        raise RuntimeError(
+            "installer get_installer_config registry_backend_id mismatch: "
+            f"{inst_cfg.get('registry_backend_id')!r} != {expected_registry!r}"
+        )
+    console.print("  registry + installer configure verified")
+
+
+def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None:
+    registry_id = descriptor.canisters.get("file_registry")
+    if not registry_id:
+        raise RuntimeError("file_registry canister ID required")
+
+    work = _work_dir(ctx)
+    for entry in descriptor.gos:
+        version = _normalize_version(entry.version)
+        backend_ns = f"wasm/{entry.artifacts.backend_wasm_key}/{version}"
+        frontend_ns = f"frontend/{entry.artifacts.frontend_wasm_key}/{version}"
+
+        if namespace_published(registry_id, backend_ns, ctx.network, identity=ctx.identity):
+            hashes = fetch_namespace_hashes(
+                registry_id, backend_ns, ctx.network, identity=ctx.identity
+            )
+            if hashes:
+                console.print(f"  {entry.implementation}@{entry.version}: already seeded ({backend_ns})")
+                continue
+
+        backend_asset = entry.artifacts.resolved_backend_asset(entry.implementation)
+        frontend_asset = entry.artifacts.resolved_frontend_asset(entry.implementation)
+        assets = fetch_release_assets(
+            entry.release_repo,
+            entry.version,
+            ["checksums.txt", backend_asset, frontend_asset],
+            work / "gos" / entry.implementation / entry.version,
+            session=ctx.http,
+        )
+        backend_path = next(p for p in assets if p.name == backend_asset)
+        frontend_path = next(p for p in assets if p.name == frontend_asset)
+        console.print(f"  seeding {entry.implementation}@{entry.version} → {backend_ns}, {frontend_ns}")
+        seed_gos_entry(
+            registry_id,
+            backend_ns,
+            frontend_ns,
+            backend_path,
+            frontend_path,
+            ctx.network,
+            identity=ctx.identity,
+        )
+
+
+def _confirm_reinstall(ctx: DeployContext) -> None:
+    if ctx.yes or ctx.network != "ic":
+        return
+    answer = console.input(
+        "[yellow]Reinstall asset canisters on ic? This wipes frontend state. [y/N]: [/yellow]"
+    )
+    if answer.strip().lower() not in {"y", "yes"}:
+        raise RuntimeError("frontend reinstall cancelled (pass --yes to skip prompt)")
+
+
+def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
+    platform_version, release_repo = _platform_release(descriptor)
+    repo_root = find_gos_repo_root(ctx.descriptor_path.parent if ctx.descriptor_path else None)
+    gaas_env_path: Path | None = None
+
+    try:
+        gaas_env_path = write_gaas_env(repo_root, descriptor, ctx.network)
+        console.print(f"  wrote {gaas_env_path}")
+
+        env = {**os.environ, "DFX_NETWORK": ctx.network}
+        console.print("  npm install (repo root)...")
+        subprocess.run(
+            ["npm", "install", "--legacy-peer-deps"],
+            cwd=repo_root,
+            env=env,
+            check=True,
+        )
+        console.print("  building realm_registry_frontend...")
+        subprocess.run(
+            ["npm", "run", "build", "--workspace=src/realm_registry_frontend"],
+            cwd=repo_root,
+            env=env,
+            check=True,
+        )
+        console.print("  building file_registry_frontend...")
+        subprocess.run(
+            ["npm", "run", "build", "--workspace=src/file_registry_frontend"],
+            cwd=repo_root,
+            env=env,
+            check=True,
+        )
+
+        _confirm_reinstall(ctx)
+        work = _work_dir(ctx)
+
+        for canister in ("realm_registry_frontend", "file_registry_frontend"):
+            canister_id = descriptor.canisters.get(canister)
+            if not canister_id:
+                raise RuntimeError(f"missing canister ID for {canister}")
+
+            dist = frontend_dist_dir(
+                canister,
+                platform_version=platform_version,
+                release_repo=release_repo,
+                work_dir=work,
+                repo_root=repo_root,
+                session=ctx.http,
+            )
+            if not dist.is_dir() or not any(dist.iterdir()):
+                if platform_version:
+                    archive = fetch_platform_frontend_archive(
+                        canister,
+                        platform_version,
+                        release_repo,
+                        work / "frontends" / canister,
+                        session=ctx.http,
+                    )
+                    extract_dir = work / "frontends" / canister / "dist"
+                    extract_dir.mkdir(parents=True, exist_ok=True)
+                    with tarfile.open(archive, "r:gz") as tar:
+                        tar.extractall(extract_dir)
+                    dist = extract_dir
+                else:
+                    raise RuntimeError(f"frontend build produced empty dist for {canister}")
+
+            dfx_name = DFX_CANISTER_NAMES[canister]
+            if not dfx_name:
+                raise RuntimeError(f"no dfx mapping for {canister}")
+            console.print(f"  {canister}: reinstall assets to {canister_id}")
+            dfx.deploy_assets_canister(
+                dfx_name,
+                canister_id,
+                ctx.network,
+                repo_root=repo_root,
+                identity=ctx.identity,
+                mode="reinstall",
+                yes=True,
+            )
+    finally:
+        if gaas_env_path and not ctx.keep_env_file:
+            remove_gaas_env(repo_root)
+
+
+def phase_domain_wiring(descriptor: Descriptor, ctx: DeployContext) -> None:
+    if ctx.network == "local":
+        console.print("  skipping domain wiring on local network")
+        return
+
+    frontend_id = descriptor.canisters.get("realm_registry_frontend")
+    if not frontend_id:
+        raise RuntimeError("realm_registry_frontend ID required for domain wiring")
+
+    records = render_dns_records(descriptor.domain, frontend_id)
+    table = Table(title=f"DNS records for {descriptor.domain}")
+    table.add_column("Type")
+    table.add_column("Host")
+    table.add_column("Value")
+    for record in records:
+        table.add_row(record.record_type, record.host, record.value)
+    console.print(table)
+
+    if ctx.skip_dns_wait:
+        console.print("  --skip-dns-wait: continuing without DNS poll")
+    else:
+        timeout = float(ctx.dns_timeout_min * 60)
+        console.print(f"  waiting up to {ctx.dns_timeout_min} min for DNS propagation...")
+        if not wait_for_dns(descriptor.domain, frontend_id, timeout=timeout):
+            console.print(
+                "[red]DNS records not detected in time.[/red] Configure the records above, "
+                "register the domain at https://reg.icp0.io if needed, then re-run deploy."
+            )
+            _save_descriptor(descriptor, ctx)
+            ctx.stopped = True
+            raise RuntimeError("domain wiring timed out waiting for DNS propagation")
+
+    ok, detail = attempt_domain_registration(descriptor.domain, timeout=120.0)
+    if ok:
+        console.print("  domain registration API: active")
+    else:
+        console.print(f"  [yellow]domain registration API (best-effort):[/yellow] {detail}")
+
+
+def _http_get(url: str, timeout: float = 30.0) -> tuple[int, str]:
+    import urllib.error
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as response:
+            body = response.read(1024).decode("utf-8", errors="replace")
+            return response.status, body
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read(256).decode("utf-8", errors="replace")
+
+
+def phase_smoke_checks(descriptor: Descriptor, ctx: DeployContext) -> None:
+    seed_keys = [
+        f"{entry.artifacts.backend_wasm_key}@{_normalize_version(entry.version)}"
+        for entry in descriptor.gos
+    ]
+
+    for name, canister_id in descriptor.canisters.items():
+        status = dfx.canister_status(canister_id, ctx.network, identity=ctx.identity)
+        if status.status != "running":
+            raise RuntimeError(f"{name} ({canister_id}) status is {status.status}, expected running")
+
+    registry_id = descriptor.canisters["realm_registry_backend"]
+    env_raw = dfx.canister_call(
+        registry_id,
+        "get_env_config",
+        dfx.candid_text_arg(""),
+        ctx.network,
+        identity=ctx.identity,
+        query=True,
+    )
+    env_cfg = json.loads(env_raw)
+    if descriptor.domain not in env_cfg.get("portal_url", ""):
+        raise RuntimeError("registry portal_url smoke check failed")
+
+    file_registry_id = descriptor.canisters["file_registry"]
+    for entry in descriptor.gos:
+        version = _normalize_version(entry.version)
+        backend_ns = f"wasm/{entry.artifacts.backend_wasm_key}/{version}"
+        hashes = fetch_namespace_hashes(
+            file_registry_id, backend_ns, ctx.network, identity=ctx.identity
+        )
+        if not hashes:
+            raise RuntimeError(f"file_registry missing seeded namespace {backend_ns}")
+
+    if ctx.network == "ic":
+        deadline = time.monotonic() + 90.0
+        last_status = 0
+        while time.monotonic() < deadline:
+            status, body = _http_get(f"https://{descriptor.domain}/")
+            last_status = status
+            if status == 200:
+                break
+            time.sleep(5)
+        if last_status != 200:
+            raise RuntimeError(f"https://{descriptor.domain}/ returned {last_status}, expected 200")
+
+        ic_status, ic_body = _http_get(f"https://{descriptor.domain}/.well-known/ic-domains")
+        if ic_status != 200 or descriptor.domain not in ic_body:
+            raise RuntimeError("ic-domains well-known check failed")
+    else:
+        frontend_id = descriptor.canisters["realm_registry_frontend"]
+        local_url = f"http://{frontend_id}.localhost:4943/"
+        status, _body = _http_get(local_url)
+        if status != 200:
+            console.print(f"  [yellow]local frontend HTTP check returned {status} for {local_url}[/yellow]")
+
+    table = Table(title="Deployment summary")
+    table.add_column("Field")
+    table.add_column("Value")
+    table.add_row("Environment", descriptor.name)
+    table.add_row("Domain", descriptor.domain)
+    table.add_row("Network", ctx.network)
+    for name, canister_id in descriptor.canisters.items():
+        table.add_row(name, canister_id)
+    table.add_row("Seed keys", ", ".join(seed_keys))
+    table.add_row(
+        "Next steps",
+        f"Open https://{descriptor.domain} (or re-run gaas if domain wiring was skipped)",
+    )
+    console.print(table)
+
+
+PHASES: list[tuple[str, str, PhaseFunc]] = [
+    ("validate", "Validating descriptor, identity, cycles", phase_validate),
+    ("create_canisters", "Creating canisters", phase_create_canisters),
+    ("install_backends", "Installing backends", phase_install_backends),
+    ("configure_backends", "Configuring backends", phase_configure_backends),
+    ("seed_file_registry", "Seeding file registry", phase_seed_file_registry),
+    ("install_frontends", "Building + installing frontends", phase_install_frontends),
+    ("domain_wiring", "Domain wiring", phase_domain_wiring),
+    ("smoke_checks", "Smoke checks", phase_smoke_checks),
+]
+
+
+def run_phases(
+    descriptor: Descriptor,
+    ctx: DeployContext,
+    *,
+    on_phase_start: Callable[[int, str, str], None] | None = None,
+) -> DeployContext:
+    total = len(PHASES)
+    for index, (phase_id, title, func) in enumerate(PHASES, start=1):
+        if on_phase_start:
+            on_phase_start(index, phase_id, title)
+        else:
+            console.print(f"[{index}/{total}] {title}...")
+        func(descriptor, ctx)
+        ctx.completed_phases.append(phase_id)
+        if ctx.stopped:
+            break
+    return ctx

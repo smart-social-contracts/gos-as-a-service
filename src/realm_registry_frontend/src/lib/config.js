@@ -9,18 +9,31 @@
 
 import { getRegistryRuntimeFlagsSnapshot } from '$lib/stores/registryRuntimeFlags.js';
 import { detectNetwork, getCanisterId } from './network.js';
+import {
+	resolveBillingServiceUrl,
+	resolveDeployServiceUrl,
+	resolvePortalBaseUrl,
+	resolvePortalHosts
+} from './config-resolvers.js';
 
 const viteEnv = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {};
 
-const PORTAL_HOSTS = {
-	staging: 'https://staging.gos.earth',
-	demo: 'https://demo.gos.earth',
-	test: 'https://test.gos.earth',
-	ic: 'https://registry.realmsgos.org',
-	production: 'https://registry.realmsgos.org'
-};
+/**
+ * @typedef {import('../../scripts/gaas-env.js').GaasEnv} GaasEnv
+ */
 
-const network = detectNetwork();
+/**
+ * @returns {GaasEnv | undefined}
+ */
+function runtimeGaasEnv() {
+	return typeof __GAAS_ENV__ !== 'undefined' ? __GAAS_ENV__ : undefined;
+}
+
+const gaasEnv = runtimeGaasEnv();
+const network = detectNetwork(undefined, gaasEnv);
+const portalHosts = resolvePortalHosts(viteEnv, gaasEnv, network);
+
+export { resolveBillingServiceUrl, resolveDeployServiceUrl, resolvePortalBaseUrl, resolvePortalHosts };
 
 export const CONFIG = {
 	internet_identity_url: viteEnv.VITE_INTERNET_IDENTITY_URL || 'https://identity.ic0.app/',
@@ -28,11 +41,11 @@ export const CONFIG = {
 	federation_portal: viteEnv.VITE_FEDERATION_PORTAL !== 'false',
 	ii_derivation_origin:
 		viteEnv.VITE_II_DERIVATION_ORIGIN ||
-		(viteEnv.VITE_FEDERATION_PORTAL === 'false' ? PORTAL_HOSTS[network] || '' : ''),
-	portal_base_url: viteEnv.VITE_PORTAL_BASE_URL || PORTAL_HOSTS[network] || PORTAL_HOSTS.staging,
-	portal_hosts: PORTAL_HOSTS,
+		(viteEnv.VITE_FEDERATION_PORTAL === 'false' ? portalHosts[network] || '' : ''),
+	portal_base_url: resolvePortalBaseUrl(viteEnv, gaasEnv, network),
+	portal_hosts: portalHosts,
 	deploy_queue_network: network,
-	billing_service_url: viteEnv.VITE_BILLING_SERVICE_URL || 'https://billing.realmsgos.dev',
+	billing_service_url: resolveBillingServiceUrl(viteEnv, gaasEnv),
 	realm_installer_canister_id:
 		getCanisterId('realm_installer') ||
 		viteEnv.VITE_REALM_INSTALLER_CANISTER_ID ||
@@ -50,7 +63,7 @@ export const CONFIG = {
 			viteEnv.VITE_DEPLOY_RELEASE_FRONTEND_CHECKSUM ||
 			'58cf46349679f137c9e481aa7831d367ee14f0f6aba78de9b76a2385d5031406'
 	},
-	deploy_service_url: viteEnv.VITE_DEPLOY_SERVICE_URL || 'https://deploy.realmsgos.dev',
+	deploy_service_url: resolveDeployServiceUrl(viteEnv, gaasEnv),
 	file_registry_canister_id:
 		getCanisterId('file_registry') ||
 		viteEnv.VITE_FILE_REGISTRY_CANISTER_ID ||

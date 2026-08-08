@@ -1,0 +1,119 @@
+name: GaaS E2E
+
+on:
+  pull_request:
+    paths:
+      - "cli/**"
+      - "environments/**"
+      - "src/**"
+      - "dfx.json"
+      - "casals_conductor.did"
+      - ".github/workflows/gaas-e2e.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: gaas-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.10"
+  NODE_VERSION: "20"
+  DFX_VERSION: "0.32.0"
+  CASALS_VERSION: "v0.3.0"
+
+jobs:
+  gaas-local-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout Casals (conductor build + dfx create stub)
+        uses: actions/checkout@v4
+        with:
+          repository: smart-social-contracts/Casals
+          ref: ${{ env.CASALS_VERSION }}
+          path: Casals
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dfx
+        run: |
+          curl -fsSL "https://github.com/dfinity/sdk/releases/download/${DFX_VERSION}/dfx-${DFX_VERSION}-x86_64-linux.tar.gz" -o /tmp/dfx.tar.gz
+          tar -xzf /tmp/dfx.tar.gz -C /usr/local/bin
+          rm /tmp/dfx.tar.gz
+          dfx --version
+
+      - name: Basilisk venv (platform backends)
+        run: |
+          python3 -m venv .venv-basilisk
+          .venv-basilisk/bin/pip install --upgrade pip
+          .venv-basilisk/bin/pip install \
+            ic-basilisk==0.14.2 ic-basilisk-toolkit==0.5.3 \
+            ic-python-db==0.11.0 ic-python-logging==0.3.4
+
+      - name: Build Casals conductor stub for dfx create
+        run: |
+          cd Casals
+          python3 -m venv .venv-basilisk
+          .venv-basilisk/bin/pip install --upgrade pip
+          .venv-basilisk/bin/pip install \
+            ic-basilisk==0.14.2 ic-basilisk-toolkit==0.5.3 \
+            ic-python-db==0.11.0 ic-python-logging==0.3.4
+          export PATH="$PWD/.venv-basilisk/bin:$PATH"
+          export CANISTER_CANDID_PATH="$(pwd)/casals_backend.did"
+          python -m basilisk casals_backend src/main.py
+          cp casals_backend.did ../casals_conductor.did
+          cp .basilisk/casals_backend/casals_backend.wasm ../casals_conductor.wasm
+
+      - name: Install npm deps
+        run: npm ci --legacy-peer-deps
+
+      - name: Install GaaS CLI
+        run: |
+          cd cli
+          python3 -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -e ".[dev]"
+
+      - name: Start local replica
+        run: |
+          export TERM=xterm
+          dfx start --background --clean --host 127.0.0.1:4943
+          sleep 3
+          dfx ping local
+
+      - name: gaas new (local descriptor)
+        run: |
+          export TERM=xterm
+          export PATH="$PWD/.venv-basilisk/bin:$PATH"
+          cd cli
+          .venv/bin/gaas new ../environments/local.json --network local --yes
+
+      - name: Assert canisters running
+        run: |
+          export TERM=xterm
+          cd cli
+          .venv/bin/gaas status ../environments/local.json --network local | tee /tmp/gaas-status.txt
+          running_count=$(grep -c running /tmp/gaas-status.txt || true)
+          test "$running_count" -eq 6
+          ! grep -i error /tmp/gaas-status.txt
+
+      - name: Assert registry frontend HTTP 200
+        run: |
+          FRONTEND_ID=$(python3 -c "import json; print(json.load(open('environments/local.json'))['canisters']['realm_registry_frontend'])")
+          code=$(curl -s -o /dev/null -w "%{http_code}" "http://${FRONTEND_ID}.localhost:4943/")
+          test "$code" = "200"
+
+      - name: Stop local replica
+        if: always()
+        run: |
+          export TERM=xterm
+          dfx stop || true

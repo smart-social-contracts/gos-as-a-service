@@ -1,5 +1,6 @@
 import json
 
+from core.env_config import get_portal_url
 from core.models import RealmRecord, SlugRecord, RegistryConfig
 from _cdk import ic
 from ic_python_logging import get_logger
@@ -70,6 +71,9 @@ def _validate_slug(slug: str):
 def _portal_base_url(override: str = "") -> str:
     if override and override.strip():
         return override.strip().rstrip("/")
+    configured = get_portal_url()
+    if configured:
+        return configured
     cfg = RegistryConfig["portal_base_url"]
     if cfg and cfg.value:
         return cfg.value.rstrip("/")

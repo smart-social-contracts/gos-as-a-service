@@ -380,7 +380,13 @@ def _credits_record(c: dict) -> UserCreditsRecord:
 
 
 @init
-def init_canister() -> void:
+def init_canister(config_json: text = "") -> void:
+    """Optional init JSON: {portal_url?, billing_url?, open_mode?}."""
+    if config_json and config_json.strip():
+        from core.env_config import apply_env_config_from_json
+
+        result = apply_env_config_from_json(config_json)
+        logger.info(f"init env config: {result}")
     logger.info("Realm Registry canister initialized")
 
 # ── Registry endpoints ─────────────────────────────────────────────────
@@ -602,13 +608,17 @@ def request_deployment(manifest_json: text) -> Async[text]:
         network = manifest.get("network", "")
         realm_name = manifest.get("name", "unknown")
 
-        cr = get_user_credits(caller)
-        if not cr.get("success"):
-            return json.dumps({"success": False, "error": cr.get("error", "credit check failed")})
-        balance = int((cr.get("credits") or {}).get("balance", 0))
-        if balance < DEPLOYMENT_COST_CREDITS:
-            return json.dumps({"success": False,
-                "error": f"Insufficient credits: {balance} < {DEPLOYMENT_COST_CREDITS}"})
+        from core.env_config import is_open_mode
+
+        skip_credits = is_open_mode()
+        if not skip_credits:
+            cr = get_user_credits(caller)
+            if not cr.get("success"):
+                return json.dumps({"success": False, "error": cr.get("error", "credit check failed")})
+            balance = int((cr.get("credits") or {}).get("balance", 0))
+            if balance < DEPLOYMENT_COST_CREDITS:
+                return json.dumps({"success": False,
+                    "error": f"Insufficient credits: {balance} < {DEPLOYMENT_COST_CREDITS}"})
 
         installer_id = _INSTALLER_IDS.get(network) or manifest.get("installer_canister_id", "")
         if not installer_id:
@@ -628,19 +638,23 @@ def request_deployment(manifest_json: text) -> Async[text]:
         if not job_id:
             return json.dumps({"success": False, "error": "installer missing job_id"})
 
-        hold = create_deployment_hold(caller, job_id, DEPLOYMENT_COST_CREDITS,
-                                      f"Realm deployment: {realm_name}")
-        if not hold.get("success"):
-            try:
-                yield installer.cancel_deployment(job_id)
-            except Exception:
-                pass
-            return json.dumps({"success": False, "error": hold.get("error", "hold failed")})
+        if not skip_credits:
+            hold = create_deployment_hold(caller, job_id, DEPLOYMENT_COST_CREDITS,
+                                          f"Realm deployment: {realm_name}")
+            if not hold.get("success"):
+                try:
+                    yield installer.cancel_deployment(job_id)
+                except Exception:
+                    pass
+                return json.dumps({"success": False, "error": hold.get("error", "hold failed")})
+            result["credits_held"] = DEPLOYMENT_COST_CREDITS
+        else:
+            result["credits_held"] = 0
+            result["open_mode"] = True
 
         if (result.get("status") or "") == "provisioning":
             _schedule_casals_provision(installer_id, job_id)
 
-        result["credits_held"] = DEPLOYMENT_COST_CREDITS
         result["caller"] = caller
         return json.dumps(result)
     except Exception as e:
@@ -677,8 +691,9 @@ def _unwrap_enqueue(raw):
 @update
 def deployment_failed(job_id: text, reason: text, caller_principal: text = "") -> text:
     try:
-        release_deployment_hold(job_id, f"Failed: {reason}")
-        return json.dumps({"success": True, "job_id": job_id, "settlement": "released"})
+        from core.env_config import settle_deployment_failed
+
+        return json.dumps(settle_deployment_failed(job_id, reason))
     except Exception as e:
         return json.dumps({"success": False, "error": str(e)})
 
@@ -686,8 +701,9 @@ def deployment_failed(job_id: text, reason: text, caller_principal: text = "") -
 @update
 def deployment_succeeded(job_id: text, caller_principal: text = "") -> text:
     try:
-        capture_deployment_hold(job_id, "Deployment completed")
-        return json.dumps({"success": True, "job_id": job_id, "settlement": "captured"})
+        from core.env_config import settle_deployment_succeeded
+
+        return json.dumps(settle_deployment_succeeded(job_id))
     except Exception as e:
         return json.dumps({"success": False, "error": str(e)})
 
@@ -807,16 +823,19 @@ def request_upgrade(args_json: text) -> Async[text]:
             return json.dumps({"success": False,
                 "error": f"Realm not registered: {caller}"})
 
-        # Check credit balance
-        cr = get_user_credits(caller)
-        if not cr.get("success"):
-            return json.dumps({"success": False,
-                "error": cr.get("error", "credit check failed")})
-        balance = int((cr.get("credits") or {}).get("balance", 0))
-        if balance < UPGRADE_COST_CREDITS:
-            return json.dumps({"success": False,
-                "error": f"Insufficient credits: {balance} < {UPGRADE_COST_CREDITS}. "
-                         f"Purchase credits by transferring tokens to the registry."})
+        from core.env_config import is_open_mode
+
+        skip_credits = is_open_mode()
+        if not skip_credits:
+            cr = get_user_credits(caller)
+            if not cr.get("success"):
+                return json.dumps({"success": False,
+                    "error": cr.get("error", "credit check failed")})
+            balance = int((cr.get("credits") or {}).get("balance", 0))
+            if balance < UPGRADE_COST_CREDITS:
+                return json.dumps({"success": False,
+                    "error": f"Insufficient credits: {balance} < {UPGRADE_COST_CREDITS}. "
+                             f"Purchase credits by transferring tokens to the registry."})
 
         # Validate reported cycles
         if reported_cycles < MIN_CYCLES_FOR_UPGRADE:
@@ -880,16 +899,20 @@ def request_upgrade(args_json: text) -> Async[text]:
         if not job_id:
             return json.dumps({"success": False, "error": "installer missing job_id"})
 
-        hold = create_deployment_hold(caller, job_id, UPGRADE_COST_CREDITS,
-                                      f"Realm upgrade to {latest.version}")
-        if not hold.get("success"):
-            try:
-                yield installer.cancel_deployment(job_id)
-            except Exception:
-                pass
-            return json.dumps({"success": False, "error": hold.get("error", "hold failed")})
+        if not skip_credits:
+            hold = create_deployment_hold(caller, job_id, UPGRADE_COST_CREDITS,
+                                          f"Realm upgrade to {latest.version}")
+            if not hold.get("success"):
+                try:
+                    yield installer.cancel_deployment(job_id)
+                except Exception:
+                    pass
+                return json.dumps({"success": False, "error": hold.get("error", "hold failed")})
+            result["credits_held"] = UPGRADE_COST_CREDITS
+        else:
+            result["credits_held"] = 0
+            result["open_mode"] = True
 
-        result["credits_held"] = UPGRADE_COST_CREDITS
         result["target_version"] = latest.version
         return json.dumps(result)
     except Exception as e:
@@ -1039,6 +1062,32 @@ def list_activated_principals() -> text:
             return json.dumps({"success": False, "error": "Only controllers can list activated principals"})
         principals = [p.to_dict() for p in ActivatedPrincipal.instances()]
         return json.dumps({"success": True, "principals": principals, "count": len(principals)})
+    except Exception as e:
+        return json.dumps({"success": False, "error": str(e)})
+
+
+@update
+def configure(args_json: text) -> GenericResult:
+    """Controller-only. Set descriptor env: portal_url, billing_url, open_mode."""
+    try:
+        from core.env_config import configure_registry
+
+        result = configure_registry(args_json, ic.is_controller(ic.caller()))
+        if "Err" in result:
+            return {"Err": result["Err"]}
+        logger.info(f"configure: {result['Ok']}")
+        return {"Ok": result["Ok"]}
+    except Exception as e:
+        return {"Err": str(e)}
+
+
+@query
+def get_env_config() -> text:
+    """Read descriptor env config (portal_url, billing_url, open_mode)."""
+    try:
+        from core.env_config import get_env_config_payload
+
+        return json.dumps(get_env_config_payload())
     except Exception as e:
         return json.dumps({"success": False, "error": str(e)})
 

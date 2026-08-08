@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "name": "local",
+  "domain": "local.localhost",
+  "gos": [
+    {
+      "implementation": "realms-gos",
+      "version": "v0.4.0",
+      "release_repo": "smart-social-contracts/realms",
+      "artifacts": {
+        "backend_wasm_key": "realm-backend",
+        "frontend_wasm_key": "realm-assets"
+      },
+      "loader_profile": "realms-iframe-v1"
+    }
+  ],
+  "canisters": {},
+  "casals": {
+    "version": "v0.3.0",
+    "release_repo": "smart-social-contracts/Casals"
+  },
+  "services": {},
+  "dns": {
+    "provider": "manual"
+  }
+}

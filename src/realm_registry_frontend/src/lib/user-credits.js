@@ -44,7 +44,11 @@ async function fetchCreditsRecord(principalText) {
     console.warn('fetchCreditsRecord: canister get_credits failed, trying billing proxy', e);
   }
 
-  const billingUrl = CONFIG.billing_service_url || 'https://billing.realmsgos.dev';
+  const billingUrl = CONFIG.billing_service_url;
+  if (!billingUrl) {
+    return { balance: 0, total_purchased: 0, total_spent: 0 };
+  }
+
   try {
     const br = await fetch(`${billingUrl}/credits/${encodeURIComponent(principalText)}`);
     if (br.ok) {

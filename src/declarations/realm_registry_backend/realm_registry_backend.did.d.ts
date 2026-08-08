@@ -169,11 +169,18 @@ export interface GetUtxosResult {
 }
 export type GuardResult = { 'Ok' : null } |
   { 'Err' : string };
+export type Header = [string, string];
 export interface HealthView { 'ok' : boolean, 'canister' : string }
 export interface HttpHeader { 'value' : string, 'name' : string }
 export type HttpMethod = { 'get' : null } |
   { 'head' : null } |
   { 'post' : null };
+export interface HttpRequest {
+  'url' : string,
+  'method' : string,
+  'body' : Uint8Array | number[],
+  'headers' : Array<Header>,
+}
 export interface HttpRequestArgs {
   'url' : string,
   'method' : HttpMethod,
@@ -186,6 +193,13 @@ export interface HttpResponse {
   'status' : bigint,
   'body' : Uint8Array | number[],
   'headers' : Array<HttpHeader>,
+}
+export interface HttpResponseIncoming {
+  'body' : Uint8Array | number[],
+  'headers' : Array<Header>,
+  'upgrade' : [] | [boolean],
+  'streaming_strategy' : [] | [string],
+  'status_code' : number,
 }
 export interface HttpTransform {
   'function' : HttpTransformFunc,
@@ -528,12 +542,14 @@ export interface _SERVICE {
     ],
     GenericResult
   >,
+  'configure' : ActorMethod<[string], GenericResult>,
   'create_invitation_codes' : ActorMethod<[string], GenericResult>,
   'deactivate_principal' : ActorMethod<[string], GenericResult>,
   'deduct_credits' : ActorMethod<[string, bigint, string], DeductCreditsResult>,
   'deployment_failed' : ActorMethod<[string, string, string], string>,
   'deployment_succeeded' : ActorMethod<[string, string], string>,
   'get_credits' : ActorMethod<[string], GetCreditsResult>,
+  'get_env_config' : ActorMethod<[], string>,
   'get_invitation_mode' : ActorMethod<[], GenericResult>,
   'get_latest_version' : ActorMethod<[], UpgradeResult>,
   'get_realm' : ActorMethod<[string], GetRealmResult>,

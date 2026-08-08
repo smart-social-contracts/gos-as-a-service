@@ -7,14 +7,28 @@
 const viteEnv = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {};
 
 /**
+ * @typedef {import('../../scripts/gaas-env.js').GaasEnv} GaasEnv
+ */
+
+/**
+ * @returns {GaasEnv | undefined}
+ */
+function runtimeGaasEnv() {
+	return typeof __GAAS_ENV__ !== 'undefined' ? __GAAS_ENV__ : undefined;
+}
+
+/**
  * Detect the deployment network from hostname or build-time override.
  *
  * @param {string | undefined} [hostname] - Optional hostname for testing
+ * @param {GaasEnv | undefined} [gaasEnvOverride] - Optional gaas-env for testing
  * @returns {string}
  */
-export function detectNetwork(hostname) {
+export function detectNetwork(hostname, gaasEnvOverride) {
 	const override = viteEnv.VITE_DEPLOY_QUEUE_NETWORK;
 	if (override) return override;
+
+	const gaasEnv = gaasEnvOverride ?? runtimeGaasEnv();
 
 	if (hostname === undefined) {
 		if (typeof window === 'undefined') return 'staging';
@@ -24,6 +38,11 @@ export function detectNetwork(hostname) {
 	if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.localhost')) {
 		return 'local';
 	}
+
+	if (gaasEnv?.domain && hostname === gaasEnv.domain.replace(/^https?:\/\//, '').split('/')[0]) {
+		return gaasEnv.network || 'staging';
+	}
+
 	if (hostname === 'test.gos.earth') return 'test';
 	if (hostname === 'staging.gos.earth') return 'staging';
 	if (hostname === 'demo.gos.earth') return 'demo';
@@ -36,13 +55,22 @@ export function detectNetwork(hostname) {
  * Resolve a canister ID for the current (or specified) network.
  *
  * @param {string} name - Canister name as in canister_ids.json (e.g. 'realm_registry_backend')
- * @param {{ hostname?: string, canisterIdsMap?: Record<string, Record<string, string>>, envOverride?: Record<string, string> }} [options]
+ * @param {{ hostname?: string, canisterIdsMap?: Record<string, Record<string, string>>, envOverride?: Record<string, string>, gaasEnvOverride?: GaasEnv }} [options]
  * @returns {string | undefined}
  */
 export function getCanisterId(name, options = {}) {
-	const { hostname, canisterIdsMap, envOverride } = options;
-	const network = detectNetwork(hostname);
+	const { hostname, canisterIdsMap, envOverride, gaasEnvOverride } = options;
+	const network = detectNetwork(hostname, gaasEnvOverride);
 	const envKey = `CANISTER_ID_${name.toUpperCase()}`;
+
+	const gaasEnv = gaasEnvOverride ?? runtimeGaasEnv();
+	const gaasCanisters = gaasEnv?.canisters;
+	if (gaasCanisters && network !== 'local') {
+		const gaasEntry = gaasCanisters[name];
+		if (gaasEntry?.[network]) {
+			return gaasEntry[network];
+		}
+	}
 
 	const ids =
 		canisterIdsMap ??

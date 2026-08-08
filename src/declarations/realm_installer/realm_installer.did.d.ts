@@ -169,11 +169,18 @@ export interface GetUtxosResult {
 }
 export type GuardResult = { 'Ok' : null } |
   { 'Err' : string };
+export type Header = [string, string];
 export interface HealthView { 'ok' : boolean, 'canister' : string }
 export interface HttpHeader { 'value' : string, 'name' : string }
 export type HttpMethod = { 'get' : null } |
   { 'head' : null } |
   { 'post' : null };
+export interface HttpRequest {
+  'url' : string,
+  'method' : string,
+  'body' : Uint8Array | number[],
+  'headers' : Array<Header>,
+}
 export interface HttpRequestArgs {
   'url' : string,
   'method' : HttpMethod,
@@ -186,6 +193,13 @@ export interface HttpResponse {
   'status' : bigint,
   'body' : Uint8Array | number[],
   'headers' : Array<HttpHeader>,
+}
+export interface HttpResponseIncoming {
+  'body' : Uint8Array | number[],
+  'headers' : Array<Header>,
+  'upgrade' : [] | [boolean],
+  'streaming_strategy' : [] | [string],
+  'status_code' : number,
 }
 export interface HttpTransform {
   'function' : HttpTransformFunc,
@@ -508,6 +522,7 @@ export interface _SERVICE {
   '__get_candid_interface_tmp_hack' : ActorMethod<[], string>,
   'backfill_job_refs_batch' : ActorMethod<[], string>,
   'cancel_deployment' : ActorMethod<[string], ResultJobCancel>,
+  'configure' : ActorMethod<[string], string>,
   'delete_deployment_job' : ActorMethod<[string], ResultJobCancel>,
   'destroy_realm_job' : ActorMethod<[string], ResultJobCancel>,
   'enqueue_deployment' : ActorMethod<[string], ResultEnqueue>,
@@ -519,6 +534,7 @@ export interface _SERVICE {
   'get_deploy_task_status' : ActorMethod<[string], ResultDeployTaskStatus>,
   'get_deployment_job_status' : ActorMethod<[string], ResultJobIdStatus>,
   'get_deployment_manifest' : ActorMethod<[string], ResultJobManifest>,
+  'get_installer_config' : ActorMethod<[], string>,
   'get_pending_deployments' : ActorMethod<[], ResultPendingJobs>,
   'health' : ActorMethod<[], HealthView>,
   'list_deployment_jobs' : ActorMethod<

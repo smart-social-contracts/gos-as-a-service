@@ -37,6 +37,8 @@ Casals conductors (external platform provisioner; operated by realms fleet ops):
 
 Portal hosts: `test.gos.earth`, `demo.gos.earth`, `staging.gos.earth`.
 
+Dogfood deployment descriptors: [`environments/`](environments/) — see [docs/GAAS_CLI.md](docs/GAAS_CLI.md) for the `gaas` CLI.
+
 ## Registry / wizard UI (staging)
 
 The **create-realm wizard** and **deployment status page** live in

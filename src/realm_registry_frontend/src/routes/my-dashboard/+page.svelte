@@ -36,6 +36,10 @@
   let loading = true;
   let activeTab = 'realms';
 
+  // Billing service URL — null means open mode (no billing UI / proxy)
+  const billingEnabled = CONFIG.billing_service_url != null;
+  const BILLING_SERVICE_URL = CONFIG.billing_service_url || 'http://localhost:8001';
+
   // Invitation status
   let invitationActivated = false;
   let invitationModeOn = false;
@@ -47,7 +51,7 @@
       activeTab = 'realms';
     } else if (tabParam === 'connect') {
       activeTab = 'connect';
-    } else if (tabParam === 'billing' || tabParam === 'credits') {
+    } else if ((tabParam === 'billing' || tabParam === 'credits') && billingEnabled) {
       activeTab = 'billing';
     }
   }
@@ -107,9 +111,6 @@
   let voucherError = null;
   let voucherSuccess = null;
   let redeemedVouchers = [];
-
-  // Billing service URL - should be configured per environment
-  const BILLING_SERVICE_URL = CONFIG.billing_service_url || 'http://localhost:8001';
 
   onMount(async () => {
     if (browser) {
@@ -484,7 +485,7 @@
   }
 
   async function loadVouchers() {
-    if (!userPrincipal) return;
+    if (!userPrincipal || !billingEnabled) return;
     try {
       const response = await fetch(`${BILLING_SERVICE_URL}/voucher/redemptions/${userPrincipal.toText()}`);
       if (response.ok) {
@@ -634,6 +635,7 @@
           </svg>
           {$_('dashboard.realms_tab')}
         </button>
+        {#if billingEnabled}
         <button 
           class="tab" 
           class:active={activeTab === 'billing'}
@@ -645,6 +647,7 @@
           </svg>
           {$_('dashboard.billing_tab')}
         </button>
+        {/if}
         <button
           class="tab"
           class:active={activeTab === 'connect'}
@@ -660,7 +663,7 @@
 
       <!-- Tab Content -->
       <div class="tab-content">
-        {#if activeTab === 'billing'}
+        {#if billingEnabled && activeTab === 'billing'}
           <div class="credits-section">
             <!-- Balance Card -->
             <div class="balance-card">

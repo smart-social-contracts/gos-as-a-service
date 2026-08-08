@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "name": "test",
+  "domain": "test.gos.earth",
+  "gos": [
+    {
+      "implementation": "realms-gos",
+      "version": "v0.4.0",
+      "release_repo": "smart-social-contracts/realms",
+      "artifacts": {
+        "backend_wasm_key": "realm-backend",
+        "frontend_wasm_key": "realm-assets"
+      },
+      "loader_profile": "realms-iframe-v1"
+    }
+  ],
+  "canisters": {
+    "realm_registry_backend": "yhw3g-fyaaa-aaaas-qgorq-cai",
+    "realm_registry_frontend": "qtank-3qaaa-aaaaa-qhb6q-cai",
+    "realm_installer": "fltjm-tyaaa-aaaap-qunhq-cai",
+    "file_registry": "uq2mu-kaaaa-aaaah-avqcq-cai",
+    "file_registry_frontend": "2no7h-xqaaa-aaaad-qlxeq-cai",
+    "casals_conductor": "qthgp-3yaaa-aaaae-agveq-cai"
+  },
+  "casals": {
+    "version": "v0.3.0",
+    "release_repo": "smart-social-contracts/Casals"
+  },
+  "services": {
+    "billing_url": "https://billing.realmsgos.dev",
+    "deploy_url": "https://deploy.realmsgos.dev"
+  },
+  "dns": {
+    "provider": "manual"
+  }
+}

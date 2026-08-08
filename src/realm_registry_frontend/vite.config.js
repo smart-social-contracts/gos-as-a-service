@@ -5,8 +5,32 @@ import environment from 'vite-plugin-environment';
 import dotenv from 'dotenv';
 import { execSync } from 'child_process';
 import { readFileSync, existsSync } from 'fs';
+import { dirname, join } from 'path';
+import {
+  generateWellKnownFiles,
+  getGaasEnvViteDefine,
+  loadGaasEnv,
+} from './scripts/gaas-env.js';
 
 dotenv.config({ path: '../../.env' });
+
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../..');
+const staticDir = join(dirname(fileURLToPath(import.meta.url)), 'static');
+
+function getGaasEnvConfig() {
+  try {
+    return loadGaasEnv(repoRoot);
+  } catch (e) {
+    console.warn(e.message);
+    return null;
+  }
+}
+
+const gaasEnv = getGaasEnvConfig();
+if (gaasEnv) {
+  generateWellKnownFiles(gaasEnv, staticDir);
+  console.log(`gaas-env: loaded deployment descriptor for ${gaasEnv.domain}`);
+}
 
 function getBuildTimeValues() {
   let version = 'dev';
@@ -78,6 +102,7 @@ function getCanisterIdsDefine() {
 const buildValues = getBuildTimeValues();
 const canisterDefines = getCanisterIdDefines();
 const canisterIdsDefine = getCanisterIdsDefine();
+const gaasEnvDefine = getGaasEnvViteDefine(gaasEnv);
 
 export default defineConfig({
   build: {
@@ -98,6 +123,7 @@ export default defineConfig({
     '__BUILD_TIME__': JSON.stringify(buildValues.buildTime),
     ...canisterIdsDefine,
     ...canisterDefines,
+    ...gaasEnvDefine,
   },
   optimizeDeps: {
     include: ['maplibre-gl', 'h3-js'],

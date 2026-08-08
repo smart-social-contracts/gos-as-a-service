@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "name": "staging",
+  "domain": "staging.gos.earth",
+  "gos": [
+    {
+      "implementation": "realms-gos",
+      "version": "v0.4.0",
+      "release_repo": "smart-social-contracts/realms",
+      "artifacts": {
+        "backend_wasm_key": "realm-backend",
+        "frontend_wasm_key": "realm-assets"
+      },
+      "loader_profile": "realms-iframe-v1"
+    }
+  ],
+  "canisters": {
+    "realm_registry_backend": "7wzxh-wyaaa-aaaau-aggyq-cai",
+    "realm_registry_frontend": "77243-aqaaa-aaaau-aggza-cai",
+    "realm_installer": "lusjm-wqaaa-aaaau-ago7q-cai",
+    "file_registry": "iebdk-kqaaa-aaaau-agoxq-cai",
+    "file_registry_frontend": "rbex3-xyaaa-aaaah-qumma-cai",
+    "casals_conductor": "jj2e5-iyaaa-aaaac-bffeq-cai"
+  },
+  "casals": {
+    "version": "v0.3.0",
+    "release_repo": "smart-social-contracts/Casals"
+  },
+  "services": {
+    "billing_url": "https://billing.realmsgos.dev",
+    "deploy_url": "https://deploy.realmsgos.dev"
+  },
+  "dns": {
+    "provider": "manual"
+  }
+}

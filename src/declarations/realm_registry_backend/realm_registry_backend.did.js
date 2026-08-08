@@ -90,6 +90,7 @@ export const idlFactory = ({ IDL }) => {
         [GenericResult],
         [],
       ),
+    'configure' : IDL.Func([IDL.Text], [GenericResult], []),
     'create_invitation_codes' : IDL.Func([IDL.Text], [GenericResult], []),
     'deactivate_principal' : IDL.Func([IDL.Text], [GenericResult], []),
     'deduct_credits' : IDL.Func(
@@ -104,6 +105,7 @@ export const idlFactory = ({ IDL }) => {
       ),
     'deployment_succeeded' : IDL.Func([IDL.Text, IDL.Text], [IDL.Text], []),
     'get_credits' : IDL.Func([IDL.Text], [GetCreditsResult], ['query']),
+    'get_env_config' : IDL.Func([], [IDL.Text], ['query']),
     'get_invitation_mode' : IDL.Func([], [GenericResult], ['query']),
     'get_latest_version' : IDL.Func([], [UpgradeResult], ['query']),
     'get_realm' : IDL.Func([IDL.Text], [GetRealmResult], ['query']),
@@ -143,4 +145,4 @@ export const idlFactory = ({ IDL }) => {
     'status' : IDL.Func([], [GetStatusResult], ['query']),
   });
 };
-export const init = ({ IDL }) => { return []; };
+export const init = ({ IDL }) => { return [IDL.Text]; };

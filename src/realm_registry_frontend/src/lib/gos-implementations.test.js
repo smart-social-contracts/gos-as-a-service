@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   GOS_IMPLEMENTATIONS,
+  buildGosImplementationsFromEnv,
   buildGosManifestBlock,
   getGosImplementation,
   normalizeGosDeployVersion,
+  resolveGosImplementations,
   shouldShowVersionPicker,
   soleDeployVersionOption,
   visibleWizardSteps,
@@ -93,4 +95,26 @@ test('soleDeployVersionOption returns the single option or null', () => {
     ]),
     null,
   );
+});
+
+test('buildGosImplementationsFromEnv maps gaas-env gos entries', () => {
+  const list = buildGosImplementationsFromEnv([
+    {
+      implementation: 'realms-gos',
+      version: 'v0.3.1',
+      loader_profile: 'realms-iframe-v1',
+      available: true,
+    },
+  ]);
+  assert.equal(list.length, 1);
+  assert.equal(list[0].id, 'realms-gos');
+  assert.equal(list[0].available, true);
+  assert.equal(list[0].loaderProfile, 'realms-iframe-v1');
+});
+
+test('resolveGosImplementations falls back to defaults without gaas-env', () => {
+  const list = resolveGosImplementations(undefined);
+  assert.equal(list.length, 2);
+  assert.ok(list.some((impl) => impl.id === 'realms-gos'));
+  assert.ok(list.some((impl) => impl.id === 'chora-gos'));
 });

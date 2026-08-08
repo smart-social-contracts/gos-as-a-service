@@ -112,4 +112,4 @@ The **realms** repo references release artifact URLs in its `dfx.json` / mundus 
 - Realm deployments pull `realm_backend.wasm.gz` and `realm_frontend.tar.gz` from **realms** releases (unchanged).
 - Registry/installer artifacts come from **this** repo's releases.
 
-See [AGENTS.md](./AGENTS.md) for agent-oriented deploy loops, canister IDs, and debugging.
+See [docs/GAAS_CLI.md](./docs/GAAS_CLI.md) for the descriptor-driven `gaas` CLI, and [AGENTS.md](./AGENTS.md) for agent-oriented deploy loops, canister IDs, and debugging.
