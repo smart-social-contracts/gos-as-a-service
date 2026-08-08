@@ -9,6 +9,7 @@ import dns.exception
 import dns.resolver
 
 ICP_GATEWAY = "icp1.io"
+ICP_ACME_GATEWAY = "icp2.io"
 
 
 @dataclass(frozen=True)
@@ -22,13 +23,13 @@ class DnsRecord:
 def render_dns_records(domain: str, frontend_canister_id: str) -> list[DnsRecord]:
     """Render the exact DNS records required for an IC custom domain."""
     domain = domain.rstrip(".").lower()
-    acme_target = f"_acme-challenge.{domain}.{ICP_GATEWAY}"
+    acme_target = f"_acme-challenge.{domain}.{ICP_ACME_GATEWAY}"
 
     return [
         DnsRecord(
             record_type="CNAME/ALIAS",
             host=domain,
-            value=ICP_GATEWAY,
+            value=f"{domain}.{ICP_GATEWAY}",
             notes="apex/subdomain host → IC gateway",
         ),
         DnsRecord(
@@ -82,17 +83,18 @@ def dns_records_ready(domain: str, canister_id: str) -> tuple[bool, list[str]]:
         issues.append(f"TXT {canister_host} does not contain {canister_id}")
 
     acme_host = f"_acme-challenge.{domain}"
-    acme_expected = f"_acme-challenge.{domain}.{ICP_GATEWAY}"
+    acme_expected = f"_acme-challenge.{domain}.{ICP_ACME_GATEWAY}"
     acme_value = _resolve_cname(acme_host)
     if acme_value != acme_expected:
         issues.append(
             f"CNAME {acme_host} expected {acme_expected}, got {acme_value or 'missing'}"
         )
 
+    host_expected = f"{domain}.{ICP_GATEWAY}"
     host_cname = _resolve_cname(domain)
-    if host_cname != ICP_GATEWAY:
+    if host_cname != host_expected:
         issues.append(
-            f"CNAME/ALIAS {domain} expected {ICP_GATEWAY}, got {host_cname or 'missing'}"
+            f"CNAME/ALIAS {domain} expected {host_expected}, got {host_cname or 'missing'}"
         )
 
     return len(issues) == 0, issues

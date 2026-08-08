@@ -14,7 +14,7 @@ def test_render_dns_records() -> None:
     host, txt, acme = records
     assert host.record_type == "CNAME/ALIAS"
     assert host.host == "test.gos.earth"
-    assert host.value == "icp1.io"
+    assert host.value == "test.gos.earth.icp1.io"
 
     assert txt.record_type == "TXT"
     assert txt.host == "_canister-id.test.gos.earth"
@@ -22,4 +22,4 @@ def test_render_dns_records() -> None:
 
     assert acme.record_type == "CNAME"
     assert acme.host == "_acme-challenge.test.gos.earth"
-    assert acme.value == "_acme-challenge.test.gos.earth.icp1.io"
+    assert acme.value == "_acme-challenge.test.gos.earth.icp2.io"

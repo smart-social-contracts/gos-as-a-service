@@ -211,16 +211,16 @@ For domain `test.gos.earth` and frontend canister `qtank-3qaaa-aaaaa-qhb6q-cai`:
 
 | Type | Host | Value | Purpose |
 |---|---|---|---|
-| CNAME or ALIAS | `test.gos.earth` | `icp1.io` | Route traffic to the IC gateway |
+| CNAME or ALIAS | `test.gos.earth` | `test.gos.earth.icp1.io` | Route traffic to the IC gateway |
 | TXT | `_canister-id.test.gos.earth` | `qtank-3qaaa-aaaaa-qhb6q-cai` | Prove canister ownership to the IC |
-| CNAME | `_acme-challenge.test.gos.earth` | `_acme-challenge.test.gos.earth.icp1.io` | Delegate ACME certificate challenge |
+| CNAME | `_acme-challenge.test.gos.earth` | `_acme-challenge.test.gos.earth.icp2.io` | Delegate ACME certificate challenge |
 
 ### Namecheap Advanced DNS walkthrough
 
 1. Log in to Namecheap → **Domain List** → **Manage** → **Advanced DNS**.
-2. **CNAME Record** (or **ALIAS** for apex): Host `@` or subdomain label (e.g. `test`), Value `icp1.io`, TTL Automatic.
+2. **CNAME Record** (or **ALIAS** for apex): Host `@` or subdomain label (e.g. `test`), Value `test.gos.earth.icp1.io`, TTL Automatic.
 3. **TXT Record**: Host `_canister-id.test` (Namecheap appends `.gos.earth`), Value the frontend canister ID.
-4. **CNAME Record**: Host `_acme-challenge.test`, Value `_acme-challenge.test.gos.earth.icp1.io`.
+4. **CNAME Record**: Host `_acme-challenge.test`, Value `_acme-challenge.test.gos.earth.icp2.io`.
 5. Remove conflicting A/AAAA records on the same host.
 
 ### Verify loop
@@ -228,8 +228,8 @@ For domain `test.gos.earth` and frontend canister `qtank-3qaaa-aaaaa-qhb6q-cai`:
 During the **domain wiring** phase, gaas polls public DNS every 10 seconds (default timeout 300 seconds) and checks:
 
 - TXT at `_canister-id.<domain>` contains the frontend canister ID
-- CNAME at `_acme-challenge.<domain>` points to `_acme-challenge.<domain>.icp1.io`
-- CNAME/ALIAS at `<domain>` points to `icp1.io`
+- CNAME at `_acme-challenge.<domain>` points to `_acme-challenge.<domain>.icp2.io`
+- CNAME/ALIAS at `<domain>` points to `<domain>.icp1.io`
 
 ### IC custom-domain registration
 
