@@ -21,6 +21,7 @@
     indexCreatedRealmsByBackend,
     preferredVisitUrl,
     registryEntryForDeployment,
+    isRealmInSetup,
   } from '$lib/user-created-realms.js';
   import {
     buildDashboardDeploymentCards,
@@ -234,9 +235,11 @@
   }
 
   function draftStepLabel(step) {
-    const labels = ['Codex', 'Land & Tokens', 'Extensions', 'Data', 'Basics', 'Branding', 'Deploy'];
+    const labels = ['Platform', 'Basics', 'Review & Deploy'];
     return labels[step] || `Step ${(step || 0) + 1}`;
   }
+
+  const DEPLOY_WIZARD_STEP = 2;
 
   $: visibleDrafts = filterVisibleDrafts(wizardDrafts, deployments);
   $: registryByBackend = indexCreatedRealmsByBackend(createdRealms);
@@ -278,13 +281,13 @@
   function editDraftUrlForDeployment(deployment) {
     const draft = findDraftForDeployment(wizardDrafts, deployment);
     if (!draft) return '/create-realm';
-    return `${draftResumeUrl(draft, 6)}&edit=1`;
+    return `${draftResumeUrl(draft, DEPLOY_WIZARD_STEP)}&edit=1`;
   }
 
   function retryDeployUrlForDeployment(deployment) {
     const draft = findDraftForDeployment(wizardDrafts, deployment);
     if (!draft) return '/create-realm';
-    return draftResumeUrl(draft, 6);
+    return draftResumeUrl(draft, DEPLOY_WIZARD_STEP);
   }
 
   function requestDeleteDeployment(deployment) {
@@ -949,6 +952,8 @@
                             <span class="registry-badge destroyed">{$_('dashboard.destroyed_realm')}</span>
                           {:else if deployment.cardKind === 'destroying'}
                             <span class="registry-badge destroying">{$_('dashboard.destroying_live_realm')}</span>
+                          {:else if registryEntry && isRealmInSetup(registryEntry)}
+                            <span class="registry-badge pending">Setup in progress</span>
                           {:else if registryEntry}
                             <span class="registry-badge">{$_('dashboard.on_registry')}</span>
                           {:else if deployment.raw_status === 'completed'}
@@ -1001,7 +1006,12 @@
                               : $_('dashboard.remove_failed_job')}
                           </button>
                         {/if}
-                        {#if deployment.cardKind === 'live' && deployment.raw_status === 'completed' && visitUrl}
+                        {#if deployment.cardKind === 'live' && deployment.raw_status === 'completed' && visitUrl && registryEntry && isRealmInSetup(registryEntry)}
+                          <a href={visitUrl} target="_blank" rel="noopener noreferrer" class="visit-btn">
+                            Continue setup →
+                          </a>
+                        {/if}
+                        {#if deployment.cardKind === 'live' && deployment.raw_status === 'completed' && visitUrl && (!registryEntry || !isRealmInSetup(registryEntry))}
                           <a href={visitUrl} target="_blank" rel="noopener noreferrer" class="visit-btn">
                             Visit Realm →
                           </a>

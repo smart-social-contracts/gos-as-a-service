@@ -1,12 +1,11 @@
 import { writable } from 'svelte/store';
 
-/** @typedef {'prepare' | 'upload' | 'submit' | 'redirect'} DeployStep */
+/** @typedef {'prepare' | 'submit' | 'redirect'} DeployStep */
 
 const INITIAL = {
   open: false,
   phase: 'running',
   activeStep: /** @type {DeployStep} */ ('prepare'),
-  uploadDetail: '',
   errorMessage: '',
 };
 
@@ -24,18 +23,10 @@ export function openDeployProgress() {
 }
 
 /** @param {DeployStep} step */
-export function setDeployProgressStep(step, uploadDetail = '') {
+export function setDeployProgressStep(step) {
   deployProgress.update((state) => ({
     ...state,
     activeStep: step,
-    uploadDetail: step === 'upload' ? uploadDetail : '',
-  }));
-}
-
-export function setDeployProgressUploadDetail(uploadDetail) {
-  deployProgress.update((state) => ({
-    ...state,
-    uploadDetail: uploadDetail || '',
   }));
 }
 

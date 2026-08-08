@@ -36,20 +36,12 @@ test('getGosImplementation returns matching entry or undefined', () => {
   assert.equal(getGosImplementation(), undefined);
 });
 
-test('visibleWizardSteps omits Realms-only steps for other implementations', () => {
-  const realmsSteps = visibleWizardSteps('realms-gos');
-  assert.deepEqual(
-    realmsSteps.map((s) => s.id),
-    WIZARD_STEPS.map((s) => s.id),
-  );
+test('visibleWizardSteps returns platform-only wizard flow', () => {
+  const steps = visibleWizardSteps('realms-gos');
+  assert.deepEqual(steps.map((s) => s.id), ['platform', 'basics', 'deploy']);
 
   const choraSteps = visibleWizardSteps('chora-gos');
-  assert.deepEqual(choraSteps.map((s) => s.id), [
-    'platform',
-    'basics',
-    'branding',
-    'deploy',
-  ]);
+  assert.deepEqual(choraSteps.map((s) => s.id), ['platform', 'basics', 'deploy']);
 });
 
 test('buildGosManifestBlock includes correct fields for realms-gos', () => {

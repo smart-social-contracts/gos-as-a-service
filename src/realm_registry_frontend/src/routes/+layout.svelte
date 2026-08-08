@@ -62,7 +62,6 @@
     open={$deployProgress.open}
     phase={$deployProgress.phase}
     activeStep={$deployProgress.activeStep}
-    uploadDetail={$deployProgress.uploadDetail}
     errorMessage={$deployProgress.errorMessage}
     on:dismiss={closeDeployProgress}
   />

@@ -19,7 +19,18 @@ function recordToRow(record) {
     name: record.name || record.id,
     url: realmVisitUrl(record),
     frontend_canister_id: record.frontend_canister_id || '',
+    listing_status: record.listing_status || 'live',
   };
+}
+
+/** Registry listing status: "setup" | "live" (absent ⇒ live). */
+export function effectiveListingStatus(registryEntry) {
+  const status = (registryEntry?.listing_status || '').trim().toLowerCase();
+  return status === 'setup' ? 'setup' : 'live';
+}
+
+export function isRealmInSetup(registryEntry) {
+  return effectiveListingStatus(registryEntry) === 'setup';
 }
 
 /** Collect backend canister IDs from completed deployment jobs owned by the user. */

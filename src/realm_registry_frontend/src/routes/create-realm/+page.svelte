@@ -4,16 +4,8 @@
   import { page } from '$app/stores';
   import { _, locale } from 'svelte-i18n';
   import { CONFIG } from '$lib/config.js';
-  import {
-    SHARED_TOKEN_CATALOG,
-    displaySharedToken,
-    loadSharedTokenMetadata,
-    matchesSharedRegistryKey,
-    normalizeSharedRegistryKey,
-  } from '$lib/shared-tokens.js';
-  import codicesConfig from '$lib/codices-config.json';
+  import { buildRealmDeploymentManifest, slugify } from '$lib/deployment-manifest.js';
   import AuthControls from '$lib/components/AuthControls.svelte';
-  import { buildRealmDeploymentManifest } from '$lib/deployment-manifest.js';
   import {
     GOS_IMPLEMENTATIONS,
     getGosImplementation,
@@ -22,8 +14,6 @@
     visibleWizardSteps,
   } from '$lib/gos-implementations.js';
   import { getAuthenticatedRegistryActor } from '$lib/canisters.js';
-  import { uploadBrandingFiles, brandingNamespaceFor } from '$lib/branding-upload.js';
-  import { resolveDeployBranding } from '$lib/realm-branding-generator.js';
   import { deploymentJobUrl } from '$lib/deployment-url.js';
   import { friendlyNetworkError, retryOnTransientNetworkError } from '$lib/network-retry.js';
   import {
@@ -33,7 +23,6 @@
   import {
     openDeployProgress,
     setDeployProgressStep,
-    setDeployProgressUploadDetail,
     failDeployProgress,
     closeDeployProgress,
   } from '$lib/stores/deployProgress.js';
@@ -67,7 +56,6 @@
   let draftInitialized = false;
   let draftLockedForDeploy = false;
   let saveDraftTimer = null;
-  let brandingGenerating = false;
 
   // Deploy version options (semver catalog + main)
   let deployVersionOptions = [{ value: 'main', label: 'main (latest from file registry)' }];
@@ -91,8 +79,6 @@
         if (loaded) {
           draftId = loaded.id;
           formData = { ...formData, ...loaded.formData };
-          // Older drafts may carry a URL/file codex source; packages only now.
-          formData.codex_source = 'package';
           if (loaded.deployVersion) formData.deploy_version = loaded.deployVersion;
           if (urlStep != null && urlStep !== '') {
             const stepNum = parseInt(urlStep, 10);
@@ -217,154 +203,8 @@
         draftInitialized = true;
         loadingDeployVersions = false;
       }
-
-      try {
-        existingTokens = await loadSharedTokenMetadata(CONFIG.deploy_queue_network);
-      } catch (e) {
-        console.error('Failed to load shared token metadata:', e);
-      } finally {
-        existingTokensLoading = false;
-      }
-
-      // Fetch codex descriptions from remote SHORT_DESCRIPTION.md files
-      for (const codex of AVAILABLE_CODICES) {
-        if (codex.description_url) {
-          try {
-            const res = await fetch(codex.description_url);
-            if (res.ok) {
-              const text = await res.text();
-              codex.description = text.replace(/^#.*\n\n/, '').trim();
-              AVAILABLE_CODICES = AVAILABLE_CODICES;
-            }
-          } catch (e) { /* keep hardcoded fallback */ }
-        }
-      }
-
-      // Fetch codex manifests (dependencies, overrides, onboarding policy) so
-      // the wizard can show what each package actually installs and configures.
-      for (const codex of AVAILABLE_CODICES) {
-        loadCodexManifest(codex.id);
-      }
     }
   });
-
-  // Codex package manifests keyed by codex id (fetched from the codices repo).
-  let codexManifests = {};
-
-  async function loadCodexManifest(codexId) {
-    if (!codexId || codexManifests[codexId]) return;
-    // Source of truth is the file registry: that is the package a new realm
-    // actually installs. The codices git repo is only a fallback — it can be
-    // ahead of (or behind) what is published.
-    try {
-      const { fetchCodexManifest } = await import('$lib/file-registry-client.js');
-      const manifest = await fetchCodexManifest(CONFIG.file_registry_canister_id, codexId);
-      if (manifest) {
-        codexManifests = { ...codexManifests, [codexId]: manifest };
-        return;
-      }
-    } catch (e) {
-      console.warn(`Codex manifest for '${codexId}' unavailable from file registry:`, e);
-    }
-    try {
-      const url = `https://raw.githubusercontent.com/smart-social-contracts/realms-codices/main/codices/${codexId}/manifest.json`;
-      const res = await fetch(url);
-      if (res.ok) {
-        codexManifests = { ...codexManifests, [codexId]: await res.json() };
-      }
-    } catch (e) { /* details panel simply stays hidden */ }
-  }
-
-  /** Normalized view of a codex manifest for the details panel. */
-  function codexDetails(manifest) {
-    if (!manifest) return null;
-    const rawDeps = manifest.dependencies || [];
-    const dependencies = Array.isArray(rawDeps)
-      ? rawDeps.map((d) => ({ id: String(d), pin: '' }))
-      : Object.entries(rawDeps).map(([id, pin]) => ({ id, pin: String(pin || '') }));
-    const overrides = Object.entries(manifest.extension_overrides || {});
-    const reg = manifest.onboarding?.registration;
-    return {
-      version: manifest.version || '',
-      currency: manifest.currency?.symbol || '',
-      currencyName: manifest.currency?.name || '',
-      dependencies,
-      overrides,
-      // The wizard only asks what the codex leaves open: a manifest that
-      // defines a registration policy or a currency decides it for the realm.
-      hasRegistrationPolicy: !!reg,
-      openRegistration: reg?.open_registration === true,
-      defaultProfile: reg?.default_profile || 'member',
-      identityRequirements: manifest.onboarding?.identity_requirements || [],
-      // Wizard-editable codex parameters (issue #253): declared with a
-      // config path, default, and optional min/max; values the user changes
-      // are deployed as manifest_data.config_overrides.
-      parameters: Array.isArray(manifest.parameters) ? manifest.parameters : [],
-    };
-  }
-
-  let showAdvancedParams = false;
-  $: basicParams = (selectedCodexDetails?.parameters || []).filter((p) => !p.advanced);
-  $: advancedParams = (selectedCodexDetails?.parameters || []).filter((p) => p.advanced);
-
-  function selectCodex(codexId) {
-    if (formData.codex_package_name !== codexId) {
-      formData.codex_package_name = codexId;
-      // Parameter choices belong to a codex; changing codex resets them.
-      formData.codex_params = {};
-      showAdvancedParams = false;
-    }
-  }
-
-  /** Parse a parameter input; returns null when unset/at default (no override). */
-  function paramOverrideValue(param, raw) {
-    if (raw === '' || raw === null || raw === undefined) return null;
-    const num = Number(raw);
-    if (!Number.isFinite(num)) return null;
-    const value = param.type === 'integer' ? Math.round(num) : num;
-    if (value === param.default) return null;
-    return value;
-  }
-
-  /** Flat {"lifecycle.critical_mass": 25} → nested {lifecycle: {critical_mass: 25}}. */
-  function buildConfigOverrides(params, values) {
-    const nested = {};
-    for (const param of params || []) {
-      const value = paramOverrideValue(param, values?.[param.path]);
-      if (value === null) continue;
-      const keys = param.path.split('.');
-      let node = nested;
-      for (let i = 0; i < keys.length - 1; i++) {
-        node = node[keys[i]] = node[keys[i]] || {};
-      }
-      node[keys[keys.length - 1]] = value;
-    }
-    return nested;
-  }
-
-  $: selectedCodexDetails = codexDetails(codexManifests[formData.codex_package_name] || null);
-
-  // Codex-decided settings are forced onto the form (their wizard controls
-  // render read-only); anything the manifest omits stays a user choice.
-  function applyCodexPins(codexId, manifests) {
-    const details = codexDetails(manifests[codexId]);
-    if (!details) return;
-    if (details.hasRegistrationPolicy) {
-      formData.open_registration = details.openRegistration;
-    }
-    if (details.currency) {
-      if (matchesSharedRegistryKey(details.currency)) {
-        formData.token_mode = 'existing';
-        formData.token_existing = normalizeSharedRegistryKey(details.currency);
-      } else {
-        // A codex-native currency (e.g. Dominion's DOM) means: mint it.
-        formData.token_mode = 'new';
-        formData.token_name = details.currencyName || details.currency;
-        formData.token_symbol = details.currency;
-      }
-    }
-  }
-  $: applyCodexPins(formData.codex_package_name, codexManifests);
 
   async function loadUserCredits() {
     if (!userPrincipal) return;
@@ -438,32 +278,9 @@
     return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
   }
 
-  /** @param {'prepare' | 'upload' | 'submit' | 'redirect'} step */
+  /** @param {'prepare' | 'submit' | 'redirect'} step */
   function setDeployStep(step) {
     setDeployProgressStep(step);
-  }
-
-  /** @param {{ path?: string, uploaded?: number, total?: number, status?: string }} progress */
-  function handleBrandingUploadProgress(progress) {
-    if (!progress?.path) return;
-    const base = progress.path.split('/').pop() || progress.path;
-    const friendly = base.includes('logo')
-      ? 'Logo'
-      : base.includes('background')
-        ? 'Background'
-        : base;
-    if (progress.status === 'done') {
-      setDeployProgressUploadDetail(`${friendly} uploaded`);
-      return;
-    }
-    const pct =
-      progress.total && progress.total > 0
-        ? Math.min(100, Math.round((progress.uploaded / progress.total) * 100))
-        : null;
-    const statusLabel = progress.status ? progress.status.replace(/_/g, ' ') : 'uploading';
-    setDeployProgressUploadDetail(
-      pct != null ? `${friendly} — ${statusLabel} (${pct}%)` : `${friendly} — ${statusLabel}`,
-    );
   }
 
   function onDeployClick() {
@@ -484,44 +301,13 @@
       openDeployProgress();
       setDeployStep('prepare');
 
-      const brandingFiles = await withTimeout(
-        resolveDeployBranding(formData, { useAi: false }),
-        30000,
-        'Artwork generation timed out. Try again or upload images manually.',
-      );
-
-      setDeployStep('upload');
-      let branding = null;
-      if (brandingFiles.logo || brandingFiles.background) {
-        branding = await withTimeout(
-          retryOnTransientNetworkError(() =>
-            uploadBrandingFiles({
-              logo: brandingFiles.logo,
-              background: brandingFiles.background,
-              namespace: brandingNamespaceFor(formData.name),
-              fileRegistryCanisterId: CONFIG.file_registry_canister_id,
-              onProgress: handleBrandingUploadProgress,
-            }),
-          ),
-          180000,
-          'Branding upload timed out. Check your connection and try again.',
-        );
-      }
-
       setDeployStep('submit');
-      const manifestFormData = {
-        ...formData,
-        logo: brandingFiles.logo,
-        background: brandingFiles.background,
-      };
       const manifest = await buildRealmDeploymentManifest(
-        manifestFormData, CONFIG.default_deploy_queue_network, branding,
+        formData,
+        CONFIG.default_deploy_queue_network,
         {
           deployVersion: formData.deploy_version,
           useCasals: true,
-          configOverrides: buildConfigOverrides(
-            selectedCodexDetails?.parameters, formData.codex_params,
-          ),
         },
       );
       const manifestJson = JSON.stringify(manifest);
@@ -597,67 +383,21 @@
     formData.gos_implementation = id;
   }
 
-  // Available languages with translated placeholders
-  const AVAILABLE_LANGUAGES = [
-    { code: 'en', name: 'English', native: 'English', manifestoPlaceholder: "Share your realm's vision, values, and purpose...", welcomePlaceholder: "Write a welcoming message for new citizens..." },
-    { code: 'es', name: 'Spanish', native: 'Español', manifestoPlaceholder: "Describe la visión, los valores y el propósito de tu reino...", welcomePlaceholder: "Escribe un mensaje de bienvenida para los nuevos ciudadanos..." },
-    { code: 'fr', name: 'French', native: 'Français', manifestoPlaceholder: "Décrivez la vision, les valeurs et la mission de votre royaume...", welcomePlaceholder: "Rédigez un message de bienvenue pour les nouveaux citoyens..." },
-    { code: 'de', name: 'German', native: 'Deutsch', manifestoPlaceholder: "Beschreiben Sie die Vision, Werte und den Zweck Ihres Reiches...", welcomePlaceholder: "Schreiben Sie eine Willkommensnachricht für neue Bürger..." },
-    { code: 'it', name: 'Italian', native: 'Italiano', manifestoPlaceholder: "Descrivi la visione, i valori e lo scopo del tuo regno...", welcomePlaceholder: "Scrivi un messaggio di benvenuto per i nuovi cittadini..." },
-    { code: 'pt', name: 'Portuguese', native: 'Português', manifestoPlaceholder: "Descreva a visão, os valores e o propósito do seu reino...", welcomePlaceholder: "Escreva uma mensagem de boas-vindas para os novos cidadãos..." },
-    { code: 'zh', name: 'Chinese', native: '中文', manifestoPlaceholder: "描述您领域的愿景、价值观和目标...", welcomePlaceholder: "为新公民写一条欢迎信息..." },
-    { code: 'ja', name: 'Japanese', native: '日本語', manifestoPlaceholder: "あなたの領域のビジョン、価値観、目的を説明してください...", welcomePlaceholder: "新しい市民へのウェルカムメッセージを書いてください..." },
-    { code: 'ko', name: 'Korean', native: '한국어', manifestoPlaceholder: "왕국의 비전, 가치관, 목적을 설명하세요...", welcomePlaceholder: "새로운 시민들을 위한 환영 메시지를 작성하세요..." },
-    { code: 'ar', name: 'Arabic', native: 'العربية', manifestoPlaceholder: "صف رؤية مملكتك وقيمها وهدفها...", welcomePlaceholder: "اكتب رسالة ترحيب للمواطنين الجدد..." },
-    { code: 'hi', name: 'Hindi', native: 'हिन्दी', manifestoPlaceholder: "अपने राज्य की दृष्टि, मूल्यों और उद्देश्य का वर्णन करें...", welcomePlaceholder: "नए नागरिकों के लिए स्वागत संदेश लिखें..." },
-    { code: 'ru', name: 'Russian', native: 'Русский', manifestoPlaceholder: "Опишите видение, ценности и цели вашего королевства...", welcomePlaceholder: "Напишите приветственное сообщение для новых граждан..." }
-  ];
+  // Form data — platform-only; codex/token/branding configured in-realm post-deploy.
+  let formData = {
+    gos_implementation: 'realms-gos',
+    name: '',
+    slug: '',
+    deploy_version: CONFIG.default_deploy_version || 'main',
+  };
 
-  // Available governance assistants (AI bots)
-  const AVAILABLE_ASSISTANTS = [
-    { 
-      id: 'ashoka', 
-      name: 'Ashoka', 
-      description: 'An AI governance assistant inspired by the principles of Emperor Ashoka - promoting peace, ethical governance, and the welfare of all citizens.',
-      avatar: '🕊️',
-      features: ['Conflict resolution', 'Ethical decision support', 'Community welfare focus']
-    }
-  ];
+  let slugTouched = false;
 
-  // Shared token ledgers — registryKey is the manifest identifier; name/symbol
-  // are loaded from live ICRC-1 metadata on mount.
-  let existingTokens = SHARED_TOKEN_CATALOG.map((t) => ({
-    registryKey: t.registryKey,
-    name: t.name,
-    symbol: t.symbol,
-    description: t.description,
-    ledger: t.ledgers?.[CONFIG.deploy_queue_network] || t.ledgers?.staging || '',
-    decimals: t.decimals,
-  }));
-  let existingTokensLoading = true;
+  $: if (formData.name && !slugTouched) {
+    formData.slug = slugify(formData.name);
+  }
 
-  $: existingTokenSymbolsLabel = existingTokens.length
-    ? existingTokens.map((t) => t.symbol).join(', ')
-    : 'REALMS, ckBTC or ckUSDC';
-
-  $: pinnedCodexCurrencyDisplay = selectedCodexDetails?.currency
-    ? displaySharedToken(selectedCodexDetails.currency, existingTokens)
-    : null;
-
-  // Available codices (loaded from $lib/codices-config.json)
-  let AVAILABLE_CODICES = codicesConfig.codices;
-
-  // Codex sorting & expand state
-  let expandedCodices = {};
-  let codexSortBy = 'popularity'; // 'popularity' | 'newest' | 'oldest'
-  $: sortedCodices = [...AVAILABLE_CODICES].sort((a, b) => {
-    if (codexSortBy === 'popularity') return (b.popularity || 0) - (a.popularity || 0);
-    if (codexSortBy === 'newest') return (b.created_at || '').localeCompare(a.created_at || '');
-    if (codexSortBy === 'oldest') return (a.created_at || '').localeCompare(b.created_at || '');
-    return 0;
-  });
-
-  let currentStep = 0;
+  $: portalPreviewPath = formData.slug ? `/r/${slugify(formData.slug)}` : '';
 
   onDestroy(() => {
     closeDeployProgress();
@@ -667,36 +407,7 @@
   let isSubmitting = false;
   let submitError = null;
 
-  // Form data
-  let formData = {
-    gos_implementation: 'realms-gos',
-    name: '',
-    manifestos: { en: '' }, // Language-keyed manifestos
-    languages: ['en'], // Default to English
-    logo: null,
-    logoPreview: '',
-    background: null,
-    backgroundPreview: '',
-    welcome_messages: { en: '' }, // Language-keyed welcome messages
-    // Token: create a new realm token, or adopt an existing shared ledger
-    token_mode: 'new', // 'new' | 'existing'
-    token_name: '',
-    token_symbol: '',
-    token_existing: 'REALMS', // when token_mode === 'existing'
-    // Codex (package only — codices are distro-style packages, issue #242)
-    codex_source: 'package',
-    codex_package_name: '',
-    codex_package_version: 'latest',
-    // Codex parameter values keyed by config path (issue #253); only values
-    // differing from the codex default are deployed as config_overrides.
-    codex_params: {},
-    // Governance Assistant
-    assistant: null, // null means no assistant, or assistant id
-    // Member registration type (default follows the selected codex)
-    open_registration: false,
-    // Realm software version for Casals deploy (semver or main)
-    deploy_version: CONFIG.default_deploy_version || 'main',
-  };
+  let currentStep = 0;
 
   $: if (draftInitialized && browser && !draftLockedForDeploy) {
     void formData;
@@ -732,39 +443,6 @@
       }
     }
 
-    // Codex
-    if (stepId === 'codex') {
-      if (!formData.codex_package_name.trim()) {
-        errors.codex_package_name = 'Please select a codex';
-      }
-      for (const param of selectedCodexDetails?.parameters || []) {
-        const raw = formData.codex_params?.[param.path];
-        if (raw === '' || raw === null || raw === undefined) continue;
-        const num = Number(raw);
-        if (!Number.isFinite(num)) {
-          errors[`param_${param.path}`] = 'Must be a number';
-        } else if (param.min !== undefined && num < param.min) {
-          errors[`param_${param.path}`] = `Must be at least ${param.min}`;
-        } else if (param.max !== undefined && num > param.max) {
-          errors[`param_${param.path}`] = `Must be at most ${param.max}`;
-        }
-      }
-    }
-    
-    // Token (skipped when the codex pins the currency)
-    if (stepId === 'token' && !selectedCodexDetails?.currency) {
-      if (formData.token_mode === 'new') {
-        if (!formData.token_name.trim()) {
-          errors.token_name = 'Token name is required';
-        }
-        if (!formData.token_symbol.trim()) {
-          errors.token_symbol = 'Token symbol is required';
-        } else if (formData.token_symbol.length > 10) {
-          errors.token_symbol = 'Symbol must be 10 characters or less';
-        }
-      }
-    }
-    
     // Basics
     if (stepId === 'basics') {
       if (!formData.name.trim()) {
@@ -772,31 +450,14 @@
       } else if (formData.name.length < 3) {
         errors.name = 'Name must be at least 3 characters';
       }
-      if (formData.languages.length === 0) {
-        errors.languages = 'At least one language is required';
-      }
-      // Validate manifestos for each language
-      for (const langCode of formData.languages) {
-        const desc = formData.manifestos[langCode] || '';
-        if (!desc.trim()) {
-          errors[`manifesto_${langCode}`] = 'Manifesto is required';
-        } else if (desc.length < 20) {
-          errors[`manifesto_${langCode}`] = 'Manifesto must be at least 20 characters';
-        }
+      const slug = slugify((formData.slug || formData.name || '').trim());
+      if (!slug) {
+        errors.slug = 'URL slug is required';
+      } else if (slug.length < 3) {
+        errors.slug = 'Slug must be at least 3 characters';
       }
     }
-    
-    // Branding
-    if (stepId === 'branding') {
-      // Validate welcome messages for each language
-      for (const langCode of formData.languages) {
-        const msg = formData.welcome_messages[langCode] || '';
-        if (!msg.trim()) {
-          errors[`welcome_message_${langCode}`] = 'Welcome message is required';
-        }
-      }
-    }
-    
+
     return Object.keys(errors).length === 0;
   }
 
@@ -821,60 +482,6 @@
     }
   }
 
-  function handleLogoUpload(event) {
-    const file = event.target.files[0];
-    if (file) {
-      formData.logo = file;
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        formData.logoPreview = e.target.result;
-      };
-      reader.readAsDataURL(file);
-    }
-  }
-
-  function handleWelcomeImageUpload(event) {
-    const file = event.target.files[0];
-    if (file) {
-      formData.background = file;
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        formData.backgroundPreview = e.target.result;
-      };
-      reader.readAsDataURL(file);
-    }
-  }
-
-  async function generateBranding(kind) {
-    if (!formData.name?.trim()) {
-      deployError = 'Enter a realm name first (Basics step) so we can generate matching artwork.';
-      return;
-    }
-    brandingGenerating = true;
-    try {
-      const { generateRealmLogo, generateRealmBackground } = await import(
-        '$lib/realm-branding-generator.js'
-      );
-      const seed = String(Date.now());
-      if (kind === 'logo') {
-        const file = await generateRealmLogo(formData.name, { seed });
-        formData.logo = file;
-        formData.logoPreview = URL.createObjectURL(file);
-      }
-      if (kind === 'background') {
-        const file = await generateRealmBackground(formData.name, { seed });
-        formData.background = file;
-        formData.backgroundPreview = URL.createObjectURL(file);
-      }
-      scheduleDraftSave();
-    } catch (e) {
-      console.error('Branding generation failed:', e);
-      deployError = e?.message || 'Could not generate branding images.';
-    } finally {
-      brandingGenerating = false;
-    }
-  }
-
   function copyToClipboard(text) {
     if (browser) {
       navigator.clipboard.writeText(text);
@@ -882,48 +489,10 @@
   }
 
   function generateManifest() {
-    const manifest = {
-      type: 'realm',
-      name: formData.name,
-      languages: formData.languages,
-      manifestos: formData.manifestos,
-      welcome_messages: formData.welcome_messages,
-      open_registration: formData.open_registration
-    };
-
-    // Token: new realm-native ledger, or an existing shared one
-    if (formData.token_mode === 'existing') {
-      manifest.token = { existing: formData.token_existing };
-    } else {
-      manifest.token = {
-        name: formData.token_name,
-        symbol: formData.token_symbol.toUpperCase()
-      };
-    }
-
-    // Codex package — the codex defines the extension set, land/identity
-    // policy, and initial data (issue #242).
-    manifest.codex = {
-      package: {
-        name: formData.codex_package_name,
-        version: formData.codex_package_version || 'latest'
-      }
-    };
-
-    // Governance Assistant
-    if (formData.assistant) {
-      manifest.assistant = formData.assistant;
-    }
-
-    // Codex parameter choices (issue #253)
-    const configOverrides = buildConfigOverrides(
-      selectedCodexDetails?.parameters, formData.codex_params,
-    );
-    if (Object.keys(configOverrides).length > 0) {
-      manifest.config_overrides = configOverrides;
-    }
-
-    return manifest;
+    return buildRealmDeploymentManifest(formData, CONFIG.default_deploy_queue_network, {
+      deployVersion: formData.deploy_version,
+      useCasals: true,
+    });
   }
 
   async function handleSubmit() {
@@ -933,7 +502,7 @@
     submitError = null;
 
     try {
-      const manifest = generateManifest();
+      const manifest = await generateManifest();
       
       // For now, download the manifest as a file
       // In the future, this could directly deploy via the backend
@@ -956,10 +525,7 @@
     }
   }
 
-  // Auto-generate token symbol from name
-  $: if (formData.name && !formData.token_symbol) {
-    formData.token_symbol = formData.name.substring(0, 4).toUpperCase();
-  }
+
 </script>
 
 <svelte:head>
@@ -1042,7 +608,7 @@
 <div class="wizard-container">
   <header class="wizard-header">
     <h1>Create Your Realm</h1>
-    <p class="subtitle">Configure your realm settings step by step</p>
+    <p class="subtitle">Deploy your realm on the platform — configure codex, token, and branding inside the realm afterward</p>
   </header>
 
   <!-- Progress Steps -->
@@ -1122,371 +688,23 @@
         </div>
 
         <div class="form-group">
-          <label>Supported Languages <span class="required">*</span></label>
-          <p class="hint" style="margin-bottom: 0.75rem;">Select which languages your realm will support</p>
-          <div class="language-grid">
-            {#each AVAILABLE_LANGUAGES as lang}
-              <button 
-                type="button"
-                class="language-chip" 
-                class:selected={formData.languages.includes(lang.code)}
-                on:click={() => {
-                  if (formData.languages.includes(lang.code)) {
-                    if (formData.languages.length > 1) {
-                      formData.languages = formData.languages.filter(l => l !== lang.code);
-                      delete formData.manifestos[lang.code];
-                      delete formData.welcome_messages[lang.code];
-                    }
-                  } else {
-                    formData.languages = [...formData.languages, lang.code];
-                    formData.manifestos[lang.code] = '';
-                    formData.welcome_messages[lang.code] = '';
-                  }
-                }}
-              >
-                <span class="lang-code">{lang.code.toUpperCase()}</span>
-                <span class="lang-name">{lang.name} ({lang.native})</span>
-                {#if formData.languages.includes(lang.code)}
-                  <span class="lang-check">✓</span>
-                {/if}
-              </button>
-            {/each}
-          </div>
-          {#if errors.languages}
-            <span class="error-message">{errors.languages}</span>
+          <label for="slug">URL Slug <span class="required">*</span></label>
+          <input
+            type="text"
+            id="slug"
+            bind:value={formData.slug}
+            on:input={() => { slugTouched = true; }}
+            placeholder="e.g., atlantis"
+            class:error={errors.slug}
+          />
+          {#if portalPreviewPath}
+            <p class="hint">Portal path: <code>{portalPreviewPath}</code></p>
+          {/if}
+          <p class="hint">Codex, token, and branding are configured inside your realm after deployment.</p>
+          {#if errors.slug}
+            <span class="error-message">{errors.slug}</span>
           {/if}
         </div>
-
-        <div class="form-group">
-          <label>Manifesto <span class="required">*</span></label>
-          {#if formData.languages.length > 1}
-            <p class="hint" style="margin-bottom: 0.75rem;">Enter manifesto in each supported language</p>
-          {/if}
-          <div class="multilang-inputs">
-            {#each formData.languages as langCode}
-              {@const lang = AVAILABLE_LANGUAGES.find(l => l.code === langCode)}
-              <div class="multilang-input">
-                {#if formData.languages.length > 1}
-                  <div class="multilang-label">
-                    <span class="lang-code-small">{lang?.code.toUpperCase()}</span>
-                    <span>{lang?.name}</span>
-                  </div>
-                {/if}
-                <textarea 
-                  id="manifesto_{langCode}" 
-                  bind:value={formData.manifestos[langCode]}
-                  placeholder={lang?.manifestoPlaceholder || "Share your realm's vision, values, and purpose..."}
-                  rows="3"
-                  class:error={errors[`manifesto_${langCode}`]}
-                ></textarea>
-                {#if errors[`manifesto_${langCode}`]}
-                  <span class="error-message">{errors[`manifesto_${langCode}`]}</span>
-                {/if}
-              </div>
-            {/each}
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label>Member Registration</label>
-          {#if selectedCodexDetails?.hasRegistrationPolicy}
-            <div class="codex-manifest-details" style="margin-top: 0;">
-              <div class="codex-detail-row">
-                <span class="codex-detail-label">Set by the {AVAILABLE_CODICES.find(c => c.id === formData.codex_package_name)?.name || formData.codex_package_name} codex</span>
-                <span class="codex-detail-value">
-                  <strong>{selectedCodexDetails.openRegistration ? 'Open registration' : 'Invitation only'}</strong>
-                  {#if selectedCodexDetails.openRegistration}
-                    — anyone can join as {selectedCodexDetails.defaultProfile}
-                  {:else}
-                    — members need an invitation code or are imported by an admin
-                  {/if}
-                  {#if selectedCodexDetails.identityRequirements.length > 0}
-                    · identity checks: {selectedCodexDetails.identityRequirements.join(', ')}
-                  {/if}
-                </span>
-              </div>
-              <p class="codex-details-note">
-                The registration model is part of this codex's governance design,
-                so the wizard doesn't offer a choice here.
-              </p>
-            </div>
-          {:else}
-          <p class="hint" style="margin-bottom: 0.75rem;">Choose how new members can join your realm</p>
-          <div class="registration-type-options">
-            <button
-              type="button"
-              class="registration-option"
-              class:selected={!formData.open_registration}
-              on:click={() => formData.open_registration = false}
-            >
-              <div class="registration-option-icon">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
-              </div>
-              <div class="registration-option-text">
-                <strong>Invitation Only</strong>
-                <span>Members need an invitation code from an admin to join</span>
-              </div>
-            </button>
-            <button
-              type="button"
-              class="registration-option"
-              class:selected={formData.open_registration}
-              on:click={() => formData.open_registration = true}
-            >
-              <div class="registration-option-icon">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                </svg>
-              </div>
-              <div class="registration-option-text">
-                <strong>Open Registration</strong>
-                <span>Anyone can join as a member without an invitation code</span>
-              </div>
-            </button>
-          </div>
-          <p class="hint" style="margin-top: 0.5rem;">You are registered as admin automatically when the realm deploys. Additional administrators must join with an invitation code.</p>
-          {/if}
-        </div>
-      </div>
-
-    {:else if currentStepId === 'branding'}
-      <!-- Branding -->
-      <div class="form-step">
-        <h2>Branding & Welcome</h2>
-        <p class="step-description">Customize how your realm looks and feels</p>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label>Logo</label>
-            <div class="upload-area" class:has-preview={formData.logoPreview}>
-              {#if formData.logoPreview}
-                <img src={formData.logoPreview} alt="Logo preview" class="preview-image" />
-                <button class="remove-btn" on:click={() => { formData.logo = null; formData.logoPreview = ''; }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M18 6L6 18M6 6l12 12"/>
-                  </svg>
-                </button>
-              {:else}
-                <input type="file" accept="image/*" on:change={handleLogoUpload} />
-                <div class="upload-placeholder">
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                    <polyline points="21 15 16 10 5 21"></polyline>
-                  </svg>
-                  <span>Upload Logo</span>
-                  <span class="hint">PNG or JPG, max 2MB</span>
-                </div>
-              {/if}
-            </div>
-            <button
-              type="button"
-              class="btn-generate-branding"
-              disabled={brandingGenerating}
-              on:click={() => generateBranding('logo')}
-            >
-              {brandingGenerating ? 'Generating…' : '✨ Generate logo'}
-            </button>
-          </div>
-
-          <div class="form-group">
-            <label>Welcome Image</label>
-            <div class="upload-area welcome-upload" class:has-preview={formData.backgroundPreview}>
-              {#if formData.backgroundPreview}
-                <img src={formData.backgroundPreview} alt="Background image preview" class="preview-image" />
-                <button class="remove-btn" on:click={() => { formData.background = null; formData.backgroundPreview = ''; }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M18 6L6 18M6 6l12 12"/>
-                  </svg>
-                </button>
-              {:else}
-                <input type="file" accept="image/*" on:change={handleWelcomeImageUpload} />
-                <div class="upload-placeholder">
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                    <polyline points="21 15 16 10 5 21"></polyline>
-                  </svg>
-                  <span>Upload Welcome Image</span>
-                  <span class="hint">Recommended: 1920x1080</span>
-                </div>
-              {/if}
-            </div>
-            <button
-              type="button"
-              class="btn-generate-branding"
-              disabled={brandingGenerating}
-              on:click={() => generateBranding('background')}
-            >
-              {brandingGenerating ? 'Generating…' : '✨ Generate background'}
-            </button>
-          </div>
-        </div>
-
-        <p class="branding-generate-hint">
-          Unique artwork is generated from your realm name. If none is uploaded, defaults are created automatically at deploy time.
-        </p>
-
-        <div class="form-group">
-          <label>Welcome Message <span class="required">*</span></label>
-          {#if formData.languages.length > 1}
-            <p class="hint" style="margin-bottom: 0.75rem;">Enter welcome message in each supported language</p>
-          {/if}
-          <div class="multilang-inputs">
-            {#each formData.languages as langCode}
-              {@const lang = AVAILABLE_LANGUAGES.find(l => l.code === langCode)}
-              <div class="multilang-input">
-                {#if formData.languages.length > 1}
-                  <div class="multilang-label">
-                    <span class="lang-code-small">{lang?.code.toUpperCase()}</span>
-                    <span>{lang?.name}</span>
-                  </div>
-                {/if}
-                <textarea 
-                  id="welcome_message_{langCode}" 
-                  bind:value={formData.welcome_messages[langCode]}
-                  placeholder={lang?.welcomePlaceholder || "Write a welcoming message for new citizens..."}
-                  rows="3"
-                  class:error={errors[`welcome_message_${langCode}`]}
-                ></textarea>
-                {#if errors[`welcome_message_${langCode}`]}
-                  <span class="error-message">{errors[`welcome_message_${langCode}`]}</span>
-                {/if}
-              </div>
-            {/each}
-          </div>
-        </div>
-      </div>
-
-    {:else if currentStepId === 'token'}
-      <!-- Token -->
-      <div class="form-step">
-        <h2>Realm Token</h2>
-        {#if selectedCodexDetails?.currency}
-          <p class="step-description">The selected codex decides the realm's token</p>
-
-          <div class="codex-manifest-details">
-            <div class="codex-detail-row">
-              <span class="codex-detail-label">Token (set by the {AVAILABLE_CODICES.find(c => c.id === formData.codex_package_name)?.name || formData.codex_package_name} codex)</span>
-              <span class="codex-detail-value">
-                <strong>{pinnedCodexCurrencyDisplay?.name || selectedCodexDetails.currencyName || selectedCodexDetails.currency} ({pinnedCodexCurrencyDisplay?.symbol || selectedCodexDetails.currency})</strong>
-                {#if formData.token_mode === 'existing'}
-                  — an existing shared ledger this realm will adopt
-                {:else}
-                  — a codex-native token minted for this realm
-                {/if}
-              </span>
-            </div>
-            <p class="codex-details-note">
-              This codex's fees, deposits and treasury operations are denominated in
-              {pinnedCodexCurrencyDisplay?.symbol || selectedCodexDetails.currency}, so the wizard doesn't offer a choice here.
-            </p>
-          </div>
-        {:else}
-        <p class="step-description">Choose the token your realm will use for payments and treasury operations</p>
-
-        <div class="registration-type-options">
-          <button
-            type="button"
-            class="registration-option"
-            class:selected={formData.token_mode === 'new'}
-            on:click={() => formData.token_mode = 'new'}
-          >
-            <div class="registration-option-icon">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v12m6-6H6" />
-                <circle cx="12" cy="12" r="10" stroke-width="2" />
-              </svg>
-            </div>
-            <div class="registration-option-text">
-              <strong>Create a new token</strong>
-              <span>Mint a native token owned by your realm</span>
-            </div>
-          </button>
-          <button
-            type="button"
-            class="registration-option"
-            class:selected={formData.token_mode === 'existing'}
-            on:click={() => formData.token_mode = 'existing'}
-          >
-            <div class="registration-option-icon">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <circle cx="8" cy="12" r="6" stroke-width="2" />
-                <circle cx="16" cy="12" r="6" stroke-width="2" />
-              </svg>
-            </div>
-            <div class="registration-option-text">
-              <strong>Use an existing token</strong>
-              <span>Adopt a shared ledger like {existingTokenSymbolsLabel}</span>
-            </div>
-          </button>
-        </div>
-
-        {#if formData.token_mode === 'new'}
-          <div class="token-config" style="margin-top: 1.5rem;">
-            <div class="form-row">
-              <div class="form-group">
-                <label for="token_name">Token Name <span class="required">*</span></label>
-                <input 
-                  type="text" 
-                  id="token_name" 
-                  bind:value={formData.token_name}
-                  placeholder="e.g., Atlantis Token"
-                  class:error={errors.token_name}
-                />
-                {#if errors.token_name}
-                  <span class="error-message">{errors.token_name}</span>
-                {/if}
-              </div>
-
-              <div class="form-group">
-                <label for="token_symbol">Token Symbol <span class="required">*</span></label>
-                <input 
-                  type="text" 
-                  id="token_symbol" 
-                  bind:value={formData.token_symbol}
-                  placeholder="e.g., ATL"
-                  maxlength="10"
-                  class:error={errors.token_symbol}
-                />
-                {#if errors.token_symbol}
-                  <span class="error-message">{errors.token_symbol}</span>
-                {/if}
-              </div>
-            </div>
-          </div>
-        {:else}
-          <div class="form-group" style="margin-top: 1.5rem;">
-            <label>Select Token</label>
-            {#if existingTokensLoading}
-              <p class="codex-details-note">Loading token metadata from ledgers…</p>
-            {/if}
-            <div class="codex-options">
-              {#each existingTokens as token}
-                <button
-                  type="button"
-                  class="codex-card"
-                  class:selected={formData.token_existing === token.registryKey}
-                  on:click={() => formData.token_existing = token.registryKey}
-                >
-                  <div class="codex-radio">
-                    {#if formData.token_existing === token.registryKey}
-                      <div class="codex-radio-dot"></div>
-                    {/if}
-                  </div>
-                  <div class="codex-info">
-                    <span class="codex-name">{token.name} ({token.symbol})</span>
-                    <span class="codex-desc">{token.description}</span>
-                  </div>
-                </button>
-              {/each}
-            </div>
-          </div>
-        {/if}
-
-        {/if}
       </div>
 
     {:else if currentStepId === 'platform'}
@@ -1559,207 +777,39 @@
         </div>
       </div>
 
-    {:else if currentStepId === 'codex'}
-      <!-- Codex -->
-      <div class="form-step">
-        <h2>Codex Configuration <span class="info-tooltip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg><span class="info-tooltip-text">A codex is a set of governance rules implemented in Python code. It defines how your realm operates — including taxation, budgets, voting, and more.</span></span></h2>
-        <p class="step-description">Configure the governance rules for your realm</p>
-
-          <div class="form-group">
-            <label for="codex_package">Select Codex <span class="required">*</span></label>
-            <div class="codex-sort-row">
-              <span class="codex-sort-label">Sort by:</span>
-              <button type="button" class="codex-sort-btn" class:active={codexSortBy === 'popularity'} on:click={() => codexSortBy = 'popularity'}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
-                Popular
-              </button>
-              <button type="button" class="codex-sort-btn" class:active={codexSortBy === 'newest'} on:click={() => codexSortBy = 'newest'}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                Newest
-              </button>
-              <button type="button" class="codex-sort-btn" class:active={codexSortBy === 'oldest'} on:click={() => codexSortBy = 'oldest'}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                Oldest
-              </button>
-            </div>
-            <div class="codex-options">
-              {#each sortedCodices as codex}
-                <button
-                  type="button"
-                  class="codex-card"
-                  class:selected={formData.codex_package_name === codex.id}
-                  on:click={() => selectCodex(codex.id)}
-                >
-                  <div class="codex-radio">
-                    {#if formData.codex_package_name === codex.id}
-                      <div class="codex-radio-dot"></div>
-                    {/if}
-                  </div>
-                  <div class="codex-info">
-                    <span class="codex-name">{codex.name}</span>
-                    <span class="codex-desc" class:expanded={expandedCodices[codex.id]}>{codex.description}</span>
-                    {#if codex.description && codex.description.length > 120}
-                      <button type="button" class="codex-expand-btn" on:click|stopPropagation={() => { expandedCodices[codex.id] = !expandedCodices[codex.id]; expandedCodices = expandedCodices; }}>
-                        {expandedCodices[codex.id] ? 'Show less' : 'Read more'}
-                      </button>
-                    {/if}
-                    {#if codex.doc_url}
-                      <a href={codex.doc_url} target="_blank" rel="noopener" class="doc-link" on:click|stopPropagation>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                          <polyline points="15 3 21 3 21 9"></polyline>
-                          <line x1="10" y1="14" x2="21" y2="3"></line>
-                        </svg>
-                        View documentation
-                      </a>
-                    {/if}
-                  </div>
-                </button>
-              {/each}
-            </div>
-            {#if errors.codex_package_name}
-              <span class="error-message">{errors.codex_package_name}</span>
-            {/if}
-          </div>
-          <p class="hint">Select a pre-built codex package for your realm's governance rules</p>
-
-          {#if selectedCodexDetails}
-            <div class="codex-manifest-details">
-              <h3>
-                What's included
-                {#if selectedCodexDetails.version}
-                  <span class="codex-version-badge">v{selectedCodexDetails.version}</span>
-                {/if}
-              </h3>
-
-              {#if selectedCodexDetails.dependencies.length > 0}
-                <div class="codex-detail-row">
-                  <span class="codex-detail-label">Extensions</span>
-                  <div class="codex-dep-chips">
-                    {#each selectedCodexDetails.dependencies as dep}
-                      <span class="codex-dep-chip">{dep.id}{dep.pin ? ` @ ${dep.pin}` : ''}</span>
-                    {/each}
-                  </div>
-                </div>
-              {/if}
-
-              {#if selectedCodexDetails.overrides.length > 0}
-                <div class="codex-detail-row">
-                  <span class="codex-detail-label">Replaces system extensions</span>
-                  <div class="codex-dep-chips">
-                    {#each selectedCodexDetails.overrides as [base, override]}
-                      <span class="codex-dep-chip override">{base} → {override}</span>
-                    {/each}
-                  </div>
-                </div>
-              {/if}
-
-              {#if selectedCodexDetails.hasRegistrationPolicy}
-                <div class="codex-detail-row">
-                  <span class="codex-detail-label">Registration</span>
-                  <span class="codex-detail-value">
-                    {selectedCodexDetails.openRegistration
-                      ? `Open registration (new members join as ${selectedCodexDetails.defaultProfile})`
-                      : 'Invitation only'}
-                    {#if selectedCodexDetails.identityRequirements.length > 0}
-                      · identity checks: {selectedCodexDetails.identityRequirements.join(', ')}
-                    {/if}
-                  </span>
-                </div>
-              {/if}
-
-              {#if selectedCodexDetails.currency}
-                <div class="codex-detail-row">
-                  <span class="codex-detail-label">Realm token</span>
-                  <span class="codex-detail-value">{pinnedCodexCurrencyDisplay?.name || selectedCodexDetails.currencyName || selectedCodexDetails.currency} ({pinnedCodexCurrencyDisplay?.symbol || selectedCodexDetails.currency})</span>
-                </div>
-              {/if}
-
-              <p class="codex-details-note">
-                The codex installs and configures everything above, on top of the
-                standard system extensions every realm ships with (dashboards,
-                voting, vault, settings…). You can add more extensions
-                later from inside your realm.
-              </p>
-            </div>
-
-            {#if selectedCodexDetails.parameters.length > 0}
-              <div class="codex-manifest-details codex-params-panel">
-                <h3>Parameters</h3>
-                <p class="codex-details-note" style="margin-top: 0;">
-                  This codex lets you tune the values below per realm. Leave a
-                  field empty to keep the codex default.
-                </p>
-
-                {#each basicParams as param (param.path)}
-                  <div class="form-group codex-param-group">
-                    <label for={`param-${param.path}`}>
-                      {param.label}
-                      <span class="codex-param-default">default: {param.default}</span>
-                    </label>
-                    {#if param.description}
-                      <p class="hint codex-param-hint">{param.description}</p>
-                    {/if}
-                    <input
-                      type="number"
-                      id={`param-${param.path}`}
-                      step="any"
-                      min={param.min}
-                      max={param.max}
-                      placeholder={String(param.default)}
-                      bind:value={formData.codex_params[param.path]}
-                      class:error={errors[`param_${param.path}`]}
-                    />
-                    {#if errors[`param_${param.path}`]}
-                      <span class="error-message">{errors[`param_${param.path}`]}</span>
-                    {/if}
-                  </div>
-                {/each}
-
-                {#if advancedParams.length > 0}
-                  <button
-                    type="button"
-                    class="codex-expand-btn"
-                    on:click={() => showAdvancedParams = !showAdvancedParams}
-                  >
-                    {showAdvancedParams ? 'Hide advanced parameters' : `Show advanced parameters (${advancedParams.length})`}
-                  </button>
-                  {#if showAdvancedParams}
-                    {#each advancedParams as param (param.path)}
-                      <div class="form-group codex-param-group">
-                        <label for={`param-${param.path}`}>
-                          {param.label}
-                          <span class="codex-param-default">default: {param.default}</span>
-                        </label>
-                        {#if param.description}
-                          <p class="hint codex-param-hint">{param.description}</p>
-                        {/if}
-                        <input
-                          type="number"
-                          id={`param-${param.path}`}
-                          step="any"
-                          min={param.min}
-                          max={param.max}
-                          placeholder={String(param.default)}
-                          bind:value={formData.codex_params[param.path]}
-                          class:error={errors[`param_${param.path}`]}
-                        />
-                        {#if errors[`param_${param.path}`]}
-                          <span class="error-message">{errors[`param_${param.path}`]}</span>
-                        {/if}
-                      </div>
-                    {/each}
-                  {/if}
-                {/if}
-              </div>
-            {/if}
-          {/if}
-      </div>
-
     {:else if currentStepId === 'deploy'}
-      <!-- Deploy -->
+      <!-- Review & Deploy -->
       <div class="form-step">
-        <h2>Deploy Your Realm</h2>
+        <h2>Review & Deploy</h2>
+        <p class="step-description">Confirm platform settings, then deploy your realm</p>
+
+        <div class="codex-manifest-details review-summary">
+          <div class="codex-detail-row">
+            <span class="codex-detail-label">Realm</span>
+            <span class="codex-detail-value"><strong>{formData.name || '—'}</strong></span>
+          </div>
+          <div class="codex-detail-row">
+            <span class="codex-detail-label">Slug</span>
+            <span class="codex-detail-value"><code>{slugify(formData.slug || formData.name || '') || '—'}</code></span>
+          </div>
+          {#if portalPreviewPath}
+            <div class="codex-detail-row">
+              <span class="codex-detail-label">Portal</span>
+              <span class="codex-detail-value"><code>{portalPreviewPath}</code></span>
+            </div>
+          {/if}
+          <div class="codex-detail-row">
+            <span class="codex-detail-label">Platform</span>
+            <span class="codex-detail-value">{getGosImplementation(formData.gos_implementation)?.name || formData.gos_implementation}</span>
+          </div>
+          <div class="codex-detail-row">
+            <span class="codex-detail-label">Software version</span>
+            <span class="codex-detail-value">{formData.deploy_version}</span>
+          </div>
+          <p class="codex-details-note">After deployment you will finish codex, token, and branding setup inside the realm.</p>
+        </div>
+
+        <h3 class="review-deploy-heading">Deployment</h3>
         <p class="step-description">Choose how you want to deploy your governance system</p>
 
         <div class="deploy-options">

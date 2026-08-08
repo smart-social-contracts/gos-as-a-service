@@ -1,12 +1,11 @@
 <script>
   import { createEventDispatcher } from 'svelte';
 
-  /** @type {'prepare' | 'upload' | 'submit' | 'redirect'} */
+  /** @type {'prepare' | 'submit' | 'redirect'} */
   export let activeStep = 'prepare';
   export let open = false;
   /** @type {'running' | 'error'} */
   export let phase = 'running';
-  export let uploadDetail = '';
   export let errorMessage = '';
 
   const dispatch = createEventDispatcher();
@@ -14,13 +13,8 @@
   const STEPS = [
     {
       id: 'prepare',
-      label: 'Preparing your realm artwork',
-      hint: 'Generating logo and background images when needed.',
-    },
-    {
-      id: 'upload',
-      label: 'Uploading branding to the network',
-      hint: 'Publishing your images to the decentralized file registry.',
+      label: 'Preparing deployment request',
+      hint: 'Building your realm manifest.',
     },
     {
       id: 'submit',
@@ -106,9 +100,6 @@
                 <span class="step-label">{step.label}</span>
                 {#if step.state === 'active'}
                   <span class="step-hint">{step.hint}</span>
-                  {#if step.id === 'upload' && uploadDetail}
-                    <span class="step-detail">{uploadDetail}</span>
-                  {/if}
                 {/if}
               </div>
             </li>

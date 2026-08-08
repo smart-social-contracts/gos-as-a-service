@@ -91,14 +91,11 @@ function runtimeGaasEnv() {
 
 export const GOS_IMPLEMENTATIONS = resolveGosImplementations(runtimeGaasEnv());
 
-/** Wizard step definitions (platform first, then Realms-specific steps). */
+/** Wizard step definitions — platform concerns only; realm setup happens post-deploy. */
 export const WIZARD_STEPS = [
 	{ id: 'platform', label: 'Platform' },
-	{ id: 'codex', label: 'Codex', realmsOnly: true },
-	{ id: 'token', label: 'Token', realmsOnly: true },
 	{ id: 'basics', label: 'Basics' },
-	{ id: 'branding', label: 'Branding' },
-	{ id: 'deploy', label: 'Deploy' }
+	{ id: 'deploy', label: 'Review & Deploy' }
 ];
 
 /**
@@ -112,14 +109,12 @@ export function getGosImplementation(id) {
 
 /**
  * Steps visible for the chosen GOS implementation.
- * Realms-specific codex/token steps are omitted for other implementations.
  *
- * @param {string} [gosImplementationId]
+ * @param {string} [_gosImplementationId]
  * @returns {typeof WIZARD_STEPS}
  */
-export function visibleWizardSteps(gosImplementationId) {
-	const isRealms = (gosImplementationId || 'realms-gos') === 'realms-gos';
-	return WIZARD_STEPS.filter((step) => !step.realmsOnly || isRealms);
+export function visibleWizardSteps(_gosImplementationId) {
+	return WIZARD_STEPS;
 }
 
 /**
