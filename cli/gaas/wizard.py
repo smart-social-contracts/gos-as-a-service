@@ -10,7 +10,6 @@ from questionary import Choice
 from rich.console import Console
 
 from gaas.descriptor import (
-    VERSION_TAG_RE,
     CasalsConfig,
     Descriptor,
     DnsConfig,
@@ -19,6 +18,7 @@ from gaas.descriptor import (
     PlatformConfig,
     ServicesConfig,
 )
+from gaas.versions import validate_descriptor_version
 from gaas.known import (
     DEFAULT_CASALS_RELEASE_REPO,
     DEFAULT_CASALS_VERSION,
@@ -117,9 +117,17 @@ def _validate_canister_id(value: str) -> bool | str:
 
 
 def _validate_version(value: str) -> bool | str:
-    if not VERSION_TAG_RE.match(value.strip()):
-        return f"version must match vX.Y.Z (got {value.strip()!r})"
+    try:
+        validate_descriptor_version(value)
+    except ValueError as exc:
+        return str(exc)
     return True
+
+
+_VERSION_HELP = (
+    "vX.Y.Z (pinned release), latest (newest GitHub release), or "
+    "main (unreproducible source build of HEAD — test/local only)"
+)
 
 
 def _validate_https_optional(value: str) -> bool | str:
@@ -238,7 +246,7 @@ def run_wizard(
     for impl_id in selected_gos:
         impl = GOS_IMPLEMENTATIONS[impl_id]
         version = prompt.text(
-            f"{impl.label} version:",
+            f"{impl.label} version ({_VERSION_HELP}):",
             default=impl.default_version,
             validate=_validate_version,
         ).ask()
@@ -272,7 +280,7 @@ def run_wizard(
             canisters[canister_name] = value.strip()
 
     casals_version = prompt.text(
-        "Casals version:",
+        f"Casals version ({_VERSION_HELP}):",
         default=DEFAULT_CASALS_VERSION,
         validate=_validate_version,
     ).ask()

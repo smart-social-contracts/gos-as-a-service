@@ -18,9 +18,9 @@ from gaas.known import (
     GOS_IMPLEMENTATIONS,
     KNOWN_CANISTER_NAMES,
 )
+from gaas.versions import VERSION_TAG_RE, validate_descriptor_version
 
 SLUG_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$")
-VERSION_TAG_RE = re.compile(r"^v\d+\.\d+\.\d+$")
 CANISTER_ID_RE = re.compile(r"^[a-z0-9]{5}(?:-[a-z0-9]{5}){3,10}-[a-z]{3}$")
 HOSTNAME_RE = re.compile(
     r"^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$",
@@ -64,9 +64,10 @@ class GosEntry(BaseModel):
     @field_validator("version")
     @classmethod
     def validate_version(cls, value: str) -> str:
-        if not VERSION_TAG_RE.match(value):
-            raise ValueError(f"version must match vX.Y.Z (got {value!r})")
-        return value
+        try:
+            return validate_descriptor_version(value)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
 
 
 class CasalsConfig(BaseModel):
@@ -76,9 +77,10 @@ class CasalsConfig(BaseModel):
     @field_validator("version")
     @classmethod
     def validate_version(cls, value: str) -> str:
-        if not VERSION_TAG_RE.match(value):
-            raise ValueError(f"casals.version must match vX.Y.Z (got {value!r})")
-        return value
+        try:
+            return validate_descriptor_version(value)
+        except ValueError as exc:
+            raise ValueError(f"casals.version: {exc}") from exc
 
 
 class ServicesConfig(BaseModel):

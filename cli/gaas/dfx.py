@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -32,6 +33,10 @@ _CERTIFIED_ASSETS_WASM_URL = (
     "https://github.com/smart-social-contracts/certified-assets"
     "/releases/download/v0.3.0/assetstorage.wasm.gz"
 )
+
+_ASSET_DEPLOY_ATTEMPTS = 3
+_ASSET_DEPLOY_RETRY_DELAY_S = 5
+_TRANSIENT_ASSET_SYNC_RE = re.compile(r"IC0536|Failed to list assets", re.I)
 
 
 class DfxError(RuntimeError):
@@ -447,7 +452,19 @@ def deploy_assets_canister(
             args.extend(["--identity", identity])
         if yes:
             args.append("--yes")
-        _run(args, check=True, cwd=repo_root)
+        # Right after install_code, the asset sync's `list` query can land on a
+        # replica still serving the previous wasm -> spurious IC0536. The wasm
+        # install is already done by then, so retrying is cheap and converges.
+        for attempt in range(1, _ASSET_DEPLOY_ATTEMPTS + 1):
+            try:
+                _run(args, check=True, cwd=repo_root)
+                break
+            except DfxError as exc:
+                if attempt == _ASSET_DEPLOY_ATTEMPTS or not _TRANSIENT_ASSET_SYNC_RE.search(
+                    exc.stderr + exc.stdout
+                ):
+                    raise
+                time.sleep(_ASSET_DEPLOY_RETRY_DELAY_S)
     finally:
         if backup is None:
             if ids_path.is_file():

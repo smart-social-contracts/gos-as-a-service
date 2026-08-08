@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tarfile
 import urllib.parse
 from pathlib import Path
@@ -22,8 +23,17 @@ from gaas.known import (
     PLATFORM_BACKEND_WASMS,
     PLATFORM_FRONTEND_ARCHIVES,
 )
+from gaas.source_build import clone_repo
+from gaas.versions import resolve_deploy_version
 
 _GOS_REPO_MARKERS = ("src/realm_registry_backend", "src/realm_installer", "src/file_registry")
+
+_BASILISK_REQUIREMENTS = [
+    "ic-basilisk==0.14.2",
+    "ic-basilisk-toolkit==0.5.3",
+    "ic-python-db==0.11.0",
+    "ic-python-logging==0.3.4",
+]
 
 
 class PlatformError(RuntimeError):
@@ -66,12 +76,21 @@ def _basilisk_python(casals_root: Path) -> Path:
     if py.is_file():
         return py
     alt = Path("/srv/dev/Casals/.venv-basilisk/bin/python")
-    if alt.is_file():
+    if alt.is_file() and casals_root == Path("/srv/dev/Casals").resolve():
         return alt
-    raise PlatformError(
-        f"Casals basilisk venv not found at {venv} or {alt.parent}; "
-        "create it per Casals README before building casals_conductor locally"
+    subprocess.run([sys.executable, "-m", "venv", str(venv)], check=True, cwd=casals_root)
+    pip = venv / "bin" / "pip"
+    subprocess.run([str(pip), "install", "-q", "--upgrade", "pip"], check=True)
+    subprocess.run(
+        [str(pip), "install", "-q", *list(_BASILISK_REQUIREMENTS)],
+        check=True,
     )
+    if not py.is_file():
+        raise PlatformError(
+            f"Casals basilisk venv not found at {venv}; "
+            "create it per Casals README before building casals_conductor locally"
+        )
+    return py
 
 
 def build_casals_wasm(casals_root: Path, dest: Path) -> Path:
@@ -213,9 +232,22 @@ def resolve_casals_frontend_dist(
     cached = dest / "dist"
     if cached.is_dir() and any(cached.iterdir()):
         return cached
+
+    resolved = resolve_deploy_version(version, release_repo, session=session)
+    if resolved.source_build:
+        repo_root = clone_repo(release_repo, dest.parent / "src-clone")
+        built = build_casals_frontend(
+            repo_root, dest, conductor_canister_id=conductor_canister_id
+        )
+        if conductor_canister_id:
+            _inject_casals_ic_env_assets(
+                built, conductor_canister_id, frontend_canister_id
+            )
+        return built
+
     try:
         archive = fetch_casals_frontend_archive(
-            version, release_repo, dest, session=session
+            resolved.fetch_tag or version, release_repo, dest, session=session
         )
         cached.mkdir(parents=True, exist_ok=True)
         with tarfile.open(archive, "r:gz") as tar:
@@ -250,8 +282,16 @@ def resolve_casals_wasm(
     cached = dest / "casals_conductor.wasm"
     if cached.is_file():
         return cached
+
+    resolved = resolve_deploy_version(version, release_repo, session=session)
+    if resolved.source_build:
+        repo_root = clone_repo(release_repo, dest.parent / "src-clone")
+        return build_casals_wasm(repo_root, dest)
+
     try:
-        return fetch_casals_wasm(version, release_repo, dest, session=session)
+        return fetch_casals_wasm(
+            resolved.fetch_tag or version, release_repo, dest, session=session
+        )
     except ArtifactError:
         src = resolve_casals_src(casals_src)
         if src is None:

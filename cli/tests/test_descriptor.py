@@ -44,8 +44,17 @@ def test_empty_gos_fails_validation() -> None:
 def test_invalid_version_tag() -> None:
     data = dict(SAMPLE_DESCRIPTOR)
     data["gos"] = [{**data["gos"][0], "version": "0.3.1"}]
-    with pytest.raises(ValidationError, match="vX.Y.Z"):
+    with pytest.raises(ValidationError, match="vX.Y.Z|main|latest"):
         Descriptor.model_validate(data)
+
+
+def test_main_and_latest_version_tags() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["gos"] = [{**data["gos"][0], "version": "main"}]
+    data["casals"] = {**data["casals"], "version": "latest"}
+    desc = Descriptor.model_validate(data)
+    assert desc.gos[0].version == "main"
+    assert desc.casals.version == "latest"
 
 
 def test_invalid_canister_id() -> None:

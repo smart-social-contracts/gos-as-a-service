@@ -48,6 +48,8 @@ from gaas.platform import (
     resolve_platform_backend_wasm,
 )
 from gaas.preflight import PreflightReport, run_preflight
+from gaas.source_build import resolve_gos_artifacts
+from gaas.versions import normalize_catalog_version, resolve_deploy_version
 
 console = Console()
 
@@ -86,7 +88,22 @@ def _save_descriptor(descriptor: Descriptor, ctx: DeployContext) -> None:
 
 
 def _normalize_version(version: str) -> str:
-    return version.lstrip("v")
+    return normalize_catalog_version(version)
+
+
+def _gos_catalog_version(entry, session=None) -> str:
+    return resolve_deploy_version(
+        entry.version, entry.release_repo, session=session
+    ).catalog_version
+
+
+def _gos_version_label(entry, session=None) -> str:
+    resolved = resolve_deploy_version(
+        entry.version, entry.release_repo, session=session
+    )
+    if resolved.descriptor_version == "latest" and resolved.fetch_tag:
+        return f"latest→{resolved.fetch_tag}"
+    return entry.version
 
 
 def _portal_url(descriptor: Descriptor) -> str:
@@ -357,12 +374,16 @@ def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None
 
     work = _work_dir(ctx)
     for entry in descriptor.gos:
-        version = _normalize_version(entry.version)
+        resolved = resolve_deploy_version(
+            entry.version, entry.release_repo, session=ctx.http
+        )
+        version = resolved.catalog_version
         backend_ns = f"wasm/{entry.artifacts.backend_wasm_key}/{version}"
         frontend_ns = f"frontend/{entry.artifacts.frontend_wasm_key}/{version}"
         backend_asset = entry.artifacts.resolved_backend_asset(entry.implementation)
         backend_path = backend_asset
         backend_hash = ""
+        version_label = _gos_version_label(entry, session=ctx.http)
 
         needs_seed = True
         if namespace_published(registry_id, backend_ns, ctx.network, identity=ctx.identity):
@@ -373,22 +394,24 @@ def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None
                 needs_seed = False
                 backend_hash = hashes.get(backend_path, "")
                 console.print(
-                    f"  {entry.implementation}@{entry.version}: already seeded ({backend_ns})"
+                    f"  {entry.implementation}@{version_label}: already seeded ({backend_ns})"
                 )
 
         if needs_seed:
             frontend_asset = entry.artifacts.resolved_frontend_asset(entry.implementation)
-            assets = fetch_release_assets(
-                entry.release_repo,
-                entry.version,
-                ["checksums.txt", backend_asset, frontend_asset],
-                work / "gos" / entry.implementation / entry.version,
+            artifact_dir = work / "gos" / entry.implementation / resolved.descriptor_version
+            backend_file, frontend_file = resolve_gos_artifacts(
+                implementation=entry.implementation,
+                version=entry.version,
+                release_repo=entry.release_repo,
+                backend_asset=backend_asset,
+                frontend_asset=frontend_asset,
+                dest_dir=artifact_dir,
+                clone_parent=work / "src-clone",
                 session=ctx.http,
             )
-            backend_file = next(p for p in assets if p.name == backend_asset)
-            frontend_file = next(p for p in assets if p.name == frontend_asset)
             console.print(
-                f"  seeding {entry.implementation}@{entry.version} → {backend_ns}, {frontend_ns}"
+                f"  seeding {entry.implementation}@{version_label} → {backend_ns}, {frontend_ns}"
             )
             seed_gos_entry(
                 registry_id,
@@ -415,11 +438,11 @@ def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None
             )
             if status == "published":
                 console.print(
-                    f"  published {entry.implementation}@{entry.version} to version catalog"
+                    f"  published {entry.implementation}@{version_label} to version catalog"
                 )
             elif status == "skipped":
                 console.print(
-                    f"  {entry.implementation}@{entry.version}: already in version catalog"
+                    f"  {entry.implementation}@{version_label}: already in version catalog"
                 )
 
 
@@ -599,7 +622,7 @@ def _http_get(url: str, timeout: float = 30.0) -> tuple[int, str]:
 
 def phase_smoke_checks(descriptor: Descriptor, ctx: DeployContext) -> None:
     seed_keys = [
-        f"{entry.artifacts.backend_wasm_key}@{_normalize_version(entry.version)}"
+        f"{entry.artifacts.backend_wasm_key}@{_gos_catalog_version(entry, session=ctx.http)}"
         for entry in descriptor.gos
     ]
 
@@ -623,7 +646,7 @@ def phase_smoke_checks(descriptor: Descriptor, ctx: DeployContext) -> None:
 
     file_registry_id = descriptor.canisters["file_registry"]
     for entry in descriptor.gos:
-        version = _normalize_version(entry.version)
+        version = _gos_catalog_version(entry, session=ctx.http)
         backend_ns = f"wasm/{entry.artifacts.backend_wasm_key}/{version}"
         hashes = fetch_namespace_hashes(
             file_registry_id, backend_ns, ctx.network, identity=ctx.identity

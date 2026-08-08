@@ -35,3 +35,39 @@ def test_parse_cycles_balance_raw_format():
 
 def test_parse_cycles_balance_unparseable():
     assert parse_cycles_balance("no balance here") is None
+
+
+def test_deploy_assets_retries_transient_ic0536(tmp_path, monkeypatch):
+    from gaas import dfx
+
+    calls = {"n": 0}
+
+    def fake_run(args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise dfx.DfxError(
+                "dfx command failed",
+                command=args,
+                stderr="Failed to list assets: error code Some(\"IC0536\")",
+            )
+        return None
+
+    monkeypatch.setattr(dfx, "_run", fake_run)
+    monkeypatch.setattr(dfx.time, "sleep", lambda _s: None)
+    (tmp_path / "canister_ids.json").write_text("{}", encoding="utf-8")
+    dfx.deploy_assets_canister("casals_frontend", "qic2k-baaaa-aaaae-agvga-cai", "ic", repo_root=tmp_path)
+    assert calls["n"] == 2
+
+
+def test_deploy_assets_does_not_retry_permanent_errors(tmp_path, monkeypatch):
+    import pytest
+
+    from gaas import dfx
+
+    def fake_run(args, **kwargs):
+        raise dfx.DfxError("dfx command failed", command=args, stderr="Insufficient funds")
+
+    monkeypatch.setattr(dfx, "_run", fake_run)
+    (tmp_path / "canister_ids.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(dfx.DfxError):
+        dfx.deploy_assets_canister("casals_frontend", "qic2k-baaaa-aaaae-agvga-cai", "ic", repo_root=tmp_path)

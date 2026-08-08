@@ -122,11 +122,13 @@ Schema is enforced by `cli/gaas/descriptor.py` and `cli/gaas/known.py`.
 | Field | Required | Default | Description |
 |---|---|---|---|
 | `implementation` | **yes** | — | GOS id. Known: `realms-gos` (available), `chora-gos` (not yet available). |
-| `version` | **yes** | — | Release tag matching `vX.Y.Z` (e.g. `v0.4.0`). |
+| `version` | **yes** | — | Release tag `vX.Y.Z` (e.g. `v0.4.0`), `latest` (newest GitHub release at deploy time), or `main` (build from upstream HEAD — unreproducible; recommended for test/local only). |
 | `release_repo` | **yes** | — | GitHub repo slug (`owner/repo`) for release artifacts. |
 | `artifacts.backend_wasm_key` | **yes** | — | File-registry namespace key for backend WASM. Default for `realms-gos`: `realm-backend`. |
 | `artifacts.frontend_wasm_key` | **yes** | — | File-registry namespace key for frontend assets. Default for `realms-gos`: `realm-assets`. |
 | `loader_profile` | **yes** | — | Portal embed profile. Default for `realms-gos`: `realms-iframe-v1`. |
+
+**Version pins:** Semver tags (`vX.Y.Z`) fetch fixed GitHub release assets and seed the file registry under the bare version (`0.4.0`). `latest` resolves the newest GitHub release at deploy time (cached for the process) and uses the resolved tag for fetching while catalog namespaces stay semver-clean. `main` shallow-clones upstream HEAD and builds WASM/frontend from source (mirroring each repo's release CI); artifacts are seeded under the `main` namespace. `main` and `latest` are accepted case-insensitively; semver tags are not. Prefer pinned semver tags for staging/production; use `main` only for test/local iteration.
 
 ### `canisters` keys
 
@@ -148,7 +150,7 @@ Leave a key out (or omit the entire `canisters` object) to create that canister 
 
 | Field | Required | Default | Description |
 |---|---|---|---|
-| `version` | **yes** | — | Casals release tag (`vX.Y.Z`). Default pin: `v0.3.0`. |
+| `version` | **yes** | — | Casals release tag `vX.Y.Z`, `latest`, or `main` (same semantics as `gos[].version`). Default pin: `v0.3.0`. |
 | `release_repo` | no | `smart-social-contracts/Casals` | GitHub repo for Casals release artifacts. |
 
 ### `services`
