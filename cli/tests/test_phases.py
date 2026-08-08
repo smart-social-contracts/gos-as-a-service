@@ -63,6 +63,7 @@ def test_run_phases_validate_failure(mock_preflight) -> None:
     assert ctx.completed_phases == []
 
 
+@patch("gaas.phases.dfx.top_up_canister")
 @patch("gaas.phases.dfx.create_canister_via_ledger")
 @patch("gaas.phases.dfx.create_canister")
 @patch("gaas.phases.dfx.canister_status")
@@ -76,6 +77,7 @@ def test_create_canisters_adopt_vs_create(
     mock_status,
     mock_create,
     mock_ledger_create,
+    _mock_top_up,
     tmp_path: Path,
 ) -> None:
     from gaas.preflight import PreflightCheck, PreflightReport

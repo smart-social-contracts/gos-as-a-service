@@ -190,6 +190,7 @@ def test_authorize_gos_entry_frontend_uses_assetstorage_wasm(
         lambda _cid, method, payload, _net, **_: casals_calls.append((method, payload))
         or {"ok": True},
     )
+    monkeypatch.setattr(conductor_seed, "upload_file", lambda *_a, **_k: "uploaded")
 
     conductor_seed.authorize_gos_entry(
         "qthgp-3yaaa-aaaae-agveq-cai",
@@ -248,6 +249,7 @@ def test_authorize_gos_entry_frontend_works_without_bundle_namespace(
         lambda _cid, method, payload, _net, **_: casals_calls.append((method, payload))
         or {"ok": True},
     )
+    monkeypatch.setattr(conductor_seed, "upload_file", lambda *_a, **_k: "uploaded")
 
     conductor_seed.authorize_gos_entry(
         "qthgp-3yaaa-aaaae-agveq-cai",
