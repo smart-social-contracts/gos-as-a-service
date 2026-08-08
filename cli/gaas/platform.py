@@ -321,6 +321,33 @@ def _basilisk_env(repo_root: Path) -> dict[str, str] | None:
     return None
 
 
+def find_local_assetstorage_wasm(repo_root: Path | None = None) -> Path:
+    """Locate certified-assets canister wasm (assetstorage.wasm.gz) on disk."""
+    if repo_root is not None:
+        dfx_ic = repo_root / ".dfx" / "ic" / "canisters"
+        if dfx_ic.is_dir():
+            for candidate in sorted(dfx_ic.glob("*/assetstorage.wasm.gz")):
+                if candidate.is_file():
+                    return candidate
+
+    from gaas import dfx
+
+    try:
+        cache = dfx._run(["dfx", "cache", "show"], check=True).stdout.strip()
+        cache_path = Path(cache) / "assetstorage.wasm.gz"
+        if cache_path.is_file():
+            return cache_path
+    except dfx.DfxError:
+        pass
+
+    raise PlatformError(
+        "certified-assets canister wasm (assetstorage.wasm.gz) not found; "
+        "deploy a platform frontend with dfx first (creates "
+        ".dfx/ic/canisters/*/assetstorage.wasm.gz) or install dfx so its cache "
+        "contains assetstorage.wasm.gz"
+    )
+
+
 def _local_backend_wasm(repo_root: Path, canister: str) -> Path:
     from gaas import dfx
 

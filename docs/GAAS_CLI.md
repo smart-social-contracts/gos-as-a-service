@@ -348,6 +348,8 @@ gaas new [DESCRIPTOR] [OPTIONS]
 4. Configuring backends (registry, installer, casals `set_settings`)
 5. Seeding file registry
 6. Seeding conductor orchestra (templates, authorized WASMs, sheet, multisig deploy)
+
+   For each GOS entry, the conductor authorizes the **backend realm WASM** from `wasm/<backend_wasm_key>/<version>/` and the **frontend certified-assets canister WASM** (`realms-assetstorage.wasm.gz` under `wasm/realm-assetstorage/<version>/`). The frontend dist bundle remains in `frontend/<frontend_wasm_key>/<version>/` for the realm installer to sync after canister install; it is not registered as an installable WASM module.
 7. Configuring multisig signers
 8. Building + installing frontends
 9. Domain wiring (DNS verify + IC registration)

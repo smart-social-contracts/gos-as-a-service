@@ -14,7 +14,7 @@ from rich.console import Console
 from gaas import dfx
 from gaas.descriptor import Descriptor
 from gaas.file_registry_client import fetch_namespace_hashes, upload_file
-from gaas.platform import resolve_casals_src
+from gaas.platform import find_local_assetstorage_wasm, resolve_casals_src
 from gaas.versions import resolve_deploy_version
 
 console = Console()
@@ -251,6 +251,38 @@ def seed_orchestration_templates(
         )
 
 
+def ensure_assetstorage_wasm(
+    registry_id: str,
+    version: str,
+    network: str,
+    *,
+    identity: str | None = None,
+    repo_root: Path | None = None,
+) -> tuple[str, str, str]:
+    """Upload realm certified-assets wasm to file_registry; return (namespace, path, sha256)."""
+    namespace = f"wasm/realm-assetstorage/{version}"
+    registry_path = "realms-assetstorage.wasm.gz"
+    local_path = find_local_assetstorage_wasm(repo_root)
+    digest = hashlib.sha256(local_path.read_bytes()).hexdigest()
+    existing = fetch_namespace_hashes(
+        registry_id, namespace, network, identity=identity
+    )
+    if existing.get(registry_path) == digest:
+        return namespace, registry_path, digest
+    result = upload_file(
+        registry_id,
+        namespace,
+        registry_path,
+        local_path,
+        network,
+        identity=identity,
+        existing_hashes=existing,
+    )
+    if result == "failed":
+        raise RuntimeError(f"upload failed for {namespace}/{registry_path}")
+    return namespace, registry_path, digest
+
+
 def authorize_gos_entry(
     casals_id: str,
     registry_id: str,
@@ -260,11 +292,11 @@ def authorize_gos_entry(
     *,
     identity: str | None = None,
     session=None,
+    repo_root: Path | None = None,
 ) -> None:
     resolved = resolve_deploy_version(entry.version, entry.release_repo, session=session)
     version = resolved.catalog_version
     backend_ns = f"wasm/{entry.artifacts.backend_wasm_key}/{version}"
-    frontend_ns = f"frontend/{entry.artifacts.frontend_wasm_key}/{version}"
     backend_path = entry.artifacts.resolved_backend_asset(entry.implementation)
 
     backend_hashes = fetch_namespace_hashes(
@@ -298,33 +330,35 @@ def authorize_gos_entry(
             identity=identity,
         )
 
-    frontend_hashes = fetch_namespace_hashes(
-        registry_id, frontend_ns, network, identity=identity
+    frontend_key = f"{entry.artifacts.frontend_wasm_key}@{version}"
+    fe_ns, fe_path, fe_hash = ensure_assetstorage_wasm(
+        registry_id,
+        version,
+        network,
+        identity=identity,
+        repo_root=repo_root,
     )
-    frontend_asset = entry.artifacts.resolved_frontend_asset(entry.implementation)
-    if frontend_hashes:
-        frontend_key = f"{entry.artifacts.frontend_wasm_key}@{version}"
-        fe_path = frontend_asset if frontend_asset in frontend_hashes else next(iter(frontend_hashes), "")
-        fe_hash = frontend_hashes.get(fe_path, "") if fe_path else ""
-        if fe_path and existing.get(frontend_key) != fe_hash:
-            console.print(f"  authorizing {frontend_key} from {frontend_ns}...")
-            _casals_call(
-                casals_id,
-                "add_authorized_wasm",
-                {
-                    "key": entry.artifacts.frontend_wasm_key,
-                    "version": version,
-                    "registry_namespace": frontend_ns,
-                    "registry_path": fe_path,
-                    "wasm_hash": fe_hash,
-                    "kind": "frontend",
-                    "wasm_type": "assets",
-                    "bundle_namespace": frontend_ns,
-                    "description": f"GaaS {entry.implementation} frontend {version}",
-                },
-                network,
-                identity=identity,
-            )
+    if existing.get(frontend_key) != fe_hash:
+        console.print(f"  authorizing {frontend_key} from {fe_ns}...")
+        _casals_call(
+            casals_id,
+            "add_authorized_wasm",
+            {
+                "key": entry.artifacts.frontend_wasm_key,
+                "version": version,
+                "registry_namespace": fe_ns,
+                "registry_path": fe_path,
+                "wasm_hash": fe_hash,
+                "kind": "frontend",
+                "wasm_type": "assets",
+                "description": (
+                    f"GaaS {entry.implementation} frontend {version} "
+                    "(certified-assets wasm)"
+                ),
+            },
+            network,
+            identity=identity,
+        )
 
 
 def ensure_sheet_and_deploy_multisig(

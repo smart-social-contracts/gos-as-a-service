@@ -769,6 +769,12 @@ def phase_seed_conductor(descriptor: Descriptor, ctx: DeployContext) -> None:
     if not casals_id or not registry_id:
         raise RuntimeError("casals_backend and file_registry IDs required")
 
+    repo_root: Path | None = None
+    try:
+        repo_root = _find_repo_root(ctx)
+    except PlatformError:
+        pass
+
     seed_orchestration_templates(
         casals_id,
         registry_id,
@@ -785,6 +791,7 @@ def phase_seed_conductor(descriptor: Descriptor, ctx: DeployContext) -> None:
             ctx.network,
             identity=ctx.identity,
             session=ctx.http,
+            repo_root=repo_root,
         )
     ensure_sheet_and_deploy_multisig(
         casals_id, ctx.network, identity=ctx.identity
