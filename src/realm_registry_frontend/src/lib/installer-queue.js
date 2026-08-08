@@ -2,6 +2,9 @@ import { browser, building } from '$app/environment';
 import { CONFIG } from '$lib/config.js';
 import { getDeploymentProgress } from '$lib/deployment-progress.js';
 import { getObservedStageStarts, toTimestampMs } from '$lib/deployment-stage-timing.js';
+import { pollRecentDeploymentJob } from './deployment-request-recovery.js';
+
+export { isAmbiguousDeploymentRequestError, matchRecentDeploymentJob } from './deployment-request-recovery.js';
 
 const buildingOrTesting = building || process.env.NODE_ENV === 'test';
 
@@ -161,6 +164,14 @@ export async function fetchDeploymentJobsFromInstaller() {
   }
 
   return all;
+}
+
+/** Poll installer jobs after request_deployment returns an ambiguous agent-js reply. */
+export async function findRecentDeploymentJob(options = {}) {
+  return pollRecentDeploymentJob({
+    ...options,
+    fetchJobs: options.fetchJobs ?? fetchDeploymentJobsFromInstaller,
+  });
 }
 
 /**

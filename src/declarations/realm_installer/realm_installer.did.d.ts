@@ -58,6 +58,7 @@ export interface CasalsService {
   'create_canister' : ActorMethod<[string], string>,
   'create_stand' : ActorMethod<[string], string>,
   'destroy_realm_stand' : ActorMethod<[string], string>,
+  'get_cycles_cached' : ActorMethod<[], string>,
   'get_tree' : ActorMethod<[], string>,
   'orchestration_configure_baton' : ActorMethod<[string], string>,
   'orchestration_hand_to_baton' : ActorMethod<[string], string>,

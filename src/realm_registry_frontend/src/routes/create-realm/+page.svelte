@@ -27,6 +27,10 @@
   import { deploymentJobUrl } from '$lib/deployment-url.js';
   import { friendlyNetworkError, retryOnTransientNetworkError } from '$lib/network-retry.js';
   import {
+    findRecentDeploymentJob,
+    isAmbiguousDeploymentRequestError,
+  } from '$lib/installer-queue.js';
+  import {
     openDeployProgress,
     setDeployProgressStep,
     setDeployProgressUploadDetail,
@@ -523,12 +527,29 @@
       const manifestJson = JSON.stringify(manifest);
 
       const registry = await getAuthenticatedRegistryActor();
-      const raw = await withTimeout(
-        retryOnTransientNetworkError(() => registry.request_deployment(manifestJson)),
-        120000,
-        'Deployment request timed out. Check your dashboard before retrying.',
-      );
-      const result = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      let result;
+      try {
+        const raw = await withTimeout(
+          retryOnTransientNetworkError(() => registry.request_deployment(manifestJson)),
+          120000,
+          'Deployment request timed out. Check your dashboard before retrying.',
+        );
+        result = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      } catch (deployErr) {
+        if (isAmbiguousDeploymentRequestError(deployErr)) {
+          const recovered = await findRecentDeploymentJob({
+            callerPrincipal: userPrincipal.toText(),
+            realmName: formData.name,
+          });
+          if (recovered?.job_id) {
+            result = { success: true, job_id: recovered.job_id };
+          } else {
+            throw deployErr;
+          }
+        } else {
+          throw deployErr;
+        }
+      }
 
       if (!result?.success) {
         failAutomaticDeploy(result?.error || 'Deployment request failed');
