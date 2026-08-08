@@ -1,0 +1,100 @@
+"""Post-install bootstrap helpers for the in-realm setup wizard."""
+
+from installer_config import configured_portal_base
+
+
+def manifest_has_codex_block(manifest: dict) -> bool:
+    """True when the manifest carries a legacy realm.codex package block."""
+    realm_info = manifest.get("realm") or {}
+    codex = realm_info.get("codex")
+    if not codex or not isinstance(codex, dict):
+        return False
+    return bool(codex.get("package"))
+
+
+def configure_canister_ids_args(manifest: dict, backend_id: str, frontend_id: str) -> dict:
+    """Build args for the configure_canister_ids deploy step."""
+    return {
+        "backend_canister_id": backend_id,
+        "frontend_canister_id": frontend_id,
+        "file_registry_canister_id": manifest.get("registry_canister_id", ""),
+        "marketplace_canister_id": manifest.get("marketplace_canister_id", ""),
+        "network": manifest.get("network", ""),
+        "requesting_principal": (manifest.get("requesting_principal") or "").strip(),
+        "portal_origin": configured_portal_base(manifest),
+    }
+
+
+def configure_canister_ids_payload(args: dict) -> tuple[dict, list[str]]:
+    """Build set_canister_config_json payload. Returns (payload, warnings)."""
+    warnings = []
+    frontend_id = args.get("frontend_canister_id", "")
+    payload = {"frontend_canister_id": frontend_id}
+
+    registry_id = (args.get("file_registry_canister_id") or "").strip()
+    if registry_id:
+        payload["file_registry_canister_id"] = registry_id
+    marketplace_id = (args.get("marketplace_canister_id") or "").strip()
+    if marketplace_id:
+        payload["marketplace_canister_id"] = marketplace_id
+    network = (args.get("network") or "").strip()
+    if network:
+        payload["network"] = network
+
+    creator = (args.get("requesting_principal") or "").strip()
+    if creator:
+        payload["creator_principal"] = creator
+    else:
+        warnings.append(
+            "requesting_principal missing from manifest; creator_principal not set"
+        )
+
+    portal_origin = (args.get("portal_origin") or "").strip()
+    if portal_origin:
+        payload["portal_origin"] = portal_origin
+
+    return payload, warnings
+
+
+def deploy_step_kinds(manifest: dict) -> list[str]:
+    """Return ordered deploy step kinds matching ``_build_steps``."""
+    kinds = []
+    frontend_id = manifest.get("frontend_canister_id", "")
+    backend_id = manifest.get("target_canister_id", "")
+    if frontend_id and backend_id:
+        kinds.extend(["configure_canister_ids", "grant_frontend_access"])
+
+    for ext in manifest.get("extensions") or []:
+        ext_id = ext.get("id") if isinstance(ext, dict) else None
+        if ext_id:
+            kinds.append("extension")
+
+    for cdx in manifest.get("codices") or []:
+        cdx_id = cdx.get("id") if isinstance(cdx, dict) else None
+        if cdx_id:
+            kinds.append("codex")
+
+    return kinds
+
+
+def resolve_legacy_install_lists(realm_info: dict) -> tuple[list, list]:
+    """Resolve extension and codex install lists from a legacy manifest."""
+    ext_list = []
+    for ext in realm_info.get("extensions") or []:
+        if isinstance(ext, str):
+            ext_list.append({"id": ext})
+        elif isinstance(ext, dict):
+            ext_list.append(ext)
+
+    codex_list = []
+    codex = realm_info.get("codex")
+    if codex and isinstance(codex, dict):
+        pkg = codex.get("package")
+        if isinstance(pkg, str):
+            codex_list.append({"id": pkg, "version": codex.get("version"), "run_init": True})
+        elif isinstance(pkg, dict):
+            codex_list.append(
+                {"id": pkg.get("name", ""), "version": pkg.get("version"), "run_init": True}
+            )
+
+    return ext_list, codex_list

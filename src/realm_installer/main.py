@@ -34,6 +34,12 @@ from provision_kick import (
     should_kick_provision_on_enqueue,
 )
 from claim_args import build_claim_slug_args
+from bootstrap import (
+    configure_canister_ids_args,
+    configure_canister_ids_payload,
+    manifest_has_codex_block,
+    resolve_legacy_install_lists,
+)
 from ic_assets import ensure_frame_ancestor, portal_url_to_origin
 from installer_config import (
     InstallerConfig,
@@ -983,16 +989,16 @@ def _count_expected_steps(manifest: dict, backend_id: str = "", frontend_id: str
     deploy_scope = (manifest.get("deploy_scope") or "both").strip()
     has_pair = bool((backend_id or "").strip() and (frontend_id or "").strip())
     if has_pair or deploy_scope == "both":
-        count += 1
+        count += 2  # configure_canister_ids + grant_frontend_access
+    if not manifest_has_codex_block(manifest):
+        return count
     realm_info = manifest.get("realm") or {}
     for ext in (realm_info.get("extensions") or []):
         if isinstance(ext, str) and ext.strip():
             count += 1
         elif isinstance(ext, dict) and (ext.get("id") or "").strip():
             count += 1
-    codex = realm_info.get("codex")
-    if codex and isinstance(codex, dict) and codex.get("package"):
-        count += 1
+    count += 1  # codex install step
     return count
 
 
@@ -1006,13 +1012,7 @@ def _build_steps(task, manifest: dict) -> list:
         _log.info(f"[{task.name}] step {idx}: configure_canister_ids frontend={frontend_id}")
         steps.append(DeployStep(
             task=task, idx=idx, kind="configure_canister_ids", label="configure_canister_ids",
-            args_json=json.dumps({
-                "backend_canister_id": backend_id,
-                "frontend_canister_id": frontend_id,
-                "file_registry_canister_id": manifest.get("registry_canister_id", ""),
-                "marketplace_canister_id": manifest.get("marketplace_canister_id", ""),
-                "network": manifest.get("network", ""),
-            }),
+            args_json=json.dumps(configure_canister_ids_args(manifest, backend_id, frontend_id)),
             status="pending",
         ))
         idx += 1
@@ -1124,20 +1124,16 @@ def _execute_configure_canister_ids(task, step, args):
         step.completed_at = now_s()
         return
 
-    payload = {"frontend_canister_id": frontend_id}
-    registry_id = (args.get("file_registry_canister_id") or "").strip()
-    if registry_id:
-        payload["file_registry_canister_id"] = registry_id
-    marketplace_id = (args.get("marketplace_canister_id") or "").strip()
-    if marketplace_id:
-        payload["marketplace_canister_id"] = marketplace_id
-    network = (args.get("network") or "").strip()
-    if network:
-        payload["network"] = network
+    payload, config_warnings = configure_canister_ids_payload(args)
+    for msg in config_warnings:
+        jlog(task.name).warning(msg)
+    creator = (args.get("requesting_principal") or "").strip()
 
     jlog(task.name).info(
         f"setting canister config on backend {backend_id}: frontend={frontend_id}, "
-        f"file_registry={registry_id or '–'}, marketplace={marketplace_id or '–'}"
+        f"file_registry={(args.get('file_registry_canister_id') or '').strip() or '–'}, "
+        f"marketplace={(args.get('marketplace_canister_id') or '').strip() or '–'}, "
+        f"creator={'set' if creator else 'missing'}"
     )
     config_json = json.dumps(payload).replace("\\", "\\\\").replace('"', '\\"')
     config_arg = '("' + config_json + '")'
@@ -1526,62 +1522,50 @@ def _start_extensions_for_job(job, manifest: dict) -> Async[None]:
         "registry_canister_id": registry_id,
         "marketplace_canister_id": marketplace_id,
         "network": network,
+        "requesting_principal": (manifest.get("requesting_principal") or "").strip(),
+        "federation": manifest.get("federation") or {},
     }
     ext_list = []
-    for ext in raw_exts:
-        if isinstance(ext, str):
-            ext_list.append({"id": ext})
-        elif isinstance(ext, dict):
-            ext_list.append(ext)
-    if ext_list:
-        ext_manifest["extensions"] = ext_list
-    jlog(job.name).info(f"resolved {len(ext_list)} extensions")
-
     codex_list = []
-    codex = realm_info.get("codex")
-    if codex and isinstance(codex, dict):
-        pkg = codex.get("package")
-        if isinstance(pkg, str):
-            codex_list.append({"id": pkg, "version": codex.get("version"), "run_init": True})
-        elif isinstance(pkg, dict):
-            codex_list.append({"id": pkg.get("name", ""), "version": pkg.get("version"), "run_init": True})
-        else:
-            # A codex dict without a usable "package" means the caller used a
-            # different shape (e.g. {"codex_id": ...}). Silently skipping it
-            # deploys a codex-less realm with zero dependency extensions —
-            # found when a custom deploy client did exactly that (R7).
+    has_codex_block = manifest_has_codex_block(manifest)
+    if has_codex_block:
+        ext_list, codex_list = resolve_legacy_install_lists(realm_info)
+        if ext_list:
+            ext_manifest["extensions"] = ext_list
+        jlog(job.name).info(f"resolved {len(ext_list)} extensions")
+
+        codex = realm_info.get("codex")
+        if codex and isinstance(codex, dict) and not codex_list:
             jlog(job.name).error(
                 f"realm.codex has no 'package' field (keys: {sorted(codex.keys())}) — "
                 "the realm will deploy WITHOUT a codex or its dependency extensions"
             )
-    elif codex:
-        jlog(job.name).error(
-            f"realm.codex is a {type(codex).__name__}, expected dict with 'package' — "
-            "the realm will deploy WITHOUT a codex or its dependency extensions"
-        )
-    if codex_list:
-        ext_manifest["codices"] = codex_list
+        elif codex and not isinstance(codex, dict):
+            jlog(job.name).error(
+                f"realm.codex is a {type(codex).__name__}, expected dict with 'package' — "
+                "the realm will deploy WITHOUT a codex or its dependency extensions"
+            )
+        if codex_list:
+            ext_manifest["codices"] = codex_list
 
-    seen = {str(e.get("id")) for e in ext_list if e.get("id")}
-    for cdx in codex_list:
-        cdx_id = (cdx.get("id") or "").strip()
-        if not cdx_id:
-            continue
-        deps = yield from _fetch_codex_dependency_ids(registry_id, cdx_id, cdx.get("version"))
-        for dep in deps:
-            if dep not in seen:
-                ext_list.append({"id": dep})
-                seen.add(dep)
-    if ext_list:
-        ext_manifest["extensions"] = ext_list
+        seen = {str(e.get("id")) for e in ext_list if e.get("id")}
+        for cdx in codex_list:
+            cdx_id = (cdx.get("id") or "").strip()
+            if not cdx_id:
+                continue
+            deps = yield from _fetch_codex_dependency_ids(registry_id, cdx_id, cdx.get("version"))
+            for dep in deps:
+                if dep not in seen:
+                    ext_list.append({"id": dep})
+                    seen.add(dep)
+        if ext_list:
+            ext_manifest["extensions"] = ext_list
+    else:
+        jlog(job.name).info(
+            "no realm.codex block; skipping codex/extension installs (bootstrap only)"
+        )
 
     jlog(job.name).info(f"resolved {len(codex_list)} codices, {len(ext_list)} extension steps")
-
-    if not ext_list and not codex_list:
-        jlog(job.name).info("no extensions or codices to install, skipping to registration")
-        job.status = "registering"
-        schedule_registration(job.name)
-        return
 
     try:
         task_id = "deploy_%d" % ic.time()
@@ -2814,18 +2798,11 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
         job.frontend_wasm_verified = 1
     job.registry_canister_id = job.registry_canister_id or (manifest.get("registry_canister_id") or "").strip()
 
-    # 5. Domain tail: same as the off-chain success path (extensions/codices
-    # then registration; credit settlement happens at the end of that chain).
-    exts = realm_info.get("extensions")
-    cdx = realm_info.get("codex")
-    if bool(exts) or bool(cdx):
-        job.status = "extensions"
-        jlog(job_id).info("entering extensions phase (casals path)")
-        yield from _start_extensions_for_job(job, manifest)
-    else:
-        job.status = "registering"
-        jlog(job_id).info("no extensions/codex; scheduling registration (casals path)")
-        schedule_registration(job.name)
+    # 5. Domain tail: bootstrap (configure_canister_ids, grant_frontend_access)
+    # then optional legacy codex/extension installs, then registration.
+    job.status = "extensions"
+    jlog(job_id).info("entering bootstrap/extensions phase (casals path)")
+    yield from _start_extensions_for_job(job, manifest)
 
     return ProvisionOk(
         job_id=job_id, status=job.status or "", stand=stand,
@@ -3101,19 +3078,14 @@ def report_frontend_verified(args: text) -> Async[ResultReportFrontend]:
                 job.assets_verified = 1
                 manifest = json.loads(job.manifest_json or "{}")
                 realm_info = manifest.get("realm", {})
-                exts = realm_info.get("extensions")
-                cdx = realm_info.get("codex")
-                has_work = bool(exts) or bool(cdx)
-                jlog(job_id).info(f"frontend verified: has_work={has_work}, extensions={type(exts).__name__}({len(exts) if isinstance(exts, list) else exts}), codex={type(cdx).__name__}")
-                jlog(job_id).info(f"manifest_json length={len(job.manifest_json or '')}, realm_info keys={list(realm_info.keys())}")
-                if has_work:
-                    job.status = "extensions"
-                    jlog(job_id).info("entering extensions phase")
-                    yield from _start_extensions_for_job(job, manifest)
-                else:
-                    job.status = "registering"
-                    jlog(job_id).info("no work, skipping to registration")
-                    schedule_registration(job.name)
+                has_codex = manifest_has_codex_block(manifest)
+                jlog(job_id).info(
+                    f"frontend verified: has_codex_block={has_codex}, "
+                    f"realm_info keys={list(realm_info.keys())}"
+                )
+                job.status = "extensions"
+                jlog(job_id).info("entering bootstrap/extensions phase")
+                yield from _start_extensions_for_job(job, manifest)
 
         return ResultReportFrontend(Ok=ReportFrontendOk(
             job_id=job_id, status=job.status or "",
