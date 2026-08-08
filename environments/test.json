@@ -25,7 +25,10 @@
   },
   "casals": {
     "version": "main",
-    "release_repo": "smart-social-contracts/Casals"
+    "release_repo": "smart-social-contracts/Casals",
+    "commanders": [
+      "3itd6-2sx7g-vefdk-xhebm-fucot-llay5-lhqd6-pkjac-m7mkf-vhwqq-fqe"
+    ]
   },
   "multisig": {
     "backend_id": "3iqx7-eyaaa-aaaae-agyxq-cai"
