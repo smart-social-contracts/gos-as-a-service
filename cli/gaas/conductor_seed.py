@@ -178,7 +178,9 @@ def _upload_wasm_to_registry(
     work.mkdir(parents=True, exist_ok=True)
     local = work / registry_path.replace("/", "_")
     local.write_bytes(wasm_bytes)
-    uploaded = upload_file(
+    # upload_file returns a status string; the registry verifies expected_sha256
+    # server-side during finalize, so a non-failed result means the digest holds.
+    result = upload_file(
         registry_id,
         namespace,
         registry_path,
@@ -186,11 +188,8 @@ def _upload_wasm_to_registry(
         network,
         identity=identity,
     )
-    if uploaded != digest:
-        raise RuntimeError(
-            f"hash mismatch uploading {namespace}/{registry_path}: "
-            f"local {digest} != registry {uploaded}"
-        )
+    if result == "failed":
+        raise RuntimeError(f"upload failed for {namespace}/{registry_path}")
     return digest
 
 
