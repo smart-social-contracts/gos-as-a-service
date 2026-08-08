@@ -58,6 +58,7 @@ export interface CasalsService {
   'create_canister' : ActorMethod<[string], string>,
   'create_stand' : ActorMethod<[string], string>,
   'destroy_realm_stand' : ActorMethod<[string], string>,
+  'get_cycles_cached' : ActorMethod<[], string>,
   'get_tree' : ActorMethod<[], string>,
   'orchestration_configure_baton' : ActorMethod<[string], string>,
   'orchestration_hand_to_baton' : ActorMethod<[string], string>,
@@ -356,6 +357,7 @@ export interface RealmRecord {
   'logo' : string,
   'name' : string,
   'created_at' : number,
+  'listing_status' : string,
   'backend_url' : string,
   'frontend_canister_id' : string,
   'users_count' : bigint,
@@ -563,6 +565,7 @@ export interface _SERVICE {
   'list_versions' : ActorMethod<[], string>,
   'publish_version' : ActorMethod<[string], UpgradeResult>,
   'realm_count' : ActorMethod<[], bigint>,
+  'realm_setup_completed' : ActorMethod<[string], string>,
   'redeem_invitation_code' : ActorMethod<[string], GenericResult>,
   'register_realm' : ActorMethod<
     [string, string, string, string, string],

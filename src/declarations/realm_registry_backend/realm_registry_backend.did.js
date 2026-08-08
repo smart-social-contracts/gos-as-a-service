@@ -35,6 +35,7 @@ export const idlFactory = ({ IDL }) => {
     'logo' : IDL.Text,
     'name' : IDL.Text,
     'created_at' : IDL.Float64,
+    'listing_status' : IDL.Text,
     'backend_url' : IDL.Text,
     'frontend_canister_id' : IDL.Text,
     'users_count' : IDL.Nat64,
@@ -123,6 +124,7 @@ export const idlFactory = ({ IDL }) => {
     'list_versions' : IDL.Func([], [IDL.Text], ['query']),
     'publish_version' : IDL.Func([IDL.Text], [UpgradeResult], []),
     'realm_count' : IDL.Func([], [IDL.Nat64], ['query']),
+    'realm_setup_completed' : IDL.Func([IDL.Text], [IDL.Text], []),
     'redeem_invitation_code' : IDL.Func([IDL.Text], [GenericResult], []),
     'register_realm' : IDL.Func(
         [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text],
