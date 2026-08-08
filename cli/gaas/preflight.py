@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from rich.console import Console
+
 from gaas import dfx
+from gaas.cycles_plan import CyclesPlan, build_cycles_plan, print_cycles_plan
 from gaas.descriptor import Descriptor
 from gaas.known import (
     DEFAULT_CYCLES_PER_CANISTER,
@@ -12,6 +15,8 @@ from gaas.known import (
     DEFAULT_REQUIRED_CYCLES,
     KNOWN_CANISTER_NAMES,
 )
+
+_console = Console()
 
 
 @dataclass
@@ -28,6 +33,7 @@ class PreflightReport:
     checks: list[PreflightCheck] = field(default_factory=list)
     required_cycles: int = DEFAULT_REQUIRED_CYCLES
     available_cycles: int | None = None
+    cycles_plan: CyclesPlan | None = None
 
     @property
     def ok(self) -> bool:
@@ -40,9 +46,9 @@ def run_preflight(
     network: str,
     *,
     required_cycles: int = DEFAULT_REQUIRED_CYCLES,
+    console: Console | None = None,
 ) -> PreflightReport:
-    # Only canisters absent from the descriptor need creation cycles; adopted
-    # canisters pay for their own installs from their existing balances.
+    # Legacy estimate kept for summary output; detailed plan replaces this on ic.
     to_create = [n for n in KNOWN_CANISTER_NAMES if n not in descriptor.canisters]
     if to_create:
         required_cycles = (
@@ -55,6 +61,7 @@ def run_preflight(
         network=network,
         required_cycles=required_cycles,
     )
+    out = console or _console
 
     if dfx.identity_exists(identity):
         report.checks.append(
@@ -95,43 +102,42 @@ def run_preflight(
 
     if network == "ic":
         try:
-            balance = dfx.cycles_balance(network)
-            report.available_cycles = balance
-            if balance is None:
+            plan = build_cycles_plan(descriptor, network, identity=identity)
+            report.cycles_plan = plan
+            report.required_cycles = plan.wallet_required
+            wallet_item = next(item for item in plan.items if item.label == "wallet")
+            report.available_cycles = wallet_item.available
+            print_cycles_plan(plan, out)
+
+            if plan.ok:
                 report.checks.append(
                     PreflightCheck(
-                        name="cycles_balance",
-                        passed=False,
-                        detail="could not parse cycles balance on ic",
-                    )
-                )
-            elif balance >= required_cycles:
-                report.checks.append(
-                    PreflightCheck(
-                        name="cycles_balance",
+                        name="cycles_plan",
                         passed=True,
-                        detail=(
-                            f"available: {balance:,} cycles; "
-                            f"required estimate: {required_cycles:,} cycles"
-                        ),
+                        detail="wallet and canister cycles sufficient for deploy estimate",
                     )
                 )
             else:
+                short_items = [
+                    item.label
+                    for item in plan.items
+                    if item.shortfall > 0
+                ]
+                detail = (
+                    f"insufficient cycles for: {', '.join(short_items)}; "
+                    "see cycles plan table and remediation commands above"
+                )
                 report.checks.append(
                     PreflightCheck(
-                        name="cycles_balance",
+                        name="cycles_plan",
                         passed=False,
-                        detail=(
-                            f"insufficient cycles: have {balance:,}, "
-                            f"need ~{required_cycles:,} "
-                            f"({len(to_create)} canisters to create × 1T + 2T install buffer)"
-                        ),
+                        detail=detail,
                     )
                 )
         except dfx.DfxError as exc:
             report.checks.append(
                 PreflightCheck(
-                    name="cycles_balance",
+                    name="cycles_plan",
                     passed=False,
                     detail=str(exc),
                 )

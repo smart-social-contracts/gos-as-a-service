@@ -35,10 +35,9 @@ def _print_preflight(report: PreflightReport) -> None:
         status = "[green]pass[/green]" if check.passed else "[red]fail[/red]"
         table.add_row(check.name, status, check.detail)
     console.print(table)
-    if report.network == "ic":
+    if report.network == "ic" and report.cycles_plan is None:
         console.print(
-            f"Required cycles estimate: {report.required_cycles:,} "
-            f"(override with descriptor tooling in a future release)"
+            f"Required cycles estimate: {report.required_cycles:,} cycles"
         )
 
 

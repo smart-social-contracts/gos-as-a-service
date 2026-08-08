@@ -236,6 +236,21 @@ def parse_cycles_balance(text: str) -> int | None:
     return None
 
 
+def parse_canister_cycles_balance(status_raw: str) -> int | None:
+    """Extract cycles balance from `dfx canister status` output."""
+    for line in status_raw.splitlines():
+        if line.lower().startswith("balance:"):
+            return parse_cycles_balance(line)
+    return parse_cycles_balance(status_raw)
+
+
+def canister_cycles_balance(
+    canister_id: str, network: str, *, identity: str | None = None
+) -> int | None:
+    status = canister_status(canister_id, network, identity=identity)
+    return parse_canister_cycles_balance(status.raw)
+
+
 def ping_local() -> bool:
     result = _run(["dfx", "ping", "local"], check=False)
     return result.returncode == 0

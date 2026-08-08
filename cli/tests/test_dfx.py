@@ -46,6 +46,23 @@ def test_parse_cycles_balance_unparseable():
     assert parse_cycles_balance("no balance here") is None
 
 
+def test_parse_canister_cycles_balance_from_status():
+    from gaas.dfx import parse_canister_cycles_balance
+
+    raw_tc = (
+        "Canister status call result for yhw3g-fyaaa-aaaas-qgorq-cai.\n"
+        "Status: Running\n"
+        "Balance: 0.604 TC (trillion cycles)\n"
+    )
+    assert parse_canister_cycles_balance(raw_tc) == 604_000_000_000
+
+    raw_cycles = (
+        "Status: Running\n"
+        "Balance: 3_072_815_616 cycles\n"
+    )
+    assert parse_canister_cycles_balance(raw_cycles) == 3_072_815_616
+
+
 def test_deploy_assets_retries_transient_ic0536(tmp_path, monkeypatch):
     from gaas import dfx
 

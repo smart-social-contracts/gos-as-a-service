@@ -200,9 +200,24 @@ In production (no test mode), gaas loses IC control after this phase — it must
 | `realms-gos` | Realms GOS | `v0.3.1` | `smart-social-contracts/realms` | `realms-iframe-v1` |
 | `chora-gos` | Chora GOS | `v0.1.0` | `smart-social-contracts/chora` | `chora-iframe-v1` (unavailable) |
 
-### Cycles estimate (`known.py`)
+### Cycles estimate (`known.py` / preflight)
 
-Default required cycles: **9 trillion** (`7 canisters × 1T + 2T install buffer`).
+Preflight on `--network ic` builds a **cycles plan** before deploy: wallet requirements for canisters not yet in the descriptor (creation fee + initial funding), plus minimum in-canister headroom for canisters already listed. It queries `dfx cycles balance` and `dfx canister status` for each adopted canister, prints a table, and fails with remediation commands when anything is short.
+
+Example output (fresh deploy, all canisters missing):
+
+```
+                              Cycles plan
+┏━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┓
+┃ Item     ┃ Required ┃ Available ┃ Shortfall ┃
+┡━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━┩
+│ wallet   │   4.2 TC │    3.0 TC │    1.2 TC │
+└──────────┴──────────┴───────────┴───────────┘
+Suggested remediation:
+  dfx cycles convert --amount=1.5 --network ic
+```
+
+Default wallet estimate per missing canister: **0.6 TC** (0.1T creation + 0.5T initial funding). Canister headrooms: `file_registry` 0.5T, `realm_installer` 0.3T, `casals_backend` 1T (+2T when `multisig.backend_id` is unset), others 0.2T.
 
 ## Prerequisites
 
@@ -210,7 +225,7 @@ Default required cycles: **9 trillion** (`7 canisters × 1T + 2T install buffer`
 |---|---|
 | **dfx** | DFINITY SDK installed and on `PATH`. gaas sets `TERM=xterm` and `DFX_WARNING=-mainnet_plaintext_identity`. |
 | **dfx identity** | Named identity with controller access to target canisters. Create with `dfx identity new <name>`. |
-| **Cycles (IC mainnet)** | ~9T cycles recommended. Check balance: `dfx cycles balance --network ic`. Top up via the [cycles ledger](https://internetcomputer.org/docs/current/developer-docs/setup/cycles/cycles-wallet) or IC faucet for test principals. |
+| **Cycles (IC mainnet)** | Preflight estimates wallet + canister requirements from the descriptor. Check balance: `dfx cycles balance --network ic`. Top up via the [cycles ledger](https://internetcomputer.org/docs/current/developer-docs/setup/cycles/cycles-wallet) or IC faucet for test principals. |
 | **Local replica** | For `--network local`: `dfx start --background` before deploy. Preflight runs `dfx ping local`. |
 | **Node.js / npm** | Required for registry and file-registry frontend builds during the install-frontends phase. |
 | **Casals checkout (fallback)** | If Casals release artifacts are unavailable, gaas may fall back to a local Casals repo checkout. Keep a clone of [smart-social-contracts/Casals](https://github.com/smart-social-contracts/Casals) handy. |
@@ -299,7 +314,7 @@ gaas descriptors are designed for **any domain** — nothing hardcodes `gos.eart
 | Realm deploy pulls wrong GOS version | Pin drift across repos | Single `gos[].version` pin in the descriptor; file registry seeded from that release |
 | Empty `file_registry` canister ID | ID is assigned at first `dfx canister create` | Omit `file_registry` from `canisters` on fresh deploy; gaas writes the generated ID back to state |
 | DNS verify loop times out | Registrar propagation delay or wrong host labels | Run `gaas dns-records <file>` and compare; re-run deploy after fixing records |
-| Preflight: insufficient cycles | Wallet below 9T estimate | `dfx cycles balance --network ic`; top up via cycles ledger |
+| Preflight: insufficient cycles | Wallet or canister below deploy estimate | Preflight prints a cycles plan table with `dfx cycles convert` / `dfx cycles top-up` remediation |
 | Preflight: identity not found | Wrong `--identity` | `dfx identity list`; create or select the correct identity |
 | Casals artifact fetch fails | Release missing or network error | Ensure `casals.version` tag exists on GitHub; keep a local Casals checkout as fallback |
 
