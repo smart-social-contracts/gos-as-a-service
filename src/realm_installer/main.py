@@ -9,6 +9,14 @@ import hashlib
 import json
 import traceback
 
+from baton_deferral import (
+    build_baton_handoff_payload,
+    decode_baton_handoff_payload,
+    encode_baton_handoff_payload,
+    hand_targets_from_payload,
+    should_record_deferred_baton,
+    should_run_deferred_baton_handoff,
+)
 from claim_args import build_claim_slug_args
 from ic_assets import ensure_frame_ancestor, portal_url_to_origin
 from installer_config import (
@@ -146,6 +154,9 @@ class DeploymentJob(Entity, TimestampedMixin):
     snapshot_id = String(max_length=200, default="")
     snapshot_taken = Integer(default=0)
     skip_snapshot = Integer(default=0)
+    baton_pending = Integer(default=0)
+    baton_canister_id = String(max_length=64, default="")
+    baton_handoff_json = String(max_length=2048, default="")
     error = String(max_length=2000)
     created_at = Integer(default=0)
     completed_at = Integer(default=0)
@@ -856,6 +867,12 @@ def schedule_registration(job_id_val: str):
                         jlog(job_id_val).info(f"admin invite hash stored on backend")
                 except Exception as invite_err:
                     jlog(job_id_val).error(f"store_admin_invite_hash error: {invite_err}")
+
+            # Deferred baton hand-off (Casals path): after extensions (if any)
+            # and all backend/frontend prep above, but before registry.register_realm.
+            # The installer must stay an IC controller through bootstrap; hand-off
+            # removes it. Topology is a hard requirement — failure fails the job.
+            yield from _run_deferred_baton_handoff(j)
 
             registry = RealmRegistryService(Principal.from_str(reg_id))
             result: CallResult = yield registry.register_realm(
@@ -2350,6 +2367,45 @@ def _setup_stand_baton(casals, job_id: str, stand: str, casals_id: str,
     return baton_id
 
 
+def _run_deferred_baton_handoff(job: DeploymentJob):
+    """Execute a pending stand baton hand-off recorded during provision_via_casals."""
+    cfg = _config()
+    if not should_run_deferred_baton_handoff(
+        baton_pending=int(job.baton_pending or 0),
+        baton_canister_id=job.baton_canister_id or "",
+        create_stand_baton=bool(int(cfg.create_stand_baton or 0)),
+    ):
+        return
+
+    raw = (job.baton_handoff_json or "").strip()
+    if not raw:
+        raise RuntimeError("baton hand-off pending but baton_handoff_json is empty")
+
+    payload = decode_baton_handoff_payload(raw)
+    stand = (payload.get("stand") or "").strip()
+    casals_id = (payload.get("casals_id") or "").strip()
+    baton_key = (payload.get("baton_key") or cfg.baton_wasm_key or "orchestration-baton").strip()
+    backend_id = (payload.get("backend_id") or job.backend_canister_id or "").strip()
+    hand_targets = hand_targets_from_payload(payload)
+
+    if not stand or not casals_id:
+        raise RuntimeError("baton hand-off payload missing stand or casals_id")
+    if not hand_targets:
+        raise RuntimeError("baton hand-off payload has no hand targets")
+
+    jlog(job.name).info(
+        f"running deferred baton hand-off for stand '{stand}' ({len(hand_targets)} targets)"
+    )
+    casals = CasalsService(Principal.from_str(casals_id))
+    baton_id = yield from _setup_stand_baton(
+        casals, job.name, stand, casals_id, baton_key,
+        hand_targets, backend_id,
+    )
+    job.baton_canister_id = baton_id
+    job.baton_pending = 0
+    jlog(job.name).info(f"deferred baton hand-off complete: {baton_id}")
+
+
 @update
 def configure(args: text) -> text:
     """Controller-only descriptor config: registry_backend_id, file_registry_id,
@@ -2515,10 +2571,16 @@ def provision_via_casals(job_id: text) -> Async[ResultProvision]:
                         f"stand token provisioning failed (non-fatal): {tok_err}"
                     )
 
-        # 3b. Per-realm Baton governance (opt-in): stand baton + hand-offs +
-        # 2-of-2 (casals-backend + realm-backend) approval policy.
-        baton_id = ""
-        if int(cfg.create_stand_baton or 0):
+        # 3b. Per-realm Baton governance (opt-in): record hand-off for after
+        # bootstrap. _setup_stand_baton removes the installer from canister
+        # controllers, so it must not run until set_quarter_provisioning_config,
+        # extension installs, and schedule_registration prep are done.
+        baton_id = (job.baton_canister_id or "").strip()
+        if should_record_deferred_baton(
+            create_stand_baton=bool(int(cfg.create_stand_baton or 0)),
+            baton_pending=int(job.baton_pending or 0),
+            baton_canister_id=baton_id,
+        ):
             baton_key = (cas.get("baton_wasm_key") or cfg.baton_wasm_key
                          or "orchestration-baton").strip()
             hand_targets = []
@@ -2528,9 +2590,18 @@ def provision_via_casals(job_id: text) -> Async[ResultProvision]:
                 hand_targets.append((f"{stand}-frontend", frontend_id))
             if token_id:
                 hand_targets.append((f"{stand}-token", token_id))
-            baton_id = yield from _setup_stand_baton(
-                casals, job_id, stand, casals_id, baton_key,
-                hand_targets, backend_id if want_backend else "",
+            job.baton_pending = 1
+            job.baton_handoff_json = encode_baton_handoff_payload(
+                build_baton_handoff_payload(
+                    stand=stand,
+                    casals_id=casals_id,
+                    baton_key=baton_key,
+                    hand_targets=hand_targets,
+                    backend_id=backend_id if want_backend else "",
+                )
+            )[:2048]
+            jlog(job_id).info(
+                f"baton hand-off deferred until post-bootstrap ({len(hand_targets)} targets)"
             )
 
         # 4. Make the realm backend the Stand commander so it can self-upgrade.
