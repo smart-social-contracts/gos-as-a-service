@@ -19,9 +19,7 @@
     "version": "v0.3.0",
     "release_repo": "smart-social-contracts/Casals"
   },
-  "services": {
-    "open_mode": true
-  },
+  "services": {},
   "dns": {
     "provider": "manual"
   }

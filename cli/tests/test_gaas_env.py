@@ -46,3 +46,15 @@ def test_domain_and_network_propagate():
     env = build_gaas_env(_descriptor(), "ic")
     assert env["domain"] == "test.gos.earth"
     assert env["network"] == "ic"
+
+
+def test_flags_omitted_when_empty():
+    env = build_gaas_env(_descriptor(), "ic")
+    assert "flags" not in env
+
+
+def test_flags_included_when_set():
+    desc = _descriptor()
+    desc.flags["open_mode"] = True
+    env = build_gaas_env(desc, "ic")
+    assert env["flags"] == {"open_mode": True}

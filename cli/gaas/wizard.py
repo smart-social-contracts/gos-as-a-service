@@ -286,21 +286,18 @@ def run_wizard(
     if billing_url is None:
         raise SystemExit(0)
 
-    open_mode = True
-    if billing_url.strip():
-        open_mode_answer = prompt.confirm(
-            "Open mode (skip credit holds for realm deployments)?",
-            default=False,
-        ).ask()
-        if open_mode_answer is None:
-            raise SystemExit(0)
-        open_mode = bool(open_mode_answer)
-
     deploy_url = prompt.text(
         "Deploy service URL (optional, https):",
         validate=_validate_https_optional,
     ).ask()
     if deploy_url is None:
+        raise SystemExit(0)
+
+    open_mode = prompt.confirm(
+        "Enable open mode (skip billing credit checks)?",
+        default=False,
+    ).ask()
+    if open_mode is None:
         raise SystemExit(0)
 
     default_path = Path.cwd() / f"{name}.gaas.json"
@@ -311,6 +308,10 @@ def run_wizard(
     if output_raw is None:
         raise SystemExit(0)
     output_path = Path(output_raw.strip())
+
+    flags: dict[str, bool] = {}
+    if open_mode:
+        flags["open_mode"] = True
 
     descriptor = Descriptor(
         name=name,
@@ -325,8 +326,8 @@ def run_wizard(
         services=ServicesConfig(
             billing_url=billing_url.strip() or None,
             deploy_url=deploy_url.strip() or None,
-            open_mode=open_mode,
         ),
+        flags=flags,
         dns=DnsConfig(provider="manual"),
     )
 

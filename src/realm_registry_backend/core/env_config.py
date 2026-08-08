@@ -15,6 +15,7 @@ from core.models import RegistryConfig
 _PORTAL_URL_KEY = "env:portal_url"
 _BILLING_URL_KEY = "env:billing_url"
 _OPEN_MODE_KEY = "env:open_mode"
+_INSTALLER_ID_KEY = "env:installer_id"
 
 
 def _truthy(val: str) -> bool:
@@ -37,6 +38,11 @@ def is_open_mode() -> bool:
     return cfg is not None and _truthy(cfg.value)
 
 
+def get_installer_id() -> str:
+    cfg = RegistryConfig[_INSTALLER_ID_KEY]
+    return (cfg.value if cfg else "").strip()
+
+
 def apply_env_config(params: dict) -> None:
     """Persist env config fields present in *params* (all optional)."""
     if "portal_url" in params:
@@ -48,6 +54,9 @@ def apply_env_config(params: dict) -> None:
     if "open_mode" in params:
         val = "true" if params.get("open_mode") else "false"
         _set_key(_OPEN_MODE_KEY, val)
+    if "installer_id" in params:
+        val = (params.get("installer_id") or "").strip()
+        _set_key(_INSTALLER_ID_KEY, val)
 
 
 def apply_env_config_from_json(args: str) -> dict:
@@ -64,6 +73,7 @@ def get_env_config_payload() -> dict:
         "portal_url": get_portal_url(),
         "billing_url": get_billing_url(),
         "open_mode": is_open_mode(),
+        "installer_id": get_installer_id(),
     }
 
 

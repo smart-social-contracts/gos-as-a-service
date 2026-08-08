@@ -29,7 +29,9 @@
   },
   "services": {
     "billing_url": "https://billing.realmsgos.dev",
-    "deploy_url": "https://deploy.realmsgos.dev",
+    "deploy_url": "https://deploy.realmsgos.dev"
+  },
+  "flags": {
     "open_mode": true
   },
   "dns": {

@@ -124,6 +124,7 @@ class Descriptor(BaseModel):
     casals: CasalsConfig
     platform: PlatformConfig | None = None
     services: ServicesConfig = Field(default_factory=ServicesConfig)
+    flags: dict[str, bool] = Field(default_factory=dict)
     dns: DnsConfig = Field(default_factory=DnsConfig)
 
     @field_validator("name")

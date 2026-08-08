@@ -45,6 +45,8 @@ def build_gaas_env(descriptor: Descriptor, network: str) -> dict:
         payload["services"]["deploy_url"] = descriptor.services.deploy_url
     if not payload["services"]:
         del payload["services"]
+    if descriptor.flags:
+        payload["flags"] = descriptor.flags
     return payload
 
 

@@ -15,10 +15,8 @@ from gaas.phases import (
     _installer_config_json,
     _opt_text_init_arg,
     _registry_config_json,
-    _resolve_open_mode,
     phase_create_canisters,
     phase_domain_wiring,
-    phase_seed_file_registry,
     run_phases,
 )
 from gaas.gaas_env import build_gaas_env
@@ -116,41 +114,64 @@ def test_create_canisters_adopt_vs_create(
 
 def test_registry_init_json_open_mode() -> None:
     desc = Descriptor.model_validate(SAMPLE_DESCRIPTOR)
-    open_json = json.loads(_registry_config_json(desc))
+    default_json = json.loads(_registry_config_json(desc))
+    # No billing_url in SAMPLE_DESCRIPTOR → derived open mode, always explicit.
+    assert default_json["open_mode"] is True
+    assert default_json["portal_url"] == "https://test.gos.earth"
+
+    open_desc = desc.model_copy(update={"flags": {"open_mode": True}})
+    open_json = json.loads(_registry_config_json(open_desc))
     assert open_json["open_mode"] is True
-    assert open_json["portal_url"] == "https://test.gos.earth"
 
     billed = desc.model_copy(
         update={
             "services": ServicesConfig(
                 billing_url="https://billing.example.com",
                 deploy_url=None,
-            )
+            ),
+            "flags": {"open_mode": True},
         }
     )
     billed_json = json.loads(_registry_config_json(billed))
-    assert billed_json["open_mode"] is False
-    assert billed_json["billing_url"] == "https://billing.example.com"
+    assert billed_json["open_mode"] is True
 
-
-def test_registry_init_json_open_mode_explicit() -> None:
-    desc = Descriptor.model_validate(SAMPLE_DESCRIPTOR)
-    billed_open = desc.model_copy(
+    # Billing present, nothing explicit → derived closed.
+    billed_only = desc.model_copy(
         update={
             "services": ServicesConfig(
                 billing_url="https://billing.example.com",
-                open_mode=True,
-            )
+                deploy_url=None,
+            ),
         }
     )
-    assert json.loads(_registry_config_json(billed_open))["open_mode"] is True
-    assert _resolve_open_mode(billed_open) is True
+    assert json.loads(_registry_config_json(billed_only))["open_mode"] is False
 
-    forced_closed = desc.model_copy(
-        update={"services": ServicesConfig(open_mode=False)}
+    # Deprecated services.open_mode alias still honored when flags lack the key.
+    alias = desc.model_copy(
+        update={
+            "services": ServicesConfig(
+                billing_url="https://billing.example.com",
+                deploy_url=None,
+                open_mode=True,
+            ),
+        }
     )
-    assert json.loads(_registry_config_json(forced_closed))["open_mode"] is False
-    assert _resolve_open_mode(forced_closed) is False
+    assert json.loads(_registry_config_json(alias))["open_mode"] is True
+
+    # Explicit flag beats the deprecated alias.
+    override = alias.model_copy(update={"flags": {"open_mode": False}})
+    assert json.loads(_registry_config_json(override))["open_mode"] is False
+    assert billed_json["billing_url"] == "https://billing.example.com"
+
+
+def test_registry_config_json_installer_id_and_flags() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {"realm_installer": VALID_CANISTER_ID}
+    data["flags"] = {"open_mode": True}
+    desc = Descriptor.model_validate(data)
+    payload = json.loads(_registry_config_json(desc))
+    assert payload["installer_id"] == VALID_CANISTER_ID
+    assert payload["open_mode"] is True
 
 
 def test_installer_config_json_includes_ids() -> None:
@@ -240,63 +261,3 @@ def test_platform_descriptor_optional() -> None:
     )
     assert with_platform.platform is not None
     assert with_platform.platform.version == "v0.3.1"
-
-
-@patch("gaas.phases.ensure_version_catalog_entry")
-@patch("gaas.phases.seed_gos_entry")
-@patch("gaas.phases.fetch_release_assets")
-@patch("gaas.phases.namespace_published", return_value=False)
-def test_seed_phase_publishes_version_catalog(
-    _namespace_published,
-    mock_fetch_assets,
-    mock_seed,
-    mock_publish,
-    tmp_path: Path,
-) -> None:
-    backend = tmp_path / "realm_backend.wasm.gz"
-    frontend = tmp_path / "realm_frontend.tar.gz"
-    backend.write_bytes(b"wasm")
-    frontend.write_bytes(b"tar")
-    mock_fetch_assets.return_value = [backend, frontend]
-    mock_publish.return_value = "published"
-
-    data = dict(SAMPLE_DESCRIPTOR)
-    data["canisters"] = {
-        "file_registry": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aab",
-        "realm_registry_backend": VALID_CANISTER_ID,
-    }
-    desc = Descriptor.model_validate(data)
-    ctx = DeployContext(identity="default", network="ic")
-
-    phase_seed_file_registry(desc, ctx)
-
-    mock_seed.assert_called_once()
-    mock_publish.assert_called_once()
-    args = mock_publish.call_args[0]
-    assert args[0] == VALID_CANISTER_ID
-    assert args[2] == "0.3.1"
-    assert args[3] == "wasm/realm-backend/0.3.1"
-    assert args[4] == "frontend/realm-assets/0.3.1"
-    assert args[5] == "realm_backend.wasm.gz"
-
-
-@patch("gaas.phases.ensure_version_catalog_entry", return_value="skipped")
-@patch("gaas.phases.fetch_namespace_hashes", return_value={"realm_backend.wasm.gz": "abc123"})
-@patch("gaas.phases.namespace_published", return_value=True)
-def test_seed_phase_skips_publish_when_already_cataloged(
-    _namespace_published,
-    _fetch_hashes,
-    mock_publish,
-) -> None:
-    data = dict(SAMPLE_DESCRIPTOR)
-    data["canisters"] = {
-        "file_registry": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aab",
-        "realm_registry_backend": VALID_CANISTER_ID,
-    }
-    desc = Descriptor.model_validate(data)
-    ctx = DeployContext(identity="default", network="ic")
-
-    phase_seed_file_registry(desc, ctx)
-
-    mock_publish.assert_called_once()
-    assert mock_publish.return_value == "skipped"

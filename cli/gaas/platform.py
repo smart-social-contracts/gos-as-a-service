@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import gzip
+import json
 import os
 import shutil
 import subprocess
 import tarfile
+import urllib.parse
 from pathlib import Path
 
 import requests
@@ -118,13 +120,21 @@ def fetch_casals_wasm(
     raise ArtifactError(f"{CASALS_CONDUCTOR_WASM_ASSET} missing from {release_repo} {version}")
 
 
-def build_casals_frontend(casals_root: Path, work_dir: Path) -> Path:
+def build_casals_frontend(
+    casals_root: Path,
+    work_dir: Path,
+    *,
+    conductor_canister_id: str = "",
+) -> Path:
     dest = work_dir / "casals_frontend_dist"
     if dest.is_dir() and any(dest.iterdir()):
         return dest
     frontend_dir = casals_root / "frontend"
-    subprocess.run(["npm", "ci"], cwd=frontend_dir, check=True)
-    subprocess.run(["npm", "run", "build"], cwd=frontend_dir, check=True)
+    env = {**os.environ}
+    if conductor_canister_id:
+        env["VITE_CANISTER_ID"] = conductor_canister_id
+    subprocess.run(["npm", "ci"], cwd=frontend_dir, check=True, env=env)
+    subprocess.run(["npm", "run", "build"], cwd=frontend_dir, check=True, env=env)
     built = casals_root / "dist"
     if not built.is_dir() or not any(built.iterdir()):
         raise PlatformError(f"Casals frontend build did not produce {built}")
@@ -156,6 +166,39 @@ def fetch_casals_frontend_archive(
     )
 
 
+def _casals_ic_env_cookie_value(conductor_id: str, frontend_id: str = "") -> str:
+    """URL-encoded ic_env cookie body (certified-assets / Casals api.ts format)."""
+    pairs = ["ic_root_key=", f"PUBLIC_CANISTER_ID:casals_backend={conductor_id}"]
+    if frontend_id:
+        pairs.append(f"PUBLIC_CANISTER_ID:casals_frontend={frontend_id}")
+    return urllib.parse.quote("&".join(pairs), safe="")
+
+
+def _inject_casals_ic_env_assets(
+    dist_dir: Path,
+    conductor_id: str,
+    frontend_id: str = "",
+) -> None:
+    """Set ic_env via .ic-assets.json5 for prebuilt Casals frontend (release tarball).
+
+    Local builds bake VITE_CANISTER_ID instead. This relies on the assets canister
+    applying custom Set-Cookie headers on HTML responses.
+    """
+    cookie_val = _casals_ic_env_cookie_value(conductor_id, frontend_id)
+    config = [
+        {
+            "match": "**/*.{html,shtml}",
+            "headers": {
+                "Set-Cookie": f"ic_env={cookie_val}; SameSite=Lax",
+            },
+        },
+    ]
+    (dist_dir / ".ic-assets.json5").write_text(
+        json.dumps(config, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
 def resolve_casals_frontend_dist(
     version: str,
     release_repo: str,
@@ -163,6 +206,8 @@ def resolve_casals_frontend_dist(
     *,
     casals_src: Path | None = None,
     session: requests.Session | None = None,
+    conductor_canister_id: str = "",
+    frontend_canister_id: str = "",
 ) -> Path:
     dest.mkdir(parents=True, exist_ok=True)
     cached = dest / "dist"
@@ -175,6 +220,10 @@ def resolve_casals_frontend_dist(
         cached.mkdir(parents=True, exist_ok=True)
         with tarfile.open(archive, "r:gz") as tar:
             tar.extractall(cached)
+        if conductor_canister_id:
+            _inject_casals_ic_env_assets(
+                cached, conductor_canister_id, frontend_canister_id
+            )
         return cached
     except ArtifactError:
         src = resolve_casals_src(casals_src)
@@ -184,7 +233,9 @@ def resolve_casals_frontend_dist(
                 f"{CASALS_FRONTEND_ARCHIVE}; provide --casals-src, set CASALS_SRC, "
                 "or place a checkout at /srv/dev/Casals"
             ) from None
-        return build_casals_frontend(src, dest)
+        return build_casals_frontend(
+            src, dest, conductor_canister_id=conductor_canister_id
+        )
 
 
 def resolve_casals_wasm(

@@ -155,9 +155,8 @@ Leave a key out (or omit the entire `canisters` object) to create that canister 
 
 | Field | Required | Default | Description |
 |---|---|---|---|
-| `billing_url` | no | `null` | HTTPS URL for the credits / Stripe billing service. When present, credits are enforced unless `open_mode` is explicitly `true`. |
+| `billing_url` | no | `null` | HTTPS URL for the credits / Stripe billing service. **When present, credits are enforced.** When absent, the environment runs in **open mode** (no credit gate). |
 | `deploy_url` | no | `null` | HTTPS URL for the off-chain deploy worker API. |
-| `open_mode` | no | derived | When `true`, the registry skips credit holds for realm deploy/upgrade. When `false`, credits are enforced. When omitted, defaults to `true` if `billing_url` is absent, otherwise `false`. Set explicitly on environments that use a billing URL but should not gate deployments (e.g. test/staging). |
 
 Both URLs must use `https://`. Empty strings are treated as absent.
 
@@ -248,14 +247,17 @@ Completed phases are skipped; gaas resumes where it left off.
 
 ## Open mode vs billing
 
-| `services.open_mode` | `services.billing_url` | Behaviour |
-|---|---|---|
-| `true` | any | **Open mode** — deployments proceed without credit checks. |
-| `false` | present | Credits enforced (5 credits per realm deploy, holds/capture via billing service). |
-| omitted | present | Credits enforced (same as `open_mode: false`). |
-| omitted | absent | **Open mode** — no billing URL and no explicit flag. |
+Open mode is resolved with this precedence (highest first):
 
-`deploy_url` is independent: it points the registry frontend at an off-chain worker for legacy deploy paths. Omit both billing URLs for fully self-contained environments.
+| Setting | Effect |
+|---|---|
+| `flags.open_mode` (top level) | Explicit — always wins. Also settable via `gaas new --open-mode` or the wizard prompt. |
+| `services.open_mode` | Deprecated alias, still honored when `flags.open_mode` is absent. |
+| _(neither set)_ | Derived: **open** when `services.billing_url` is absent, **closed** (credits enforced) when a billing URL is present. |
+
+The resolved value is always written explicitly into the registry's `configure` payload — the backend itself defaults to closed and only skips credit checks when `open_mode` is explicitly `true`.
+
+`deploy_url` is independent: it points the registry frontend at an off-chain worker for legacy deploy paths. Omit both for fully self-contained environments.
 
 ## Third-party self-hosting
 

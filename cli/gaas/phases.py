@@ -94,18 +94,28 @@ def _portal_url(descriptor: Descriptor) -> str:
 
 
 def _resolve_open_mode(descriptor: Descriptor) -> bool:
+    """Precedence: explicit flags.open_mode > deprecated services.open_mode >
+    derived (open when no billing_url is configured)."""
+    if "open_mode" in descriptor.flags:
+        return descriptor.flags["open_mode"]
     if descriptor.services.open_mode is not None:
         return descriptor.services.open_mode
     return descriptor.services.billing_url is None
 
 
 def _registry_config_json(descriptor: Descriptor) -> str:
-    payload = {
+    payload: dict = {
         "portal_url": _portal_url(descriptor),
         "open_mode": _resolve_open_mode(descriptor),
     }
     if descriptor.services.billing_url:
         payload["billing_url"] = descriptor.services.billing_url
+    installer_id = descriptor.canisters.get("realm_installer", "")
+    if installer_id:
+        payload["installer_id"] = installer_id
+    for key, value in descriptor.flags.items():
+        if key != "open_mode":
+            payload[key] = value
     return json.dumps(payload)
 
 
@@ -354,19 +364,19 @@ def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None
         backend_path = backend_asset
         backend_hash = ""
 
-        already_seeded = False
+        needs_seed = True
         if namespace_published(registry_id, backend_ns, ctx.network, identity=ctx.identity):
             hashes = fetch_namespace_hashes(
                 registry_id, backend_ns, ctx.network, identity=ctx.identity
             )
             if hashes:
-                already_seeded = True
+                needs_seed = False
                 backend_hash = hashes.get(backend_path, "")
                 console.print(
                     f"  {entry.implementation}@{entry.version}: already seeded ({backend_ns})"
                 )
 
-        if not already_seeded:
+        if needs_seed:
             frontend_asset = entry.artifacts.resolved_frontend_asset(entry.implementation)
             assets = fetch_release_assets(
                 entry.release_repo,
@@ -513,6 +523,8 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
             work / "casals" / "frontend",
             casals_src=ctx.casals_src,
             session=ctx.http,
+            conductor_canister_id=descriptor.canisters.get("casals_conductor", ""),
+            frontend_canister_id=casals_frontend_id,
         )
         if casals_staging.exists():
             shutil.rmtree(casals_staging)

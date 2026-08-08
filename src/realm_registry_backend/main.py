@@ -341,12 +341,6 @@ DEPLOYMENT_COST_CREDITS = 5
 UPGRADE_COST_CREDITS = 5
 MIN_CYCLES_FOR_UPGRADE = 1_000_000_000_000  # 1T cycles
 
-_INSTALLER_IDS = {
-    "staging": "lusjm-wqaaa-aaaau-ago7q-cai",
-    "demo": "2s4td-daaaa-aaaao-bazmq-cai",
-    "test": "fltjm-tyaaa-aaaap-qunhq-cai",
-}
-
 _NETWORK_FOR_CANISTER = {}  # populated from realm records
 
 _INVITATION_MODE_KEY = "invitation_code_mode"
@@ -381,7 +375,7 @@ def _credits_record(c: dict) -> UserCreditsRecord:
 
 @init
 def init_canister(config_json: text = "") -> void:
-    """Optional init JSON: {portal_url?, billing_url?, open_mode?}."""
+    """Optional init JSON: {portal_url?, billing_url?, open_mode?, installer_id?}."""
     if config_json and config_json.strip():
         from core.env_config import apply_env_config_from_json
 
@@ -620,9 +614,15 @@ def request_deployment(manifest_json: text) -> Async[text]:
                 return json.dumps({"success": False,
                     "error": f"Insufficient credits: {balance} < {DEPLOYMENT_COST_CREDITS}"})
 
-        installer_id = _INSTALLER_IDS.get(network) or manifest.get("installer_canister_id", "")
+        from core.env_config import get_installer_id
+
+        configured_installer_id = get_installer_id()
+        installer_id = configured_installer_id or manifest.get("installer_canister_id", "")
         if not installer_id:
-            return json.dumps({"success": False, "error": f"No installer for network '{network}'"})
+            return json.dumps({
+                "success": False,
+                "error": "No installer configured (set installer_id via configure)",
+            })
 
         manifest["requesting_principal"] = caller
         manifest["registry_canister_id"] = str(ic.id())
@@ -883,10 +883,15 @@ def request_upgrade(args_json: text) -> Async[text]:
             "registry_canister_id": str(ic.id()),
         }
 
-        installer_id = _INSTALLER_IDS.get(network)
+        from core.env_config import get_installer_id
+
+        configured_installer_id = get_installer_id()
+        installer_id = configured_installer_id or manifest.get("installer_canister_id", "")
         if not installer_id:
-            return json.dumps({"success": False,
-                "error": f"No installer configured for network '{network}'"})
+            return json.dumps({
+                "success": False,
+                "error": "No installer configured (set installer_id via configure)",
+            })
 
         installer = RealmInstallerService(Principal.from_str(installer_id))
         call_result: CallResult = yield installer.enqueue_deployment(json.dumps(manifest))
