@@ -187,7 +187,7 @@ from api.credits import (
     get_user_transactions, release_deployment_hold,
 )
 from api.registry import (
-    count_registered_realms, get_registered_realm,
+    complete_realm_setup, count_registered_realms, get_registered_realm,
     list_registered_realms, register_realm_by_caller, remove_registered_realm,
 )
 from api.slugs import (
@@ -283,6 +283,7 @@ class RealmRecord(Record):
     users_count: nat64
     created_at: float64
     frontend_canister_id: text
+    listing_status: text
 
 class AddRealmResult(Variant, total=False):
     Ok: text
@@ -363,6 +364,7 @@ def _realm_record(r: dict) -> RealmRecord:
         logo=r.get("logo", ""), users_count=int(r.get("users_count", 0)),
         created_at=float(r.get("created_at", 0.0)),
         frontend_canister_id=r.get("frontend_canister_id", ""),
+        listing_status=r.get("listing_status") or "live",
     )
 
 
@@ -448,6 +450,20 @@ def remove_realm(realm_id: text) -> AddRealmResult:
 @query
 def realm_count() -> nat64:
     return count_registered_realms()
+
+@update
+def realm_setup_completed(args: text) -> text:
+    """Called by a realm backend when creator setup finishes.
+
+    Args (JSON): {"realm_backend_canister_id": "<backend principal>"}.
+    Caller must match the recorded backend canister id for that realm.
+    """
+    try:
+        params = json.loads(args) if args else {}
+        backend_id = params.get("realm_backend_canister_id", "")
+        return json.dumps(complete_realm_setup(backend_id))
+    except Exception as e:
+        return json.dumps({"success": False, "error": str(e)})
 
 # ── Federation slug endpoints (portal routing) ─────────────────────────
 

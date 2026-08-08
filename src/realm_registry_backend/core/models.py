@@ -71,6 +71,11 @@ class RealmRecord(Entity, TimestampedMixin):
     users_count = Integer()
     created_at = Float()
     frontend_canister_id = String(max_length=64)
+    listing_status = String(max_length=16, default="live")
+
+    def effective_listing_status(self) -> str:
+        status = (self.listing_status or "").strip()
+        return status if status else "live"
 
     def to_dict(self) -> dict:
         return {
@@ -82,6 +87,7 @@ class RealmRecord(Entity, TimestampedMixin):
             "users_count": self.users_count or 0,
             "created_at": self.created_at or 0.0,
             "frontend_canister_id": self.frontend_canister_id or "",
+            "listing_status": self.effective_listing_status(),
         }
 
 

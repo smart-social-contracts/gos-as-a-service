@@ -42,6 +42,7 @@ def register_realm_by_caller(
             logo=logo.strip(),
             created_at=float(ic.time() / 1_000_000_000),
             frontend_canister_id=frontend_canister_id.strip(),
+            listing_status="setup",
         )
         return {"success": True, "message": f"Realm '{realm_id}' registered"}
     except Exception as e:
@@ -78,3 +79,25 @@ def count_registered_realms() -> int:
         return len(list(RealmRecord.instances()))
     except Exception:
         return 0
+
+
+def complete_realm_setup(realm_backend_canister_id: str) -> dict:
+    """Mark a freshly provisioned realm as live after setup completes."""
+    realm_id = (realm_backend_canister_id or "").strip()
+    if not realm_id:
+        return {"success": False, "error": "realm_backend_canister_id is required"}
+    caller = str(ic.caller())
+    if caller != realm_id:
+        return {
+            "success": False,
+            "error": f"Caller {caller} does not match realm backend {realm_id}",
+        }
+    try:
+        realm = RealmRecord[realm_id]
+        if realm is None:
+            return {"success": False, "error": f"Realm '{realm_id}' not found"}
+        realm.listing_status = "live"
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Error completing setup for realm {realm_id}: {e}")
+        return {"success": False, "error": str(e)}
