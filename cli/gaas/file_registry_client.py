@@ -177,6 +177,49 @@ def publish_namespace(
         raise RuntimeError(f"publish_namespace({namespace}) failed: {result}")
 
 
+def set_namespace_approval(
+    registry_id: str,
+    namespace: str,
+    network: str,
+    *,
+    identity: str | None = None,
+    status: str = "approved",
+    notes: str = "",
+) -> None:
+    """Record marketplace approval for a namespace (caller becomes approver)."""
+    payload = json.dumps({"namespace": namespace, "status": status, "notes": notes})
+    raw = dfx.canister_call(
+        registry_id,
+        "set_namespace_approval",
+        dfx.candid_text_arg(payload),
+        network,
+        identity=identity,
+        timeout=120,
+    )
+    result = json.loads(raw)
+    if not (isinstance(result, dict) and result.get("ok") is True):
+        raise RuntimeError(f"set_namespace_approval({namespace}) failed: {result}")
+
+
+def approve_marketplace_namespaces(
+    registry_id: str,
+    namespaces: list[str],
+    network: str,
+    *,
+    identity: str | None = None,
+) -> None:
+    """Approve codex/extension namespaces after seeding."""
+    for namespace in sorted(set(namespaces)):
+        if not (namespace.startswith("ext/") or namespace.startswith("codex/")):
+            continue
+        set_namespace_approval(
+            registry_id,
+            namespace,
+            network,
+            identity=identity,
+        )
+
+
 def extract_frontend_tar(tar_path: Path, dest: Path) -> Path:
     dest.mkdir(parents=True, exist_ok=True)
     with tarfile.open(tar_path, "r:gz") as archive:

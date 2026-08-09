@@ -12,11 +12,29 @@ def frontend_ic_origin(canister_id: str) -> str:
     return f"https://{canister_id}.icp0.io"
 
 
-def build_gaas_env(descriptor: Descriptor, network: str) -> dict:
+def build_gaas_env(
+    descriptor: Descriptor,
+    network: str,
+    *,
+    deployer_principal: str | None = None,
+) -> dict:
     frontend_id = descriptor.canisters.get("realm_registry_frontend", "")
     ii_origins: list[str] = []
     if frontend_id:
         ii_origins.append(frontend_ic_origin(frontend_id))
+
+    canisters = {
+        name: {network: canister_id}
+        for name, canister_id in descriptor.canisters.items()
+    }
+    if "marketplace_backend" not in canisters:
+        approver = None
+        if descriptor.marketplace and descriptor.marketplace.approver_principal:
+            approver = descriptor.marketplace.approver_principal
+        elif deployer_principal:
+            approver = deployer_principal
+        if approver:
+            canisters["marketplace_backend"] = {network: approver}
 
     payload: dict = {
         "name": descriptor.name,
@@ -24,10 +42,7 @@ def build_gaas_env(descriptor: Descriptor, network: str) -> dict:
         "network": network,
         "services": {},
         # network.js resolves gaasEnv.canisters[name][network] — name-first.
-        "canisters": {
-            name: {network: canister_id}
-            for name, canister_id in descriptor.canisters.items()
-        },
+        "canisters": canisters,
         "gos": [
             {
                 "implementation": entry.implementation,
@@ -50,9 +65,15 @@ def build_gaas_env(descriptor: Descriptor, network: str) -> dict:
     return payload
 
 
-def write_gaas_env(repo_root: Path, descriptor: Descriptor, network: str) -> Path:
+def write_gaas_env(
+    repo_root: Path,
+    descriptor: Descriptor,
+    network: str,
+    *,
+    deployer_principal: str | None = None,
+) -> Path:
     path = repo_root / "gaas-env.json"
-    payload = build_gaas_env(descriptor, network)
+    payload = build_gaas_env(descriptor, network, deployer_principal=deployer_principal)
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return path
 

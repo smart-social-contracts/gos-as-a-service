@@ -183,6 +183,22 @@ class DnsConfig(BaseModel):
     provider: str = "manual"
 
 
+class MarketplaceConfig(BaseModel):
+    """Optional marketplace / approver override for realm manifests."""
+
+    approver_principal: str | None = None
+
+    @field_validator("approver_principal")
+    @classmethod
+    def validate_approver_principal(cls, value: str | None) -> str | None:
+        if value is None or value == "":
+            return None
+        principal = value.strip()
+        if not principal:
+            raise ValueError("marketplace.approver_principal must be non-empty when set")
+        return principal
+
+
 class Descriptor(BaseModel):
     version: int = 1
     name: str
@@ -193,6 +209,7 @@ class Descriptor(BaseModel):
     multisig: MultisigConfig = Field(default_factory=MultisigConfig)
     platform: PlatformConfig | None = None
     services: ServicesConfig = Field(default_factory=ServicesConfig)
+    marketplace: MarketplaceConfig | None = None
     flags: dict[str, bool] = Field(default_factory=dict)
     dns: DnsConfig = Field(default_factory=DnsConfig)
 

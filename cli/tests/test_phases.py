@@ -146,8 +146,13 @@ def test_create_canisters_adopt_vs_create(
         "ccccc-ccccc-ccccc-ccccc-ccccc-ccc",
         "ddddd-ddddd-ddddd-ddddd-ddddd-ddd",
         "fffff-fffff-fffff-fffff-fffff-fff",
+        "ggggg-ggggg-ggggg-ggggg-ggggg-ggg",
+        "hhhhh-hhhhh-hhhhh-hhhhh-hhhhh-hhh",
     ]
-    mock_ledger_create.return_value = "eeeee-eeeee-eeeee-eeeee-eeeee-eee"
+    mock_ledger_create.side_effect = [
+        "eeeee-eeeee-eeeee-eeeee-eeeee-eee",
+        "iiiii-iiiii-iiiii-iiiii-iiiii-iii",
+    ]
 
     data = dict(SAMPLE_DESCRIPTOR)
     data["canisters"] = {"realm_registry_backend": VALID_CANISTER_ID}
@@ -164,7 +169,7 @@ def test_create_canisters_adopt_vs_create(
 
     mock_create.assert_called()
     assert desc.canisters["realm_registry_backend"] == VALID_CANISTER_ID
-    assert len(desc.canisters) == 7
+    assert len(desc.canisters) == 9
 
 
 def test_registry_init_json_open_mode() -> None:

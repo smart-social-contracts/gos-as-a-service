@@ -37,6 +37,7 @@ from gaas.conductor_seed import (
     _section_names,
 )
 from gaas.file_registry_client import (
+    approve_marketplace_namespaces,
     ensure_version_catalog_entry,
     fetch_namespace_hashes,
     namespace_published,
@@ -443,6 +444,7 @@ def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None
 
     work = _work_dir(ctx)
     seeded_catalog_sources: set[tuple[str, str]] = set()
+    marketplace_namespaces: list[str] = []
     for entry in descriptor.gos:
         resolved = resolve_deploy_version(
             entry.version, entry.release_repo, session=ctx.http
@@ -526,7 +528,7 @@ def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None
                 f"(no catalog declared)"
             )
         elif catalog_key not in seeded_catalog_sources:
-            seed_codex_catalog(
+            seeded = seed_codex_catalog(
                 registry_id,
                 entry.release_repo,
                 entry.version,
@@ -539,7 +541,19 @@ def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None
                 else None,
                 session=ctx.http,
             )
+            marketplace_namespaces.extend(seeded)
             seeded_catalog_sources.add(catalog_key)
+
+    if marketplace_namespaces:
+        console.print(
+            f"  approving {len(set(marketplace_namespaces))} codex/extension namespace(s)"
+        )
+        approve_marketplace_namespaces(
+            registry_id,
+            marketplace_namespaces,
+            ctx.network,
+            identity=ctx.identity,
+        )
 
 
 def _is_interactive(ctx: DeployContext) -> bool:
@@ -563,7 +577,9 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
     casals_staging = repo_root / "casals_frontend_dist"
 
     try:
-        gaas_env_path = write_gaas_env(repo_root, descriptor, ctx.network)
+        gaas_env_path = write_gaas_env(
+            repo_root, descriptor, ctx.network, deployer_principal=dfx.get_principal(ctx.identity)
+        )
         console.print(f"  wrote {gaas_env_path}")
 
         env = {**os.environ, "DFX_NETWORK": ctx.network}

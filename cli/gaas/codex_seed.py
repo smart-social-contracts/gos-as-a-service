@@ -324,7 +324,7 @@ def publish_package(
     *,
     identity: str | None,
     label: str,
-) -> None:
+) -> str:
     uploaded, skipped, failed = _upload_specs(
         registry_id, namespace, uploads, network, identity=identity
     )
@@ -336,6 +336,7 @@ def publish_package(
         f"  {label}: {namespace} "
         f"({uploaded} uploaded, {skipped} skipped)"
     )
+    return namespace
 
 
 def publish_codex_dir(
@@ -344,10 +345,10 @@ def publish_codex_dir(
     network: str,
     *,
     identity: str | None = None,
-) -> None:
+) -> str:
     package_id, version, prefix, uploads = collect_codex_uploads(source_dir)
     namespace = package_namespace(package_id, version, namespace_prefix=prefix)
-    publish_package(
+    return publish_package(
         registry_id,
         namespace,
         uploads,
@@ -364,10 +365,10 @@ def publish_extension_dir(
     *,
     identity: str | None = None,
     namespace_prefix: str = "ext",
-) -> None:
+) -> str:
     ext_id, version, uploads = collect_extension_package_uploads(source_dir)
     namespace = package_namespace(ext_id, version, namespace_prefix=namespace_prefix)
-    publish_package(
+    return publish_package(
         registry_id,
         namespace,
         uploads,
@@ -450,7 +451,7 @@ def _try_seed_extensions(
     *,
     identity: str | None,
     catalog: GosCatalog,
-) -> None:
+) -> list[str]:
     extensions_repo_root: Path | None = None
     nested = realms_root / "extensions"
     if nested.is_dir():
@@ -475,25 +476,28 @@ def _try_seed_extensions(
                 f"  [yellow]warning:[/yellow] could not clone {ext_repo}@{ref} "
                 f"for extension seeding ({exc}); realm extension installs may fail"
             )
-            return
+            return []
 
     try:
         extensions_root = resolve_extensions_root(extensions_repo_root)
     except CodexSeedError as exc:
         console.print(f"  [yellow]warning:[/yellow] {exc}")
-        return
+        return []
 
     ext_dirs = list_extensions(extensions_root)
     if not ext_dirs:
         console.print("  [yellow]warning:[/yellow] no extensions found to seed")
-        return
+        return []
 
     console.print(f"  seeding {len(ext_dirs)} extensions from {extensions_root}")
     failures: list[str] = []
+    namespaces: list[str] = []
     for ext_dir in ext_dirs:
         try:
-            publish_extension_dir(
-                registry_id, ext_dir, network, identity=identity
+            namespaces.append(
+                publish_extension_dir(
+                    registry_id, ext_dir, network, identity=identity
+                )
             )
         except CodexSeedError:
             failures.append(ext_dir.name)
@@ -502,6 +506,7 @@ def _try_seed_extensions(
             f"  [yellow]warning:[/yellow] extension publish failed for: "
             f"{', '.join(failures)}"
         )
+    return namespaces
 
 
 def seed_codex_catalog(
@@ -515,7 +520,7 @@ def seed_codex_catalog(
     catalog: GosCatalog,
     existing_realms_checkout: Path | None = None,
     session=None,
-) -> None:
+) -> list[str]:
     """Publish codex (and best-effort extension) catalogs for one GOS source tree."""
     ref = _clone_ref_for_version(version, release_repo, session=session)
     realms_root = resolve_realms_checkout(
@@ -537,9 +542,12 @@ def seed_codex_catalog(
         f"({release_repo}@{ref})"
     )
     failures: list[str] = []
+    namespaces: list[str] = []
     for codex_dir in codex_dirs:
         try:
-            publish_codex_dir(registry_id, codex_dir, network, identity=identity)
+            namespaces.append(
+                publish_codex_dir(registry_id, codex_dir, network, identity=identity)
+            )
         except CodexSeedError:
             failures.append(codex_dir.name)
 
@@ -548,13 +556,16 @@ def seed_codex_catalog(
             f"codex publish failed for: {', '.join(failures)}"
         )
 
-    _try_seed_extensions(
-        registry_id,
-        realms_root,
-        release_repo,
-        work_dir,
-        ref,
-        network,
-        identity=identity,
-        catalog=catalog,
+    namespaces.extend(
+        _try_seed_extensions(
+            registry_id,
+            realms_root,
+            release_repo,
+            work_dir,
+            ref,
+            network,
+            identity=identity,
+            catalog=catalog,
+        )
     )
+    return namespaces
