@@ -39,6 +39,7 @@ def test_phases_order() -> None:
         "configure_backends",
         "seed_file_registry",
         "seed_conductor",
+        "prime_cycles_snapshot",
         "configure_multisig",
         "install_frontends",
         "domain_wiring",

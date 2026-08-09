@@ -383,11 +383,14 @@ gaas new [DESCRIPTOR] [OPTIONS]
    For each GOS entry, the conductor authorizes the **backend realm WASM** from `wasm/<backend_wasm_key>/<version>/` and the **frontend certified-assets canister WASM** (`realms-assetstorage.wasm.gz` under `wasm/realm-assetstorage/<version>/`). The frontend dist bundle remains in `frontend/<frontend_wasm_key>/<version>/` for the realm installer to sync after canister install; it is not registered as an installable WASM module.
 
    After the sheet and governance multisig are in place, gaas registers the five platform canisters (realm registry, realm installer, file registry — backends and frontends) under **Infra/platform** in the conductor orchestra. Only canisters tracked in the orchestra tree are monitored by the conductor's cycles autopilot (`cycles_autopilot`, default minimum 0.5T, default top-up 1T); this registration ensures those platform canisters receive automatic cycle monitoring and top-ups.
+
+   Immediately afterward, gaas **primes the conductor cycles snapshot**: it reads `get_tree`, calls `refresh_canisters` in batches of up to three names, then verifies via `get_cycles_cached` that every orchestra canister appears in the persisted snapshot. Missing rows fail the deploy loudly; per-canister refresh errors produce warnings. This prevents a fresh deploy from leaving the Casals Orchestra dashboard at "Canisters: 0".
 7. Configuring multisig signers
 8. Building + installing frontends
 9. Domain wiring (DNS verify + IC registration)
 10. Smoke checks
-11. Applying controller topology (final — gaas may lose control in production)
+11. Granting Casals commanders (interactive; skipped with `--yes` or non-TTY)
+12. Applying controller topology (final — gaas may lose control in production)
 
 If a phase is not yet implemented, the pipeline pauses and prints a resume command.
 

@@ -12,7 +12,7 @@ import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Protocol
+from typing import Any, Callable, Protocol
 
 import requests
 from rich.console import Console
@@ -942,6 +942,168 @@ def phase_seed_conductor(descriptor: Descriptor, ctx: DeployContext) -> None:
         )
 
 
+REFRESH_CANISTERS_BATCH_MAX = 3
+
+
+def collect_tree_canister_names(tree: dict[str, Any]) -> list[str]:
+    """Return orchestra canister names that have a non-empty principal."""
+    names: list[str] = []
+    for sec in tree.get("sections") or []:
+        for stand in sec.get("stands") or []:
+            for canister in stand.get("canisters") or []:
+                name = (canister.get("name") or "").strip()
+                canister_id = (canister.get("canister_id") or "").strip()
+                if name and canister_id:
+                    names.append(name)
+    return names
+
+
+def chunk_canister_names(
+    names: list[str], batch_max: int = REFRESH_CANISTERS_BATCH_MAX
+) -> list[list[str]]:
+    """Split canister names into batches of at most ``batch_max``."""
+    return [names[i : i + batch_max] for i in range(0, len(names), batch_max)]
+
+
+def _cycles_snapshot_by_name(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {
+        (row.get("name") or "").strip(): row
+        for row in (snapshot.get("canisters") or [])
+        if (row.get("name") or "").strip()
+    }
+
+
+def _refresh_canisters_response_is_error(response: dict[str, Any]) -> bool:
+    if response.get("ok") is False:
+        return True
+    if response.get("error"):
+        return True
+    return "canisters" not in response and "totals" not in response
+
+
+def _canister_row_has_error(row: dict[str, Any] | None) -> bool:
+    if row is None:
+        return True
+    return (row.get("status") or "").strip().lower() == "error"
+
+
+def verify_cycles_snapshot_covers_tree(
+    tree_names: list[str], snapshot: dict[str, Any]
+) -> list[str]:
+    """Ensure every tree canister appears in the snapshot.
+
+    Returns names whose snapshot row has status ``error``. Raises ``RuntimeError``
+    when a tree canister is missing from the snapshot entirely.
+    """
+    by_name = _cycles_snapshot_by_name(snapshot)
+    missing = [name for name in tree_names if name not in by_name]
+    if missing:
+        raise RuntimeError(
+            "cycles snapshot missing conductor canisters after refresh: "
+            + ", ".join(sorted(missing))
+        )
+    return [name for name in tree_names if _canister_row_has_error(by_name.get(name))]
+
+
+def _call_refresh_canisters(
+    casals_id: str,
+    names: list[str],
+    network: str,
+    *,
+    identity: str | None,
+) -> dict[str, Any]:
+    payload = json.dumps({"canisters": names})
+    raw = dfx.canister_call(
+        casals_id,
+        "refresh_canisters",
+        dfx.candid_text_arg(payload),
+        network,
+        identity=identity,
+    )
+    return json.loads(raw)
+
+
+def _refresh_canisters_batch_with_retries(
+    casals_id: str,
+    names: list[str],
+    network: str,
+    *,
+    identity: str | None,
+) -> list[str]:
+    """Refresh canisters in batches; retry failures individually. Returns names still failing."""
+    still_failing: list[str] = []
+    for batch in chunk_canister_names(names):
+        response = _call_refresh_canisters(casals_id, batch, network, identity=identity)
+        if _refresh_canisters_response_is_error(response):
+            retry_names = list(batch)
+        else:
+            by_name = _cycles_snapshot_by_name(response)
+            retry_names = [name for name in batch if _canister_row_has_error(by_name.get(name))]
+        for name in retry_names:
+            individual = _call_refresh_canisters(
+                casals_id, [name], network, identity=identity
+            )
+            if _refresh_canisters_response_is_error(individual):
+                still_failing.append(name)
+                continue
+            row = _cycles_snapshot_by_name(individual).get(name)
+            if _canister_row_has_error(row):
+                still_failing.append(name)
+    return still_failing
+
+
+def phase_prime_cycles_snapshot(descriptor: Descriptor, ctx: DeployContext) -> None:
+    casals_id = descriptor.canisters.get("casals_backend")
+    if not casals_id:
+        raise RuntimeError("casals_backend ID required")
+
+    tree = get_tree(casals_id, ctx.network, identity=ctx.identity)
+    names = collect_tree_canister_names(tree)
+    if not names:
+        console.print("  skip: no orchestra canisters in tree")
+        return
+
+    batches = chunk_canister_names(names)
+    console.print(
+        f"  priming cycles snapshot for {len(names)} canister(s) "
+        f"in {len(batches)} batch(es)..."
+    )
+    for index, batch in enumerate(batches, start=1):
+        console.print(f"  refresh batch {index}/{len(batches)}: {', '.join(batch)}")
+
+    failed = _refresh_canisters_batch_with_retries(
+        casals_id, names, ctx.network, identity=ctx.identity
+    )
+    if failed:
+        console.print(
+            "[yellow]  warning: refresh failed for "
+            f"{', '.join(sorted(failed))}[/yellow]"
+        )
+
+    cached_raw = dfx.canister_call(
+        casals_id,
+        "get_cycles_cached",
+        "()",
+        ctx.network,
+        identity=ctx.identity,
+        query=True,
+    )
+    snapshot = json.loads(cached_raw)
+    error_names = verify_cycles_snapshot_covers_tree(names, snapshot)
+    for name in error_names:
+        row = _cycles_snapshot_by_name(snapshot)[name]
+        detail = row.get("error") or row.get("status") or "error"
+        console.print(f"  [yellow]warning: {name} cycles status error: {detail}[/yellow]")
+
+    totals = snapshot.get("totals") or {}
+    ok_count = totals.get("ok", "?")
+    err_count = totals.get("error", "?")
+    console.print(
+        f"  cycles snapshot verified: {len(names)} tree canister(s) "
+        f"({ok_count} ok, {err_count} error in snapshot)"
+    )
+
+
 def phase_configure_multisig(descriptor: Descriptor, ctx: DeployContext) -> None:
     casals_id = descriptor.canisters.get("casals_backend")
     if not casals_id:
@@ -1153,6 +1315,11 @@ PHASES: list[tuple[str, str, PhaseFunc]] = [
     ("configure_backends", "Configuring backends", phase_configure_backends),
     ("seed_file_registry", "Seeding file registry", phase_seed_file_registry),
     ("seed_conductor", "Seeding conductor orchestra", phase_seed_conductor),
+    (
+        "prime_cycles_snapshot",
+        "Priming conductor cycles snapshot",
+        phase_prime_cycles_snapshot,
+    ),
     ("configure_multisig", "Configuring multisig signers", phase_configure_multisig),
     ("install_frontends", "Building + installing frontends", phase_install_frontends),
     ("domain_wiring", "Domain wiring", phase_domain_wiring),
