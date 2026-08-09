@@ -49,7 +49,7 @@ def test_resolve_gos_artifacts_main_build_wiring(tmp_path: Path) -> None:
         )
 
     clone_mock.assert_called_once_with(
-        "smart-social-contracts/realms", tmp_path / "src-clone"
+        "smart-social-contracts/realms", tmp_path / "src-clone", refresh=True
     )
     build_mock.assert_called_once()
     assert got_backend == backend
@@ -92,6 +92,104 @@ def test_phase_seed_file_registry_main_namespace_and_catalog(
     catalog_args = catalog_mock.call_args[0]
     assert catalog_args[2] == "main"
     codex_mock.assert_called_once()
+
+
+def test_phase_seed_file_registry_main_reseeds_when_already_published(
+    descriptor_main: Descriptor, tmp_path: Path
+) -> None:
+    backend_file = tmp_path / "realm_backend.wasm.gz"
+    frontend_file = tmp_path / "realm_frontend.tar.gz"
+    backend_file.write_bytes(b"wasm-bytes")
+    frontend_file.write_bytes(b"frontend-bytes")
+
+    ctx = DeployContext(
+        identity="deployer",
+        network="local",
+        work_dir=tmp_path / "work",
+        yes=True,
+    )
+
+    with patch("gaas.phases.namespace_published", return_value=True), patch(
+        "gaas.phases.fetch_namespace_hashes",
+        return_value={"realm_backend.wasm.gz": "existing"},
+    ), patch(
+        "gaas.phases.resolve_gos_artifacts",
+        return_value=(backend_file, frontend_file),
+    ) as resolve_mock, patch(
+        "gaas.phases.seed_gos_entry"
+    ) as seed_mock, patch(
+        "gaas.phases.seed_codex_catalog"
+    ), patch(
+        "gaas.phases.ensure_version_catalog_entry", return_value="skipped"
+    ), patch(
+        "gaas.phases.sha256_file", return_value="fresh-hash"
+    ):
+        phase_seed_file_registry(descriptor_main, ctx)
+
+    resolve_mock.assert_called_once()
+    seed_mock.assert_called_once()
+
+
+def test_phase_seed_file_registry_pinned_skips_when_already_published(
+    tmp_path: Path,
+) -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        "file_registry": VALID_CANISTER_ID,
+        "realm_registry_backend": VALID_CANISTER_ID,
+    }
+    descriptor = Descriptor.model_validate(data)
+    ctx = DeployContext(
+        identity="deployer",
+        network="local",
+        work_dir=tmp_path / "work",
+        yes=True,
+    )
+
+    with patch("gaas.phases.namespace_published", return_value=True), patch(
+        "gaas.phases.fetch_namespace_hashes",
+        return_value={"realm_backend.wasm.gz": "existing"},
+    ), patch("gaas.phases.resolve_gos_artifacts") as resolve_mock, patch(
+        "gaas.phases.seed_gos_entry"
+    ) as seed_mock, patch(
+        "gaas.phases.seed_codex_catalog"
+    ), patch(
+        "gaas.phases.ensure_version_catalog_entry", return_value="skipped"
+    ):
+        phase_seed_file_registry(descriptor, ctx)
+
+    resolve_mock.assert_not_called()
+    seed_mock.assert_not_called()
+
+
+def test_resolve_gos_artifacts_main_refreshes_existing_clone(tmp_path: Path) -> None:
+    from gaas.source_build import resolve_gos_artifacts
+
+    backend = tmp_path / "realm_backend.wasm.gz"
+    frontend = tmp_path / "realm_frontend.tar.gz"
+    backend.write_bytes(b"wasm")
+    frontend.write_bytes(b"tar")
+
+    with patch("gaas.source_build.clone_repo") as clone_mock, patch(
+        "gaas.source_build.build_realms_gos_artifacts",
+        return_value=(backend, frontend),
+    ):
+        clone_mock.return_value = tmp_path / "clone"
+        resolve_gos_artifacts(
+            implementation="realms-gos",
+            version="main",
+            release_repo="smart-social-contracts/realms",
+            backend_asset="realm_backend.wasm.gz",
+            frontend_asset="realm_frontend.tar.gz",
+            dest_dir=tmp_path / "artifacts",
+            clone_parent=tmp_path / "src-clone",
+        )
+
+    clone_mock.assert_called_once_with(
+        "smart-social-contracts/realms",
+        tmp_path / "src-clone",
+        refresh=True,
+    )
 
 
 def test_resolve_casals_wasm_main_clones_and_builds(tmp_path: Path) -> None:

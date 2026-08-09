@@ -24,11 +24,22 @@ class SourceBuildError(RuntimeError):
     pass
 
 
-def clone_repo(release_repo: str, dest_parent: Path) -> Path:
+def clone_repo(release_repo: str, dest_parent: Path, *, refresh: bool = False) -> Path:
     """Shallow-clone *release_repo* into *dest_parent* and return the checkout path."""
     slug = release_repo.replace("/", "_")
     dest = dest_parent / slug
     if (dest / ".git").is_dir():
+        if refresh:
+            subprocess.run(
+                ["git", "fetch", "origin", "main", "--depth", "1"],
+                cwd=dest,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "checkout", "FETCH_HEAD"],
+                cwd=dest,
+                check=True,
+            )
         return dest
     dest_parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
@@ -193,7 +204,9 @@ def resolve_gos_artifacts(
                 f"source build for {implementation!r} is not supported "
                 f"(only realms-gos)"
             )
-        repo_root = clone_repo(release_repo, clone_parent)
+        repo_root = clone_repo(
+            release_repo, clone_parent, refresh=resolved.source_build
+        )
         backend_file, frontend_file = build_realms_gos_artifacts(repo_root, dest_dir)
         if backend_file.name != backend_asset or frontend_file.name != frontend_asset:
             raise SourceBuildError(

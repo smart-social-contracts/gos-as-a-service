@@ -536,8 +536,14 @@ def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None
         backend_hash = ""
         version_label = _gos_version_label(entry, session=ctx.http)
 
+        # Pinned semver releases are immutable once seeded; ``main`` is rebuilt from
+        # HEAD on every seed so the frontend bundle in file_registry stays current.
         needs_seed = True
-        if namespace_published(registry_id, backend_ns, ctx.network, identity=ctx.identity):
+        if resolved.source_build:
+            console.print(
+                f"  {entry.implementation}@{version_label}: re-seeding (main channel)"
+            )
+        elif namespace_published(registry_id, backend_ns, ctx.network, identity=ctx.identity):
             hashes = fetch_namespace_hashes(
                 registry_id, backend_ns, ctx.network, identity=ctx.identity
             )
