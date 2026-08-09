@@ -107,6 +107,44 @@ def _run(
     return result
 
 
+_CANDID_ESCAPE_RE = re.compile(r"\\(?:([0-9a-fA-F]{2})|(.))")
+
+_CANDID_NAMED_ESCAPES = {"n": "\n", "t": "\t", "r": "\r", '"': '"', "'": "'", "\\": "\\"}
+
+
+def _decode_candid_text(text: str) -> str:
+    """Decode Candid text escapes in a single left-to-right pass.
+
+    Sequential str.replace calls are order-dependent and corrupt payloads whose
+    JSON contains escaped backslashes (e.g. ``C:\\new`` arrives as ``\\\\\\\\n``:
+    replacing ``\\n`` first eats the final backslash of the quadruple).
+    """
+    out: list[str] = []
+    hexbuf = bytearray()
+    pos = 0
+
+    def flush_hex() -> None:
+        nonlocal hexbuf
+        if hexbuf:
+            out.append(hexbuf.decode("utf-8", errors="replace"))
+            hexbuf = bytearray()
+
+    for match in _CANDID_ESCAPE_RE.finditer(text):
+        if match.start() > pos:
+            flush_hex()
+            out.append(text[pos : match.start()])
+        hex_digits, named = match.groups()
+        if hex_digits is not None:
+            hexbuf.append(int(hex_digits, 16))
+        else:
+            flush_hex()
+            out.append(_CANDID_NAMED_ESCAPES.get(named, named))
+        pos = match.end()
+    flush_hex()
+    out.append(text[pos:])
+    return "".join(out)
+
+
 def _parse_candid_string(raw: str) -> str:
     raw = raw.strip()
     if raw.startswith("(") and raw.endswith(")"):
@@ -115,7 +153,7 @@ def _parse_candid_string(raw: str) -> str:
         raw = raw[:-1].strip()
     if raw.startswith('"') and raw.endswith('"'):
         raw = raw[1:-1]
-    return raw.replace("\\n", "\n").replace('\\"', '"').replace("\\\\", "\\")
+    return _decode_candid_text(raw)
 
 
 def parse_controllers(status_raw: str) -> tuple[str, ...]:

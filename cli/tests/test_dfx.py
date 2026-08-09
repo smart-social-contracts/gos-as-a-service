@@ -120,3 +120,29 @@ def test_update_canister_settings_passes_controllers(monkeypatch) -> None:
     assert "multisig-id" in args
     assert "deployer-id" in args
 
+
+
+def test_parse_candid_string_preserves_json_escaped_backslash_before_n():
+    """Regression: gaas seed crashed with JSONDecodeError on Casals payloads
+    containing a JSON-escaped backslash followed by 'n' (e.g. "C:\\\\new"),
+    because sequential unescape replaces ate the quadrupled backslash."""
+    import json
+
+    from gaas.dfx import _parse_candid_string
+
+    payload = json.dumps({"path": "C:\\new", "quote": 'say "hi"'})
+    candid = payload.replace("\\", "\\\\").replace('"', '\\"')
+    raw = f'("{candid}")'
+    decoded = _parse_candid_string(raw)
+    assert json.loads(decoded) == {"path": "C:\\new", "quote": 'say "hi"'}
+
+
+def test_parse_candid_string_plain_json_roundtrip():
+    import json
+
+    from gaas.dfx import _parse_candid_string
+
+    payload = json.dumps({"ok": True, "items": [1, 2, 3], "note": "line\nbreak"})
+    candid = payload.replace("\\", "\\\\").replace('"', '\\"')
+    decoded = _parse_candid_string(f'(\n  "{candid}"\n)')
+    assert json.loads(decoded) == json.loads(payload)
