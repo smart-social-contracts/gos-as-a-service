@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -12,6 +13,7 @@ from gaas.codex_seed import (
     CodexSeedError,
     collect_codex_uploads,
     collect_extension_uploads,
+    ensure_extension_frontend_built,
     list_codices,
     package_namespace,
     publish_codex_dir,
@@ -109,6 +111,125 @@ def test_collect_extension_uploads_backend_only(tmp_path: Path) -> None:
     uploads = collect_extension_uploads(ext_dir, "voting")
     paths = {spec.registry_path for spec in uploads}
     assert paths == {"manifest.json", "backend/entry.py"}
+
+
+def _write_extension_with_frontend_rt(
+    root: Path,
+    ext_id: str,
+    *,
+    with_dist: bool = False,
+    with_lock: bool = False,
+) -> Path:
+    ext_dir = _write_extension(root, ext_id, "1.0.0")
+    frontend_rt = ext_dir / "frontend-rt"
+    frontend_rt.mkdir()
+    (frontend_rt / "package.json").write_text(
+        json.dumps({"scripts": {"build": "vite build"}}),
+        encoding="utf-8",
+    )
+    if with_lock:
+        (frontend_rt / "package-lock.json").write_text("{}", encoding="utf-8")
+    if with_dist:
+        dist = frontend_rt / "dist"
+        dist.mkdir()
+        (dist / "index.js").write_text("export default {};\n", encoding="utf-8")
+        (dist / "index.css").write_text("body {}\n", encoding="utf-8")
+    return ext_dir
+
+
+@patch("gaas.codex_seed.subprocess.run")
+def test_ensure_extension_frontend_skips_when_dist_present(
+    mock_run: MagicMock, tmp_path: Path
+) -> None:
+    ext_dir = _write_extension_with_frontend_rt(tmp_path, "vault", with_dist=True)
+
+    assert ensure_extension_frontend_built(ext_dir, "vault") is None
+
+    mock_run.assert_not_called()
+
+
+@patch("gaas.codex_seed.subprocess.run")
+def test_ensure_extension_frontend_builds_when_dist_missing(
+    mock_run: MagicMock, tmp_path: Path
+) -> None:
+    ext_dir = _write_extension_with_frontend_rt(
+        tmp_path, "public_dashboard", with_lock=True
+    )
+    dist_index = ext_dir / "frontend-rt" / "dist" / "index.js"
+
+    def _fake_build(cmd, cwd=None, check=None):
+        if cmd[:2] == ["npm", "run"]:
+            dist = Path(cwd) / "dist"
+            dist.mkdir(parents=True, exist_ok=True)
+            (dist / "index.js").write_text("built\n", encoding="utf-8")
+            (dist / "index.css").write_text("body {}\n", encoding="utf-8")
+        return MagicMock(returncode=0)
+
+    mock_run.side_effect = _fake_build
+
+    assert ensure_extension_frontend_built(ext_dir, "public_dashboard") is None
+
+    assert mock_run.call_count == 2
+    assert mock_run.call_args_list[0].args[0] == [
+        "npm",
+        "ci",
+        "--no-audit",
+        "--no-fund",
+    ]
+    assert mock_run.call_args_list[1].args[0] == ["npm", "run", "build"]
+    uploads = collect_extension_uploads(ext_dir, "public_dashboard")
+    paths = {spec.registry_path for spec in uploads}
+    assert "frontend/dist/index.js" in paths
+    assert "frontend/dist/index.css" in paths
+    assert dist_index.is_file()
+
+
+@patch("gaas.codex_seed.subprocess.run")
+def test_ensure_extension_frontend_build_failure_returns_error(
+    mock_run: MagicMock, tmp_path: Path
+) -> None:
+    ext_dir = _write_extension_with_frontend_rt(tmp_path, "broken_ui")
+    mock_run.side_effect = subprocess.CalledProcessError(1, ["npm", "run", "build"])
+
+    err = ensure_extension_frontend_built(ext_dir, "broken_ui")
+
+    assert err is not None
+    assert "npm build failed" in err
+    assert not (ext_dir / "frontend-rt" / "dist" / "index.js").is_file()
+
+
+@patch("gaas.codex_seed.publish_extension_dir")
+@patch("gaas.codex_seed.ensure_extension_frontend_built")
+def test_try_seed_extensions_continues_after_build_failure(
+    mock_build: MagicMock,
+    mock_publish: MagicMock,
+    tmp_path: Path,
+) -> None:
+    from gaas.codex_seed import _try_seed_extensions
+
+    realms = tmp_path / "realms"
+    extensions_root = realms / "extensions" / "extensions"
+    extensions_root.mkdir(parents=True)
+    _write_extension(extensions_root, "good_ext", "1.0.0")
+    _write_extension(extensions_root, "bad_ext", "1.0.0")
+
+    mock_build.side_effect = [None, "npm build failed (exit 1)"]
+    mock_publish.return_value = "ext/good_ext/1.0.0"
+
+    namespaces = _try_seed_extensions(
+        VALID_CANISTER_ID,
+        realms,
+        "smart-social-contracts/realms",
+        tmp_path / "work",
+        "main",
+        "local",
+        identity="deployer",
+        catalog=REALMS_CATALOG,
+    )
+
+    assert mock_build.call_count == 2
+    assert mock_publish.call_count == 2
+    assert namespaces == ["ext/good_ext/1.0.0", "ext/good_ext/1.0.0"]
 
 
 def test_list_codices_skips_common_dirs(tmp_path: Path) -> None:

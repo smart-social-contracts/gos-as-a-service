@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -138,6 +139,43 @@ def package_namespace(package_id: str, version: str, *, namespace_prefix: str) -
 
 def is_unified_codex(source_dir: Path, manifest: dict) -> bool:
     return manifest.get("kind") == "codex" and (source_dir / "backend").is_dir()
+
+
+def _extension_frontend_dist(source_dir: Path) -> Path:
+    return source_dir / "frontend-rt" / "dist" / "index.js"
+
+
+def ensure_extension_frontend_built(source_dir: Path, ext_id: str) -> str | None:
+    """Build ``frontend-rt`` when ``package.json`` exists but ``dist/index.js`` does not.
+
+    Returns ``None`` on success (including when no build is needed), or an error
+    message string when the npm build fails.
+    """
+    frontend_rt = source_dir / "frontend-rt"
+    package_json = frontend_rt / "package.json"
+    dist_index = _extension_frontend_dist(source_dir)
+
+    if not package_json.is_file():
+        return None
+    if dist_index.is_file():
+        return None
+
+    console.print(f"  building frontend for extension {ext_id}...")
+    lock = frontend_rt / "package-lock.json"
+    install_cmd = (
+        ["npm", "ci", "--no-audit", "--no-fund"]
+        if lock.is_file()
+        else ["npm", "install", "--no-audit", "--no-fund"]
+    )
+    try:
+        subprocess.run(install_cmd, cwd=frontend_rt, check=True)
+        subprocess.run(["npm", "run", "build"], cwd=frontend_rt, check=True)
+    except subprocess.CalledProcessError as exc:
+        return f"npm build failed (exit {exc.returncode})"
+
+    if not dist_index.is_file():
+        return "build completed but frontend-rt/dist/index.js is still missing"
+    return None
 
 
 def collect_extension_uploads(source_dir: Path, ext_id: str) -> list[UploadSpec]:
@@ -491,8 +529,15 @@ def _try_seed_extensions(
 
     console.print(f"  seeding {len(ext_dirs)} extensions from {extensions_root}")
     failures: list[str] = []
+    build_failures: list[str] = []
     namespaces: list[str] = []
     for ext_dir in ext_dirs:
+        build_err = ensure_extension_frontend_built(ext_dir, ext_dir.name)
+        if build_err:
+            console.print(
+                f"  [yellow]warning:[/yellow] extension {ext_dir.name}: {build_err}"
+            )
+            build_failures.append(ext_dir.name)
         try:
             namespaces.append(
                 publish_extension_dir(
@@ -501,6 +546,11 @@ def _try_seed_extensions(
             )
         except CodexSeedError:
             failures.append(ext_dir.name)
+    if build_failures:
+        console.print(
+            f"  [yellow]warning:[/yellow] extension frontend builds failed: "
+            f"{', '.join(build_failures)}"
+        )
     if failures:
         console.print(
             f"  [yellow]warning:[/yellow] extension publish failed for: "
