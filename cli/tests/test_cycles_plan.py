@@ -29,7 +29,7 @@ from gaas.cycles_plan import (
     wallet_convert_amount_icp,
 )
 from gaas.descriptor import Descriptor, MultisigConfig
-from gaas.known import KNOWN_CANISTER_NAMES
+from gaas.known import KNOWN_CANISTER_NAMES, PLATFORM_CANISTER_NAMES
 from gaas.preflight import run_preflight
 from tests.conftest import SAMPLE_DESCRIPTOR, VALID_CANISTER_ID
 
@@ -48,7 +48,7 @@ def test_wallet_required_all_canisters_missing() -> None:
     )
     wallet = next(item for item in plan.items if item.label == "wallet")
     per = WALLET_CREATE_CYCLES + WALLET_INITIAL_FUNDING
-    assert wallet.required == per * len(KNOWN_CANISTER_NAMES)
+    assert wallet.required == per * len(PLATFORM_CANISTER_NAMES)
     assert len(plan.items) == 1
 
 
@@ -72,7 +72,7 @@ def test_wallet_required_partial_create_mix() -> None:
         },
     )
     wallet = next(item for item in plan.items if item.label == "wallet")
-    missing = len(KNOWN_CANISTER_NAMES) - len(canisters)
+    missing = len(PLATFORM_CANISTER_NAMES) - len(canisters)
     assert wallet.required == missing * (WALLET_CREATE_CYCLES + WALLET_INITIAL_FUNDING)
     assert len(plan.items) == 1 + len(canisters)
 

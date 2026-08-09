@@ -19,7 +19,7 @@ from rich.table import Table
 
 from gaas import dfx
 from gaas.descriptor import Descriptor
-from gaas.known import KNOWN_CANISTER_NAMES
+from gaas.known import KNOWN_CANISTER_NAMES, PLATFORM_CANISTER_NAMES
 
 # Wallet pays dfx canister create (ledger fee) plus initial --with-cycles funding.
 WALLET_CREATE_CYCLES: int = 100_000_000_000  # 0.1T — IC canister creation fee
@@ -147,7 +147,7 @@ def build_cycles_plan(
     balances = canister_balances or {}
 
     wallet_required = 0
-    for name in KNOWN_CANISTER_NAMES:
+    for name in PLATFORM_CANISTER_NAMES:
         if name not in descriptor.canisters:
             wallet_required += _wallet_required_per_canister()
 

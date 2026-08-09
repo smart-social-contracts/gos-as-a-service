@@ -169,7 +169,10 @@ def test_create_canisters_adopt_vs_create(
 
     mock_create.assert_called()
     assert desc.canisters["realm_registry_backend"] == VALID_CANISTER_ID
-    assert len(desc.canisters) == 9
+    # 1 adopted + 6 platform created; adopt-only marketplace names are skipped.
+    assert len(desc.canisters) == 7
+    assert "marketplace_backend" not in desc.canisters
+    assert "marketplace_frontend" not in desc.canisters
 
 
 def test_registry_init_json_open_mode() -> None:

@@ -357,6 +357,7 @@ export interface RealmRecord {
   'logo' : string,
   'name' : string,
   'created_at' : number,
+  'listing_status' : string,
   'backend_url' : string,
   'frontend_canister_id' : string,
   'users_count' : bigint,

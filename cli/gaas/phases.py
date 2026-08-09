@@ -46,6 +46,7 @@ from gaas.file_registry_client import (
 )
 from gaas.gaas_env import frontend_ic_origin, remove_gaas_env, write_gaas_env
 from gaas.known import (
+    ADOPT_ONLY_CANISTER_NAMES,
     DEFAULT_CANISTER_COUNT,
     DEFAULT_CASALS_SECTION,
     DEFAULT_CYCLES_PER_CANISTER,
@@ -240,6 +241,9 @@ def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
                     f"{name} ({existing_id}); controllers: {', '.join(controllers)}"
                 )
             console.print(f"  {name}: adopt {existing_id} ({status.status})")
+            continue
+
+        if name in ADOPT_ONLY_CANISTER_NAMES:
             continue
 
         dfx_name = DFX_CANISTER_NAMES.get(name)

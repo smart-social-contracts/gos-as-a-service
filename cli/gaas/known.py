@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
-KNOWN_CANISTER_NAMES: Final[tuple[str, ...]] = (
+PLATFORM_CANISTER_NAMES: Final[tuple[str, ...]] = (
     "realm_registry_backend",
     "realm_registry_frontend",
     "realm_installer",
@@ -13,8 +13,17 @@ KNOWN_CANISTER_NAMES: Final[tuple[str, ...]] = (
     "file_registry_frontend",
     "casals_backend",
     "casals_frontend",
+)
+
+# Valid in descriptors and adopted when present, but never created, deployed,
+# or cycle-budgeted by gaas (external services wired in by configuration).
+ADOPT_ONLY_CANISTER_NAMES: Final[tuple[str, ...]] = (
     "marketplace_backend",
     "marketplace_frontend",
+)
+
+KNOWN_CANISTER_NAMES: Final[tuple[str, ...]] = (
+    PLATFORM_CANISTER_NAMES + ADOPT_ONLY_CANISTER_NAMES
 )
 
 DEFAULT_CASALS_VERSION: Final[str] = "v0.3.0"
@@ -23,7 +32,7 @@ DEFAULT_PLATFORM_VERSION: Final[str] = "v0.3.1"
 DEFAULT_PLATFORM_RELEASE_REPO: Final[str] = "smart-social-contracts/gos-as-a-service"
 DEFAULT_CASALS_SECTION: Final[str] = "Deployments"
 
-# Maps descriptor canister names to dfx.json canister names (None = create via ledger).
+# Maps platform canister names to dfx.json canister names (None = create via ledger).
 DFX_CANISTER_NAMES: Final[dict[str, str | None]] = {
     "realm_registry_backend": "realm_registry_backend",
     "realm_registry_frontend": "realm_registry_frontend",
@@ -32,8 +41,6 @@ DFX_CANISTER_NAMES: Final[dict[str, str | None]] = {
     "file_registry_frontend": "file_registry_frontend",
     "casals_backend": None,
     "casals_frontend": "casals_frontend",
-    "marketplace_backend": None,
-    "marketplace_frontend": "marketplace_frontend",
 }
 
 PLATFORM_BACKEND_WASMS: Final[dict[str, str]] = {
@@ -51,7 +58,7 @@ CASALS_BACKEND_WASM_ASSET: Final[str] = "casals_backend.wasm.gz"
 CASALS_FRONTEND_ARCHIVE: Final[str] = "casals_frontend.tar.gz"
 
 DEFAULT_CYCLES_PER_CANISTER: Final[int] = 1_000_000_000_000  # 1T
-DEFAULT_CANISTER_COUNT: Final[int] = 9
+DEFAULT_CANISTER_COUNT: Final[int] = len(PLATFORM_CANISTER_NAMES)
 DEFAULT_INSTALL_BUFFER_CYCLES: Final[int] = 2_000_000_000_000  # 2T
 DEFAULT_REQUIRED_CYCLES: Final[int] = (
     DEFAULT_CANISTER_COUNT * DEFAULT_CYCLES_PER_CANISTER + DEFAULT_INSTALL_BUFFER_CYCLES
