@@ -1132,6 +1132,7 @@ def _execute_configure_canister_ids(task, step, args):
     jlog(task.name).info(
         f"setting canister config on backend {backend_id}: frontend={frontend_id}, "
         f"file_registry={(args.get('file_registry_canister_id') or '').strip() or '–'}, "
+        f"realm_registry={(args.get('realm_registry_canister_id') or '').strip() or '–'}, "
         f"marketplace={(args.get('marketplace_canister_id') or '').strip() or '–'}, "
         f"creator={'set' if creator else 'missing'}"
     )
@@ -1493,6 +1494,9 @@ def _start_extensions_for_job(job, manifest: dict) -> Async[None]:
     realm_info = manifest.get("realm", {})
     network = (manifest.get("network") or "").strip()
     registry_id = manifest.get("file_registry_canister_id", "") or configured_file_registry_id(network)
+    realm_registry_id = (
+        (manifest.get("realm_registry_canister_id") or manifest.get("registry_canister_id") or "").strip()
+    )
 
     jlog(job.name).info(f"starting extension install: network={network}, file_registry={registry_id}")
     jlog(job.name).info(f"realm_info keys: {list(realm_info.keys())}")
@@ -1520,6 +1524,9 @@ def _start_extensions_for_job(job, manifest: dict) -> Async[None]:
         "target_canister_id": job.backend_canister_id,
         "frontend_canister_id": job.frontend_canister_id or "",
         "registry_canister_id": registry_id,
+        "file_registry_canister_id": registry_id,
+        "realm_registry_canister_id": realm_registry_id,
+        "infra": manifest.get("infra") or {},
         "marketplace_canister_id": marketplace_id,
         "network": network,
         "requesting_principal": (manifest.get("requesting_principal") or "").strip(),

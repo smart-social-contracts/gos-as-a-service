@@ -1,6 +1,25 @@
 """Post-install bootstrap helpers for the in-realm setup wizard."""
 
-from installer_config import configured_portal_base
+from installer_config import configured_file_registry_id, configured_portal_base
+
+
+def _resolve_file_registry_canister_id(manifest: dict) -> str:
+    """Resolve the file registry from manifest infra, not the realm registry."""
+    infra = manifest.get("infra") or {}
+    return (
+        (manifest.get("file_registry_canister_id") or "").strip()
+        or (infra.get("file_registry_canister_id") or "").strip()
+        or configured_file_registry_id(manifest.get("network", ""))
+        or ""
+    )
+
+
+def _resolve_realm_registry_canister_id(manifest: dict) -> str:
+    """Resolve the realm registry id (registry backend), when present."""
+    return (
+        (manifest.get("realm_registry_canister_id") or "").strip()
+        or (manifest.get("registry_canister_id") or "").strip()
+    )
 
 
 def manifest_has_codex_block(manifest: dict) -> bool:
@@ -17,7 +36,8 @@ def configure_canister_ids_args(manifest: dict, backend_id: str, frontend_id: st
     return {
         "backend_canister_id": backend_id,
         "frontend_canister_id": frontend_id,
-        "file_registry_canister_id": manifest.get("registry_canister_id", ""),
+        "file_registry_canister_id": _resolve_file_registry_canister_id(manifest),
+        "realm_registry_canister_id": _resolve_realm_registry_canister_id(manifest),
         "marketplace_canister_id": manifest.get("marketplace_canister_id", ""),
         "network": manifest.get("network", ""),
         "requesting_principal": (manifest.get("requesting_principal") or "").strip(),
@@ -31,9 +51,12 @@ def configure_canister_ids_payload(args: dict) -> tuple[dict, list[str]]:
     frontend_id = args.get("frontend_canister_id", "")
     payload = {"frontend_canister_id": frontend_id}
 
-    registry_id = (args.get("file_registry_canister_id") or "").strip()
-    if registry_id:
-        payload["file_registry_canister_id"] = registry_id
+    file_registry_id = (args.get("file_registry_canister_id") or "").strip()
+    if file_registry_id:
+        payload["file_registry_canister_id"] = file_registry_id
+    realm_registry_id = (args.get("realm_registry_canister_id") or "").strip()
+    if realm_registry_id:
+        payload["realm_registry_canister_id"] = realm_registry_id
     marketplace_id = (args.get("marketplace_canister_id") or "").strip()
     if marketplace_id:
         payload["marketplace_canister_id"] = marketplace_id

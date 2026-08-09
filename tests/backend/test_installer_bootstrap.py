@@ -31,7 +31,8 @@ def _bootstrap_manifest(**overrides):
     base = {
         "target_canister_id": "backend-principal",
         "frontend_canister_id": "frontend-principal",
-        "registry_canister_id": "file-registry-id",
+        "registry_canister_id": "realm-registry-id",
+        "infra": {"file_registry_canister_id": "file-registry-id"},
         "marketplace_canister_id": "marketplace-id",
         "network": "test",
         "requesting_principal": "creator-principal-abc",
@@ -54,12 +55,26 @@ def _legacy_codex_manifest(**overrides):
 
 def _ext_manifest_for_job(manifest):
     """Build the deploy-task manifest shape used after _start_extensions_for_job."""
+    network = (manifest.get("network") or "").strip()
+    file_registry_id = (
+        manifest.get("file_registry_canister_id")
+        or (manifest.get("infra") or {}).get("file_registry_canister_id")
+        or ""
+    )
+    realm_registry_id = (
+        manifest.get("realm_registry_canister_id")
+        or manifest.get("registry_canister_id")
+        or ""
+    )
     ext_manifest = {
         "target_canister_id": manifest["target_canister_id"],
         "frontend_canister_id": manifest["frontend_canister_id"],
-        "registry_canister_id": manifest["registry_canister_id"],
+        "registry_canister_id": file_registry_id,
+        "file_registry_canister_id": file_registry_id,
+        "realm_registry_canister_id": realm_registry_id,
+        "infra": manifest.get("infra") or {},
         "marketplace_canister_id": manifest["marketplace_canister_id"],
-        "network": manifest["network"],
+        "network": network,
         "requesting_principal": manifest.get("requesting_principal", ""),
         "federation": manifest.get("federation") or {},
     }
@@ -108,6 +123,59 @@ def test_configure_payload_includes_creator_and_portal_origin():
     assert payload["creator_principal"] == "creator-principal-abc"
     assert payload["portal_origin"] == "https://portal.example"
     assert payload["frontend_canister_id"] == "frontend-principal"
+    assert payload["file_registry_canister_id"] == "file-registry-id"
+    assert payload["realm_registry_canister_id"] == "realm-registry-id"
+
+
+def test_configure_payload_realm_registry_from_explicit_field():
+    manifest = _bootstrap_manifest(
+        realm_registry_canister_id="explicit-realm-registry",
+        registry_canister_id="injected-realm-registry",
+    )
+    args = configure_canister_ids_args(
+        manifest, manifest["target_canister_id"], manifest["frontend_canister_id"]
+    )
+    payload, _warnings = configure_canister_ids_payload(args)
+    assert payload["realm_registry_canister_id"] == "explicit-realm-registry"
+
+
+def test_configure_file_registry_from_infra_not_registry_canister_id():
+    """registry_canister_id is the realm registry; file registry lives in infra."""
+    manifest = _bootstrap_manifest(
+        registry_canister_id="realm-registry-only",
+        infra={"file_registry_canister_id": "infra-file-registry"},
+    )
+    args = configure_canister_ids_args(
+        manifest, manifest["target_canister_id"], manifest["frontend_canister_id"]
+    )
+    payload, _warnings = configure_canister_ids_payload(args)
+    assert payload["file_registry_canister_id"] == "infra-file-registry"
+    assert payload["realm_registry_canister_id"] == "realm-registry-only"
+    assert "file-registry-id" not in payload.values()
+
+
+def test_configure_file_registry_falls_back_to_installer_config():
+    _reset_installer_config()
+    apply_installer_config({"file_registry_id": "configured-fr-id"})
+    manifest = _bootstrap_manifest(infra={}, registry_canister_id="realm-registry-only")
+    args = configure_canister_ids_args(
+        manifest, manifest["target_canister_id"], manifest["frontend_canister_id"]
+    )
+    payload, _warnings = configure_canister_ids_payload(args)
+    assert payload["file_registry_canister_id"] == "configured-fr-id"
+    assert payload["realm_registry_canister_id"] == "realm-registry-only"
+
+
+def test_ext_manifest_configure_includes_realm_registry():
+    ext_manifest = _ext_manifest_for_job(_bootstrap_manifest())
+    configure_args = configure_canister_ids_args(
+        ext_manifest,
+        ext_manifest["target_canister_id"],
+        ext_manifest["frontend_canister_id"],
+    )
+    payload, _warnings = configure_canister_ids_payload(configure_args)
+    assert payload["file_registry_canister_id"] == "file-registry-id"
+    assert payload["realm_registry_canister_id"] == "realm-registry-id"
 
 
 def test_configure_missing_requesting_principal_warns_and_proceeds():
