@@ -113,6 +113,31 @@ def test_collect_extension_uploads_backend_only(tmp_path: Path) -> None:
     assert paths == {"manifest.json", "backend/entry.py"}
 
 
+def test_collect_extension_uploads_includes_html_and_nested_assets(tmp_path: Path) -> None:
+    ext_dir = _write_extension(tmp_path, "member_dashboard", "1.1.2")
+    dist = ext_dir / "frontend-rt" / "dist"
+    assets = dist / "assets"
+    assets.mkdir(parents=True)
+    (dist / "index.html").write_text("<!doctype html><html></html>", encoding="utf-8")
+    (dist / "index.js").write_text("export default {};\n", encoding="utf-8")
+    (assets / "chunk-abc.js").write_text("console.log('chunk');\n", encoding="utf-8")
+    (assets / "chunk-abc.js.map").write_bytes(b"source map")
+
+    uploads = collect_extension_uploads(ext_dir, "member_dashboard")
+    paths = {spec.registry_path: spec.local_path for spec in uploads}
+
+    assert set(paths) == {
+        "manifest.json",
+        "backend/entry.py",
+        "frontend/dist/index.html",
+        "frontend/dist/index.js",
+        "frontend/dist/assets/chunk-abc.js",
+    }
+    assert paths["frontend/dist/index.html"] == dist / "index.html"
+    assert paths["frontend/dist/index.js"] == dist / "index.js"
+    assert paths["frontend/dist/assets/chunk-abc.js"] == assets / "chunk-abc.js"
+
+
 def _write_extension_with_frontend_rt(
     root: Path,
     ext_id: str,

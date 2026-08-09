@@ -145,6 +145,38 @@ def _extension_frontend_dist(source_dir: Path) -> Path:
     return source_dir / "frontend-rt" / "dist" / "index.js"
 
 
+# Allowlisted extensions under frontend-rt/dist/ (recursive). Source maps excluded.
+_FRONTEND_DIST_SUFFIXES = (
+    ".html",
+    ".js",
+    ".css",
+    ".png",
+    ".svg",
+    ".woff",
+    ".woff2",
+    ".ttf",
+    ".json",
+    ".webmanifest",
+)
+
+
+def _iter_frontend_dist_uploads(dist_dir: Path) -> list[tuple[str, Path]]:
+    """Return (registry_path, local_path) pairs for allowlisted dist artifacts."""
+    if not dist_dir.is_dir():
+        return []
+    specs: list[tuple[str, Path]] = []
+    for root, _dirs, files in os.walk(dist_dir):
+        for fname in sorted(files):
+            if fname.endswith(".map"):
+                continue
+            if not fname.endswith(_FRONTEND_DIST_SUFFIXES):
+                continue
+            local = Path(root) / fname
+            rel = local.relative_to(dist_dir).as_posix()
+            specs.append((f"frontend/dist/{rel}", local))
+    return specs
+
+
 def ensure_extension_frontend_built(source_dir: Path, ext_id: str) -> str | None:
     """Build ``frontend-rt`` when ``package.json`` exists but ``dist/index.js`` does not.
 
@@ -195,16 +227,9 @@ def collect_extension_uploads(source_dir: Path, ext_id: str) -> list[UploadSpec]
                 rel = local.relative_to(backend_dir).as_posix()
                 uploads.append(UploadSpec(f"backend/{rel}", local_path=local))
 
-    auto_bundle = source_dir / "frontend-rt" / "dist" / "index.js"
-    if auto_bundle.is_file():
-        uploads.append(UploadSpec("frontend/dist/index.js", local_path=auto_bundle))
-
     dist_dir = source_dir / "frontend-rt" / "dist"
-    if dist_dir.is_dir():
-        for fname in sorted(dist_dir.iterdir()):
-            if fname.name == "index.js" or not fname.name.endswith((".js", ".css")):
-                continue
-            uploads.append(UploadSpec(f"frontend/dist/{fname.name}", local_path=fname))
+    for registry_path, local_path in _iter_frontend_dist_uploads(dist_dir):
+        uploads.append(UploadSpec(registry_path, local_path=local_path))
 
     i18n_ext_dir = source_dir / "frontend" / "i18n" / "locales" / "extensions" / ext_id
     locales_root = source_dir / "frontend" / "i18n" / "locales"
