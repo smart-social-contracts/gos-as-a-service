@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   buildRealmDeploymentManifest,
+  networkInfra,
   slugify,
 } from './deployment-manifest-core.js';
 
@@ -69,4 +70,32 @@ test('casals wasm keys always pin the channel (main must not collapse to bare fa
   );
   assert.equal(pinnedManifest.casals.backend_wasm_key, 'realm-backend@0.4.0');
   assert.equal(pinnedManifest.casals.frontend_wasm_key, 'realm-assets@0.4.0');
+});
+
+test('test network infra omits stale hardcoded canister fallbacks', () => {
+  const infra = networkInfra('test', {});
+  assert.equal(infra, null);
+
+  const infraWithOrigin = networkInfra('test', { ii_derivation_origin: 'https://test.gos.earth' });
+  assert.equal(infraWithOrigin.file_registry_canister_id, '');
+  assert.equal(infraWithOrigin.marketplace_canister_id, '');
+});
+
+test('test network config-provided infra IDs win over fallbacks', () => {
+  const infra = networkInfra('test', {
+    file_registry_canister_id: 'custom-file-id',
+    marketplace_canister_id: 'custom-market-id',
+  });
+  assert.equal(infra.file_registry_canister_id, 'custom-file-id');
+  assert.equal(infra.marketplace_canister_id, 'custom-market-id');
+});
+
+test('staging and demo networks still use infra fallbacks when config omits IDs', () => {
+  const staging = networkInfra('staging', {});
+  assert.equal(staging.file_registry_canister_id, 'iebdk-kqaaa-aaaau-agoxq-cai');
+  assert.equal(staging.marketplace_canister_id, 'jji3o-uyaaa-aaaah-qreja-cai');
+
+  const demo = networkInfra('demo', {});
+  assert.equal(demo.file_registry_canister_id, 'vi64l-3aaaa-aaaae-qj4va-cai');
+  assert.equal(demo.marketplace_canister_id, 'ehyfg-wyaaa-aaaae-qg3qq-cai');
 });
