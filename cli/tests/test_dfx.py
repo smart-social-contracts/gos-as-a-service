@@ -63,6 +63,26 @@ def test_parse_canister_cycles_balance_from_status():
     assert parse_canister_cycles_balance(raw_cycles) == 3_072_815_616
 
 
+def test_deploy_assets_passes_yes_flag(tmp_path, monkeypatch):
+    from gaas import dfx
+
+    captured: dict = {}
+
+    def fake_run(args, **kwargs):
+        captured["args"] = args
+
+    monkeypatch.setattr(dfx, "_run", fake_run)
+    (tmp_path / "canister_ids.json").write_text("{}", encoding="utf-8")
+    dfx.deploy_assets_canister(
+        "casals_frontend",
+        "qic2k-baaaa-aaaae-agvga-cai",
+        "ic",
+        repo_root=tmp_path,
+        yes=True,
+    )
+    assert "--yes" in captured["args"]
+
+
 def test_deploy_assets_retries_transient_ic0536(tmp_path, monkeypatch):
     from gaas import dfx
 

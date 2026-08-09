@@ -30,6 +30,27 @@ from gaas.known import (
 
 console = Console()
 
+ASSET_FRONTEND_CANISTERS = (
+    "realm_registry_frontend",
+    "file_registry_frontend",
+    "casals_frontend",
+)
+
+
+def deploy_confirmation_message(*, network: str = "ic") -> str:
+    if network == "ic":
+        names = ", ".join(ASSET_FRONTEND_CANISTERS)
+        return (
+            "Deploy now? This will create or update canisters, install backend WASM, "
+            "seed the file registry and conductor, and reinstall asset canisters "
+            f"({names}) on IC mainnet — this wipes existing frontend state on those "
+            "canisters."
+        )
+    return (
+        "Deploy now? This will create or update canisters, install backends, seed "
+        "artifacts, and reinstall frontend asset canisters."
+    )
+
 
 def _validate_domain(value: str) -> bool | str:
     if not value.strip():
@@ -371,6 +392,9 @@ def run_wizard(
     return descriptor, identity, network, output_path
 
 
-def confirm_deploy() -> bool:
-    answer = questionary.confirm("Deploy now?", default=False).ask()
+def confirm_deploy(*, network: str = "ic") -> bool:
+    answer = questionary.confirm(
+        deploy_confirmation_message(network=network),
+        default=False,
+    ).ask()
     return bool(answer)

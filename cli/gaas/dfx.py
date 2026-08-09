@@ -13,7 +13,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+from gaas.runlog import get_run_log
+
 from gaas.known import DEFAULT_CYCLES_PER_CANISTER
+from gaas.runlog import get_run_log
 
 InstallMode = Literal["install", "reinstall", "upgrade"]
 
@@ -92,6 +95,14 @@ def _run(
             command=args,
             stderr=str(exc),
         ) from exc
+
+    run_log = get_run_log()
+    if run_log is not None:
+        run_log.log_command(args, cwd=cwd)
+        if result.stdout:
+            run_log.log_output(result.stdout)
+        if result.stderr:
+            run_log.log_output(result.stderr)
 
     if check and result.returncode != 0:
         message = f"dfx command failed (exit {result.returncode}): {' '.join(args)}"

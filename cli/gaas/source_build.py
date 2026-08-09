@@ -5,12 +5,12 @@ from __future__ import annotations
 import gzip
 import os
 import shutil
-import subprocess
 import sys
 import tarfile
 from pathlib import Path
 
 from gaas.artifacts import ArtifactError
+from gaas.runlog import run_subprocess
 
 _BASILISK_REQUIREMENTS = [
     "ic-basilisk==0.14.2",
@@ -30,19 +30,19 @@ def clone_repo(release_repo: str, dest_parent: Path, *, refresh: bool = False) -
     dest = dest_parent / slug
     if (dest / ".git").is_dir():
         if refresh:
-            subprocess.run(
+            run_subprocess(
                 ["git", "fetch", "origin", "main", "--depth", "1"],
                 cwd=dest,
                 check=True,
             )
-            subprocess.run(
+            run_subprocess(
                 ["git", "checkout", "FETCH_HEAD"],
                 cwd=dest,
                 check=True,
             )
         return dest
     dest_parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
+    run_subprocess(
         [
             "git",
             "clone",
@@ -61,7 +61,7 @@ def clone_repo_at_ref(release_repo: str, dest: Path, ref: str) -> Path:
     if (dest / ".git").is_dir():
         return dest
     dest.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
+    run_subprocess(
         [
             "git",
             "clone",
@@ -83,10 +83,10 @@ def ensure_basilisk_python(repo_root: Path) -> Path:
     py = venv / "bin" / "python"
     if py.is_file():
         return py
-    subprocess.run([sys.executable, "-m", "venv", str(venv)], check=True, cwd=repo_root)
+    run_subprocess([sys.executable, "-m", "venv", str(venv)], check=True, cwd=repo_root)
     pip = venv / "bin" / "pip"
-    subprocess.run([str(pip), "install", "-q", "--upgrade", "pip"], check=True)
-    subprocess.run(
+    run_subprocess([str(pip), "install", "-q", "--upgrade", "pip"], check=True)
+    run_subprocess(
         [str(pip), "install", "-q", *list(_BASILISK_REQUIREMENTS)],
         check=True,
     )
@@ -109,7 +109,7 @@ def build_realms_gos_artifacts(repo_root: Path, dest_dir: Path) -> tuple[Path, P
             repo_root / "src" / "realm_backend" / "realm_backend.did"
         ),
     }
-    subprocess.run(
+    run_subprocess(
         [str(py), "scripts/build_base_wasm.py", "--gzip"],
         cwd=repo_root,
         env=env,
@@ -129,19 +129,19 @@ def build_realms_gos_artifacts(repo_root: Path, dest_dir: Path) -> tuple[Path, P
     fe_dir = repo_root / "src" / "realm_frontend"
     # Realms is an npm workspace: install at the root so shared deps (vite)
     # are hoisted; installing inside src/realm_frontend leaves a partial tree.
-    subprocess.run(
+    run_subprocess(
         ["npm", "install", "--legacy-peer-deps"],
         cwd=repo_root,
         check=True,
     )
     # Workspace packages ship source only; realm_frontend imports
     # @realmsgos/extension-bridge which must be compiled (tsc) first.
-    subprocess.run(
+    run_subprocess(
         ["npm", "run", "build", "-w", "packages/extension-bridge", "--if-present"],
         cwd=repo_root,
         check=True,
     )
-    subprocess.run(["npm", "run", "build"], cwd=fe_dir, check=True)
+    run_subprocess(["npm", "run", "build"], cwd=fe_dir, check=True)
     dist = fe_dir / "dist"
     if not dist.is_dir() or not any(dist.iterdir()):
         raise SourceBuildError(f"Realms frontend build did not produce {dist}")

@@ -23,6 +23,7 @@ from gaas.phases import (
     phase_create_canisters,
     phase_domain_wiring,
     phase_grant_commanders,
+    phase_install_frontends,
     phase_seed_conductor,
     phase_seed_file_registry,
     run_phases,
@@ -750,3 +751,51 @@ def test_phase_grant_commanders_grant_error_continues(
 
     assert mock_ensure.call_count == 2
     assert mock_ensure.call_args_list[1][0][2] == [PRINCIPAL_B]
+
+
+@patch("gaas.phases.dfx.get_principal", return_value="aaaaa-aa")
+@patch("gaas.phases.dfx.deploy_assets_canister")
+@patch("gaas.phases.resolve_casals_frontend_dist")
+@patch("gaas.phases.frontend_dist_dir")
+@patch("gaas.phases.write_gaas_env", return_value=Path("/tmp/gaas-env.json"))
+@patch("gaas.phases._find_repo_root")
+@patch("gaas.phases.get_run_log")
+def test_phase_install_frontends_no_mid_run_confirm(
+    mock_get_run_log,
+    mock_repo_root,
+    _write_env,
+    mock_frontend_dist,
+    mock_casals_dist,
+    mock_deploy_assets,
+    _mock_principal,
+    tmp_path: Path,
+) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    dist = repo_root / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("<html></html>", encoding="utf-8")
+    mock_repo_root.return_value = repo_root
+    mock_frontend_dist.return_value = dist
+    mock_casals_dist.return_value = dist
+
+    run_log = MagicMock()
+    run_log.run_step = MagicMock()
+    mock_get_run_log.return_value = run_log
+
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        "realm_registry_frontend": VALID_CANISTER_ID,
+        "file_registry_frontend": VALID_CANISTER_ID,
+        "casals_frontend": VALID_CANISTER_ID,
+        "casals_backend": VALID_CANISTER_ID,
+    }
+    descriptor = Descriptor.model_validate(data)
+    ctx = DeployContext(identity="deployer", network="ic", yes=False, work_dir=tmp_path / "work")
+
+    phase_install_frontends(descriptor, ctx)
+
+    assert run_log.run_step.call_count == 3
+    for call in mock_deploy_assets.call_args_list:
+        assert call.kwargs.get("yes") is True
+        assert call.kwargs.get("mode") == "reinstall"

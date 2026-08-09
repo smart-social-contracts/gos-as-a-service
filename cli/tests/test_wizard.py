@@ -5,7 +5,15 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from gaas.wizard import run_wizard
+from gaas.wizard import deploy_confirmation_message, run_wizard
+
+
+def test_deploy_confirmation_message_mentions_asset_reinstalls() -> None:
+    message = deploy_confirmation_message(network="ic")
+    assert "realm_registry_frontend" in message
+    assert "file_registry_frontend" in message
+    assert "casals_frontend" in message
+    assert "wipes existing frontend state" in message
 
 
 def test_wizard_builds_descriptor(tmp_path: Path, monkeypatch) -> None:

@@ -6,7 +6,6 @@ import gzip
 import json
 import os
 import shutil
-import subprocess
 import sys
 import tarfile
 import urllib.parse
@@ -15,6 +14,7 @@ from pathlib import Path
 import requests
 
 from gaas.artifacts import ArtifactError, fetch_release_assets
+from gaas.runlog import run_subprocess
 from gaas.known import (
     CASALS_BACKEND_WASM_ASSET,
     CASALS_FRONTEND_ARCHIVE,
@@ -78,10 +78,10 @@ def _basilisk_python(casals_root: Path) -> Path:
     alt = Path("/srv/dev/Casals/.venv-basilisk/bin/python")
     if alt.is_file() and casals_root == Path("/srv/dev/Casals").resolve():
         return alt
-    subprocess.run([sys.executable, "-m", "venv", str(venv)], check=True, cwd=casals_root)
+    run_subprocess([sys.executable, "-m", "venv", str(venv)], check=True, cwd=casals_root)
     pip = venv / "bin" / "pip"
-    subprocess.run([str(pip), "install", "-q", "--upgrade", "pip"], check=True)
-    subprocess.run(
+    run_subprocess([str(pip), "install", "-q", "--upgrade", "pip"], check=True)
+    run_subprocess(
         [str(pip), "install", "-q", *list(_BASILISK_REQUIREMENTS)],
         check=True,
     )
@@ -107,7 +107,7 @@ def build_casals_wasm(casals_root: Path, dest: Path) -> Path:
         **os.environ,
         "CANISTER_CANDID_PATH": str(casals_root / "casals_backend.did"),
     }
-    subprocess.run(
+    run_subprocess(
         [str(py), "-m", "basilisk", "casals_backend", "src/main.py"],
         cwd=casals_root,
         env=env,
@@ -152,8 +152,8 @@ def build_casals_frontend(
     env = {**os.environ}
     if conductor_canister_id:
         env["VITE_CANISTER_ID"] = conductor_canister_id
-    subprocess.run(["npm", "ci"], cwd=frontend_dir, check=True, env=env)
-    subprocess.run(["npm", "run", "build"], cwd=frontend_dir, check=True, env=env)
+    run_subprocess(["npm", "ci"], cwd=frontend_dir, check=True, env=env)
+    run_subprocess(["npm", "run", "build"], cwd=frontend_dir, check=True, env=env)
     built = casals_root / "dist"
     if not built.is_dir() or not any(built.iterdir()):
         raise PlatformError(f"Casals frontend build did not produce {built}")

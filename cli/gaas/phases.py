@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import subprocess
 import sys
 import tarfile
 import tempfile
@@ -64,6 +63,7 @@ from gaas.platform import (
     resolve_platform_backend_wasm,
 )
 from gaas.preflight import PreflightReport, run_preflight
+from gaas.runlog import format_duration, get_run_log, print_log_path
 from gaas.source_build import resolve_gos_artifacts
 from gaas.versions import normalize_catalog_version, resolve_deploy_version
 
@@ -268,6 +268,7 @@ def phase_validate(descriptor: Descriptor, ctx: DeployContext) -> None:
     if not report.ok:
         failed = [c.detail for c in report.checks if not c.passed]
         raise RuntimeError("preflight failed:\n  - " + "\n  - ".join(failed))
+    print_log_path()
 
 
 def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
@@ -387,7 +388,7 @@ def phase_install_backends(descriptor: Descriptor, ctx: DeployContext) -> None:
             mode,
             init_arg,
             identity=ctx.identity,
-            yes=ctx.yes,
+            yes=True,
         )
 
 
@@ -660,16 +661,6 @@ def _is_interactive(ctx: DeployContext) -> bool:
     return not ctx.yes and sys.stdin.isatty()
 
 
-def _confirm_reinstall(ctx: DeployContext) -> None:
-    if ctx.yes or ctx.network != "ic":
-        return
-    answer = console.input(
-        "[yellow]Reinstall asset canisters on ic? This wipes frontend state. [y/N]: [/yellow]"
-    )
-    if answer.strip().lower() not in {"y", "yes"}:
-        raise RuntimeError("frontend reinstall cancelled (pass --yes to skip prompt)")
-
-
 def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
     platform_version, release_repo = _platform_release(descriptor)
     repo_root = _find_repo_root(ctx)
@@ -683,29 +674,29 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
         console.print(f"  wrote {gaas_env_path}")
 
         env = {**os.environ, "DFX_NETWORK": ctx.network}
-        console.print("  npm install (repo root)...")
-        subprocess.run(
+        run_log = get_run_log()
+        if run_log is None:
+            raise RuntimeError("run log not initialized for frontend build phase")
+
+        run_log.run_step(
+            "npm install (repo root)",
             ["npm", "install", "--legacy-peer-deps"],
             cwd=repo_root,
             env=env,
-            check=True,
         )
-        console.print("  building realm_registry_frontend...")
-        subprocess.run(
+        run_log.run_step(
+            "building realm_registry_frontend",
             ["npm", "run", "build", "--workspace=src/realm_registry_frontend"],
             cwd=repo_root,
             env=env,
-            check=True,
         )
-        console.print("  building file_registry_frontend...")
-        subprocess.run(
+        run_log.run_step(
+            "building file_registry_frontend",
             ["npm", "run", "build", "--workspace=src/file_registry_frontend"],
             cwd=repo_root,
             env=env,
-            check=True,
         )
 
-        _confirm_reinstall(ctx)
         work = _work_dir(ctx)
 
         for canister in ("realm_registry_frontend", "file_registry_frontend"):
@@ -742,6 +733,7 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
             if not dfx_name:
                 raise RuntimeError(f"no dfx mapping for {canister}")
             console.print(f"  {canister}: reinstall assets to {canister_id}")
+            start = time.monotonic()
             dfx.deploy_assets_canister(
                 dfx_name,
                 canister_id,
@@ -750,6 +742,10 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
                 identity=ctx.identity,
                 mode="reinstall",
                 yes=True,
+            )
+            console.print(
+                f"  {canister}: reinstall assets done "
+                f"({format_duration(time.monotonic() - start)})"
             )
 
         casals_frontend_id = descriptor.canisters.get("casals_frontend")
@@ -769,6 +765,7 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
             shutil.rmtree(casals_staging)
         shutil.copytree(casals_dist, casals_staging)
         console.print(f"  casals_frontend: reinstall assets to {casals_frontend_id}")
+        start = time.monotonic()
         dfx.deploy_assets_canister(
             "casals_frontend",
             casals_frontend_id,
@@ -777,6 +774,10 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
             identity=ctx.identity,
             mode="reinstall",
             yes=True,
+        )
+        console.print(
+            f"  casals_frontend: reinstall assets done "
+            f"({format_duration(time.monotonic() - start)})"
         )
     finally:
         if gaas_env_path and not ctx.keep_env_file:

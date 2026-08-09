@@ -5,13 +5,13 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
-import subprocess
 from pathlib import Path
 from typing import Any
 
 from rich.console import Console
 
 from gaas import dfx
+from gaas.runlog import get_run_log, run_subprocess
 from gaas.descriptor import Descriptor
 from gaas.file_registry_client import fetch_namespace_hashes, upload_file
 from gaas.platform import find_local_assetstorage_wasm, resolve_casals_src
@@ -160,8 +160,16 @@ def _resolve_template_wasm(casals_root: Path, filename: str) -> Path:
         return path
     script = casals_root / "scripts" / "build_orchestration_templates.sh"
     if script.is_file():
-        console.print("  building orchestration templates (Motoko/basilisk)...")
-        subprocess.run(["bash", str(script)], cwd=casals_root, check=True)
+        run_log = get_run_log()
+        if run_log is not None:
+            run_log.run_step(
+                "building orchestration templates (Motoko/basilisk)",
+                ["bash", str(script)],
+                cwd=casals_root,
+            )
+        else:
+            console.print("  building orchestration templates (Motoko/basilisk)...")
+            run_subprocess(["bash", str(script)], cwd=casals_root, check=True)
     if not path.is_file():
         raise RuntimeError(
             f"missing orchestration template {path}; "

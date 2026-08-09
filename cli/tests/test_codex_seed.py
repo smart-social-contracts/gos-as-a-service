@@ -162,7 +162,7 @@ def _write_extension_with_frontend_rt(
     return ext_dir
 
 
-@patch("gaas.codex_seed.subprocess.run")
+@patch("gaas.codex_seed.run_subprocess")
 def test_ensure_extension_frontend_skips_when_dist_present(
     mock_run: MagicMock, tmp_path: Path
 ) -> None:
@@ -173,7 +173,7 @@ def test_ensure_extension_frontend_skips_when_dist_present(
     mock_run.assert_not_called()
 
 
-@patch("gaas.codex_seed.subprocess.run")
+@patch("gaas.codex_seed.run_subprocess")
 def test_ensure_extension_frontend_builds_when_dist_missing(
     mock_run: MagicMock, tmp_path: Path
 ) -> None:
@@ -209,12 +209,14 @@ def test_ensure_extension_frontend_builds_when_dist_missing(
     assert dist_index.is_file()
 
 
-@patch("gaas.codex_seed.subprocess.run")
+@patch("gaas.codex_seed.run_subprocess")
 def test_ensure_extension_frontend_build_failure_returns_error(
     mock_run: MagicMock, tmp_path: Path
 ) -> None:
+    from gaas.runlog import CommandError
+
     ext_dir = _write_extension_with_frontend_rt(tmp_path, "broken_ui")
-    mock_run.side_effect = subprocess.CalledProcessError(1, ["npm", "run", "build"])
+    mock_run.side_effect = CommandError("failed", cmd=["npm", "run", "build"], tail="")
 
     err = ensure_extension_frontend_built(ext_dir, "broken_ui")
 

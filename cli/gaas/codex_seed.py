@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +19,7 @@ from gaas.file_registry_client import (
     publish_namespace,
     upload_file,
 )
+from gaas.runlog import CommandError, get_run_log, run_subprocess
 from gaas.source_build import clone_repo, clone_repo_at_ref
 from gaas.versions import resolve_deploy_version
 
@@ -200,10 +200,28 @@ def ensure_extension_frontend_built(source_dir: Path, ext_id: str) -> str | None
         else ["npm", "install", "--no-audit", "--no-fund"]
     )
     try:
-        subprocess.run(install_cmd, cwd=frontend_rt, check=True)
-        subprocess.run(["npm", "run", "build"], cwd=frontend_rt, check=True)
-    except subprocess.CalledProcessError as exc:
-        return f"npm build failed (exit {exc.returncode})"
+        run_log = get_run_log()
+        if run_log is not None:
+            run_log.run_step(
+                f"building extension {ext_id} (npm install)",
+                install_cmd,
+                cwd=frontend_rt,
+            )
+            run_log.run_step(
+                f"building extension {ext_id} (npm run build)",
+                ["npm", "run", "build"],
+                cwd=frontend_rt,
+            )
+        else:
+            run_subprocess(install_cmd, cwd=frontend_rt, check=True)
+            run_subprocess(["npm", "run", "build"], cwd=frontend_rt, check=True)
+    except CommandError as exc:
+        return f"npm build failed: {exc}"
+    except Exception as exc:
+        returncode = getattr(exc, "returncode", None)
+        if returncode is not None:
+            return f"npm build failed (exit {returncode})"
+        raise
 
     if not dist_index.is_file():
         return "build completed but frontend-rt/dist/index.js is still missing"

@@ -4,6 +4,30 @@ The **gaas** CLI deploys a complete GOS-as-a-Service (GaaS) environment from a s
 
 Dogfood descriptors for our live fleets live in [`environments/`](../environments/) (`test.json`, `staging.json`, `demo.json`).
 
+## Operator output and run logs
+
+During `gaas new` and `gaas seed`, gaas keeps the terminal focused on progress: stage headers (`[N/13]`), one-line status per build/deploy step, tables (cycles plan, seed summary, deployment summary), warnings/errors, and intentional interactive prompts.
+
+Verbose subprocess output (npm/vite builds, `dfx deploy`/`install`, git clone noise) is appended to a per-invocation log file instead of the console:
+
+```
+~/.gaas/logs/<environment-name>-<UTC-timestamp>.log
+```
+
+Example: `~/.gaas/logs/test-20260809-201530.log` for environment `test`.
+
+gaas prints `Full logs: <path>` immediately after preflight succeeds and again when the run finishes (success or failure). On command failure, the last ~40 lines of that command's output are also printed to the console so you can debug without opening the log.
+
+## Single confirmation point
+
+Mutating deploy steps — including IC asset-canister reinstalls for `realm_registry_frontend`, `file_registry_frontend`, and `casals_frontend` (which wipe existing frontend state) — are covered by a single upfront confirmation:
+
+- Interactive wizard: **Deploy now?** (enhanced message listing asset reinstalls on IC)
+- Descriptor mode on a TTY: same confirmation before the pipeline starts
+- `--yes`: skip all confirmations; gaas passes `--yes` to `dfx` for install/reinstall operations so no mid-run `dfx` prompts appear
+
+The only mid-run interactive prompts that remain are intentional gaas flows (for example, granting Casals commander principals at the end of deploy).
+
 ## Install
 
 ```bash
@@ -372,6 +396,7 @@ gaas new [DESCRIPTOR] [OPTIONS]
 | `DESCRIPTOR` | Optional path to descriptor JSON. Omit to run the interactive wizard. |
 | `--identity TEXT` | dfx identity name. Default: `default` (descriptor mode) or wizard prompt. |
 | `--network [ic\|local]` | Target network. Default: `ic`. |
+| `--yes` | Skip interactive confirmations (upfront deploy confirmation and Casals commander grant). gaas passes `--yes` to `dfx` for install/reinstall so no mid-run prompts appear. |
 
 **Deploy phases** (when pipeline runs):
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -16,6 +17,7 @@ from gaas.dns import render_dns_records
 from gaas.known import DEFAULT_REQUIRED_CYCLES
 from gaas.phases import DeployContext, PHASES, run_phases, run_seed_phases
 from gaas.preflight import PreflightReport
+from gaas.runlog import print_log_path, start_run_log, stop_run_log
 from gaas.wizard import confirm_deploy, run_wizard
 
 app = typer.Typer(
@@ -85,6 +87,7 @@ def _run_deploy_pipeline(
         keep_env_file=keep_env_file,
     )
     total = len(PHASES)
+    run_log = start_run_log(descriptor.name)
 
     def on_start(index: int, _phase_id: str, title: str) -> None:
         console.print(f"[{index}/{total}] {title}...")
@@ -94,6 +97,9 @@ def _run_deploy_pipeline(
     except RuntimeError as exc:
         console.print(f"[red]Deployment failed:[/red] {exc}")
         raise typer.Exit(code=1) from exc
+    finally:
+        print_log_path()
+        stop_run_log()
 
     if ctx.preflight:
         _print_preflight(ctx.preflight)
@@ -128,6 +134,7 @@ def _run_seed_pipeline(
         casals_src=casals_src,
     )
     total = 3
+    start_run_log(descriptor.name)
 
     def on_start(index: int, _phase_id: str, title: str) -> None:
         console.print(f"[{index}/{total}] {title}...")
@@ -137,6 +144,9 @@ def _run_seed_pipeline(
     except RuntimeError as exc:
         console.print(f"[red]Seed failed:[/red] {exc}")
         raise typer.Exit(code=1) from exc
+    finally:
+        print_log_path()
+        stop_run_log()
 
     console.print("\n[green]Seed complete.[/green]")
 
@@ -206,7 +216,7 @@ def new_command(
         console.print(f"\n[green]Wrote descriptor:[/green] {output_path}\n")
         console.print(Syntax(desc.to_pretty_json(), "json", theme="monokai"))
 
-        if confirm_deploy():
+        if confirm_deploy(network=resolved_network):
             _run_deploy_pipeline(
                 desc,
                 resolved_identity,
@@ -232,6 +242,10 @@ def new_command(
         desc.flags["open_mode"] = True
     resolved_identity = identity or "default"
     resolved_network = network or "ic"
+    if not yes and sys.stdin.isatty():
+        if not confirm_deploy(network=resolved_network):
+            console.print("Deploy cancelled.")
+            raise typer.Exit(code=0)
     _run_deploy_pipeline(
         desc,
         resolved_identity,
