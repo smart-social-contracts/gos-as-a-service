@@ -50,3 +50,23 @@ test('buildRealmDeploymentManifest slugifies custom slug for federation', () => 
 
   assert.equal(manifest.federation.slug, slugify('Custom_Slug Name!'));
 });
+
+test('casals wasm keys always pin the channel (main must not collapse to bare family)', () => {
+  const mainManifest = buildRealmDeploymentManifest(
+    { name: 'Main Realm', gos_implementation: 'realms-gos' },
+    'staging',
+    TEST_CONFIG,
+    { deployVersion: 'main', useCasals: true },
+  );
+  assert.equal(mainManifest.casals.backend_wasm_key, 'realm-backend@main');
+  assert.equal(mainManifest.casals.frontend_wasm_key, 'realm-assets@main');
+
+  const pinnedManifest = buildRealmDeploymentManifest(
+    { name: 'Pinned Realm', gos_implementation: 'realms-gos' },
+    'staging',
+    TEST_CONFIG,
+    { deployVersion: '0.4.0', useCasals: true },
+  );
+  assert.equal(pinnedManifest.casals.backend_wasm_key, 'realm-backend@0.4.0');
+  assert.equal(pinnedManifest.casals.frontend_wasm_key, 'realm-assets@0.4.0');
+});

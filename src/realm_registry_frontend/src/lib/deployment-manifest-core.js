@@ -88,12 +88,14 @@ function networkInfra(network, config) {
 
 function buildCasalsBlock(realmName, deployVersion, config) {
   const versionKey = normalizeDeployVersion(deployVersion);
-  const keySuffix = versionKey === 'main' ? '' : `@${versionKey}`;
+  // Always pin the channel: a bare family name resolves conductor-side to the
+  // newest *semver* in the family, which would silently pick e.g. 0.4.0 over
+  // the main-channel snapshot whenever both are authorized.
   return {
     section: config.casals_section || 'Deployments',
     stand: slugify(realmName),
-    backend_wasm_key: `realm-backend${keySuffix}`,
-    frontend_wasm_key: `realm-assets${keySuffix}`,
+    backend_wasm_key: `realm-backend@${versionKey}`,
+    frontend_wasm_key: `realm-assets@${versionKey}`,
   };
 }
 
