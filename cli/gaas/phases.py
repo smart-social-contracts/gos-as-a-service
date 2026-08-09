@@ -71,6 +71,30 @@ console = Console()
 
 
 @dataclass
+class SeedArtifactSummary:
+    key: str
+    wasm_hash: str
+    status: str
+
+
+@dataclass
+class SeedAuthSummary:
+    key: str
+    wasm_hash: str
+    status: str
+
+
+SEED_PHASE_CANISTERS: tuple[str, ...] = (
+    "file_registry",
+    "realm_registry_backend",
+    "casals_backend",
+    "realm_registry_frontend",
+    "realm_installer",
+    "file_registry_frontend",
+)
+
+
+@dataclass
 class DeployContext:
     identity: str
     network: str
@@ -86,6 +110,8 @@ class DeployContext:
     keep_env_file: bool = False
     work_dir: Path | None = None
     http: requests.Session | None = None
+    seed_artifacts: list[SeedArtifactSummary] = field(default_factory=list)
+    seed_authorizations: list[SeedAuthSummary] = field(default_factory=list)
 
 
 class PhaseFunc(Protocol):
@@ -502,6 +528,21 @@ def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None
                 identity=ctx.identity,
             )
             backend_hash = sha256_file(backend_file)
+            ctx.seed_artifacts.append(
+                SeedArtifactSummary(
+                    f"{backend_ns}/{backend_path}",
+                    backend_hash,
+                    "uploaded",
+                )
+            )
+        elif backend_hash:
+            ctx.seed_artifacts.append(
+                SeedArtifactSummary(
+                    f"{backend_ns}/{backend_path}",
+                    backend_hash,
+                    "already_seeded",
+                )
+            )
 
         if registry_backend_id:
             status = ensure_version_catalog_entry(
@@ -838,7 +879,7 @@ def phase_seed_conductor(descriptor: Descriptor, ctx: DeployContext) -> None:
         casals_src=ctx.casals_src,
     )
     for entry in descriptor.gos:
-        authorize_gos_entry(
+        auth_result = authorize_gos_entry(
             casals_id,
             registry_id,
             descriptor,
@@ -847,6 +888,20 @@ def phase_seed_conductor(descriptor: Descriptor, ctx: DeployContext) -> None:
             identity=ctx.identity,
             session=ctx.http,
             repo_root=repo_root,
+        )
+        ctx.seed_authorizations.extend(
+            [
+                SeedAuthSummary(
+                    auth_result["backend_key"],
+                    auth_result["backend_hash"],
+                    auth_result["backend_status"],
+                ),
+                SeedAuthSummary(
+                    auth_result["frontend_key"],
+                    auth_result["frontend_hash"],
+                    auth_result["frontend_status"],
+                ),
+            ]
         )
     ensure_sheet_and_deploy_multisig(
         casals_id, ctx.network, identity=ctx.identity
@@ -1028,6 +1083,67 @@ def phase_grant_commanders(descriptor: Descriptor, ctx: DeployContext) -> None:
         if principal not in descriptor.casals.commanders:
             descriptor.casals.commanders.append(principal)
             _save_descriptor(descriptor, ctx)
+
+
+def validate_seed_prerequisites(descriptor: Descriptor) -> None:
+    errors = descriptor.validate_descriptor()
+    if errors:
+        raise RuntimeError("descriptor validation failed:\n  - " + "\n  - ".join(errors))
+
+    missing = [
+        name for name in SEED_PHASE_CANISTERS if not descriptor.canisters.get(name)
+    ]
+    if missing:
+        raise RuntimeError(
+            "seed requires canister IDs in descriptor: " + ", ".join(missing)
+        )
+
+
+def phase_seed_validate(descriptor: Descriptor, ctx: DeployContext) -> None:
+    validate_seed_prerequisites(descriptor)
+
+
+SEED_PHASES: list[tuple[str, str, PhaseFunc]] = [
+    ("seed_validate", "Validating descriptor for seed", phase_seed_validate),
+    ("seed_file_registry", "Seeding file registry", phase_seed_file_registry),
+    ("seed_conductor", "Seeding conductor orchestra", phase_seed_conductor),
+]
+
+
+def print_seed_summary(ctx: DeployContext) -> None:
+    table = Table(title="Seed summary")
+    table.add_column("Kind")
+    table.add_column("Key")
+    table.add_column("Hash")
+    table.add_column("Status")
+    for artifact in ctx.seed_artifacts:
+        table.add_row("artifact", artifact.key, artifact.wasm_hash[:16] + "…", artifact.status)
+    for auth in ctx.seed_authorizations:
+        table.add_row("authorization", auth.key, auth.wasm_hash[:16] + "…", auth.status)
+    console.print(table)
+
+
+def run_seed_phases(
+    descriptor: Descriptor,
+    ctx: DeployContext,
+    *,
+    on_phase_start: Callable[[int, str, str], None] | None = None,
+) -> DeployContext:
+    phases: list[tuple[str, str, PhaseFunc]] = [
+        ("seed_validate", "Validating descriptor for seed", phase_seed_validate),
+        ("seed_file_registry", "Seeding file registry", phase_seed_file_registry),
+        ("seed_conductor", "Seeding conductor orchestra", phase_seed_conductor),
+    ]
+    total = len(phases)
+    for index, (phase_id, title, func) in enumerate(phases, start=1):
+        if on_phase_start:
+            on_phase_start(index, phase_id, title)
+        else:
+            console.print(f"[{index}/{total}] {title}...")
+        func(descriptor, ctx)
+        ctx.completed_phases.append(phase_id)
+    print_seed_summary(ctx)
+    return ctx
 
 
 PHASES: list[tuple[str, str, PhaseFunc]] = [

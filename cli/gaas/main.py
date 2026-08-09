@@ -14,7 +14,7 @@ from gaas import dfx
 from gaas.descriptor import Descriptor
 from gaas.dns import render_dns_records
 from gaas.known import DEFAULT_REQUIRED_CYCLES
-from gaas.phases import DeployContext, PHASES, run_phases
+from gaas.phases import DeployContext, PHASES, run_phases, run_seed_phases
 from gaas.preflight import PreflightReport
 from gaas.wizard import confirm_deploy, run_wizard
 
@@ -109,6 +109,36 @@ def _run_deploy_pipeline(
         raise typer.Exit(code=1)
 
     console.print("\n[green]Deployment complete.[/green]")
+
+
+def _run_seed_pipeline(
+    descriptor: Descriptor,
+    identity: str,
+    network: str,
+    *,
+    descriptor_path: Path | None = None,
+    yes: bool = False,
+    casals_src: Path | None = None,
+) -> None:
+    ctx = DeployContext(
+        identity=identity,
+        network=network,
+        descriptor_path=descriptor_path,
+        yes=yes,
+        casals_src=casals_src,
+    )
+    total = 3
+
+    def on_start(index: int, _phase_id: str, title: str) -> None:
+        console.print(f"[{index}/{total}] {title}...")
+
+    try:
+        run_seed_phases(descriptor, ctx, on_phase_start=on_start)
+    except RuntimeError as exc:
+        console.print(f"[red]Seed failed:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    console.print("\n[green]Seed complete.[/green]")
 
 
 @app.command("new")
@@ -212,6 +242,38 @@ def new_command(
         dns_timeout_min=dns_timeout_min,
         skip_dns_wait=skip_dns_wait,
         keep_env_file=keep_env_file,
+    )
+
+
+@app.command("seed")
+def seed_command(
+    descriptor: Path = typer.Argument(..., help="Descriptor JSON path"),
+    identity: str = typer.Option(..., "--identity", help="dfx identity"),
+    network: str = typer.Option("ic", "--network", help="Target network: ic or local"),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        help="Skip interactive confirmations",
+    ),
+    casals_src: Optional[Path] = typer.Option(
+        None,
+        "--casals-src",
+        help="Local Casals checkout for orchestration template WASM",
+    ),
+) -> None:
+    """Re-seed GOS artifacts and conductor authorization on an existing environment."""
+    if network not in {"ic", "local"}:
+        console.print("[red]--network must be 'ic' or 'local'[/red]")
+        raise typer.Exit(code=1)
+
+    desc = Descriptor.load(descriptor)
+    _run_seed_pipeline(
+        desc,
+        identity,
+        network,
+        descriptor_path=descriptor,
+        yes=yes,
+        casals_src=casals_src,
     )
 
 

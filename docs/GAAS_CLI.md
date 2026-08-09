@@ -391,6 +391,34 @@ gaas new [DESCRIPTOR] [OPTIONS]
 
 If a phase is not yet implemented, the pipeline pauses and prints a resume command.
 
+### `gaas seed`
+
+Re-seed GOS realm artifacts and conductor WASM authorization on an **existing** environment — without creating canisters, running cycle preflight, deploying frontends, or wiring DNS.
+
+Use this when iterating on realm backend/frontend builds against a test environment: rebuild from source, run `gaas seed`, and the file registry plus Casals conductor pick up the new WASM hashes (including `add_authorized_wasm` for the conductor).
+
+```
+gaas seed DESCRIPTOR --identity NAME [--network ic|local] [--yes] [--casals-src PATH]
+```
+
+| Argument / flag | Description |
+|---|---|
+| `DESCRIPTOR` | Path to descriptor JSON (required). |
+| `--identity TEXT` | dfx identity name (required). |
+| `--network [ic\|local]` | Target network. Default: `ic`. |
+| `--yes` | Skip interactive confirmations. |
+| `--casals-src PATH` | Local Casals checkout for orchestration template WASM. |
+
+**Seed phases** (artifact pipeline only):
+
+1. Validating descriptor and required canister IDs (`file_registry`, `casals_backend`, and platform canisters used by conductor seed)
+2. Seeding file registry (GOS WASM/frontend bundles, version catalog, codex/extension packages, marketplace namespace approvals)
+3. Seeding conductor orchestra (templates, authorized WASMs, sheet, multisig, platform stand registration)
+
+The command prints a summary of uploaded artifact keys/hashes and which WASM hashes were newly authorized vs already authorized on the conductor. Re-running with unchanged artifacts is idempotent.
+
+Requires canister IDs already present in the descriptor. Does **not** run deployer cycle checks, canister creation, backend install/configure, frontend deploy, DNS, smoke checks, commander grants, or controller topology.
+
 ### `gaas status`
 
 Print canister status for every ID listed in the descriptor.

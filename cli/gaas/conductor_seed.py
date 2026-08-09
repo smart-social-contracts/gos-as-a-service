@@ -304,7 +304,7 @@ def authorize_gos_entry(
     identity: str | None = None,
     session=None,
     repo_root: Path | None = None,
-) -> None:
+) -> dict[str, str]:
     resolved = resolve_deploy_version(entry.version, entry.release_repo, session=session)
     version = resolved.catalog_version
     backend_ns = f"wasm/{entry.artifacts.backend_wasm_key}/{version}"
@@ -323,7 +323,11 @@ def authorize_gos_entry(
 
     existing = list_authorized_keys(casals_id, network, identity=identity)
     backend_key = f"{entry.artifacts.backend_wasm_key}@{version}"
-    if existing.get(backend_key) != backend_hash:
+    if existing.get(backend_key) == backend_hash:
+        backend_status = "already_authorized"
+        console.print(f"  {backend_key}: already authorized")
+    else:
+        backend_status = "authorized"
         console.print(f"  authorizing {backend_key} from {backend_ns}...")
         _casals_call(
             casals_id,
@@ -375,6 +379,14 @@ def authorize_gos_entry(
         network,
         identity=identity,
     )
+    return {
+        "backend_key": backend_key,
+        "backend_hash": backend_hash,
+        "backend_status": backend_status,
+        "frontend_key": frontend_key,
+        "frontend_hash": fe_hash,
+        "frontend_status": "authorized",
+    }
 
 
 def ensure_sheet_and_deploy_multisig(
