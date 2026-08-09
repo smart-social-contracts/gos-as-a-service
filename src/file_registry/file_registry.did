@@ -168,8 +168,6 @@ service : {
   "get_backend_files_icc" : (text, text, text) -> (text) query;
   "get_frontend_files" : (text) -> (text) query;
   "get_frontend_files_icc" : (text, text) -> (text) query;
-  "get_namespace_approval" : (text) -> (text) query;
-  "get_namespace_approval_icc" : (text) -> (text) query;
   "store_file" : (text) -> (text);
   "delete_file" : (text) -> (text);
   "update_namespace" : (text) -> (text);
@@ -178,6 +176,8 @@ service : {
   "purge_old_versions" : (text) -> (text);
   "grant_publish" : (text) -> (text);
   "revoke_publish" : (text) -> (text);
+  "get_namespace_approval" : (text) -> (text) query;
+  "get_namespace_approval_icc" : (text) -> (text) query;
   "set_namespace_approval" : (text) -> (text);
   "store_file_chunk" : (text) -> (text);
   "finalize_chunked_file" : (text) -> (text);
