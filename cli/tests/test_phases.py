@@ -17,6 +17,8 @@ from gaas.phases import (
     _infra_canister_names,
     _opt_text_init_arg,
     _registry_config_json,
+    _registry_runtime_config_json,
+    phase_configure_backends,
     phase_controller_topology,
     phase_create_canisters,
     phase_domain_wiring,
@@ -26,7 +28,7 @@ from gaas.phases import (
     run_phases,
 )
 from gaas.gaas_env import build_gaas_env
-from gaas.dfx import detect_install_mode
+from gaas.dfx import detect_install_mode, _parse_candid_string
 from tests.conftest import SAMPLE_DESCRIPTOR, VALID_CANISTER_ID
 
 
@@ -236,6 +238,151 @@ def test_registry_config_json_installer_id_and_flags() -> None:
     payload = json.loads(_registry_config_json(desc))
     assert payload["installer_id"] == VALID_CANISTER_ID
     assert payload["open_mode"] is True
+
+
+def test_registry_runtime_config_json_open_mode() -> None:
+    desc = Descriptor.model_validate(SAMPLE_DESCRIPTOR)
+    # No billing_url → derived open mode.
+    ic_payload = json.loads(_registry_runtime_config_json(desc, "ic"))
+    assert ic_payload == {
+        "test_flags": {"test_mode": True, "ii_bypass": True},
+    }
+
+    open_desc = desc.model_copy(update={"flags": {"open_mode": True}})
+    local_payload = json.loads(_registry_runtime_config_json(open_desc, "local"))
+    assert local_payload == {
+        "test_flags": {"test_mode": True, "ii_bypass": True},
+        "network": "local",
+    }
+
+    billed_closed = desc.model_copy(
+        update={
+            "services": ServicesConfig(
+                billing_url="https://billing.example.com",
+                deploy_url=None,
+            ),
+        }
+    )
+    assert _registry_runtime_config_json(billed_closed, "ic") is None
+
+
+@patch("gaas.phases.dfx.get_principal")
+@patch("gaas.phases.dfx.canister_call")
+def test_phase_configure_backends_open_mode_sets_runtime_flags(
+    mock_call: MagicMock,
+    mock_principal: MagicMock,
+) -> None:
+    mock_principal.return_value = "deployer-principal"
+    registry_id = VALID_CANISTER_ID
+    installer_id = "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aab"
+    casals_id = "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb"
+
+    registry_configure_ok = json.dumps(
+        {
+            "success": True,
+            "portal_url": "https://test.gos.earth",
+            "open_mode": True,
+        }
+    ).replace("\\", "\\\\").replace('"', '\\"')
+
+    def call_side_effect(canister_id, method, arg, network, *, identity=None, query=False):
+        del network, identity, query
+        if canister_id == registry_id and method == "configure":
+            return f'variant {{ Ok = "{registry_configure_ok}" }}'
+        if canister_id == registry_id and method == "get_env_config":
+            return json.dumps({"portal_url": "https://test.gos.earth"})
+        if canister_id == registry_id and method == "set_canister_config_json":
+            payload = json.loads(_parse_candid_string(arg))
+            assert payload["test_flags"] == {"test_mode": True, "ii_bypass": True}
+            return json.dumps({"success": True})
+        if canister_id == registry_id and method == "get_runtime_flags":
+            return json.dumps(
+                {"success": True, "test_mode": True, "test_mode_ii_bypass": True}
+            )
+        if canister_id == installer_id and method == "configure":
+            return json.dumps({"success": True})
+        if canister_id == installer_id and method == "get_installer_config":
+            return json.dumps({"registry_backend_id": registry_id})
+        if canister_id == casals_id and method == "set_settings":
+            return json.dumps({"ok": True})
+        raise AssertionError(f"unexpected call: {canister_id} {method}")
+
+    mock_call.side_effect = call_side_effect
+
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["flags"] = {"open_mode": True}
+    data["canisters"] = {
+        "realm_registry_backend": registry_id,
+        "realm_installer": installer_id,
+        "casals_backend": casals_id,
+    }
+    desc = Descriptor.model_validate(data)
+    ctx = DeployContext(identity="deployer", network="ic")
+    phase_configure_backends(desc, ctx)
+
+    runtime_calls = [
+        c
+        for c in mock_call.call_args_list
+        if c[0][0] == registry_id and c[0][1] == "set_canister_config_json"
+    ]
+    assert len(runtime_calls) == 1
+
+
+@patch("gaas.phases.dfx.get_principal")
+@patch("gaas.phases.dfx.canister_call")
+def test_phase_configure_backends_closed_skips_runtime_flags(
+    mock_call: MagicMock,
+    mock_principal: MagicMock,
+) -> None:
+    mock_principal.return_value = "deployer-principal"
+    registry_id = VALID_CANISTER_ID
+    installer_id = "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aab"
+    casals_id = "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb"
+
+    registry_configure_ok = json.dumps(
+        {
+            "success": True,
+            "portal_url": "https://test.gos.earth",
+            "open_mode": False,
+        }
+    ).replace("\\", "\\\\").replace('"', '\\"')
+
+    def call_side_effect(canister_id, method, arg, network, *, identity=None, query=False):
+        del arg, network, identity, query
+        if canister_id == registry_id and method == "configure":
+            return f'variant {{ Ok = "{registry_configure_ok}" }}'
+        if canister_id == registry_id and method == "get_env_config":
+            return json.dumps({"portal_url": "https://test.gos.earth"})
+        if canister_id == installer_id and method == "configure":
+            return json.dumps({"success": True})
+        if canister_id == installer_id and method == "get_installer_config":
+            return json.dumps({"registry_backend_id": registry_id})
+        if canister_id == casals_id and method == "set_settings":
+            return json.dumps({"ok": True})
+        raise AssertionError(f"unexpected call: {canister_id} {method}")
+
+    mock_call.side_effect = call_side_effect
+
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["services"] = ServicesConfig(
+        billing_url="https://billing.example.com",
+        deploy_url=None,
+    )
+    data["canisters"] = {
+        "realm_registry_backend": registry_id,
+        "realm_installer": installer_id,
+        "casals_backend": casals_id,
+    }
+    desc = Descriptor.model_validate(data)
+    ctx = DeployContext(identity="deployer", network="ic")
+    phase_configure_backends(desc, ctx)
+
+    runtime_calls = [
+        c
+        for c in mock_call.call_args_list
+        if c[0][1] == "set_canister_config_json"
+    ]
+    assert runtime_calls == []
 
 
 def test_installer_config_json_includes_ids() -> None:

@@ -178,6 +178,25 @@ def _registry_config_json(descriptor: Descriptor) -> str:
     return json.dumps(payload)
 
 
+def _registry_runtime_config_json(descriptor: Descriptor, network: str) -> str | None:
+    """Runtime test flags for open_mode portal auth (set_canister_config_json).
+
+    Returns None when open_mode is false so production registries stay secure.
+  """
+    if not _resolve_open_mode(descriptor):
+        return None
+    payload: dict = {
+        "test_flags": {
+            "test_mode": True,
+            "ii_bypass": True,
+        }
+    }
+    # Registry runtime_flags rejects test flags when network=ic; omit on mainnet.
+    if network != "ic":
+        payload["network"] = network
+    return json.dumps(payload)
+
+
 def _installer_config_json(descriptor: Descriptor) -> str:
     canisters = descriptor.canisters
     payload = {
@@ -446,6 +465,36 @@ def phase_configure_backends(descriptor: Descriptor, ctx: DeployContext) -> None
             f"{inst_cfg.get('registry_backend_id')!r} != {expected_registry!r}"
         )
     console.print("  registry + installer configure verified")
+
+    runtime_json = _registry_runtime_config_json(descriptor, ctx.network)
+    if runtime_json:
+        runtime_raw = dfx.canister_call(
+            registry_id,
+            "set_canister_config_json",
+            dfx.candid_text_arg(runtime_json),
+            ctx.network,
+            identity=ctx.identity,
+        )
+        runtime_result = json.loads(runtime_raw)
+        if not runtime_result.get("success"):
+            raise RuntimeError(
+                f"registry set_canister_config_json failed: {runtime_result}"
+            )
+        flags_raw = dfx.canister_call(
+            registry_id,
+            "get_runtime_flags",
+            dfx.candid_text_arg(""),
+            ctx.network,
+            identity=ctx.identity,
+            query=True,
+        )
+        flags = json.loads(flags_raw)
+        if not flags.get("test_mode") or not flags.get("test_mode_ii_bypass"):
+            raise RuntimeError(
+                "registry runtime flags mismatch after set_canister_config_json: "
+                f"{flags!r}"
+            )
+        console.print("  registry runtime test flags verified")
 
     casals_id = descriptor.canisters.get("casals_backend")
     if not casals_id:

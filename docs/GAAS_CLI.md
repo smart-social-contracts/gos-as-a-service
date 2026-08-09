@@ -328,6 +328,8 @@ Open mode is resolved with this precedence (highest first):
 
 The resolved value is always written explicitly into the registry's `configure` payload — the backend itself defaults to closed and only skips credit checks when `open_mode` is explicitly `true`.
 
+When `open_mode` is true, gaas also calls the registry backend's `set_canister_config_json` with `test_flags: {test_mode: true, ii_bypass: true}` so the portal wizard authentication flow works without manual post-deploy steps. Production deployments (`open_mode` false or absent with billing) do not set these flags.
+
 `deploy_url` is independent: it points the registry frontend at an off-chain worker for legacy deploy paths. Omit both for fully self-contained environments.
 
 ## Third-party self-hosting
