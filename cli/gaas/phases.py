@@ -229,6 +229,8 @@ def _casals_settings_json(descriptor: Descriptor, deployer_principal: str) -> st
     if descriptor.services.monitor_url:
         payload["monitor_enabled"] = True
         payload["monitor_service_url"] = descriptor.services.monitor_url
+    if descriptor.services.monitor_principal:
+        payload["monitor_principal"] = descriptor.services.monitor_principal
     if _resolve_open_mode(descriptor):
         payload["extra_controller_principals"] = [deployer_principal]
     return json.dumps(payload)

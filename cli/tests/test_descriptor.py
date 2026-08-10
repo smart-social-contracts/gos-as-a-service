@@ -78,6 +78,36 @@ def test_services_https_validation() -> None:
         Descriptor.model_validate(data)
 
 
+def test_services_monitor_principal_validation() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["services"] = {
+        "monitor_url": "https://monitor.example.com",
+        "monitor_principal": "not-a-principal",
+    }
+    with pytest.raises(ValidationError, match="invalid principal"):
+        Descriptor.model_validate(data)
+
+
+def test_services_monitor_principal_parses() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["services"] = {
+        "monitor_url": "https://monitor.example.com",
+        "monitor_principal": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
+    }
+    desc = Descriptor.model_validate(data)
+    assert desc.services.monitor_principal == "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa"
+
+
+def test_services_billing_service_principal_parses() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["services"] = {
+        "billing_url": "https://billing.example.com",
+        "billing_service_principal": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
+    }
+    desc = Descriptor.model_validate(data)
+    assert desc.services.billing_service_principal == "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa"
+
+
 def test_services_open_mode_parses() -> None:
     data = dict(SAMPLE_DESCRIPTOR)
     data["services"] = {

@@ -136,9 +136,13 @@ class CasalsConfig(BaseModel):
 
 
 class ServicesConfig(BaseModel):
+    # Public HTTPS URL for credits / Stripe billing; default unset (open mode when absent).
     billing_url: str | None = None
     deploy_url: str | None = None
+    # Public HTTPS URL for the off-chain Casals cycles/health monitor; default unset.
     monitor_url: str | None = None
+    # Public IC principal the monitor service uses; default unset (not a secret).
+    monitor_principal: str | None = None
     # Lives on ServicesConfig (with billing_url) — open_mode controls whether the
     # registry skips credit holds during realm deploy/upgrade, independent of whether
     # a billing URL is configured for the frontend.
@@ -152,6 +156,18 @@ class ServicesConfig(BaseModel):
         if not HTTPS_URL_RE.match(value):
             raise ValueError(f"service URL must be https (got {value!r})")
         return value
+
+    @field_validator("monitor_principal")
+    @classmethod
+    def validate_monitor_principal(cls, value: str | None) -> str | None:
+        if value is None or value == "":
+            return None
+        principal = value.strip()
+        if not principal:
+            raise ValueError("services.monitor_principal must be non-empty when set")
+        if not CANISTER_ID_RE.match(principal):
+            raise ValueError(f"services.monitor_principal: invalid principal {value!r}")
+        return principal
 
 
 class PlatformConfig(BaseModel):

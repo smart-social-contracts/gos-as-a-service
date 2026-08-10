@@ -231,6 +231,19 @@ def test_registry_init_json_open_mode() -> None:
     assert billed_json["billing_url"] == "https://billing.example.com"
 
 
+def test_registry_config_json_billing_service_principal() -> None:
+    desc = Descriptor.model_validate(SAMPLE_DESCRIPTOR).model_copy(
+        update={
+            "services": ServicesConfig(
+                billing_url="https://billing.example.com",
+                billing_service_principal="aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
+            ),
+        }
+    )
+    payload = json.loads(_registry_config_json(desc))
+    assert payload["billing_service_principal"] == "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa"
+
+
 def test_registry_config_json_installer_id_and_flags() -> None:
     data = dict(SAMPLE_DESCRIPTOR)
     data["canisters"] = {"realm_installer": VALID_CANISTER_ID}
@@ -451,6 +464,31 @@ def test_casals_settings_json_monitor_url() -> None:
     assert payload["monitor_enabled"] is True
     assert payload["monitor_service_url"] == "https://monitor.example.com"
     assert "monitor_principal" not in payload
+
+
+def test_casals_settings_json_monitor_url_and_principal() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {"file_registry": VALID_CANISTER_ID}
+    data["services"] = {
+        "monitor_url": "https://monitor.example.com",
+        "monitor_principal": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
+    }
+    desc = Descriptor.model_validate(data)
+    payload = json.loads(_casals_settings_json(desc, "deployer-principal"))
+    assert payload["monitor_enabled"] is True
+    assert payload["monitor_service_url"] == "https://monitor.example.com"
+    assert payload["monitor_principal"] == "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa"
+
+
+def test_casals_settings_json_monitor_principal_without_url() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {"file_registry": VALID_CANISTER_ID}
+    data["services"] = {"monitor_principal": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa"}
+    desc = Descriptor.model_validate(data)
+    payload = json.loads(_casals_settings_json(desc, "deployer-principal"))
+    assert payload["monitor_enabled"] is False
+    assert "monitor_service_url" not in payload
+    assert payload["monitor_principal"] == "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa"
 
 
 def test_casals_settings_json_no_monitor_url() -> None:

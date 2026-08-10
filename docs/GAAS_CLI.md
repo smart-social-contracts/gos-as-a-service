@@ -236,11 +236,15 @@ Optional governance multisig canister. When `backend_id` is omitted, gaas create
 
 | Field | Required | Default | Description |
 |---|---|---|---|
-| `billing_url` | no | `null` | HTTPS URL for the credits / Stripe billing service. **When present, credits are enforced.** When absent, the environment runs in **open mode** (no credit gate). |
-| `deploy_url` | no | `null` | HTTPS URL for the off-chain deploy worker API. |
-| `monitor_url` | no | `null` | HTTPS URL for the off-chain cycles/health monitor service the conductor reports to. When set, gaas passes `monitor_service_url` and `monitor_enabled: true` to the conductor via `set_settings`. `monitor_principal` is not set by gaas — configure it separately on the conductor if needed. |
+| `billing_url` | no | `null` | Public HTTPS URL for the credits / Stripe billing service (not a secret). **When present, credits are enforced.** When absent, the environment runs in **open mode** (no credit gate). |
+| `billing_service_principal` | no | `null` | IC principal allowed to call the registry's `add_credits` / `deduct_credits` (typically the realms-billing host deployer identity). When set, gaas passes it via registry `configure`; only that principal may mint credits on-chain. When unset, any caller is allowed (backward compat). |
+| `deploy_url` | no | `null` | Public HTTPS URL for the off-chain deploy worker API. |
+| `monitor_url` | no | `null` | Public HTTPS URL for the off-chain Casals cycles/health monitor service the conductor reports to. When set, gaas passes `monitor_service_url` and `monitor_enabled: true` to the conductor via `set_settings`. |
+| `monitor_principal` | no | `null` | Public IC principal the monitor service uses (not a canister secret). When set, gaas also passes `monitor_principal` in the conductor `set_settings` payload. |
 
-Both service URLs must use `https://`. Empty strings are treated as absent.
+All service URLs must use `https://`. Empty strings are treated as absent. `monitor_principal` is only prompted in `gaas new` when a monitor URL is provided; `billing_service_principal` when a billing URL is provided.
+
+The portal sends an Internet Identity delegation proof (`identity.publicKey` + `identity.delegations` from `DelegationIdentity.getDelegation().toJSON()`) and `registry_canister_id` on voucher redeem and Stripe checkout so realms-billing can verify the user (realms-billing#4).
 
 `services.open_mode` is a deprecated alias for `flags.open_mode` (see [Open mode vs billing](#open-mode-vs-billing)).
 

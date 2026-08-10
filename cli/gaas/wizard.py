@@ -152,11 +152,21 @@ _VERSION_HELP = (
 )
 
 
-def _validate_https_optional(value: str) -> bool | str:
+def _validate_https_optional(value: str, *, field: str = "billing_url") -> bool | str:
     if not value.strip():
         return True
     try:
-        ServicesConfig.model_validate({"billing_url": value.strip()})
+        ServicesConfig.model_validate({field: value.strip()})
+    except Exception as exc:
+        return str(exc)
+    return True
+
+
+def _validate_monitor_principal_optional(value: str) -> bool | str:
+    if not value.strip():
+        return True
+    try:
+        ServicesConfig.model_validate({"monitor_principal": value.strip()})
     except Exception as exc:
         return str(exc)
     return True
@@ -357,17 +367,34 @@ def run_wizard(
 
     billing_url = prompt.text(
         "Billing service URL (optional, https):",
-        validate=_validate_https_optional,
+        validate=lambda value: _validate_https_optional(value, field="billing_url"),
     ).ask()
     if billing_url is None:
         raise SystemExit(0)
 
     deploy_url = prompt.text(
         "Deploy service URL (optional, https):",
-        validate=_validate_https_optional,
+        validate=lambda value: _validate_https_optional(value, field="deploy_url"),
     ).ask()
     if deploy_url is None:
         raise SystemExit(0)
+
+    monitor_url = prompt.text(
+        "Casals monitor URL (optional, https):",
+        validate=lambda value: _validate_https_optional(value, field="monitor_url"),
+    ).ask()
+    if monitor_url is None:
+        raise SystemExit(0)
+
+    monitor_principal: str | None = None
+    if monitor_url.strip():
+        monitor_principal_raw = prompt.text(
+            "Casals monitor principal (optional):",
+            validate=_validate_monitor_principal_optional,
+        ).ask()
+        if monitor_principal_raw is None:
+            raise SystemExit(0)
+        monitor_principal = monitor_principal_raw.strip() or None
 
     open_mode = prompt.confirm(
         "Enable open mode (skip billing credit checks)?",
@@ -403,6 +430,8 @@ def run_wizard(
         services=ServicesConfig(
             billing_url=billing_url.strip() or None,
             deploy_url=deploy_url.strip() or None,
+            monitor_url=monitor_url.strip() or None,
+            monitor_principal=monitor_principal,
         ),
         cycles=CyclesConfig(threshold_tc=float(threshold_raw.strip() or "2")),
         flags=flags,

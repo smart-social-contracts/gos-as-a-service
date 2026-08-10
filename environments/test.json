@@ -37,7 +37,9 @@
     "backend_id": "3iqx7-eyaaa-aaaae-agyxq-cai"
   },
   "services": {
-    "billing_url": "https://billing.realmsgos.dev"
+    "billing_url": "https://billing.realmsgos.dev",
+    "monitor_url": "https://casals.realmsgos.dev/v1/realms-test",
+    "monitor_principal": "ah6ac-cc73l-bb2zc-ni7bh-jov4q-roeyj-6k2ob-mkg5j-pequi-vuaa6-2ae"
   },
   "flags": {
     "open_mode": true
