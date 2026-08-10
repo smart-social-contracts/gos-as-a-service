@@ -474,5 +474,6 @@ Uses `realm_registry_frontend` from the descriptor; if missing, prints a placeho
 ## Related
 
 - [Issue #1 — one-command GaaS deployment](https://github.com/smart-social-contracts/gos-as-a-service/issues/1)
+- [Issue #10 — Slim GaaS scope](https://github.com/smart-social-contracts/gos-as-a-service/issues/10) — shared RealmsGOS canisters (token, NFT, marketplace) are out of GaaS scope; see [realms#288](https://github.com/smart-social-contracts/realms/issues/288)
 - Live dogfood descriptors: [`environments/`](../environments/)
 - Agent deploy loops and canister IDs: [AGENTS.md](../AGENTS.md)

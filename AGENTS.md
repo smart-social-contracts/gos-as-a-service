@@ -39,6 +39,10 @@ Portal hosts: `test.gos.earth`, `demo.gos.earth`, `staging.gos.earth`.
 
 Dogfood deployment descriptors: [`environments/`](environments/) — see [docs/GAAS_CLI.md](docs/GAAS_CLI.md) for the `gaas` CLI.
 
+### Slim GaaS scope (realms#288 / gos-as-a-service#10)
+
+GaaS owns **platform** canisters (registry, installer, file registry for GOS boot artifacts) and passes **network** plus realm-specific IDs (e.g. `frontend_canister_id`) via `set_canister_config_json`. **Shared RealmsGOS service canisters** — token ledgers, NFT backend, marketplace — are **not** injected by the installer or wizard manifests; realms resolve those in-realm via `env_services`. Package file-registry cutover from GaaS boot wiring is tracked in realms#290.
+
 ## Registry / wizard UI (staging)
 
 The **create-realm wizard** and **deployment status page** live in
