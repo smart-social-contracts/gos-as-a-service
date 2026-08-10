@@ -66,6 +66,7 @@ CONTENT_TYPES = {
     ".js":   "application/javascript",
     ".mjs":  "application/javascript",
     ".json": "application/json",
+    ".json5": "application/json",
     ".html": "text/html",
     ".css":  "text/css",
     ".wasm": "application/wasm",
@@ -77,6 +78,11 @@ CONTENT_TYPES = {
     ".jpeg": "image/jpeg",
     ".gif":  "image/gif",
     ".ico":  "image/x-icon",
+    ".webp": "image/webp",
+    ".woff": "font/woff",
+    ".woff2": "font/woff2",
+    ".ttf":  "font/ttf",
+    ".webmanifest": "application/manifest+json",
     ".ts":   "text/plain",
     ".toml": "text/plain",
     ".yaml": "text/plain",
@@ -205,6 +211,19 @@ def _guess_content_type(path: str) -> str:
         if path.endswith(ext):
             return ct
     return "application/octet-stream"
+
+
+def _effective_list_content_type(path: str, stored: str | None) -> str:
+    """Return content type for list_files / Casals bundle enumeration.
+
+    Legacy seeds stored ``application/octet-stream`` for SVG and other extensions
+    when the gaas CLI omitted MIME mappings (realms#292). Prefer extension guess
+    when metadata is missing or only the generic default.
+    """
+    stored = (stored or "").strip()
+    if not stored or stored == "application/octet-stream":
+        return _guess_content_type(path)
+    return stored
 
 
 def _ensure_namespace_exists(namespace: str, caller_str: str):
@@ -473,7 +492,7 @@ def list_files(args: text) -> text:
         {
             "path": path,
             "size": info.get("size", 0),
-            "content_type": info.get("content_type", "application/octet-stream"),
+            "content_type": _effective_list_content_type(path, info.get("content_type")),
             "sha256": info.get("sha256", ""),
             "updated": info.get("updated", 0),
         }

@@ -16,18 +16,44 @@ CHUNK_SIZE = 64 * 1024
 FINALIZE_BATCH = 8
 
 
+# Keep in sync with CONTENT_TYPES in src/file_registry/main.py (gaas file_registry
+# canister). Wrong types here are copied into registry metadata and then into realm
+# frontend asset canisters by Casals bundle upload (realms#292).
+_CONTENT_TYPE_SUFFIXES: tuple[tuple[str, str], ...] = (
+    (".json5", "application/json"),
+    (".json", "application/json"),
+    (".js", "application/javascript"),
+    (".mjs", "application/javascript"),
+    (".css", "text/css"),
+    (".html", "text/html"),
+    (".wasm.gz", "application/wasm"),
+    (".wasm", "application/wasm"),
+    (".svg", "image/svg+xml"),
+    (".png", "image/png"),
+    (".jpg", "image/jpeg"),
+    (".jpeg", "image/jpeg"),
+    (".gif", "image/gif"),
+    (".ico", "image/x-icon"),
+    (".webp", "image/webp"),
+    (".txt", "text/plain"),
+    (".md", "text/markdown"),
+    (".ts", "text/plain"),
+    (".toml", "text/plain"),
+    (".yaml", "text/plain"),
+    (".yml", "text/plain"),
+    (".svelte", "text/plain"),
+    (".woff2", "font/woff2"),
+    (".woff", "font/woff"),
+    (".ttf", "font/ttf"),
+    (".webmanifest", "application/manifest+json"),
+)
+
+
 def _content_type(path: str) -> str:
     lower = path.lower()
-    if lower.endswith(".json"):
-        return "application/json"
-    if lower.endswith((".js", ".mjs")):
-        return "application/javascript"
-    if lower.endswith(".css"):
-        return "text/css"
-    if lower.endswith(".html"):
-        return "text/html"
-    if lower.endswith((".wasm", ".wasm.gz")):
-        return "application/wasm"
+    for suffix, content_type in _CONTENT_TYPE_SUFFIXES:
+        if lower.endswith(suffix):
+            return content_type
     return "application/octet-stream"
 
 
