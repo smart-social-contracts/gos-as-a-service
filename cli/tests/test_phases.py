@@ -401,6 +401,7 @@ def test_installer_config_json_includes_ids() -> None:
     assert payload["portal_url"] == "https://test.gos.earth"
     assert payload["provision_via_casals"] is True
     assert payload["create_stand_baton"] is True
+    assert payload["cycle_threshold_cycles"] == 2_000_000_000_000
 
 
 def test_installer_config_json_casals_backend_key() -> None:
@@ -430,7 +431,10 @@ def test_casals_settings_json_defaults_and_test_mode() -> None:
     )
     closed = json.loads(_casals_settings_json(billed, "deployer-principal"))
     assert closed["monitor_enabled"] is False
-    assert closed["default_min_cycles"] == 500_000_000_000
+    assert closed["default_min_cycles"] == 2_000_000_000_000
+    assert closed["default_topup_cycles"] == 2_000_000_000_000
+    assert closed["treasury_reserve"] == 2_000_000_000_000
+    assert closed["create_cycles"] == 2_000_000_000_000
     assert "extra_controller_principals" not in closed
 
     open_desc = desc.model_copy(update={"flags": {"open_mode": True}})

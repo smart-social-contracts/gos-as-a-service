@@ -11,6 +11,7 @@ from rich.console import Console
 
 from gaas.descriptor import (
     CasalsConfig,
+    CyclesConfig,
     Descriptor,
     DnsConfig,
     GosArtifacts,
@@ -182,6 +183,16 @@ def _validate_commanders_optional(value: str) -> bool | str:
     return True
 
 
+def _validate_threshold_tc(value: str) -> bool | str:
+    if not value.strip():
+        return True
+    try:
+        CyclesConfig.model_validate({"threshold_tc": float(value.strip())})
+    except Exception as exc:
+        return str(exc)
+    return True
+
+
 def _gos_choices() -> list[Choice]:
     choices: list[Choice] = []
     for impl in GOS_IMPLEMENTATIONS.values():
@@ -336,6 +347,14 @@ def run_wizard(
     if commanders_raw is None:
         raise SystemExit(0)
 
+    threshold_raw = prompt.text(
+        "Cycle threshold (TC) for all canisters:",
+        default="2",
+        validate=_validate_threshold_tc,
+    ).ask()
+    if threshold_raw is None:
+        raise SystemExit(0)
+
     billing_url = prompt.text(
         "Billing service URL (optional, https):",
         validate=_validate_https_optional,
@@ -385,6 +404,7 @@ def run_wizard(
             billing_url=billing_url.strip() or None,
             deploy_url=deploy_url.strip() or None,
         ),
+        cycles=CyclesConfig(threshold_tc=float(threshold_raw.strip() or "2")),
         flags=flags,
         dns=DnsConfig(provider="manual"),
     )

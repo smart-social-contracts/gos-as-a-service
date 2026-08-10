@@ -207,21 +207,23 @@ def _installer_config_json(descriptor: Descriptor) -> str:
         "portal_url": _portal_url(descriptor),
         "provision_via_casals": True,
         "create_stand_baton": True,
+        "cycle_threshold_cycles": descriptor.threshold_cycles(),
     }
     return json.dumps(payload)
 
 
 def _casals_settings_json(descriptor: Descriptor, deployer_principal: str) -> str:
     canisters = descriptor.canisters
+    threshold = descriptor.threshold_cycles()
     payload: dict = {
         "file_registry_canister_id": canisters.get("file_registry", ""),
         "file_registry_frontend_canister_id": canisters.get("file_registry_frontend", ""),
         "casals_frontend_canister_id": canisters.get("casals_frontend", ""),
         "realm_installer_canister_id": canisters.get("realm_installer", ""),
-        "default_min_cycles": 500_000_000_000,
-        "default_topup_cycles": 1_000_000_000_000,
-        "treasury_reserve": 1_000_000_000_000,
-        "create_cycles": 2_000_000_000_000,
+        "default_min_cycles": threshold,
+        "default_topup_cycles": threshold,
+        "treasury_reserve": threshold,
+        "create_cycles": threshold,
         "monitor_enabled": False,
     }
     if descriptor.services.monitor_url:

@@ -44,6 +44,7 @@ from ic_assets import ensure_frame_ancestor, portal_url_to_origin
 from installer_config import (
     InstallerConfig,
     apply_installer_config,
+    configured_cycle_threshold_cycles,
     configured_file_registry_id,
     configured_portal_base,
     get_config,
@@ -1827,6 +1828,7 @@ def _cycles_preflight_gen(manifest: dict, cfg: InstallerConfig):
         required_conductor_cycles=required,
         file_registry_cycles=file_registry_cycles,
         file_registry_id=file_registry_id,
+        file_registry_min_cycles=configured_cycle_threshold_cycles(),
     )
 
 
@@ -2673,6 +2675,7 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
         casals_canister_id=casals_id,
         required_conductor_cycles=required,
         file_registry_id=file_registry_id,
+        file_registry_min_cycles=configured_cycle_threshold_cycles(),
     )
     if preflight_err:
         raise RuntimeError(preflight_err)

@@ -39,6 +39,7 @@ def test_wizard_builds_descriptor(tmp_path: Path, monkeypatch) -> None:
             "",
             "v0.3.0",
             "",
+            "2",
             "",
             "",
             False,
@@ -67,6 +68,7 @@ def test_wizard_builds_descriptor(tmp_path: Path, monkeypatch) -> None:
     assert desc.domain == "myenv.gos.earth"
     assert desc.gos[0].version == "v0.3.1"
     assert desc.casals.version == "v0.3.0"
+    assert desc.cycles.threshold_tc == 2
     assert desc.dns.provider == "manual"
     assert desc.flags.get("open_mode") is not True
     assert identity == "deployer"
@@ -93,6 +95,7 @@ def test_wizard_honors_flag_overrides() -> None:
             "",
             "v0.3.0",
             "",
+            "2",
             "",
             "",
             False,
@@ -145,6 +148,7 @@ def test_wizard_open_mode_prompt_sets_flag(tmp_path: Path, monkeypatch) -> None:
             "",
             "v0.3.0",
             "",
+            "2",
             "",
             "",
             True,
@@ -192,6 +196,7 @@ def test_wizard_parses_casals_commanders(tmp_path: Path, monkeypatch) -> None:
             "",
             "v0.3.0",
             "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa, bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+            "2",
             "",
             "",
             False,

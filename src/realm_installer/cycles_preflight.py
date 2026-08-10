@@ -12,7 +12,7 @@ PREFLIGHT_PER_CANISTER_CREATE_CYCLES = 2_000_000_000_000
 PREFLIGHT_OPS_MARGIN_CYCLES = 1_000_000_000_000
 
 # Minimum balance required on file_registry (WASM pulls + bundle uploads).
-PREFLIGHT_FILE_REGISTRY_MIN_CYCLES = 1_000_000_000_000
+DEFAULT_CYCLE_THRESHOLD_CYCLES = 2_000_000_000_000
 
 FILE_REGISTRY_CANISTER_NAME = "file-registry"
 
@@ -125,9 +125,13 @@ def check_cycles_preflight(
     required_conductor_cycles: int,
     file_registry_cycles: int | None = None,
     file_registry_id: str = "",
+    file_registry_min_cycles: int | None = None,
 ) -> str | None:
     """Return an actionable error when treasury or file_registry is under-funded."""
     errors: list[str] = []
+    min_cycles = file_registry_min_cycles or DEFAULT_CYCLE_THRESHOLD_CYCLES
+    if min_cycles <= 0:
+        min_cycles = DEFAULT_CYCLE_THRESHOLD_CYCLES
 
     spendable = conductor_spendable(cycles_report)
     if spendable is not None and spendable < required_conductor_cycles:
@@ -150,13 +154,13 @@ def check_cycles_preflight(
             if not fr_id:
                 fr_id = (fr_row.get("canister_id") or "").strip()
 
-    if fr_bal is not None and fr_id and fr_bal < PREFLIGHT_FILE_REGISTRY_MIN_CYCLES:
+    if fr_bal is not None and fr_id and fr_bal < min_cycles:
         errors.append(
             _insufficient_cycles_error(
                 "file_registry",
                 fr_id,
                 fr_bal,
-                PREFLIGHT_FILE_REGISTRY_MIN_CYCLES,
+                min_cycles,
             )
         )
 

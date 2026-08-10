@@ -39,6 +39,9 @@
   "flags": {
     "open_mode": true
   },
+  "cycles": {
+    "threshold_tc": 2
+  },
   "dns": {
     "provider": "manual"
   }

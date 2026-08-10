@@ -54,6 +54,7 @@ def test_configure_maps_registry_backend_id():
             "casals_canister_id": "casals-1",
             "casals_section": "MySection",
             "portal_url": "https://portal.example",
+            "cycle_threshold_cycles": 3_000_000_000_000,
         }
     )
     payload = installer_config_payload()
@@ -61,6 +62,7 @@ def test_configure_maps_registry_backend_id():
     assert payload["casals_canister_id"] == "casals-1"
     assert payload["casals_section"] == "MySection"
     assert payload["portal_url"] == "https://portal.example"
+    assert payload["cycle_threshold_cycles"] == 3_000_000_000_000
 
 
 def test_apply_installer_config_from_json():

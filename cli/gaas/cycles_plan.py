@@ -1,12 +1,12 @@
 """Cycles requirement estimation and balance verification for deploy preflight.
 
-The conductor (casals_backend) creates realm canisters at 2T each (its
-``create_cycles`` setting) and pays for orchestration work (wasm pulls, bundle
-uploads, inter-canister calls). A single realm deployment creates backend +
-frontend + baton (3 canisters) plus ~1T ops margin. We price the conductor for
-``REALMS_PER_DEPLOY_ASSUMPTION`` realm deployments on top of its 1T treasury
-reserve. The file_registry seeds platform wasms at deploy time and serves every
-realm install thereafter, so it carries a higher headroom than other backends.
+The conductor (casals_backend) creates realm canisters at the descriptor cycle
+threshold each (its ``create_cycles`` setting) and pays for orchestration work
+(wasm pulls, bundle uploads, inter-canister calls). A single realm deployment
+creates backend + frontend + baton (3 canisters) plus ~1T ops margin. We price
+the conductor for ``REALMS_PER_DEPLOY_ASSUMPTION`` realm deployments on top of
+its treasury reserve (the same threshold). All platform canisters share one
+minimum headroom from ``descriptor.cycles.threshold_tc``.
 """
 
 from __future__ import annotations
@@ -25,15 +25,7 @@ from gaas.known import KNOWN_CANISTER_NAMES, PLATFORM_CANISTER_NAMES
 WALLET_CREATE_CYCLES: int = 100_000_000_000  # 0.1T — IC canister creation fee
 WALLET_INITIAL_FUNDING: int = 500_000_000_000  # 0.5T — headroom for first install per canister
 
-# Minimum in-canister balances before deploy steps that consume cycles.
-CANISTER_HEADROOM_DEFAULT: int = 200_000_000_000  # 0.2T — backends/frontends
-CANISTER_HEADROOM_FILE_REGISTRY: int = 2_000_000_000_000  # 2T — platform WASM seed + realm bundle writes
-CANISTER_HEADROOM_REALM_INSTALLER: int = 300_000_000_000  # 0.3T — realm provisioning installs
-CANISTER_HEADROOM_CASALS_BACKEND: int = 1_000_000_000_000  # 1T — treasury reserve (orchestration float)
-MULTISIG_CREATE_CYCLES: int = 2_000_000_000_000  # 2T — conductor creates multisig when absent
-
 # Conductor realm-provisioning budget (observed on test.gos.earth: ~2T/create_canister).
-REALM_CREATE_CYCLES_PER_CANISTER: int = 2_000_000_000_000  # 2T — conductor create_cycles per realm canister
 REALM_OPS_MARGIN_CYCLES: int = 1_000_000_000_000  # 1T — wasm pulls, bundle upload, inter-canister calls
 REALMS_PER_DEPLOY_ASSUMPTION: int = 2  # price conductor for a couple of realm deployments
 REALM_CANISTERS_PER_DEPLOY: int = 3  # backend + frontend + baton
@@ -73,29 +65,30 @@ class CyclesPlan:
         return 0
 
 
-def _realm_provisioning_budget() -> int:
+def _threshold_cycles(descriptor: Descriptor) -> int:
+    return descriptor.threshold_cycles()
+
+
+def _realm_provisioning_budget(threshold_cycles: int) -> int:
     """Cycles the conductor spends provisioning one realm (3 creates + ops)."""
     return (
-        REALM_CANISTERS_PER_DEPLOY * REALM_CREATE_CYCLES_PER_CANISTER
+        REALM_CANISTERS_PER_DEPLOY * threshold_cycles
         + REALM_OPS_MARGIN_CYCLES
     )
 
 
 def _casals_backend_required(descriptor: Descriptor) -> int:
     """Treasury reserve plus budget for assumed realm deployments."""
-    multisig_extra = 0 if descriptor.multisig.backend_id else MULTISIG_CREATE_CYCLES
-    realm_budget = REALMS_PER_DEPLOY_ASSUMPTION * _realm_provisioning_budget()
-    return CANISTER_HEADROOM_CASALS_BACKEND + realm_budget + multisig_extra
+    threshold = _threshold_cycles(descriptor)
+    multisig_extra = 0 if descriptor.multisig.backend_id else threshold
+    realm_budget = REALMS_PER_DEPLOY_ASSUMPTION * _realm_provisioning_budget(threshold)
+    return threshold + realm_budget + multisig_extra
 
 
 def _canister_headroom(name: str, descriptor: Descriptor) -> int:
-    if name == "file_registry":
-        return CANISTER_HEADROOM_FILE_REGISTRY
-    if name == "realm_installer":
-        return CANISTER_HEADROOM_REALM_INSTALLER
     if name == "casals_backend":
         return _casals_backend_required(descriptor)
-    return CANISTER_HEADROOM_DEFAULT
+    return _threshold_cycles(descriptor)
 
 
 def _wallet_required_per_canister() -> int:

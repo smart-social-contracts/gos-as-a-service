@@ -22,6 +22,7 @@ class InstallerConfig(Entity):
     portal_url = String(max_length=512, default="")
     create_stand_baton = Integer(default=0)
     baton_wasm_key = String(max_length=64, default="orchestration-baton")
+    cycle_threshold_cycles = Integer(default=2_000_000_000_000)
 
 
 def get_config() -> InstallerConfig:
@@ -70,6 +71,13 @@ def apply_installer_config(params: dict) -> None:
         cfg.create_stand_baton = 1 if params["create_stand_baton"] else 0
     if "baton_wasm_key" in params:
         cfg.baton_wasm_key = (params.get("baton_wasm_key") or "orchestration-baton").strip()
+    if "cycle_threshold_cycles" in params:
+        cfg.cycle_threshold_cycles = int(params.get("cycle_threshold_cycles") or 0)
+
+
+def configured_cycle_threshold_cycles() -> int:
+    value = int(get_config().cycle_threshold_cycles or 0)
+    return value if value > 0 else 2_000_000_000_000
 
 
 def installer_config_payload() -> dict:
@@ -82,6 +90,7 @@ def installer_config_payload() -> dict:
         "casals_section": cfg.casals_section or "Deployments",
         "portal_url": cfg.portal_url or "",
         "provision_via_casals": bool(cfg.provision_via_casals),
+        "cycle_threshold_cycles": configured_cycle_threshold_cycles(),
     }
 
 

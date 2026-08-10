@@ -179,6 +179,22 @@ class MultisigConfig(BaseModel):
         return value
 
 
+class CyclesConfig(BaseModel):
+    """Unified cycle threshold (TC) for all platform canisters."""
+
+    threshold_tc: float = 2
+
+    @field_validator("threshold_tc")
+    @classmethod
+    def validate_threshold_tc(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("cycles.threshold_tc must be a positive number")
+        return value
+
+    def threshold_cycles(self) -> int:
+        return int(self.threshold_tc * 1_000_000_000_000)
+
+
 class DnsConfig(BaseModel):
     provider: str = "manual"
 
@@ -211,6 +227,7 @@ class Descriptor(BaseModel):
     services: ServicesConfig = Field(default_factory=ServicesConfig)
     marketplace: MarketplaceConfig | None = None
     flags: dict[str, bool] = Field(default_factory=dict)
+    cycles: CyclesConfig = Field(default_factory=CyclesConfig)
     dns: DnsConfig = Field(default_factory=DnsConfig)
 
     @field_validator("name")
@@ -309,6 +326,9 @@ class Descriptor(BaseModel):
         if not CANISTER_ID_RE.match(canister_id):
             raise ValueError(f"invalid canister ID: {canister_id!r}")
         self.canisters[name] = canister_id
+
+    def threshold_cycles(self) -> int:
+        return self.cycles.threshold_cycles()
 
     def set_multisig_backend_id(self, canister_id: str) -> None:
         if not CANISTER_ID_RE.match(canister_id):

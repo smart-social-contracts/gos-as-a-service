@@ -9,12 +9,6 @@ import pytest
 from rich.console import Console
 
 from gaas.cycles_plan import (
-    CANISTER_HEADROOM_CASALS_BACKEND,
-    CANISTER_HEADROOM_DEFAULT,
-    CANISTER_HEADROOM_FILE_REGISTRY,
-    CANISTER_HEADROOM_REALM_INSTALLER,
-    MULTISIG_CREATE_CYCLES,
-    REALM_CREATE_CYCLES_PER_CANISTER,
     REALM_OPS_MARGIN_CYCLES,
     REALMS_PER_DEPLOY_ASSUMPTION,
     WALLET_CREATE_CYCLES,
@@ -28,10 +22,12 @@ from gaas.cycles_plan import (
     render_cycles_plan_table,
     wallet_convert_amount_icp,
 )
-from gaas.descriptor import Descriptor, MultisigConfig
+from gaas.descriptor import CyclesConfig, Descriptor, MultisigConfig
 from gaas.known import KNOWN_CANISTER_NAMES, PLATFORM_CANISTER_NAMES
 from gaas.preflight import run_preflight
 from tests.conftest import SAMPLE_DESCRIPTOR, VALID_CANISTER_ID
+
+DEFAULT_THRESHOLD = 2_000_000_000_000
 
 
 def _descriptor(**overrides) -> Descriptor:
@@ -62,7 +58,7 @@ def test_wallet_required_partial_create_mix() -> None:
         "ic",
         wallet_balance=5_000_000_000_000,
         canister_balances={
-            "file_registry": CANISTER_HEADROOM_FILE_REGISTRY,
+            "file_registry": DEFAULT_THRESHOLD,
             "casals_backend": _casals_backend_required(
                 _descriptor(
                     canisters=canisters,
@@ -79,8 +75,9 @@ def test_wallet_required_partial_create_mix() -> None:
 
 def test_canister_headrooms_and_multisig_extra() -> None:
     canisters = {name: VALID_CANISTER_ID for name in KNOWN_CANISTER_NAMES}
-    realm_budget = REALMS_PER_DEPLOY_ASSUMPTION * _realm_provisioning_budget()
-    conductor_base = CANISTER_HEADROOM_CASALS_BACKEND + realm_budget
+    threshold = DEFAULT_THRESHOLD
+    realm_budget = REALMS_PER_DEPLOY_ASSUMPTION * _realm_provisioning_budget(threshold)
+    conductor_base = threshold + realm_budget
 
     plan_no_multisig = build_cycles_plan(
         _descriptor(canisters=canisters, multisig=MultisigConfig(backend_id=None)),
@@ -89,7 +86,7 @@ def test_canister_headrooms_and_multisig_extra() -> None:
         canister_balances={name: 10_000_000_000_000 for name in canisters},
     )
     casals = next(item for item in plan_no_multisig.items if item.label == "casals_backend")
-    assert casals.required == conductor_base + MULTISIG_CREATE_CYCLES
+    assert casals.required == conductor_base + threshold
     assert casals.required == _casals_backend_required(
         _descriptor(canisters=canisters, multisig=MultisigConfig(backend_id=None))
     )
@@ -115,24 +112,37 @@ def test_canister_headrooms_and_multisig_extra() -> None:
     frontend = next(
         item for item in plan_no_multisig.items if item.label == "casals_frontend"
     )
-    assert file_reg.required == CANISTER_HEADROOM_FILE_REGISTRY
-    assert installer.required == CANISTER_HEADROOM_REALM_INSTALLER
-    assert frontend.required == CANISTER_HEADROOM_DEFAULT
+    assert file_reg.required == threshold
+    assert installer.required == threshold
+    assert frontend.required == threshold
+
+
+def test_descriptor_threshold_tc_overrides_default_headroom() -> None:
+    canisters = {"file_registry": VALID_CANISTER_ID}
+    plan = build_cycles_plan(
+        _descriptor(canisters=canisters, cycles=CyclesConfig(threshold_tc=3)),
+        "ic",
+        wallet_balance=0,
+        canister_balances={"file_registry": 0},
+    )
+    file_reg = next(item for item in plan.items if item.label == "file_registry")
+    assert file_reg.required == 3_000_000_000_000
 
 
 def test_conductor_includes_realm_provisioning_budget() -> None:
-    per_realm = 3 * REALM_CREATE_CYCLES_PER_CANISTER + REALM_OPS_MARGIN_CYCLES
-    assert _realm_provisioning_budget() == per_realm
+    threshold = DEFAULT_THRESHOLD
+    per_realm = 3 * threshold + REALM_OPS_MARGIN_CYCLES
+    assert _realm_provisioning_budget(threshold) == per_realm
     assert per_realm == 7_000_000_000_000
 
     desc = _descriptor(
         canisters={"casals_backend": VALID_CANISTER_ID},
         multisig=MultisigConfig(backend_id="aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa"),
     )
-    assert _casals_backend_required(desc) == CANISTER_HEADROOM_CASALS_BACKEND + (
+    assert _casals_backend_required(desc) == threshold + (
         REALMS_PER_DEPLOY_ASSUMPTION * per_realm
     )
-    assert _casals_backend_required(desc) == 15_000_000_000_000
+    assert _casals_backend_required(desc) == 16_000_000_000_000
 
 
 def test_shortfall_detection_wallet_and_canister() -> None:
@@ -147,7 +157,7 @@ def test_shortfall_detection_wallet_and_canister() -> None:
     wallet = next(item for item in plan.items if item.label == "wallet")
     file_reg = next(item for item in plan.items if item.label == "file_registry")
     assert wallet.shortfall > 0
-    assert file_reg.shortfall == CANISTER_HEADROOM_FILE_REGISTRY - 100_000_000_000
+    assert file_reg.shortfall == DEFAULT_THRESHOLD - 100_000_000_000
 
 
 def test_remediation_commands() -> None:
@@ -173,7 +183,7 @@ def test_render_cycles_plan_table_columns() -> None:
         _descriptor(canisters={"file_registry": VALID_CANISTER_ID}),
         "ic",
         wallet_balance=1_000_000_000_000,
-        canister_balances={"file_registry": CANISTER_HEADROOM_FILE_REGISTRY},
+        canister_balances={"file_registry": DEFAULT_THRESHOLD},
     )
     table = render_cycles_plan_table(plan)
     assert table.title == "Cycles plan"

@@ -7,7 +7,7 @@ _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 sys.path.insert(0, os.path.join(_REPO_ROOT, "src/realm_installer"))
 
 from cycles_preflight import (
-    PREFLIGHT_FILE_REGISTRY_MIN_CYCLES,
+    DEFAULT_CYCLE_THRESHOLD_CYCLES,
     PREFLIGHT_OPS_MARGIN_CYCLES,
     PREFLIGHT_PER_CANISTER_CREATE_CYCLES,
     check_cycles_preflight,
@@ -98,7 +98,7 @@ def test_insufficient_file_registry_returns_actionable_error():
     assert "file_registry" in err
     assert FR_ID in err
     assert f"dfx cycles top-up {FR_ID}" in err
-    assert "needs 1.0T" in err
+    assert "needs 2.0T" in err
 
 
 def test_sufficient_balances_pass_preflight():
@@ -106,14 +106,28 @@ def test_sufficient_balances_pass_preflight():
     required = estimate_conductor_cycles_required(manifest, create_stand_baton=True)
     report = _report(
         treasury=required + 1,
-        file_registry=PREFLIGHT_FILE_REGISTRY_MIN_CYCLES + 1,
+        file_registry=DEFAULT_CYCLE_THRESHOLD_CYCLES + 1,
     )
     assert check_cycles_preflight(
         report,
         casals_canister_id=CASALS_ID,
         required_conductor_cycles=required,
-        file_registry_cycles=PREFLIGHT_FILE_REGISTRY_MIN_CYCLES + 1,
+        file_registry_cycles=DEFAULT_CYCLE_THRESHOLD_CYCLES + 1,
         file_registry_id=FR_ID,
+    ) is None
+
+
+def test_configured_file_registry_min_cycles_override():
+    manifest = _manifest()
+    required = estimate_conductor_cycles_required(manifest, create_stand_baton=True)
+    report = _report(treasury=required + 1, file_registry=1_500_000_000_000)
+    assert check_cycles_preflight(
+        report,
+        casals_canister_id=CASALS_ID,
+        required_conductor_cycles=required,
+        file_registry_cycles=1_500_000_000_000,
+        file_registry_id=FR_ID,
+        file_registry_min_cycles=1_000_000_000_000,
     ) is None
 
 
