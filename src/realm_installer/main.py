@@ -757,53 +757,22 @@ def schedule_registration(job_id_val: str):
 
             infra = manifest.get("infra") or {}
             fr_id = infra.get("file_registry_canister_id", "")
-            mp_id = infra.get("marketplace_canister_id", "")
             network = (manifest.get("network") or "").strip()
             version = (manifest.get("deploy_version") or "").strip()
             test_flags = manifest.get("test_flags") or {}
             test_flags_json = json.dumps(test_flags) if test_flags else ""
             if backend_id:
-                realm_info = manifest.get("realm") or {}
-                stand = ((manifest.get("casals") or {}).get("stand") or _slugify(
-                    realm_info.get("name") or realm_name
-                )).strip()
-                token_cfg = _resolve_token_from_manifest(manifest)
-                token_id = ""
-                nft_id = _shared_nft_canister_id(network)
-                if token_cfg:
-                    if token_cfg.get("deploy_new"):
-                        casals_id = (_config().casals_canister_id or "").strip()
-                        stand_token, _ = yield from _lookup_stand_token_ids(
-                            casals_id, stand, job_id_val
-                        )
-                        token_id = stand_token or ""
-                    else:
-                        token_id = token_cfg.get("ledger", "")
-
+                # Slim GaaS (gos-as-a-service#10): realm-specific IDs only.
+                # Shared RealmsGOS token/nft/marketplace are resolved in-realm via
+                # env_services (realms#288). Omit file_registry here too — realms#290
+                # will cut package FR off GaaS boot wiring; branding still reads infra.
                 link_payload = {
                     "frontend_canister_id": frontend_id or None,
-                    "file_registry_canister_id": fr_id or None,
-                    "marketplace_canister_id": mp_id or None,
                     "installed_version": version or None,
                     "network": network or None,
                 }
                 if test_flags_json:
                     link_payload["test_flags_json"] = test_flags_json
-                if token_id:
-                    link_payload["token_canister_id"] = token_id
-                if nft_id:
-                    link_payload["nft_canister_id"] = nft_id
-                if token_cfg:
-                    link_payload["accounting_currency"] = token_cfg.get("symbol", "REALMS")
-                    link_payload["accounting_currency_decimals"] = token_cfg.get(
-                        "decimals", 8
-                    )
-                    link_payload["treasury_token_symbol"] = token_cfg.get("symbol", "REALMS")
-                    if token_cfg.get("indexer"):
-                        link_payload["treasury_token_indexer_id"] = token_cfg["indexer"]
-                    link_payload["treasury_token_type"] = token_cfg.get(
-                        "token_type", "realm"
-                    )
 
                 link_json = json.dumps(
                     {k: v for k, v in link_payload.items() if v is not None}
@@ -822,8 +791,6 @@ def schedule_registration(job_id_val: str):
                 else:
                     jlog(job_id_val).info(
                         f"set_canister_config_json: frontend={frontend_id}, "
-                        f"token={token_id or '–'}, nft={nft_id or '–'}, "
-                        f"file_registry={fr_id}, marketplace={mp_id}, "
                         f"version={version}, network={network}, "
                         f"test_flags={test_flags_json}"
                     )
@@ -1133,7 +1100,7 @@ def _execute_configure_canister_ids(task, step, args):
         f"setting canister config on backend {backend_id}: frontend={frontend_id}, "
         f"file_registry={(args.get('file_registry_canister_id') or '').strip() or '–'}, "
         f"realm_registry={(args.get('realm_registry_canister_id') or '').strip() or '–'}, "
-        f"marketplace={(args.get('marketplace_canister_id') or '').strip() or '–'}, "
+        f"network={(args.get('network') or '').strip() or '–'}, "
         f"creator={'set' if creator else 'missing'}"
     )
     config_json = json.dumps(payload).replace("\\", "\\\\").replace('"', '\\"')
@@ -1276,112 +1243,14 @@ def _schedule_step_runner(task_id: str, delay_s: int = 0):
     ic.set_timer(Duration(int(delay_s)), _cb)
 
 
-# Shared land-NFT backend per network (Casals infra stand "nft", not per-realm).
-_SHARED_NFT_CANISTERS = {
-    "staging": "27sff-mqaaa-aaaah-quntq-cai",
-    "demo": "6hrip-iiaaa-aaaaf-qdoha-cai",
-    "test": "eelas-yyaaa-aaaao-qps7a-cai",
-}
-
-
-def _shared_nft_canister_id(network: str) -> str:
-    return (_SHARED_NFT_CANISTERS.get((network or "").strip().lower()) or "").strip()
-
-# Shared treasury ledgers keyed by network + symbol (mirrors realm_backend.api.tokens).
-_SHARED_TOKEN_LEDGERS = {
-    "staging": {
-        "REALMS": {
-            "ledger": "2rqin-xaaaa-aaaah-qunsq-cai",
-            "indexer": "2rqin-xaaaa-aaaah-qunsq-cai",
-            "decimals": 8,
-            "token_type": "shared",
-        },
-        "ckBTC": {
-            "ledger": "mxzaz-hqaaa-aaaar-qaada-cai",
-            "indexer": "n5wcd-faaaa-aaaar-qaaea-cai",
-            "decimals": 8,
-            "token_type": "shared",
-        },
-        "ckUSDC": {
-            "ledger": "xckus-ciaaa-aaaam-qbssa-cai",
-            "indexer": "ufqgi-4qaaa-aaaam-qbsna-cai",
-            "decimals": 6,
-            "token_type": "shared",
-        },
-    },
-    "demo": {
-        "REALMS": {
-            "ledger": "xbkkh-syaaa-aaaah-qq3ya-cai",
-            "indexer": "xbkkh-syaaa-aaaah-qq3ya-cai",
-            "decimals": 8,
-            "token_type": "shared",
-        },
-        "ckBTC": {
-            "ledger": "mxzaz-hqaaa-aaaar-qaada-cai",
-            "indexer": "n5wcd-faaaa-aaaar-qaaea-cai",
-            "decimals": 8,
-            "token_type": "shared",
-        },
-        "ckUSDC": {
-            "ledger": "xckus-ciaaa-aaaam-qbssa-cai",
-            "indexer": "ufqgi-4qaaa-aaaam-qbsna-cai",
-            "decimals": 6,
-            "token_type": "shared",
-        },
-    },
-    "test": {
-        "REALMS": {
-            "ledger": "nusyl-jiaaa-aaaae-qj6mq-cai",
-            "indexer": "nusyl-jiaaa-aaaae-qj6mq-cai",
-            "decimals": 8,
-            "token_type": "shared",
-        },
-        "ckBTC": {
-            "ledger": "mxzaz-hqaaa-aaaar-qaada-cai",
-            "indexer": "n5wcd-faaaa-aaaar-qaaea-cai",
-            "decimals": 8,
-            "token_type": "shared",
-        },
-        "ckUSDC": {
-            "ledger": "xckus-ciaaa-aaaam-qbssa-cai",
-            "indexer": "ufqgi-4qaaa-aaaam-qbsna-cai",
-            "decimals": 6,
-            "token_type": "shared",
-        },
-    },
-}
-
-
 def _esc_candid_text(value: str) -> str:
     return str(value or "").replace("\\", "\\\\").replace('"', '\\"')
 
 
 def _resolve_token_from_manifest(manifest: dict):
-    """Return treasury wiring dict from manifest.realm.token, or None."""
+    """Return per-stand token config when the wizard chose token.new (legacy path)."""
     realm_info = manifest.get("realm") or {}
     token = realm_info.get("token") or {}
-    network = (manifest.get("network") or "staging").strip().lower()
-    shared = _SHARED_TOKEN_LEDGERS.get(network, {})
-
-    existing = (token.get("existing") or "").strip()
-    if existing:
-        cfg = shared.get(existing)
-        if cfg is None:
-            for key, val in shared.items():
-                if key.upper() == existing.upper():
-                    cfg = val
-                    existing = key
-                    break
-        if cfg:
-            return {
-                "symbol": existing,
-                "ledger": cfg["ledger"],
-                "indexer": cfg.get("indexer", cfg["ledger"]),
-                "decimals": cfg.get("decimals", 8),
-                "token_type": cfg.get("token_type", "shared"),
-                "deploy_new": False,
-            }
-        return None
 
     name = (token.get("name") or "").strip()
     symbol = (token.get("symbol") or "").strip().upper()
@@ -1504,22 +1373,6 @@ def _start_extensions_for_job(job, manifest: dict) -> Async[None]:
     raw_codex = realm_info.get("codex")
     jlog(job.name).info(f"raw extensions: {len(raw_exts)} items, codex: {type(raw_codex).__name__}={raw_codex}")
 
-    # The realm refuses packages that carry no approval from an approver it
-    # trusts, and its default approver is its marketplace. A realm that does
-    # not know its marketplace yet trusts nobody, so this has to reach the
-    # backend before the first install rather than at registration.
-    infra = manifest.get("infra") or {}
-    marketplace_id = (
-        manifest.get("marketplace_canister_id")
-        or infra.get("marketplace_canister_id")
-        or ""
-    )
-    if not marketplace_id:
-        jlog(job.name).warning(
-            "no marketplace in manifest: the realm will trust no approver and "
-            "refuse every package until one is configured"
-        )
-
     ext_manifest = {
         "target_canister_id": job.backend_canister_id,
         "frontend_canister_id": job.frontend_canister_id or "",
@@ -1527,7 +1380,6 @@ def _start_extensions_for_job(job, manifest: dict) -> Async[None]:
         "file_registry_canister_id": registry_id,
         "realm_registry_canister_id": realm_registry_id,
         "infra": manifest.get("infra") or {},
-        "marketplace_canister_id": marketplace_id,
         "network": network,
         "requesting_principal": (manifest.get("requesting_principal") or "").strip(),
         "federation": manifest.get("federation") or {},

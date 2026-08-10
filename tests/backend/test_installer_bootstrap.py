@@ -33,7 +33,6 @@ def _bootstrap_manifest(**overrides):
         "frontend_canister_id": "frontend-principal",
         "registry_canister_id": "realm-registry-id",
         "infra": {"file_registry_canister_id": "file-registry-id"},
-        "marketplace_canister_id": "marketplace-id",
         "network": "test",
         "requesting_principal": "creator-principal-abc",
         "federation": {"portal_url": "https://portal.example/r/my-realm"},
@@ -73,7 +72,6 @@ def _ext_manifest_for_job(manifest):
         "file_registry_canister_id": file_registry_id,
         "realm_registry_canister_id": realm_registry_id,
         "infra": manifest.get("infra") or {},
-        "marketplace_canister_id": manifest["marketplace_canister_id"],
         "network": network,
         "requesting_principal": manifest.get("requesting_principal", ""),
         "federation": manifest.get("federation") or {},
@@ -125,6 +123,10 @@ def test_configure_payload_includes_creator_and_portal_origin():
     assert payload["frontend_canister_id"] == "frontend-principal"
     assert payload["file_registry_canister_id"] == "file-registry-id"
     assert payload["realm_registry_canister_id"] == "realm-registry-id"
+    assert payload["network"] == "test"
+    assert "marketplace_canister_id" not in payload
+    assert "token_canister_id" not in payload
+    assert "nft_canister_id" not in payload
 
 
 def test_configure_payload_realm_registry_from_explicit_field():

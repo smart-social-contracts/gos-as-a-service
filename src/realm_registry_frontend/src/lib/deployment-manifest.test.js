@@ -78,24 +78,23 @@ test('test network infra omits stale hardcoded canister fallbacks', () => {
 
   const infraWithOrigin = networkInfra('test', { ii_derivation_origin: 'https://test.gos.earth' });
   assert.equal(infraWithOrigin.file_registry_canister_id, '');
-  assert.equal(infraWithOrigin.marketplace_canister_id, '');
+  assert.equal(infraWithOrigin.marketplace_canister_id, undefined);
 });
 
 test('test network config-provided infra IDs win over fallbacks', () => {
   const infra = networkInfra('test', {
     file_registry_canister_id: 'custom-file-id',
-    marketplace_canister_id: 'custom-market-id',
   });
   assert.equal(infra.file_registry_canister_id, 'custom-file-id');
-  assert.equal(infra.marketplace_canister_id, 'custom-market-id');
+  assert.equal(infra.marketplace_canister_id, undefined);
 });
 
-test('staging and demo networks still use infra fallbacks when config omits IDs', () => {
+test('staging and demo networks still use file registry fallbacks when config omits IDs', () => {
   const staging = networkInfra('staging', {});
   assert.equal(staging.file_registry_canister_id, 'iebdk-kqaaa-aaaau-agoxq-cai');
-  assert.equal(staging.marketplace_canister_id, 'jji3o-uyaaa-aaaah-qreja-cai');
+  assert.equal(staging.marketplace_canister_id, undefined);
 
   const demo = networkInfra('demo', {});
   assert.equal(demo.file_registry_canister_id, 'vi64l-3aaaa-aaaae-qj4va-cai');
-  assert.equal(demo.marketplace_canister_id, 'ehyfg-wyaaa-aaaae-qg3qq-cai');
+  assert.equal(demo.marketplace_canister_id, undefined);
 });

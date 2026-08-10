@@ -38,7 +38,6 @@ def configure_canister_ids_args(manifest: dict, backend_id: str, frontend_id: st
         "frontend_canister_id": frontend_id,
         "file_registry_canister_id": _resolve_file_registry_canister_id(manifest),
         "realm_registry_canister_id": _resolve_realm_registry_canister_id(manifest),
-        "marketplace_canister_id": manifest.get("marketplace_canister_id", ""),
         "network": manifest.get("network", ""),
         "requesting_principal": (manifest.get("requesting_principal") or "").strip(),
         "portal_origin": configured_portal_base(manifest),
@@ -57,9 +56,6 @@ def configure_canister_ids_payload(args: dict) -> tuple[dict, list[str]]:
     realm_registry_id = (args.get("realm_registry_canister_id") or "").strip()
     if realm_registry_id:
         payload["realm_registry_canister_id"] = realm_registry_id
-    marketplace_id = (args.get("marketplace_canister_id") or "").strip()
-    if marketplace_id:
-        payload["marketplace_canister_id"] = marketplace_id
     network = (args.get("network") or "").strip()
     if network:
         payload["network"] = network
