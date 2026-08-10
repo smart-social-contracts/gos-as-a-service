@@ -272,7 +272,7 @@ Suggested remediation:
   dfx cycles convert --amount=1.5 --network ic
 ```
 
-Default wallet estimate per missing canister: **0.6 TC** (0.1T creation + 0.5T initial funding). Canister headrooms: `file_registry` 0.5T, `realm_installer` 0.3T, `casals_backend` 1T (+2T when `multisig.backend_id` is unset), others 0.2T.
+Default wallet estimate per missing canister: **0.6 TC** (0.1T creation + 0.5T initial funding). Canister headrooms: `file_registry` 2T, `realm_installer` 0.3T, `casals_backend` 1T (+2T when `multisig.backend_id` is unset), others 0.2T.
 
 ## Prerequisites
 
@@ -409,7 +409,7 @@ gaas new [DESCRIPTOR] [OPTIONS]
 
    For each GOS entry, the conductor authorizes the **backend realm WASM** from `wasm/<backend_wasm_key>/<version>/` and the **frontend certified-assets canister WASM** (`realms-assetstorage.wasm.gz` under `wasm/realm-assetstorage/<version>/`). The frontend dist bundle remains in `frontend/<frontend_wasm_key>/<version>/` for the realm installer to sync after canister install; it is not registered as an installable WASM module.
 
-   After the sheet and governance multisig are in place, gaas registers the five platform canisters (realm registry, realm installer, file registry — backends and frontends) under **Infra/platform** in the conductor orchestra. Only canisters tracked in the orchestra tree are monitored by the conductor's cycles autopilot (`cycles_autopilot`, default minimum 0.5T, default top-up 1T); this registration ensures those platform canisters receive automatic cycle monitoring and top-ups.
+   After the sheet and governance multisig are in place, gaas registers the five platform canisters (realm registry, realm installer, file registry — backends and frontends) under **Infra/platform** in the conductor orchestra. Only canisters tracked in the orchestra tree are monitored by the conductor's cycles autopilot (`cycles_autopilot`, default minimum 0.5T, default top-up 1T); this registration ensures those platform canisters receive automatic cycle monitoring and top-ups. **`file-registry`** is seeded with a per-canister Casals policy of **2T minimum and 2T top-up** so its balance stays above realm installer preflight (1T) with headroom for platform WASM seeding; re-running `gaas seed` re-applies this policy idempotently on already-registered canisters.
 
    Immediately afterward, gaas **primes the conductor cycles snapshot**: it reads `get_tree`, calls `refresh_canisters` in batches of up to three names, then verifies via `get_cycles_cached` that every orchestra canister appears in the persisted snapshot. Missing rows fail the deploy loudly; per-canister refresh errors produce warnings. This prevents a fresh deploy from leaving the Casals Orchestra dashboard at "Canisters: 0".
 7. Configuring multisig signers
@@ -443,7 +443,7 @@ gaas seed DESCRIPTOR --identity NAME [--network ic|local] [--yes] [--casals-src 
 
 1. Validating descriptor and required canister IDs (`file_registry`, `casals_backend`, and platform canisters used by conductor seed)
 2. Seeding file registry (GOS WASM/frontend bundles, version catalog, codex/extension packages, marketplace namespace approvals)
-3. Seeding conductor orchestra (templates, authorized WASMs, sheet, multisig, platform stand registration)
+3. Seeding conductor orchestra (templates, authorized WASMs, sheet, multisig, platform stand registration, and per-canister cycle policies — `file-registry` min/topup 2T)
 
 The command prints a summary of uploaded artifact keys/hashes and which WASM hashes were newly authorized vs already authorized on the conductor. Re-running with unchanged artifacts is idempotent.
 

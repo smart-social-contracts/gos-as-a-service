@@ -12,6 +12,7 @@ from rich.console import Console
 
 from gaas import dfx
 from gaas.runlog import get_run_log, run_subprocess
+from gaas.cycles_plan import CANISTER_HEADROOM_FILE_REGISTRY
 from gaas.descriptor import Descriptor
 from gaas.file_registry_client import fetch_namespace_hashes, upload_file
 from gaas.platform import find_local_assetstorage_wasm, resolve_casals_src
@@ -20,6 +21,16 @@ from gaas.versions import resolve_deploy_version
 console = Console()
 
 CASALS_TEMPLATES_NAMESPACE = "casals-templates"
+
+# Per-canister Casals autopilot overrides (orchestra names use hyphens).
+# file-registry must stay above realm_installer preflight (1 TC) with headroom
+# for platform WASM seeding; matches cycles_plan CANISTER_HEADROOM_FILE_REGISTRY.
+PLATFORM_CANISTER_CYCLE_POLICIES: dict[str, tuple[int, int]] = {
+    "file-registry": (
+        CANISTER_HEADROOM_FILE_REGISTRY,
+        CANISTER_HEADROOM_FILE_REGISTRY,
+    ),
+}
 
 # Latest orchestration template versions from Casals seed/templates.json.
 ORCHESTRATION_TEMPLATES: tuple[tuple[str, str, str], ...] = (
@@ -436,6 +447,36 @@ def ensure_sheet_and_deploy_multisig(
         console.print(f"  multisig: adopt {multisig_id}")
 
 
+def _ensure_canister_cycle_policy(
+    casals_id: str,
+    canister_name: str,
+    network: str,
+    *,
+    identity: str | None = None,
+) -> None:
+    """Apply per-canister cycle policy when configured; idempotent on re-seed."""
+    policy = PLATFORM_CANISTER_CYCLE_POLICIES.get(canister_name)
+    if not policy:
+        return
+    min_cycles, topup_cycles = policy
+    _casals_call(
+        casals_id,
+        "set_cycle_policy",
+        {
+            "canister": canister_name,
+            "min_cycles": min_cycles,
+            "topup_cycles": topup_cycles,
+        },
+        network,
+        identity=identity,
+    )
+    console.print(
+        f"  {canister_name}: cycle policy "
+        f"min={min_cycles / 1_000_000_000_000:g}T "
+        f"topup={topup_cycles / 1_000_000_000_000:g}T"
+    )
+
+
 def ensure_platform_stand(
     casals_id: str,
     platform_canisters: list[tuple[str, str, str]],
@@ -469,19 +510,22 @@ def ensure_platform_stand(
     for name, canister_id, kind in platform_canisters:
         if name in existing:
             console.print(f"  {name}: skip (already registered)")
-            continue
-        console.print(f"  {name}: register {canister_id} ({kind})")
-        _casals_call(
-            casals_id,
-            "register_canister",
-            {
-                "stand": "platform",
-                "name": name,
-                "canister_id": canister_id,
-                "kind": kind,
-            },
-            network,
-            identity=identity,
+        else:
+            console.print(f"  {name}: register {canister_id} ({kind})")
+            _casals_call(
+                casals_id,
+                "register_canister",
+                {
+                    "stand": "platform",
+                    "name": name,
+                    "canister_id": canister_id,
+                    "kind": kind,
+                },
+                network,
+                identity=identity,
+            )
+        _ensure_canister_cycle_policy(
+            casals_id, name, network, identity=identity
         )
 
 

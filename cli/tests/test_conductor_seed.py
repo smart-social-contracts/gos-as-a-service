@@ -473,7 +473,15 @@ def test_ensure_platform_stand_tolerates_existing_stand(monkeypatch) -> None:
                 "canister_id": "ddddd-ddddd-ddddd-ddddd-ddddd-ddd",
                 "kind": "backend",
             },
-        )
+        ),
+        (
+            "set_cycle_policy",
+            {
+                "canister": "file-registry",
+                "min_cycles": 2_000_000_000_000,
+                "topup_cycles": 2_000_000_000_000,
+            },
+        ),
     ]
 
 
@@ -535,5 +543,58 @@ def test_ensure_platform_stand_skips_existing_canisters(monkeypatch) -> None:
                 "canister_id": "eeeee-eeeee-eeeee-eeeee-eeeee-eee",
                 "kind": "frontend",
             },
-        )
+        ),
+    ]
+
+
+def test_ensure_platform_stand_applies_file_registry_cycle_policy_when_registered(
+    monkeypatch,
+) -> None:
+    calls: list[tuple[str, dict]] = []
+
+    def fake_casals(_cid, method, payload, _net, **_):
+        if method == "create_stand":
+            raise RuntimeError("stand platform already exists in section Infra")
+        calls.append((method, payload))
+        return {"ok": True}
+
+    monkeypatch.setattr(conductor_seed, "_casals_call", fake_casals)
+    monkeypatch.setattr(
+        conductor_seed,
+        "get_tree",
+        lambda *_a, **_k: {
+            "sections": [
+                {
+                    "name": "Infra",
+                    "stands": [
+                        {
+                            "name": "platform",
+                            "canisters": [
+                                {
+                                    "name": "file-registry",
+                                    "canister_id": "ddddd-ddddd-ddddd-ddddd-ddddd-ddd",
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+
+    conductor_seed.ensure_platform_stand(
+        "qthgp-3yaaa-aaaae-agveq-cai",
+        [("file-registry", "ddddd-ddddd-ddddd-ddddd-ddddd-ddd", "backend")],
+        "ic",
+    )
+
+    assert calls == [
+        (
+            "set_cycle_policy",
+            {
+                "canister": "file-registry",
+                "min_cycles": 2_000_000_000_000,
+                "topup_cycles": 2_000_000_000_000,
+            },
+        ),
     ]
