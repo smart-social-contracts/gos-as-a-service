@@ -14,6 +14,15 @@ def _resolve_file_registry_canister_id(manifest: dict) -> str:
     )
 
 
+def _resolve_marketplace_canister_id(manifest: dict) -> str:
+    """Resolve marketplace from manifest or infra."""
+    infra = manifest.get("infra") or {}
+    return (
+        (manifest.get("marketplace_canister_id") or "").strip()
+        or (infra.get("marketplace_canister_id") or "").strip()
+    )
+
+
 def _resolve_realm_registry_canister_id(manifest: dict) -> str:
     """Resolve the realm registry id (registry backend), when present."""
     return (
@@ -38,7 +47,7 @@ def configure_canister_ids_args(manifest: dict, backend_id: str, frontend_id: st
         "frontend_canister_id": frontend_id,
         "file_registry_canister_id": _resolve_file_registry_canister_id(manifest),
         "realm_registry_canister_id": _resolve_realm_registry_canister_id(manifest),
-        "marketplace_canister_id": manifest.get("marketplace_canister_id", ""),
+        "marketplace_canister_id": _resolve_marketplace_canister_id(manifest),
         "network": manifest.get("network", ""),
         "requesting_principal": (manifest.get("requesting_principal") or "").strip(),
         "portal_origin": configured_portal_base(manifest),

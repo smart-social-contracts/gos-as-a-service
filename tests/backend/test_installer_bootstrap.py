@@ -66,6 +66,11 @@ def _ext_manifest_for_job(manifest):
         or manifest.get("registry_canister_id")
         or ""
     )
+    marketplace_id = (
+        manifest.get("marketplace_canister_id")
+        or (manifest.get("infra") or {}).get("marketplace_canister_id")
+        or ""
+    )
     ext_manifest = {
         "target_canister_id": manifest["target_canister_id"],
         "frontend_canister_id": manifest["frontend_canister_id"],
@@ -73,7 +78,7 @@ def _ext_manifest_for_job(manifest):
         "file_registry_canister_id": file_registry_id,
         "realm_registry_canister_id": realm_registry_id,
         "infra": manifest.get("infra") or {},
-        "marketplace_canister_id": manifest["marketplace_canister_id"],
+        "marketplace_canister_id": marketplace_id,
         "network": network,
         "requesting_principal": manifest.get("requesting_principal", ""),
         "federation": manifest.get("federation") or {},
@@ -137,6 +142,36 @@ def test_configure_payload_realm_registry_from_explicit_field():
     )
     payload, _warnings = configure_canister_ids_payload(args)
     assert payload["realm_registry_canister_id"] == "explicit-realm-registry"
+
+
+def test_configure_marketplace_from_infra():
+    manifest = _bootstrap_manifest(
+        marketplace_canister_id="",
+        infra={
+            "file_registry_canister_id": "file-registry-id",
+            "marketplace_canister_id": "infra-marketplace-id",
+        },
+    )
+    args = configure_canister_ids_args(
+        manifest, manifest["target_canister_id"], manifest["frontend_canister_id"]
+    )
+    payload, _warnings = configure_canister_ids_payload(args)
+    assert payload["marketplace_canister_id"] == "infra-marketplace-id"
+
+
+def test_configure_marketplace_prefers_top_level_over_infra():
+    manifest = _bootstrap_manifest(
+        marketplace_canister_id="top-level-marketplace",
+        infra={
+            "file_registry_canister_id": "file-registry-id",
+            "marketplace_canister_id": "infra-marketplace-id",
+        },
+    )
+    args = configure_canister_ids_args(
+        manifest, manifest["target_canister_id"], manifest["frontend_canister_id"]
+    )
+    payload, _warnings = configure_canister_ids_payload(args)
+    assert payload["marketplace_canister_id"] == "top-level-marketplace"
 
 
 def test_configure_file_registry_from_infra_not_registry_canister_id():
