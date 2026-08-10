@@ -14,6 +14,7 @@ from core.models import RegistryConfig
 
 _PORTAL_URL_KEY = "env:portal_url"
 _BILLING_URL_KEY = "env:billing_url"
+_BILLING_SERVICE_PRINCIPAL_KEY = "env:billing_service_principal"
 _OPEN_MODE_KEY = "env:open_mode"
 _INSTALLER_ID_KEY = "env:installer_id"
 
@@ -30,6 +31,31 @@ def get_portal_url() -> str:
 def get_billing_url() -> str:
     cfg = RegistryConfig[_BILLING_URL_KEY]
     return (cfg.value if cfg else "").strip()
+
+
+def get_billing_service_principal() -> str:
+    cfg = RegistryConfig[_BILLING_SERVICE_PRINCIPAL_KEY]
+    return (cfg.value if cfg else "").strip()
+
+
+def check_billing_service_caller(caller: str, action: str, *, log_warning=None) -> str | None:
+    """Return an error message when *caller* may not mutate credits; else None.
+
+    When ``billing_service_principal`` is unset, any caller is allowed (backward
+    compat). When set, only that principal may call ``add_credits`` / ``deduct_credits``.
+    """
+    expected = get_billing_service_principal()
+    if not expected:
+        if log_warning:
+            log_warning(
+                "%s: billing_service_principal unset; allowing caller %s (backward compat)",
+                action,
+                caller,
+            )
+        return None
+    if caller != expected:
+        return f"Only the configured billing service ({expected}) may {action}"
+    return None
 
 
 def is_open_mode() -> bool:
@@ -51,6 +77,9 @@ def apply_env_config(params: dict) -> None:
     if "billing_url" in params:
         val = (params.get("billing_url") or "").strip()
         _set_key(_BILLING_URL_KEY, val)
+    if "billing_service_principal" in params:
+        val = (params.get("billing_service_principal") or "").strip()
+        _set_key(_BILLING_SERVICE_PRINCIPAL_KEY, val)
     if "open_mode" in params:
         val = "true" if params.get("open_mode") else "false"
         _set_key(_OPEN_MODE_KEY, val)
@@ -72,6 +101,7 @@ def get_env_config_payload() -> dict:
         "success": True,
         "portal_url": get_portal_url(),
         "billing_url": get_billing_url(),
+        "billing_service_principal": get_billing_service_principal(),
         "open_mode": is_open_mode(),
         "installer_id": get_installer_id(),
     }

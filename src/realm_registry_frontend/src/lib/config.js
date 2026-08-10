@@ -46,6 +46,11 @@ export const CONFIG = {
 	portal_hosts: portalHosts,
 	deploy_queue_network: network,
 	billing_service_url: resolveBillingServiceUrl(viteEnv, gaasEnv),
+	realm_registry_backend_canister_id:
+		getCanisterId('realm_registry_backend') ||
+		viteEnv.VITE_REALM_REGISTRY_BACKEND_CANISTER_ID ||
+		viteEnv.CANISTER_ID_REALM_REGISTRY_BACKEND ||
+		'',
 	realm_installer_canister_id:
 		getCanisterId('realm_installer') ||
 		viteEnv.VITE_REALM_INSTALLER_CANISTER_ID ||

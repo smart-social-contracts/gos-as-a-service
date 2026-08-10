@@ -172,6 +172,16 @@ def _validate_monitor_principal_optional(value: str) -> bool | str:
     return True
 
 
+def _validate_billing_service_principal_optional(value: str) -> bool | str:
+    if not value.strip():
+        return True
+    try:
+        ServicesConfig.model_validate({"billing_service_principal": value.strip()})
+    except Exception as exc:
+        return str(exc)
+    return True
+
+
 def _parse_commanders(value: str) -> list[str]:
     if not value.strip():
         return []
@@ -372,6 +382,16 @@ def run_wizard(
     if billing_url is None:
         raise SystemExit(0)
 
+    billing_service_principal: str | None = None
+    if billing_url.strip():
+        billing_principal_raw = prompt.text(
+            "Billing service principal (optional, IC principal for add_credits):",
+            validate=_validate_billing_service_principal_optional,
+        ).ask()
+        if billing_principal_raw is None:
+            raise SystemExit(0)
+        billing_service_principal = billing_principal_raw.strip() or None
+
     deploy_url = prompt.text(
         "Deploy service URL (optional, https):",
         validate=lambda value: _validate_https_optional(value, field="deploy_url"),
@@ -429,6 +449,7 @@ def run_wizard(
         ),
         services=ServicesConfig(
             billing_url=billing_url.strip() or None,
+            billing_service_principal=billing_service_principal,
             deploy_url=deploy_url.strip() or None,
             monitor_url=monitor_url.strip() or None,
             monitor_principal=monitor_principal,

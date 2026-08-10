@@ -143,6 +143,8 @@ class ServicesConfig(BaseModel):
     monitor_url: str | None = None
     # Public IC principal the monitor service uses; default unset (not a secret).
     monitor_principal: str | None = None
+    # Public IC principal of the realms-billing host; default unset (not a secret).
+    billing_service_principal: str | None = None
     # Lives on ServicesConfig (with billing_url) — open_mode controls whether the
     # registry skips credit holds during realm deploy/upgrade, independent of whether
     # a billing URL is configured for the frontend.
@@ -157,16 +159,17 @@ class ServicesConfig(BaseModel):
             raise ValueError(f"service URL must be https (got {value!r})")
         return value
 
-    @field_validator("monitor_principal")
+    @field_validator("monitor_principal", "billing_service_principal")
     @classmethod
-    def validate_monitor_principal(cls, value: str | None) -> str | None:
+    def validate_service_principal(cls, value: str | None, info) -> str | None:
         if value is None or value == "":
             return None
         principal = value.strip()
+        field = info.field_name
         if not principal:
-            raise ValueError("services.monitor_principal must be non-empty when set")
+            raise ValueError(f"services.{field} must be non-empty when set")
         if not CANISTER_ID_RE.match(principal):
-            raise ValueError(f"services.monitor_principal: invalid principal {value!r}")
+            raise ValueError(f"services.{field}: invalid principal {value!r}")
         return principal
 
 
