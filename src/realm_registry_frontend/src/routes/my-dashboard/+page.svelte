@@ -507,6 +507,15 @@
     voucherSuccess = null;
     
     try {
+      const { buildBillingIdentityPayload, II_REQUIRED_MESSAGE } = await import('$lib/ii-proof.js');
+      let billingExtras;
+      try {
+        billingExtras = await buildBillingIdentityPayload();
+      } catch (err) {
+        voucherError = err?.message === II_REQUIRED_MESSAGE ? II_REQUIRED_MESSAGE : (err?.message || II_REQUIRED_MESSAGE);
+        return;
+      }
+
       const response = await fetch(`${BILLING_SERVICE_URL}/voucher/redeem`, {
         method: 'POST',
         headers: {
@@ -515,6 +524,7 @@
         body: JSON.stringify({
           principal_id: userPrincipal.toText(),
           code: voucherCode.trim(),
+          ...billingExtras,
         }),
       });
       
@@ -547,6 +557,15 @@
     topUpError = null;
     
     try {
+      const { buildBillingIdentityPayload, II_REQUIRED_MESSAGE } = await import('$lib/ii-proof.js');
+      let billingExtras;
+      try {
+        billingExtras = await buildBillingIdentityPayload();
+      } catch (err) {
+        topUpError = err?.message === II_REQUIRED_MESSAGE ? II_REQUIRED_MESSAGE : (err?.message || II_REQUIRED_MESSAGE);
+        return;
+      }
+
       const response = await fetch(`${BILLING_SERVICE_URL}/checkout/create-session`, {
         method: 'POST',
         headers: {
@@ -555,6 +574,7 @@
         body: JSON.stringify({
           principal_id: userPrincipal.toText(),
           amount: topUpAmount,
+          ...billingExtras,
         }),
       });
       

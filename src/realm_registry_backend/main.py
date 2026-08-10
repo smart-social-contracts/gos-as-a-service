@@ -530,6 +530,12 @@ def set_pretty_hostname_status(slug: text, status: text) -> GenericResult:
 
 # ── Credits endpoints ──────────────────────────────────────────────────
 
+def _require_billing_service_caller(action: text) -> text | None:
+    from core.env_config import check_billing_service_caller
+
+    return check_billing_service_caller(ic.caller().to_str(), action, log_warning=logger.warning)
+
+
 @query
 def get_credits(principal_id: text) -> GetCreditsResult:
     try:
@@ -542,6 +548,9 @@ def get_credits(principal_id: text) -> GetCreditsResult:
 def add_credits(principal_id: text, amount: nat64,
                 stripe_session_id: text = "", description: text = "Credit top-up") -> AddCreditsResult:
     try:
+        denied = _require_billing_service_caller("add credits")
+        if denied:
+            return {"Err": denied}
         r = add_user_credits(principal_id, int(amount), stripe_session_id, description)
         return {"Ok": _credits_record(r["credits"])} if r["success"] else {"Err": r["error"]}
     except Exception as e:
@@ -551,6 +560,9 @@ def add_credits(principal_id: text, amount: nat64,
 def deduct_credits(principal_id: text, amount: nat64,
                    description: text = "Credit spend") -> DeductCreditsResult:
     try:
+        denied = _require_billing_service_caller("deduct credits")
+        if denied:
+            return {"Err": denied}
         r = deduct_user_credits(principal_id, int(amount), description)
         return {"Ok": _credits_record(r["credits"])} if r["success"] else {"Err": r["error"]}
     except Exception as e:

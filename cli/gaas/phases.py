@@ -169,6 +169,8 @@ def _registry_config_json(descriptor: Descriptor) -> str:
     }
     if descriptor.services.billing_url:
         payload["billing_url"] = descriptor.services.billing_url
+    if descriptor.services.billing_service_principal:
+        payload["billing_service_principal"] = descriptor.services.billing_service_principal
     installer_id = descriptor.canisters.get("realm_installer", "")
     if installer_id:
         payload["installer_id"] = installer_id

@@ -19,7 +19,14 @@ mock_ic = basilisk.ic
 
 
 def _clear_env_config():
-    for key in ("env:portal_url", "env:billing_url", "env:open_mode", "portal_base_url", "portal_network"):
+    for key in (
+        "env:portal_url",
+        "env:billing_url",
+        "env:billing_service_principal",
+        "env:open_mode",
+        "portal_base_url",
+        "portal_network",
+    ):
         cfg = RegistryConfig[key]
         if cfg:
             cfg.delete()
@@ -32,6 +39,7 @@ def test_configure_persists_fields():
             {
                 "portal_url": "https://custom.example",
                 "billing_url": "https://billing.example",
+                "billing_service_principal": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
                 "open_mode": True,
             }
         )
@@ -40,7 +48,29 @@ def test_configure_persists_fields():
     payload = get_env_config_payload()
     assert payload["portal_url"] == "https://custom.example"
     assert payload["billing_url"] == "https://billing.example"
+    assert payload["billing_service_principal"] == "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa"
     assert payload["open_mode"] is True
+
+
+def test_add_credits_enforces_billing_service_principal():
+    from realm_registry_backend.core.env_config import check_billing_service_caller
+
+    _clear_env_config()
+    billing_principal = "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa"
+    apply_env_config({"billing_service_principal": billing_principal})
+
+    denied = check_billing_service_caller("wrong-principal", "add credits")
+    assert denied is not None
+    assert "billing service" in denied.lower()
+    assert check_billing_service_caller(billing_principal, "add credits") is None
+    assert check_billing_service_caller(billing_principal, "deduct credits") is None
+
+
+def test_add_credits_allows_any_caller_when_principal_unset():
+    from realm_registry_backend.core.env_config import check_billing_service_caller
+
+    _clear_env_config()
+    assert check_billing_service_caller("any-caller", "add credits") is None
 
 
 def test_open_mode_defaults_closed():
