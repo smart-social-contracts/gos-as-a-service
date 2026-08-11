@@ -11,7 +11,7 @@ from realm_registry_backend.core.env_config import (
     apply_env_config_from_json,
     get_env_config_payload,
     get_portal_url,
-    is_open_mode,
+    is_can_test_mode,
 )
 from realm_registry_backend.core.models import RegistryConfig, RealmRecord, SlugRecord
 
@@ -23,6 +23,7 @@ def _clear_env_config():
         "env:portal_url",
         "env:billing_url",
         "env:billing_service_principal",
+        "env:can_test_mode",
         "env:open_mode",
         "portal_base_url",
         "portal_network",
@@ -40,7 +41,7 @@ def test_configure_persists_fields():
                 "portal_url": "https://custom.example",
                 "billing_url": "https://billing.example",
                 "billing_service_principal": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
-                "open_mode": True,
+                "can_test_mode": True,
             }
         )
     )
@@ -49,7 +50,18 @@ def test_configure_persists_fields():
     assert payload["portal_url"] == "https://custom.example"
     assert payload["billing_url"] == "https://billing.example"
     assert payload["billing_service_principal"] == "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa"
-    assert payload["open_mode"] is True
+    assert payload["can_test_mode"] is True
+    assert "open_mode" not in payload
+
+
+def test_configure_accepts_deprecated_open_mode_alias():
+    _clear_env_config()
+    apply_env_config({"open_mode": True})
+    assert is_can_test_mode() is True
+    payload = get_env_config_payload()
+    assert payload["can_test_mode"] is True
+    # Old stable key migrated away on write.
+    assert RegistryConfig["env:open_mode"] is None
 
 
 def test_add_credits_enforces_billing_service_principal():
@@ -73,11 +85,17 @@ def test_add_credits_allows_any_caller_when_principal_unset():
     assert check_billing_service_caller("any-caller", "add credits") is None
 
 
-def test_open_mode_defaults_closed():
+def test_can_test_mode_defaults_closed():
     _clear_env_config()
-    assert is_open_mode() is False
-    apply_env_config({"open_mode": False})
-    assert is_open_mode() is False
+    assert is_can_test_mode() is False
+    apply_env_config({"can_test_mode": False})
+    assert is_can_test_mode() is False
+
+
+def test_can_test_mode_reads_legacy_stable_key():
+    _clear_env_config()
+    RegistryConfig(key="env:open_mode", value="true")
+    assert is_can_test_mode() is True
 
 
 def test_portal_url_resolution_prefers_configured():
@@ -114,7 +132,7 @@ def test_claim_slug_uses_configured_portal_base():
 def test_configure_requires_controller():
     from realm_registry_backend.core.env_config import configure_registry
 
-    out = configure_registry(json.dumps({"open_mode": True}), is_controller=False)
+    out = configure_registry(json.dumps({"can_test_mode": True}), is_controller=False)
     assert out["Err"] == "Only controllers can configure the registry"
 
     out = configure_registry(json.dumps({"portal_url": "https://ctrl.example"}), is_controller=True)

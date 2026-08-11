@@ -55,6 +55,6 @@ def test_flags_omitted_when_empty():
 
 def test_flags_included_when_set():
     desc = _descriptor()
-    desc.flags["open_mode"] = True
+    desc.flags["can_test_mode"] = True
     env = build_gaas_env(desc, "ic")
-    assert env["flags"] == {"open_mode": True}
+    assert env["flags"] == {"can_test_mode": True}

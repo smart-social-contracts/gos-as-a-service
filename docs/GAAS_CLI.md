@@ -236,7 +236,7 @@ Optional governance multisig canister. When `backend_id` is omitted, gaas create
 
 | Field | Required | Default | Description |
 |---|---|---|---|
-| `billing_url` | no | `null` | Public HTTPS URL for the credits / Stripe billing service (not a secret). **When present, credits are enforced.** When absent, the environment runs in **open mode** (no credit gate). |
+| `billing_url` | no | `null` | Public HTTPS URL for the credits / Stripe billing service (not a secret). **When present, credits are enforced** unless `flags.can_test_mode` is set. When absent, the environment is derived **can test mode** (no credit gate). |
 | `billing_service_principal` | no | `null` | IC principal allowed to call the registry's `add_credits` / `deduct_credits` (typically the realms-billing host deployer identity). When set, gaas passes it via registry `configure`; only that principal may mint credits on-chain. When unset, any caller is allowed (backward compat). |
 | `deploy_url` | no | `null` | Public HTTPS URL for the off-chain deploy worker API. |
 | `monitor_url` | no | `null` | Public HTTPS URL for the off-chain Casals cycles/health monitor service the conductor reports to. When set, gaas passes `monitor_service_url` and `monitor_enabled: true` to the conductor via `set_settings`. |
@@ -246,15 +246,15 @@ All service URLs must use `https://`. Empty strings are treated as absent. `moni
 
 The portal sends an Internet Identity delegation proof (`identity.publicKey` + `identity.delegations` from `DelegationIdentity.getDelegation().toJSON()`) and `registry_canister_id` on voucher redeem and Stripe checkout so realms-billing can verify the user (realms-billing#4).
 
-`services.open_mode` is a deprecated alias for `flags.open_mode` (see [Open mode vs billing](#open-mode-vs-billing)).
+`services.open_mode` is a deprecated alias for `flags.can_test_mode` (see [Can test mode vs billing](#can-test-mode-vs-billing)).
 
 Our live environments use `https://billing.realmsgos.dev` and `https://deploy.realmsgos.dev` (confirmed in `src/realm_registry_frontend/src/lib/config-resolvers.js` defaults).
 
 ### Controller topology (final phase)
 
-After smoke checks and the optional interactive commander-grant step, gaas applies IC controller sets (production vs test mode via `flags.open_mode`):
+After smoke checks and the optional interactive commander-grant step, gaas applies IC controller sets (production vs test mode via `flags.can_test_mode`):
 
-| Canister group | Production controllers | Test mode (`open_mode: true`) |
+| Canister group | Production controllers | Test mode (`can_test_mode: true`) |
 |---|---|---|
 | `casals_backend`, `casals_frontend` | multisig | multisig + deployer identity |
 | Infra (`realm_registry_*`, `realm_installer`, `file_registry*`) | `casals_backend` | `casals_backend` + deployer |
@@ -360,19 +360,22 @@ gaas new environments/test.json --identity deployer --network ic
 
 Completed phases are skipped; gaas resumes where it left off.
 
-## Open mode vs billing
+## Can test mode vs billing
 
-Open mode is resolved with this precedence (highest first):
+Can test mode is resolved with this precedence (highest first):
 
 | Setting | Effect |
 |---|---|
-| `flags.open_mode` (top level) | Explicit — always wins. Also settable via `gaas new --open-mode` or the wizard prompt. |
-| `services.open_mode` | Deprecated alias, still honored when `flags.open_mode` is absent. |
-| _(neither set)_ | Derived: **open** when `services.billing_url` is absent, **closed** (credits enforced) when a billing URL is present. |
+| `flags.can_test_mode` (top level) | Explicit — always wins. Also settable via `gaas new --can-test-mode` or the wizard prompt. |
+| `flags.open_mode` | Deprecated alias, still honored when `flags.can_test_mode` is absent. |
+| `services.open_mode` | Deprecated alias, still honored when neither flag key is set. |
+| _(neither set)_ | Derived: **can test** when `services.billing_url` is absent, **closed** (credits enforced) when a billing URL is present. |
 
-The resolved value is always written explicitly into the registry's `configure` payload — the backend itself defaults to closed and only skips credit checks when `open_mode` is explicitly `true`.
+The resolved value is always written explicitly into the registry's `configure` payload — the backend itself defaults to closed and only skips credit checks when `can_test_mode` is explicitly `true`.
 
-When `open_mode` is true, gaas also calls the registry backend's `set_canister_config_json` with `test_flags: {test_mode: true, ii_bypass: true}` so the portal wizard authentication flow works without manual post-deploy steps. Production deployments (`open_mode` false or absent with billing) do not set these flags.
+When `can_test_mode` is true, gaas also calls the registry backend's `set_canister_config_json` with `test_flags: {test_mode: true, ii_bypass: true}` so the portal wizard authentication flow works without manual post-deploy steps. Production deployments (`can_test_mode` false or absent with billing) do not set these flags.
+
+Deprecated aliases still work for backward compatibility: `flags.open_mode`, `services.open_mode`, configure/init JSON `"open_mode"`, stable storage key `env:open_mode`, CLI `--open-mode` (hidden), and settlement marker `skipped_open_mode` in older deployments.
 
 `deploy_url` is independent: it points the registry frontend at an off-chain worker for legacy deploy paths. Omit both for fully self-contained environments.
 

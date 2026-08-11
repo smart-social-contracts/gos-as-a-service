@@ -416,11 +416,11 @@ def run_wizard(
             raise SystemExit(0)
         monitor_principal = monitor_principal_raw.strip() or None
 
-    open_mode = prompt.confirm(
-        "Enable open mode (skip billing credit checks)?",
+    can_test_mode = prompt.confirm(
+        "Enable can_test_mode (skip billing credit checks; enables portal test auth)?",
         default=False,
     ).ask()
-    if open_mode is None:
+    if can_test_mode is None:
         raise SystemExit(0)
 
     default_path = Path.cwd() / f"{name}.gaas.json"
@@ -433,8 +433,8 @@ def run_wizard(
     output_path = Path(output_raw.strip())
 
     flags: dict[str, bool] = {}
-    if open_mode:
-        flags["open_mode"] = True
+    if can_test_mode:
+        flags["can_test_mode"] = True
 
     descriptor = Descriptor(
         name=name,

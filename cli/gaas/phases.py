@@ -152,9 +152,11 @@ def _portal_url(descriptor: Descriptor) -> str:
     return f"https://{descriptor.domain}"
 
 
-def _resolve_open_mode(descriptor: Descriptor) -> bool:
-    """Precedence: explicit flags.open_mode > deprecated services.open_mode >
-    derived (open when no billing_url is configured)."""
+def _resolve_can_test_mode(descriptor: Descriptor) -> bool:
+    """Precedence: explicit flags.can_test_mode > deprecated flags.open_mode >
+    deprecated services.open_mode > derived (true when no billing_url)."""
+    if "can_test_mode" in descriptor.flags:
+        return descriptor.flags["can_test_mode"]
     if "open_mode" in descriptor.flags:
         return descriptor.flags["open_mode"]
     if descriptor.services.open_mode is not None:
@@ -165,7 +167,7 @@ def _resolve_open_mode(descriptor: Descriptor) -> bool:
 def _registry_config_json(descriptor: Descriptor) -> str:
     payload: dict = {
         "portal_url": _portal_url(descriptor),
-        "open_mode": _resolve_open_mode(descriptor),
+        "can_test_mode": _resolve_can_test_mode(descriptor),
     }
     if descriptor.services.billing_url:
         payload["billing_url"] = descriptor.services.billing_url
@@ -175,17 +177,17 @@ def _registry_config_json(descriptor: Descriptor) -> str:
     if installer_id:
         payload["installer_id"] = installer_id
     for key, value in descriptor.flags.items():
-        if key != "open_mode":
+        if key not in ("open_mode", "can_test_mode"):
             payload[key] = value
     return json.dumps(payload)
 
 
 def _registry_runtime_config_json(descriptor: Descriptor, network: str) -> str | None:
-    """Runtime test flags for open_mode portal auth (set_canister_config_json).
+    """Runtime test flags for can_test_mode portal auth (set_canister_config_json).
 
-    Returns None when open_mode is false so production registries stay secure.
+    Returns None when can_test_mode is false so production registries stay secure.
   """
-    if not _resolve_open_mode(descriptor):
+    if not _resolve_can_test_mode(descriptor):
         return None
     payload: dict = {
         "test_flags": {
@@ -233,7 +235,7 @@ def _casals_settings_json(descriptor: Descriptor, deployer_principal: str) -> st
         payload["monitor_service_url"] = descriptor.services.monitor_url
     if descriptor.services.monitor_principal:
         payload["monitor_principal"] = descriptor.services.monitor_principal
-    if _resolve_open_mode(descriptor):
+    if _resolve_can_test_mode(descriptor):
         payload["extra_controller_principals"] = [deployer_principal]
     return json.dumps(payload)
 
@@ -1207,7 +1209,7 @@ def phase_controller_topology(descriptor: Descriptor, ctx: DeployContext) -> Non
         raise RuntimeError("multisig backend_id required for controller topology")
 
     deployer = dfx.get_principal(ctx.identity)
-    test_mode = _resolve_open_mode(descriptor)
+    test_mode = _resolve_can_test_mode(descriptor)
     casals_backend_id = descriptor.canisters.get("casals_backend", "")
 
     def controllers(base: list[str]) -> list[str]:

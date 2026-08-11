@@ -22,7 +22,10 @@ from gaas.known import (
 from gaas.versions import VERSION_TAG_RE, validate_descriptor_version
 
 SLUG_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$")
+# Canister IDs end in a 3-letter CRC (typically -cai). User principals use the
+# same base32-grouped shape but the final group may include digits (e.g. -2ae).
 CANISTER_ID_RE = re.compile(r"^[a-z0-9]{5}(?:-[a-z0-9]{5}){3,10}-[a-z]{3}$")
+PRINCIPAL_RE = re.compile(r"^[a-z0-9]{5}(?:-[a-z0-9]{5}){3,10}-[a-z0-9]{1,3}$")
 HOSTNAME_RE = re.compile(
     r"^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$",
     re.IGNORECASE,
@@ -127,7 +130,7 @@ class CasalsConfig(BaseModel):
             principal = entry.strip() if isinstance(entry, str) else ""
             if not principal:
                 raise ValueError(f"casals.commanders[{index}]: principal must be non-empty")
-            if not CANISTER_ID_RE.match(principal):
+            if not PRINCIPAL_RE.match(principal):
                 raise ValueError(
                     f"casals.commanders[{index}]: invalid principal {entry!r}"
                 )
@@ -145,9 +148,7 @@ class ServicesConfig(BaseModel):
     monitor_principal: str | None = None
     # Public IC principal of the realms-billing host; default unset (not a secret).
     billing_service_principal: str | None = None
-    # Lives on ServicesConfig (with billing_url) — open_mode controls whether the
-    # registry skips credit holds during realm deploy/upgrade, independent of whether
-    # a billing URL is configured for the frontend.
+    # Deprecated alias — prefer flags.can_test_mode. Still read by the resolver.
     open_mode: bool | None = None
 
     @field_validator("billing_url", "deploy_url", "monitor_url")
@@ -168,7 +169,7 @@ class ServicesConfig(BaseModel):
         field = info.field_name
         if not principal:
             raise ValueError(f"services.{field} must be non-empty when set")
-        if not CANISTER_ID_RE.match(principal):
+        if not PRINCIPAL_RE.match(principal):
             raise ValueError(f"services.{field}: invalid principal {value!r}")
         return principal
 
@@ -245,7 +246,7 @@ class Descriptor(BaseModel):
     platform: PlatformConfig | None = None
     services: ServicesConfig = Field(default_factory=ServicesConfig)
     marketplace: MarketplaceConfig | None = None
-    flags: dict[str, bool] = Field(default_factory=dict)
+    flags: dict[str, bool] = Field(default_factory=dict)  # can_test_mode: skip billing credit checks
     cycles: CyclesConfig = Field(default_factory=CyclesConfig)
     dns: DnsConfig = Field(default_factory=DnsConfig)
 

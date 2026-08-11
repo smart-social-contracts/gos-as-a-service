@@ -192,10 +192,16 @@ def new_command(
         "--keep-env-file",
         help="Keep gaas-env.json at the repo root after frontend build",
     ),
+    can_test_mode: bool = typer.Option(
+        False,
+        "--can-test-mode",
+        help="Enable registry can_test_mode (skip billing credit checks)",
+    ),
     open_mode: bool = typer.Option(
         False,
         "--open-mode",
-        help="Enable registry open mode (skip billing credit checks)",
+        hidden=True,
+        help="Deprecated alias for --can-test-mode",
     ),
 ) -> None:
     """Create or deploy a GaaS environment from a descriptor."""
@@ -210,8 +216,8 @@ def new_command(
             identity=identity,
             network=network,
         )
-        if open_mode:
-            desc.flags["open_mode"] = True
+        if can_test_mode or open_mode:
+            desc.flags["can_test_mode"] = True
         desc.save(output_path)
         console.print(f"\n[green]Wrote descriptor:[/green] {output_path}\n")
         console.print(Syntax(desc.to_pretty_json(), "json", theme="monokai"))
@@ -238,8 +244,8 @@ def new_command(
         return
 
     desc = Descriptor.load(descriptor_path)
-    if open_mode:
-        desc.flags["open_mode"] = True
+    if can_test_mode or open_mode:
+        desc.flags["can_test_mode"] = True
     resolved_identity = identity or "default"
     resolved_network = network or "ic"
     if not yes and sys.stdin.isatty():

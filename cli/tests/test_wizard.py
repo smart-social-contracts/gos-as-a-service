@@ -71,7 +71,7 @@ def test_wizard_builds_descriptor(tmp_path: Path, monkeypatch) -> None:
     assert desc.casals.version == "v0.3.0"
     assert desc.cycles.threshold_tc == 2
     assert desc.dns.provider == "manual"
-    assert desc.flags.get("open_mode") is not True
+    assert desc.flags.get("can_test_mode") is not True
     assert identity == "deployer"
     assert network == "ic"
     assert output_path == tmp_path / "myenv.gaas.json"
@@ -127,7 +127,7 @@ def test_wizard_honors_flag_overrides() -> None:
     prompt.select.assert_called()
 
 
-def test_wizard_open_mode_prompt_sets_flag(tmp_path: Path, monkeypatch) -> None:
+def test_wizard_can_test_mode_prompt_sets_flag(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
 
     answers = iter(
@@ -172,7 +172,7 @@ def test_wizard_open_mode_prompt_sets_flag(tmp_path: Path, monkeypatch) -> None:
 
     desc, _identity, _network, _output_path = run_wizard(ask=prompt)
 
-    assert desc.flags.get("open_mode") is True
+    assert desc.flags.get("can_test_mode") is True
     prompt.confirm.assert_called()
 
 

@@ -377,7 +377,7 @@ def _credits_record(c: dict) -> UserCreditsRecord:
 
 @init
 def init_canister(config_json: text = "") -> void:
-    """Optional init JSON: {portal_url?, billing_url?, open_mode?, installer_id?}."""
+    """Optional init JSON: {portal_url?, billing_url?, can_test_mode?, installer_id?}."""
     if config_json and config_json.strip():
         from core.env_config import apply_env_config_from_json
 
@@ -613,9 +613,9 @@ def request_deployment(manifest_json: text) -> Async[text]:
         network = manifest.get("network", "")
         realm_name = manifest.get("name", "unknown")
 
-        from core.env_config import is_open_mode
+        from core.env_config import is_can_test_mode
 
-        skip_credits = is_open_mode()
+        skip_credits = is_can_test_mode()
         if not skip_credits:
             cr = get_user_credits(caller)
             if not cr.get("success"):
@@ -661,7 +661,7 @@ def request_deployment(manifest_json: text) -> Async[text]:
             result["credits_held"] = DEPLOYMENT_COST_CREDITS
         else:
             result["credits_held"] = 0
-            result["open_mode"] = True
+            result["can_test_mode"] = True
 
         result["caller"] = caller
         return json.dumps(result)
@@ -831,9 +831,9 @@ def request_upgrade(args_json: text) -> Async[text]:
             return json.dumps({"success": False,
                 "error": f"Realm not registered: {caller}"})
 
-        from core.env_config import is_open_mode
+        from core.env_config import is_can_test_mode
 
-        skip_credits = is_open_mode()
+        skip_credits = is_can_test_mode()
         if not skip_credits:
             cr = get_user_credits(caller)
             if not cr.get("success"):
@@ -924,7 +924,7 @@ def request_upgrade(args_json: text) -> Async[text]:
             result["credits_held"] = UPGRADE_COST_CREDITS
         else:
             result["credits_held"] = 0
-            result["open_mode"] = True
+            result["can_test_mode"] = True
 
         result["target_version"] = latest.version
         return json.dumps(result)
@@ -1081,7 +1081,7 @@ def list_activated_principals() -> text:
 
 @update
 def configure(args_json: text) -> GenericResult:
-    """Controller-only. Set descriptor env: portal_url, billing_url, open_mode."""
+    """Controller-only. Set descriptor env: portal_url, billing_url, can_test_mode."""
     try:
         from core.env_config import configure_registry
 
@@ -1096,7 +1096,7 @@ def configure(args_json: text) -> GenericResult:
 
 @query
 def get_env_config() -> text:
-    """Read descriptor env config (portal_url, billing_url, open_mode)."""
+    """Read descriptor env config (portal_url, billing_url, can_test_mode)."""
     try:
         from core.env_config import get_env_config_payload
 

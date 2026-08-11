@@ -3,9 +3,9 @@
 Stored in stable ``RegistryConfig`` keys. Set at install via init JSON and at
 runtime via the controller-only ``configure`` update method.
 
-Open mode: only the explicit ``open_mode`` flag skips credit checks — a missing
-``billing_url`` does *not* imply open mode (billing_url is informational for
-frontends / external integrations).
+Can test mode: only the explicit ``can_test_mode`` flag skips credit checks — a
+missing ``billing_url`` does *not* imply can test mode (billing_url is
+informational for frontends / external integrations).
 """
 
 import json
@@ -15,6 +15,7 @@ from core.models import RegistryConfig
 _PORTAL_URL_KEY = "env:portal_url"
 _BILLING_URL_KEY = "env:billing_url"
 _BILLING_SERVICE_PRINCIPAL_KEY = "env:billing_service_principal"
+_CAN_TEST_MODE_KEY = "env:can_test_mode"
 _OPEN_MODE_KEY = "env:open_mode"
 _INSTALLER_ID_KEY = "env:installer_id"
 
@@ -58,8 +59,11 @@ def check_billing_service_caller(caller: str, action: str, *, log_warning=None) 
     return None
 
 
-def is_open_mode() -> bool:
-    """Return True only when ``open_mode`` was explicitly enabled via configure/init."""
+def is_can_test_mode() -> bool:
+    """Return True only when ``can_test_mode`` was explicitly enabled via configure/init."""
+    cfg = RegistryConfig[_CAN_TEST_MODE_KEY]
+    if cfg is not None and _truthy(cfg.value):
+        return True
     cfg = RegistryConfig[_OPEN_MODE_KEY]
     return cfg is not None and _truthy(cfg.value)
 
@@ -80,9 +84,20 @@ def apply_env_config(params: dict) -> None:
     if "billing_service_principal" in params:
         val = (params.get("billing_service_principal") or "").strip()
         _set_key(_BILLING_SERVICE_PRINCIPAL_KEY, val)
+    can_test_mode_written = False
+    if "can_test_mode" in params:
+        val = "true" if params.get("can_test_mode") else "false"
+        _set_key(_CAN_TEST_MODE_KEY, val)
+        can_test_mode_written = True
     if "open_mode" in params:
         val = "true" if params.get("open_mode") else "false"
-        _set_key(_OPEN_MODE_KEY, val)
+        if not can_test_mode_written:
+            _set_key(_CAN_TEST_MODE_KEY, val)
+        can_test_mode_written = True
+    if can_test_mode_written:
+        old_cfg = RegistryConfig[_OPEN_MODE_KEY]
+        if old_cfg:
+            old_cfg.delete()
     if "installer_id" in params:
         val = (params.get("installer_id") or "").strip()
         _set_key(_INSTALLER_ID_KEY, val)
@@ -102,7 +117,7 @@ def get_env_config_payload() -> dict:
         "portal_url": get_portal_url(),
         "billing_url": get_billing_url(),
         "billing_service_principal": get_billing_service_principal(),
-        "open_mode": is_open_mode(),
+        "can_test_mode": is_can_test_mode(),
         "installer_id": get_installer_id(),
     }
 
@@ -123,8 +138,8 @@ def settle_deployment_succeeded(job_id: str) -> dict:
     hold_result = capture_deployment_hold(job_id, "Deployment completed")
     if hold_result.get("success"):
         return {"success": True, "job_id": job_id, "settlement": "captured"}
-    if is_open_mode() and "not found" in (hold_result.get("error") or "").lower():
-        return {"success": True, "job_id": job_id, "settlement": "skipped_open_mode"}
+    if is_can_test_mode() and "not found" in (hold_result.get("error") or "").lower():
+        return {"success": True, "job_id": job_id, "settlement": "skipped_can_test_mode"}
     return {"success": False, "error": hold_result.get("error", "capture failed")}
 
 
@@ -134,8 +149,8 @@ def settle_deployment_failed(job_id: str, reason: str) -> dict:
     hold_result = release_deployment_hold(job_id, f"Failed: {reason}")
     if hold_result.get("success"):
         return {"success": True, "job_id": job_id, "settlement": "released"}
-    if is_open_mode() and "not found" in (hold_result.get("error") or "").lower():
-        return {"success": True, "job_id": job_id, "settlement": "skipped_open_mode"}
+    if is_can_test_mode() and "not found" in (hold_result.get("error") or "").lower():
+        return {"success": True, "job_id": job_id, "settlement": "skipped_can_test_mode"}
     return {"success": False, "error": hold_result.get("error", "release failed")}
 
 

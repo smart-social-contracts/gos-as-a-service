@@ -139,26 +139,26 @@ def test_platform_config_parses() -> None:
 def test_save_and_load_round_trip(tmp_path: Path) -> None:
     desc = Descriptor.model_validate(SAMPLE_DESCRIPTOR)
     desc.set_canister_id("realm_registry_frontend", VALID_CANISTER_ID)
-    desc.flags["open_mode"] = True
+    desc.flags["can_test_mode"] = True
     path = tmp_path / "env.gaas.json"
     desc.save(path)
 
     loaded = Descriptor.load(path)
     assert loaded.canisters["realm_registry_frontend"] == VALID_CANISTER_ID
-    assert loaded.flags["open_mode"] is True
+    assert loaded.flags["can_test_mode"] is True
     saved = json.loads(path.read_text())
     assert saved["canisters"]["realm_registry_frontend"] == VALID_CANISTER_ID
-    assert saved["flags"]["open_mode"] is True
+    assert saved["flags"]["can_test_mode"] is True
 
 
 def test_flags_default_empty_and_round_trip(tmp_path: Path) -> None:
     desc = Descriptor.model_validate(SAMPLE_DESCRIPTOR)
     assert desc.flags == {}
-    desc.flags["open_mode"] = True
+    desc.flags["can_test_mode"] = True
     path = tmp_path / "flags.gaas.json"
     desc.save(path)
     loaded = Descriptor.load(path)
-    assert loaded.flags == {"open_mode": True}
+    assert loaded.flags == {"can_test_mode": True}
     assert "flags" in json.loads(path.read_text())
 
 

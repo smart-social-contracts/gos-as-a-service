@@ -179,16 +179,16 @@ def test_create_canisters_adopt_vs_create(
     assert "marketplace_frontend" not in desc.canisters
 
 
-def test_registry_init_json_open_mode() -> None:
+def test_registry_init_json_can_test_mode() -> None:
     desc = Descriptor.model_validate(SAMPLE_DESCRIPTOR)
     default_json = json.loads(_registry_config_json(desc))
-    # No billing_url in SAMPLE_DESCRIPTOR → derived open mode, always explicit.
-    assert default_json["open_mode"] is True
+    # No billing_url in SAMPLE_DESCRIPTOR → derived can test mode, always explicit.
+    assert default_json["can_test_mode"] is True
     assert default_json["portal_url"] == "https://test.gos.earth"
 
-    open_desc = desc.model_copy(update={"flags": {"open_mode": True}})
+    open_desc = desc.model_copy(update={"flags": {"can_test_mode": True}})
     open_json = json.loads(_registry_config_json(open_desc))
-    assert open_json["open_mode"] is True
+    assert open_json["can_test_mode"] is True
 
     billed = desc.model_copy(
         update={
@@ -196,11 +196,11 @@ def test_registry_init_json_open_mode() -> None:
                 billing_url="https://billing.example.com",
                 deploy_url=None,
             ),
-            "flags": {"open_mode": True},
+            "flags": {"can_test_mode": True},
         }
     )
     billed_json = json.loads(_registry_config_json(billed))
-    assert billed_json["open_mode"] is True
+    assert billed_json["can_test_mode"] is True
 
     # Billing present, nothing explicit → derived closed.
     billed_only = desc.model_copy(
@@ -211,7 +211,7 @@ def test_registry_init_json_open_mode() -> None:
             ),
         }
     )
-    assert json.loads(_registry_config_json(billed_only))["open_mode"] is False
+    assert json.loads(_registry_config_json(billed_only))["can_test_mode"] is False
 
     # Deprecated services.open_mode alias still honored when flags lack the key.
     alias = desc.model_copy(
@@ -223,11 +223,15 @@ def test_registry_init_json_open_mode() -> None:
             ),
         }
     )
-    assert json.loads(_registry_config_json(alias))["open_mode"] is True
+    assert json.loads(_registry_config_json(alias))["can_test_mode"] is True
+
+    # Deprecated flags.open_mode alias still honored when can_test_mode absent.
+    legacy_flag = desc.model_copy(update={"flags": {"open_mode": True}})
+    assert json.loads(_registry_config_json(legacy_flag))["can_test_mode"] is True
 
     # Explicit flag beats the deprecated alias.
-    override = alias.model_copy(update={"flags": {"open_mode": False}})
-    assert json.loads(_registry_config_json(override))["open_mode"] is False
+    override = alias.model_copy(update={"flags": {"can_test_mode": False}})
+    assert json.loads(_registry_config_json(override))["can_test_mode"] is False
     assert billed_json["billing_url"] == "https://billing.example.com"
 
 
@@ -247,22 +251,22 @@ def test_registry_config_json_billing_service_principal() -> None:
 def test_registry_config_json_installer_id_and_flags() -> None:
     data = dict(SAMPLE_DESCRIPTOR)
     data["canisters"] = {"realm_installer": VALID_CANISTER_ID}
-    data["flags"] = {"open_mode": True}
+    data["flags"] = {"can_test_mode": True}
     desc = Descriptor.model_validate(data)
     payload = json.loads(_registry_config_json(desc))
     assert payload["installer_id"] == VALID_CANISTER_ID
-    assert payload["open_mode"] is True
+    assert payload["can_test_mode"] is True
 
 
-def test_registry_runtime_config_json_open_mode() -> None:
+def test_registry_runtime_config_json_can_test_mode() -> None:
     desc = Descriptor.model_validate(SAMPLE_DESCRIPTOR)
-    # No billing_url → derived open mode.
+    # No billing_url → derived can test mode.
     ic_payload = json.loads(_registry_runtime_config_json(desc, "ic"))
     assert ic_payload == {
         "test_flags": {"test_mode": True, "ii_bypass": True},
     }
 
-    open_desc = desc.model_copy(update={"flags": {"open_mode": True}})
+    open_desc = desc.model_copy(update={"flags": {"can_test_mode": True}})
     local_payload = json.loads(_registry_runtime_config_json(open_desc, "local"))
     assert local_payload == {
         "test_flags": {"test_mode": True, "ii_bypass": True},
@@ -282,7 +286,7 @@ def test_registry_runtime_config_json_open_mode() -> None:
 
 @patch("gaas.phases.dfx.get_principal")
 @patch("gaas.phases.dfx.canister_call")
-def test_phase_configure_backends_open_mode_sets_runtime_flags(
+def test_phase_configure_backends_can_test_mode_sets_runtime_flags(
     mock_call: MagicMock,
     mock_principal: MagicMock,
 ) -> None:
@@ -295,7 +299,7 @@ def test_phase_configure_backends_open_mode_sets_runtime_flags(
         {
             "success": True,
             "portal_url": "https://test.gos.earth",
-            "open_mode": True,
+            "can_test_mode": True,
         }
     ).replace("\\", "\\\\").replace('"', '\\"')
 
@@ -324,7 +328,7 @@ def test_phase_configure_backends_open_mode_sets_runtime_flags(
     mock_call.side_effect = call_side_effect
 
     data = dict(SAMPLE_DESCRIPTOR)
-    data["flags"] = {"open_mode": True}
+    data["flags"] = {"can_test_mode": True}
     data["canisters"] = {
         "realm_registry_backend": registry_id,
         "realm_installer": installer_id,
@@ -357,7 +361,7 @@ def test_phase_configure_backends_closed_skips_runtime_flags(
         {
             "success": True,
             "portal_url": "https://test.gos.earth",
-            "open_mode": False,
+            "can_test_mode": False,
         }
     ).replace("\\", "\\\\").replace('"', '\\"')
 
@@ -450,7 +454,7 @@ def test_casals_settings_json_defaults_and_test_mode() -> None:
     assert closed["create_cycles"] == 2_000_000_000_000
     assert "extra_controller_principals" not in closed
 
-    open_desc = desc.model_copy(update={"flags": {"open_mode": True}})
+    open_desc = desc.model_copy(update={"flags": {"can_test_mode": True}})
     open_payload = json.loads(_casals_settings_json(open_desc, "deployer-principal"))
     assert open_payload["extra_controller_principals"] == ["deployer-principal"]
 
@@ -529,7 +533,7 @@ def test_controller_topology_test_mode(
 
     mock_status.side_effect = status_side_effect
     data = dict(SAMPLE_DESCRIPTOR)
-    data["flags"] = {"open_mode": True}
+    data["flags"] = {"can_test_mode": True}
     data["canisters"] = {
         "realm_registry_backend": VALID_CANISTER_ID,
         "realm_registry_frontend": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aab",
@@ -601,11 +605,11 @@ def test_parse_registry_configure_variant_ok() -> None:
 
     raw = (
         'variant {\n    Ok = "{"success":true,"portal_url":"https://local.localhost",'
-        '"billing_url":"","open_mode":true}"\n  }'
+        '"billing_url":"","can_test_mode":true}"\n  }'
     )
     parsed = _parse_registry_configure(raw)
     assert parsed["success"] is True
-    assert parsed["open_mode"] is True
+    assert parsed["can_test_mode"] is True
 
 
 def test_platform_descriptor_optional() -> None:
