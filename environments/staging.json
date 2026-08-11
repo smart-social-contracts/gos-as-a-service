@@ -5,7 +5,7 @@
   "gos": [
     {
       "implementation": "realms-gos",
-      "version": "v0.4.0",
+      "version": "main",
       "release_repo": "smart-social-contracts/realms",
       "artifacts": {
         "backend_wasm_key": "realm-backend",
@@ -24,15 +24,26 @@
     "casals_frontend": "mcqbx-hyaaa-aaaaj-qsarq-cai"
   },
   "casals": {
-    "version": "v0.3.0",
+    "version": "main",
     "release_repo": "smart-social-contracts/Casals"
+  },
+  "marketplace": {
+    "approver_principal": "ah6ac-cc73l-bb2zc-ni7bh-jov4q-roeyj-6k2ob-mkg5j-pequi-vuaa6-2ae"
+  },
+  "multisig": {
+    "backend_id": "v5ghj-nyaaa-aaaac-bfllq-cai"
   },
   "services": {
     "billing_url": "https://billing.realmsgos.dev",
-    "deploy_url": "https://deploy.realmsgos.dev"
+    "billing_service_principal": "ah6ac-cc73l-bb2zc-ni7bh-jov4q-roeyj-6k2ob-mkg5j-pequi-vuaa6-2ae",
+    "monitor_url": "https://casals.realmsgos.dev/v1/realms-staging",
+    "monitor_principal": "ah6ac-cc73l-bb2zc-ni7bh-jov4q-roeyj-6k2ob-mkg5j-pequi-vuaa6-2ae"
   },
   "flags": {
     "can_test_mode": true
+  },
+  "cycles": {
+    "threshold_tc": 2
   },
   "dns": {
     "provider": "manual"
