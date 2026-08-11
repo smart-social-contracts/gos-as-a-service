@@ -13,6 +13,7 @@ PLATFORM_CANISTER_NAMES: Final[tuple[str, ...]] = (
     "file_registry_frontend",
     "casals_backend",
     "casals_frontend",
+    "casals_file_registry",
 )
 
 # Valid in descriptors and adopted when present, but never created, deployed,
@@ -41,6 +42,7 @@ DFX_CANISTER_NAMES: Final[dict[str, str | None]] = {
     "file_registry_frontend": "file_registry_frontend",
     "casals_backend": None,
     "casals_frontend": "casals_frontend",
+    "casals_file_registry": None,
 }
 
 PLATFORM_BACKEND_WASMS: Final[dict[str, str]] = {
@@ -55,6 +57,11 @@ PLATFORM_FRONTEND_ARCHIVES: Final[dict[str, str]] = {
 }
 
 CASALS_BACKEND_WASM_ASSET: Final[str] = "casals_backend.wasm.gz"
+CASALS_FILE_REGISTRY_WASM_ASSET: Final[str] = "file_registry.wasm.gz"
+CASALS_FILE_REGISTRY_WASM_ASSETS: Final[tuple[str, ...]] = (
+    "file_registry.wasm.gz",
+    "ic_file_registry.wasm.gz",
+)
 CASALS_FRONTEND_ARCHIVE: Final[str] = "casals_frontend.tar.gz"
 
 DEFAULT_CYCLES_PER_CANISTER: Final[int] = 1_000_000_000_000  # 1T

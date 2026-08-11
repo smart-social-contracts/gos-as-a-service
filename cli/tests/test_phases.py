@@ -156,6 +156,7 @@ def test_create_canisters_adopt_vs_create(
     mock_ledger_create.side_effect = [
         "eeeee-eeeee-eeeee-eeeee-eeeee-eee",
         "iiiii-iiiii-iiiii-iiiii-iiiii-iii",
+        "jjjjj-jjjjj-jjjjj-jjjjj-jjjjj-jjj",
     ]
 
     data = dict(SAMPLE_DESCRIPTOR)
@@ -173,8 +174,8 @@ def test_create_canisters_adopt_vs_create(
 
     mock_create.assert_called()
     assert desc.canisters["realm_registry_backend"] == VALID_CANISTER_ID
-    # 1 adopted + 6 platform created; adopt-only marketplace names are skipped.
-    assert len(desc.canisters) == 7
+    # 1 adopted + 7 platform created; adopt-only marketplace names are skipped.
+    assert len(desc.canisters) == 8
     assert "marketplace_backend" not in desc.canisters
     assert "marketplace_frontend" not in desc.canisters
 
@@ -429,6 +430,17 @@ def test_installer_config_json_casals_backend_key() -> None:
     assert payload["casals_canister_id"] == VALID_CANISTER_ID
 
 
+def test_casals_settings_json_prefers_casals_file_registry() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        "file_registry": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
+        "casals_file_registry": "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+    }
+    desc = Descriptor.model_validate(data)
+    payload = json.loads(_casals_settings_json(desc, "deployer-principal"))
+    assert payload["file_registry_canister_id"] == "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb"
+
+
 def test_casals_settings_json_defaults_and_test_mode() -> None:
     data = dict(SAMPLE_DESCRIPTOR)
     data["canisters"] = {
@@ -452,7 +464,6 @@ def test_casals_settings_json_defaults_and_test_mode() -> None:
     assert closed["default_topup_cycles"] == 2_000_000_000_000
     assert closed["treasury_reserve"] == 2_000_000_000_000
     assert closed["create_cycles"] == 2_000_000_000_000
-    assert closed["delegated_destroy_principals"] == ["ccccc-ccccc-ccccc-ccccc-ccccc-ccc"]
     assert "extra_controller_principals" not in closed
 
     open_desc = desc.model_copy(update={"flags": {"can_test_mode": True}})
@@ -543,12 +554,13 @@ def test_controller_topology_test_mode(
         "file_registry_frontend": "ddddd-ddddd-ddddd-ddddd-ddddd-ddd",
         "casals_backend": "eeeee-eeeee-eeeee-eeeee-eeeee-eee",
         "casals_frontend": "fffff-fffff-fffff-fffff-fffff-fff",
+        "casals_file_registry": "ggggg-ggggg-ggggg-ggggg-ggggg-ggg",
     }
     data["multisig"] = {"backend_id": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aac"}
     desc = Descriptor.model_validate(data)
     ctx = DeployContext(identity="deployer", network="ic")
     phase_controller_topology(desc, ctx)
-    assert mock_update.call_count == 7
+    assert mock_update.call_count == 8
     first_call = mock_update.call_args_list[0]
     assert first_call[0][1] == ["aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aac", "deployer-principal"]
 
@@ -613,6 +625,87 @@ def test_parse_registry_configure_variant_ok() -> None:
     assert parsed["can_test_mode"] is True
 
 
+@patch("gaas.phases.seed_codex_catalog")
+@patch("gaas.phases.ensure_version_catalog_entry", return_value="skipped")
+@patch("gaas.phases.namespace_published", return_value=False)
+@patch("gaas.phases.resolve_gos_artifacts")
+@patch("gaas.phases.seed_gos_entry")
+@patch("gaas.phases.resolve_deploy_version")
+def test_phase_seed_file_registry_gos_binaries_use_casals_file_registry(
+    mock_resolve_version,
+    mock_seed_gos,
+    mock_resolve_artifacts,
+    _mock_published,
+    _mock_version_catalog,
+    _mock_seed_catalog,
+    tmp_path: Path,
+) -> None:
+    from gaas.versions import ResolvedDeployVersion
+
+    mock_resolve_version.return_value = ResolvedDeployVersion(
+        "v0.3.1", "v0.3.1", "0.3.1"
+    )
+    backend = tmp_path / "realm_backend.wasm.gz"
+    frontend = tmp_path / "realm_frontend.tar.gz"
+    backend.write_bytes(b"wasm")
+    frontend.write_bytes(b"tar")
+    mock_resolve_artifacts.return_value = (backend, frontend)
+
+    realms_fr = VALID_CANISTER_ID
+    casals_fr = "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aab"
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        "file_registry": realms_fr,
+        "casals_file_registry": casals_fr,
+        "realm_registry_backend": "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+    }
+    descriptor = Descriptor.model_validate(data)
+    ctx = DeployContext(
+        identity="deployer",
+        network="local",
+        work_dir=tmp_path / "work",
+        yes=True,
+    )
+
+    phase_seed_file_registry(descriptor, ctx)
+
+    assert mock_seed_gos.call_args[0][0] == casals_fr
+
+
+@patch("gaas.phases._http_get", return_value=(200, "ok"))
+@patch("gaas.phases.dfx.canister_status")
+@patch("gaas.phases.dfx.canister_call")
+@patch("gaas.phases.fetch_namespace_hashes", return_value={"realm_backend.wasm.gz": "abc"})
+def test_phase_smoke_checks_uses_casals_file_registry(
+    mock_hashes,
+    mock_call,
+    mock_status,
+    _mock_http,
+) -> None:
+    mock_status.return_value = MagicMock(status="running", controllers=())
+    mock_call.return_value = json.dumps({"portal_url": "https://test.gos.earth"})
+
+    casals_fr = "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aab"
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        "realm_registry_backend": VALID_CANISTER_ID,
+        "realm_registry_frontend": VALID_CANISTER_ID,
+        "casals_backend": VALID_CANISTER_ID,
+        "casals_frontend": VALID_CANISTER_ID,
+        "file_registry": "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+        "casals_file_registry": casals_fr,
+    }
+    desc = Descriptor.model_validate(data)
+    ctx = DeployContext(identity="deployer", network="local")
+
+    from gaas.phases import phase_smoke_checks
+
+    phase_smoke_checks(desc, ctx)
+
+    mock_hashes.assert_called()
+    assert mock_hashes.call_args[0][0] == casals_fr
+
+
 def test_platform_descriptor_optional() -> None:
     desc = Descriptor.model_validate(SAMPLE_DESCRIPTOR)
     assert desc.platform is None
@@ -650,6 +743,7 @@ def test_phase_seed_conductor_registers_platform_canisters(
         "file_registry": "ddddd-ddddd-ddddd-ddddd-ddddd-ddd",
         "file_registry_frontend": "eeeee-eeeee-eeeee-eeeee-eeeee-eee",
         "casals_backend": "fffff-fffff-fffff-fffff-fffff-fff",
+        "casals_file_registry": "ggggg-ggggg-ggggg-ggggg-ggggg-ggg",
     }
     desc = Descriptor.model_validate(data)
     ctx = DeployContext(identity="deployer", network="ic")
@@ -666,6 +760,7 @@ def test_phase_seed_conductor_registers_platform_canisters(
         ("realm-installer", "ccccc-ccccc-ccccc-ccccc-ccccc-ccc", "backend"),
         ("file-registry", "ddddd-ddddd-ddddd-ddddd-ddddd-ddd", "backend"),
         ("file-registry-frontend", "eeeee-eeeee-eeeee-eeeee-eeeee-eee", "frontend"),
+        ("casals-file-registry", "ggggg-ggggg-ggggg-ggggg-ggggg-ggg", "backend"),
     ]
 
 

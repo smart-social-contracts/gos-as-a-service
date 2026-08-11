@@ -58,6 +58,7 @@ from gaas.platform import (
     fetch_platform_frontend_archive,
     find_gos_repo_root,
     frontend_dist_dir,
+    resolve_casals_file_registry_wasm,
     resolve_casals_frontend_dist,
     resolve_casals_wasm,
     resolve_platform_backend_wasm,
@@ -219,12 +220,14 @@ def _installer_config_json(descriptor: Descriptor) -> str:
 def _casals_settings_json(descriptor: Descriptor, deployer_principal: str) -> str:
     canisters = descriptor.canisters
     threshold = descriptor.threshold_cycles()
-    installer_id = (canisters.get("realm_installer") or "").strip()
+    file_registry_id = (
+        canisters.get("casals_file_registry") or canisters.get("file_registry", "")
+    )
     payload: dict = {
-        "file_registry_canister_id": canisters.get("file_registry", ""),
+        "file_registry_canister_id": file_registry_id,
         "file_registry_frontend_canister_id": canisters.get("file_registry_frontend", ""),
         "casals_frontend_canister_id": canisters.get("casals_frontend", ""),
-        "delegated_destroy_principals": [installer_id] if installer_id else [],
+        "realm_installer_canister_id": canisters.get("realm_installer", ""),
         "default_min_cycles": threshold,
         "default_topup_cycles": threshold,
         "treasury_reserve": threshold,
@@ -252,6 +255,13 @@ def _infra_canister_names() -> tuple[str, ...]:
         "realm_installer",
         "file_registry",
         "file_registry_frontend",
+    )
+
+
+def _gos_binary_registry_id(descriptor: Descriptor) -> str:
+    return (
+        descriptor.canisters.get("casals_file_registry")
+        or descriptor.canisters.get("file_registry", "")
     )
 
 
@@ -400,6 +410,27 @@ def phase_install_backends(descriptor: Descriptor, ctx: DeployContext) -> None:
             yes=True,
         )
 
+    casals_fr_id = descriptor.canisters.get("casals_file_registry")
+    if casals_fr_id:
+        wasm = resolve_casals_file_registry_wasm(
+            descriptor.casals.version,
+            descriptor.casals.release_repo,
+            work / "casals",
+            casals_src=ctx.casals_src,
+            session=ctx.http,
+        )
+        mode = dfx.detect_install_mode(casals_fr_id, ctx.network, identity=ctx.identity)
+        console.print(f"  casals_file_registry: {mode} ({wasm.name})")
+        dfx.install_wasm(
+            casals_fr_id,
+            str(wasm),
+            ctx.network,
+            mode,
+            "(null)",
+            identity=ctx.identity,
+            yes=True,
+        )
+
 
 def _parse_registry_configure(raw: str) -> dict:
     raw = raw.strip()
@@ -526,10 +557,13 @@ def phase_configure_backends(descriptor: Descriptor, ctx: DeployContext) -> None
 
 
 def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None:
-    registry_id = descriptor.canisters.get("file_registry")
+    realms_registry_id = descriptor.canisters.get("file_registry")
+    gos_registry_id = _gos_binary_registry_id(descriptor)
     registry_backend_id = descriptor.canisters.get("realm_registry_backend")
-    if not registry_id:
+    if not realms_registry_id:
         raise RuntimeError("file_registry canister ID required")
+    if not gos_registry_id:
+        raise RuntimeError("file_registry or casals_file_registry canister ID required")
 
     work = _work_dir(ctx)
     seeded_catalog_sources: set[tuple[str, str]] = set()
@@ -547,15 +581,15 @@ def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None
         version_label = _gos_version_label(entry, session=ctx.http)
 
         # Pinned semver releases are immutable once seeded; ``main`` is rebuilt from
-        # HEAD on every seed so the frontend bundle in file_registry stays current.
+        # HEAD on every seed so the frontend bundle in the GOS binary registry stays current.
         needs_seed = True
         if resolved.source_build:
             console.print(
                 f"  {entry.implementation}@{version_label}: re-seeding (main channel)"
             )
-        elif namespace_published(registry_id, backend_ns, ctx.network, identity=ctx.identity):
+        elif namespace_published(gos_registry_id, backend_ns, ctx.network, identity=ctx.identity):
             hashes = fetch_namespace_hashes(
-                registry_id, backend_ns, ctx.network, identity=ctx.identity
+                gos_registry_id, backend_ns, ctx.network, identity=ctx.identity
             )
             if hashes:
                 needs_seed = False
@@ -584,7 +618,7 @@ def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None
                 f"  seeding {entry.implementation}@{version_label} → {backend_ns}, {frontend_ns}"
             )
             seed_gos_entry(
-                registry_id,
+                gos_registry_id,
                 backend_ns,
                 frontend_ns,
                 backend_file,
@@ -612,7 +646,7 @@ def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None
         if registry_backend_id:
             status = ensure_version_catalog_entry(
                 registry_backend_id,
-                registry_id,
+                gos_registry_id,
                 version,
                 backend_ns,
                 frontend_ns,
@@ -639,7 +673,7 @@ def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None
             )
         elif catalog_key not in seeded_catalog_sources:
             seeded = seed_codex_catalog(
-                registry_id,
+                realms_registry_id,
                 entry.release_repo,
                 entry.version,
                 work,
@@ -659,7 +693,7 @@ def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None
             f"  approving {len(set(marketplace_namespaces))} codex/extension namespace(s)"
         )
         approve_marketplace_namespaces(
-            registry_id,
+            realms_registry_id,
             marketplace_namespaces,
             ctx.network,
             identity=ctx.identity,
@@ -870,15 +904,17 @@ def phase_smoke_checks(descriptor: Descriptor, ctx: DeployContext) -> None:
     if descriptor.domain not in env_cfg.get("portal_url", ""):
         raise RuntimeError("registry portal_url smoke check failed")
 
-    file_registry_id = descriptor.canisters["file_registry"]
+    gos_registry_id = _gos_binary_registry_id(descriptor)
     for entry in descriptor.gos:
         version = _gos_catalog_version(entry, session=ctx.http)
         backend_ns = f"wasm/{entry.artifacts.backend_wasm_key}/{version}"
         hashes = fetch_namespace_hashes(
-            file_registry_id, backend_ns, ctx.network, identity=ctx.identity
+            gos_registry_id, backend_ns, ctx.network, identity=ctx.identity
         )
         if not hashes:
-            raise RuntimeError(f"file_registry missing seeded namespace {backend_ns}")
+            raise RuntimeError(
+                f"GOS binary registry missing seeded namespace {backend_ns}"
+            )
 
     if ctx.network == "ic":
         deadline = time.monotonic() + 90.0
@@ -926,9 +962,12 @@ def phase_smoke_checks(descriptor: Descriptor, ctx: DeployContext) -> None:
 
 def phase_seed_conductor(descriptor: Descriptor, ctx: DeployContext) -> None:
     casals_id = descriptor.canisters.get("casals_backend")
-    registry_id = descriptor.canisters.get("file_registry")
-    if not casals_id or not registry_id:
+    realms_registry_id = descriptor.canisters.get("file_registry")
+    gos_registry_id = _gos_binary_registry_id(descriptor)
+    if not casals_id or not realms_registry_id:
         raise RuntimeError("casals_backend and file_registry IDs required")
+    if not gos_registry_id:
+        raise RuntimeError("file_registry or casals_file_registry ID required")
 
     repo_root: Path | None = None
     try:
@@ -938,7 +977,7 @@ def phase_seed_conductor(descriptor: Descriptor, ctx: DeployContext) -> None:
 
     seed_orchestration_templates(
         casals_id,
-        registry_id,
+        gos_registry_id,
         ctx.network,
         identity=ctx.identity,
         casals_src=ctx.casals_src,
@@ -946,7 +985,7 @@ def phase_seed_conductor(descriptor: Descriptor, ctx: DeployContext) -> None:
     for entry in descriptor.gos:
         auth_result = authorize_gos_entry(
             casals_id,
-            registry_id,
+            gos_registry_id,
             descriptor,
             entry,
             ctx.network,
@@ -978,9 +1017,12 @@ def phase_seed_conductor(descriptor: Descriptor, ctx: DeployContext) -> None:
         ("realm-installer", "realm_installer", "backend"),
         ("file-registry", "file_registry", "backend"),
         ("file-registry-frontend", "file_registry_frontend", "frontend"),
+        ("casals-file-registry", "casals_file_registry", "backend"),
     ):
         canister_id = descriptor.canisters.get(key)
         if not canister_id:
+            if key == "casals_file_registry":
+                continue
             raise RuntimeError(f"{key} ID required for platform stand registration")
         platform_canisters.append((name, canister_id, kind))
     ensure_platform_stand(
@@ -1234,7 +1276,10 @@ def phase_controller_topology(descriptor: Descriptor, ctx: DeployContext) -> Non
                 f"{name} controller verify failed: {status.controllers} != {target}"
             )
 
-    for name in _infra_canister_names():
+    infra_names = list(_infra_canister_names())
+    if descriptor.canisters.get("casals_file_registry"):
+        infra_names.append("casals_file_registry")
+    for name in infra_names:
         canister_id = descriptor.canisters.get(name)
         if not canister_id:
             raise RuntimeError(f"missing canister ID for {name}")

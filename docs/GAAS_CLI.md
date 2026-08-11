@@ -155,7 +155,7 @@ Schema is enforced by `cli/gaas/descriptor.py` and `cli/gaas/known.py`.
 
 **Version pins:** Semver tags (`vX.Y.Z`) fetch fixed GitHub release assets and seed the file registry under the bare version (`0.4.0`). `latest` resolves the newest GitHub release at deploy time (cached for the process) and uses the resolved tag for fetching while catalog namespaces stay semver-clean. `main` shallow-clones upstream HEAD and builds WASM/frontend from source (mirroring each repo's release CI); artifacts are seeded under the `main` namespace. `main` and `latest` are accepted case-insensitively; semver tags are not. Prefer pinned semver tags for staging/production; use `main` only for test/local iteration.
 
-During **seed file registry**, gaas may publish a GOS **codex catalog** and (best effort) **extension catalog** into the environment's `file_registry` canister so realm creation can install packages such as `syntropia@latest`. Seeding runs only when the GOS implementation declares a catalog (see `known.py`) or the descriptor entry sets `catalog` to a non-null object. GOS implementations without a catalog (e.g. `chora-gos`) skip this step with a log note. For `realms-gos`, gaas resolves a Realms source checkout (reusing the clone from a `main` source build when available, otherwise shallow-cloning the pinned release tag). Codex packages are uploaded from `codices/codices/` when the Realms checkout includes that tree; if submodules were not initialized (typical for shallow clones), gaas shallow-clones the declared `codices_repo_suffix` repo (default `realms-codices`) at the same ref under the same org as `release_repo`. Unified codices (`kind: codex` with a `backend/` tree) publish to `ext/<id>/<manifest.version>/…` (manifest, `backend/**/*.py`, `backend/**/*.json`, optional frontend bundle/i18n). Legacy codices publish to the deprecated `codex/<id>/<manifest.version>/…` namespace. Extension bundles publish to `ext/<id>/<manifest.version>/…` from the Realms `extensions/` submodule when present, otherwise from a shallow clone of the declared `extensions_repo_suffix` repo (default `realms-extensions`); a missing extensions repo logs a warning and does not abort deploy, but codex publish failures do abort.
+During **seed file registry**, gaas uploads GOS realm WASM and frontend bundles to `casals_file_registry` when that canister is in the descriptor, otherwise to `file_registry`. It may also publish a GOS **codex catalog** and (best effort) **extension catalog** into the GaaS `file_registry` canister so realm creation can install packages such as `syntropia@latest`. Seeding runs only when the GOS implementation declares a catalog (see `known.py`) or the descriptor entry sets `catalog` to a non-null object. GOS implementations without a catalog (e.g. `chora-gos`) skip this step with a log note. For `realms-gos`, gaas resolves a Realms source checkout (reusing the clone from a `main` source build when available, otherwise shallow-cloning the pinned release tag). Codex packages are uploaded from `codices/codices/` when the Realms checkout includes that tree; if submodules were not initialized (typical for shallow clones), gaas shallow-clones the declared `codices_repo_suffix` repo (default `realms-codices`) at the same ref under the same org as `release_repo`. Unified codices (`kind: codex` with a `backend/` tree) publish to `ext/<id>/<manifest.version>/…` (manifest, `backend/**/*.py`, `backend/**/*.json`, optional frontend bundle/i18n). Legacy codices publish to the deprecated `codex/<id>/<manifest.version>/…` namespace. Extension bundles publish to `ext/<id>/<manifest.version>/…` from the Realms `extensions/` submodule when present, otherwise from a shallow clone of the declared `extensions_repo_suffix` repo (default `realms-extensions`); a missing extensions repo logs a warning and does not abort deploy, but codex publish failures do abort.
 
 ### `canisters` keys
 
@@ -166,12 +166,15 @@ Only these names are accepted:
 | `realm_registry_backend` | Credits, slug claims, deployment requests |
 | `realm_registry_frontend` | Create-realm wizard + federation portal |
 | `realm_installer` | Deployment queue + Casals provisioning |
-| `file_registry` | Platform artifact store |
-| `file_registry_frontend` | File registry admin UI |
+| `file_registry` | Realms-GOS package store (codices, extensions, marketplace approvals, version catalog) |
+| `file_registry_frontend` | File registry admin UI (GaaS platform) |
+| `casals_file_registry` | Casals-owned GOS binary store (realm WASM/frontend bundles, orchestration templates). Created on fresh deploy; omit from legacy descriptors to keep the single-`file_registry` layout. |
 | `casals_backend` | Casals orchestrator backend (conductor) canister ID |
 | `casals_frontend` | Casals orchestration UI (standalone assets canister) |
 
-Leave a key out (or omit the entire `canisters` object) to create that canister during deploy. The file registry backend ID is generated at build time when created fresh.
+Leave a key out (or omit the entire `canisters` object) to create that canister during deploy. The GaaS `file_registry` backend ID is generated at build time when created fresh; `casals_file_registry` is created via the cycles ledger (like `casals_backend`).
+
+**Two file registries:** When `casals_file_registry` is present, gaas stores **GOS realm binaries** (backend WASM, frontend asset bundles) and seeds **orchestration templates** there. The GaaS `file_registry` remains the **Realms-GOS package store** for codices, extensions, marketplace namespace approvals, and the version catalog. Casals `set_settings` receives `file_registry_canister_id` pointing at `casals_file_registry` when configured, otherwise the legacy single `file_registry`. When `casals_file_registry` is absent, all seeding and conductor authorization use `file_registry` as before.
 
 ### `casals`
 
@@ -257,7 +260,7 @@ After smoke checks and the optional interactive commander-grant step, gaas appli
 | Canister group | Production controllers | Test mode (`can_test_mode: true`) |
 |---|---|---|
 | `casals_backend`, `casals_frontend` | multisig | multisig + deployer identity |
-| Infra (`realm_registry_*`, `realm_installer`, `file_registry*`) | `casals_backend` | `casals_backend` + deployer |
+| Infra (`realm_registry_*`, `realm_installer`, `file_registry*`, `casals_file_registry`) | `casals_backend` | `casals_backend` + deployer |
 | Baton / realm canisters (created by conductor) | baton / multisig per role | + deployer via conductor `extra_controller_principals` |
 
 In production (no test mode), gaas loses IC control after this phase — it must remain last.
@@ -292,7 +295,7 @@ Suggested remediation:
   dfx cycles convert --amount=1.5 --network ic
 ```
 
-Default wallet estimate per missing canister: **0.6 TC** (0.1T creation + 0.5T initial funding). Canister headrooms use the descriptor `cycles.threshold_tc` (default **2 TC**) for every platform canister. `casals_backend` additionally includes realm-provisioning budget and, when `multisig.backend_id` is unset, one extra threshold for multisig creation.
+Default wallet estimate per missing canister: **0.6 TC** (0.1T creation + 0.5T initial funding). Eight platform canisters are budgeted by default (`realm_registry_*`, `realm_installer`, `file_registry*`, `casals_backend`, `casals_frontend`, `casals_file_registry`). Canister headrooms use the descriptor `cycles.threshold_tc` (default **2 TC**) for every platform canister. `casals_backend` additionally includes realm-provisioning budget and, when `multisig.backend_id` is unset, one extra threshold for multisig creation.
 
 ## Prerequisites
 
@@ -432,7 +435,7 @@ gaas new [DESCRIPTOR] [OPTIONS]
 
    For each GOS entry, the conductor authorizes the **backend realm WASM** from `wasm/<backend_wasm_key>/<version>/` and the **frontend certified-assets canister WASM** (`realms-assetstorage.wasm.gz` under `wasm/realm-assetstorage/<version>/`). The frontend dist bundle remains in `frontend/<frontend_wasm_key>/<version>/` for the realm installer to sync after canister install; it is not registered as an installable WASM module.
 
-   After the sheet and governance multisig are in place, gaas registers the five platform canisters (realm registry, realm installer, file registry — backends and frontends) under **Infra/platform** in the conductor orchestra. Only canisters tracked in the orchestra tree are monitored by the conductor's cycles autopilot; this registration ensures those platform canisters receive automatic cycle monitoring and top-ups. Cycle thresholds come from `set_settings` using `descriptor.cycles.threshold_tc` (default 2 TC) — one floor for every canister.
+   After the sheet and governance multisig are in place, gaas registers the platform canisters (realm registry, realm installer, GaaS file registry, Casals file registry when present — backends and frontends) under **Infra/platform** in the conductor orchestra. Only canisters tracked in the orchestra tree are monitored by the conductor's cycles autopilot; this registration ensures those platform canisters receive automatic cycle monitoring and top-ups. Cycle thresholds come from `set_settings` using `descriptor.cycles.threshold_tc` (default 2 TC) — one floor for every canister.
 
    Immediately afterward, gaas **primes the conductor cycles snapshot**: it reads `get_tree`, calls `refresh_canisters` in batches of up to three names, then verifies via `get_cycles_cached` that every orchestra canister appears in the persisted snapshot. Missing rows fail the deploy loudly; per-canister refresh errors produce warnings. This prevents a fresh deploy from leaving the Casals Orchestra dashboard at "Canisters: 0".
 7. Configuring multisig signers

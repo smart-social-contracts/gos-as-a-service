@@ -17,6 +17,8 @@ from gaas.artifacts import ArtifactError, fetch_release_assets
 from gaas.runlog import run_subprocess
 from gaas.known import (
     CASALS_BACKEND_WASM_ASSET,
+    CASALS_FILE_REGISTRY_WASM_ASSET,
+    CASALS_FILE_REGISTRY_WASM_ASSETS,
     CASALS_FRONTEND_ARCHIVE,
     DEFAULT_CASALS_RELEASE_REPO,
     DFX_CANISTER_NAMES,
@@ -300,6 +302,102 @@ def resolve_casals_wasm(
                 "provide --casals-src, set CASALS_SRC, or place a checkout at /srv/dev/Casals"
             ) from None
         return build_casals_wasm(src, dest)
+
+
+def _casals_file_registry_submodule(casals_root: Path) -> Path:
+    submodule = casals_root / "file_registry"
+    if (submodule / "src" / "main.py").is_file() and (
+        submodule / "ic_file_registry.did"
+    ).is_file():
+        return submodule
+    raise PlatformError(
+        f"Casals checkout at {casals_root} is missing the file_registry submodule; "
+        "run `git submodule update --init file_registry` in the Casals repo"
+    )
+
+
+def build_casals_file_registry_wasm(casals_root: Path, dest: Path) -> Path:
+    _casals_file_registry_submodule(casals_root)
+    dest.mkdir(parents=True, exist_ok=True)
+    output = dest / "ic_file_registry.wasm"
+    if output.is_file():
+        return output
+    built = casals_root / ".basilisk" / "ic_file_registry" / "ic_file_registry.wasm"
+    if built.is_file():
+        shutil.copy2(built, output)
+        return output
+    py = _basilisk_python(casals_root)
+    env = {
+        **os.environ,
+        "CANISTER_CANDID_PATH": str(
+            casals_root / "file_registry" / "ic_file_registry.did"
+        ),
+    }
+    run_subprocess(
+        [str(py), "-m", "basilisk", "ic_file_registry", "file_registry/src/main.py"],
+        cwd=casals_root,
+        env=env,
+        check=True,
+    )
+    if not built.is_file():
+        raise PlatformError(f"Casals basilisk build did not produce {built}")
+    shutil.copy2(built, output)
+    return output
+
+
+def fetch_casals_file_registry_wasm(
+    version: str,
+    release_repo: str,
+    dest: Path,
+    *,
+    session: requests.Session | None = None,
+) -> Path:
+    resolved = resolve_deploy_version(version, release_repo, session=session)
+    tag = resolved.fetch_tag or version
+    assets = ["checksums.txt", *CASALS_FILE_REGISTRY_WASM_ASSETS]
+    paths = fetch_release_assets(release_repo, tag, assets, dest, session=session)
+    for asset_name in CASALS_FILE_REGISTRY_WASM_ASSETS:
+        for path in paths:
+            if path.name == asset_name:
+                return _ensure_uncompressed_wasm(path)
+    raise ArtifactError(
+        f"no file-registry WASM asset ({', '.join(CASALS_FILE_REGISTRY_WASM_ASSETS)}) "
+        f"in {release_repo} {tag}"
+    )
+
+
+def resolve_casals_file_registry_wasm(
+    version: str,
+    release_repo: str,
+    work_dir: Path,
+    *,
+    casals_src: Path | None = None,
+    session: requests.Session | None = None,
+) -> Path:
+    dest = work_dir / "casals_file_registry"
+    dest.mkdir(parents=True, exist_ok=True)
+    cached = dest / "ic_file_registry.wasm"
+    if cached.is_file():
+        return cached
+
+    resolved = resolve_deploy_version(version, release_repo, session=session)
+    if resolved.source_build:
+        repo_root = clone_repo(release_repo, dest.parent / "src-clone")
+        return build_casals_file_registry_wasm(repo_root, dest)
+
+    try:
+        return fetch_casals_file_registry_wasm(
+            resolved.fetch_tag or version, release_repo, dest, session=session
+        )
+    except ArtifactError:
+        src = resolve_casals_src(casals_src)
+        if src is None:
+            raise PlatformError(
+                f"Casals release {release_repo}@{version} has no "
+                f"{CASALS_FILE_REGISTRY_WASM_ASSET}; provide --casals-src, set CASALS_SRC, "
+                "or place a Casals checkout with the file_registry submodule at /srv/dev/Casals"
+            ) from None
+        return build_casals_file_registry_wasm(src, dest)
 
 
 def _ensure_uncompressed_wasm(path: Path) -> Path:

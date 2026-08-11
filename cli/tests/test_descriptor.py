@@ -215,6 +215,13 @@ def test_casals_commanders_rejects_empty_entry() -> None:
         Descriptor.model_validate(data)
 
 
+def test_descriptor_accepts_casals_file_registry() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {"casals_file_registry": VALID_CANISTER_ID}
+    desc = Descriptor.model_validate(data)
+    assert desc.canisters["casals_file_registry"] == VALID_CANISTER_ID
+
+
 def test_gos_catalog_inherits_from_known() -> None:
     desc = Descriptor.model_validate(SAMPLE_DESCRIPTOR)
     entry = desc.gos[0]

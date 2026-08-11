@@ -6,6 +6,11 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from gaas.wizard import deploy_confirmation_message, run_wizard
+from gaas.known import KNOWN_CANISTER_NAMES
+
+
+def test_wizard_prompts_for_casals_file_registry() -> None:
+    assert "casals_file_registry" in KNOWN_CANISTER_NAMES
 
 
 def test_deploy_confirmation_message_mentions_asset_reinstalls() -> None:
@@ -28,6 +33,7 @@ def test_wizard_builds_descriptor(tmp_path: Path, monkeypatch) -> None:
             "Build from local gos-as-a-service checkout",
             ["realms-gos"],
             "v0.3.1",
+            "",
             "",
             "",
             "",
@@ -94,6 +100,7 @@ def test_wizard_honors_flag_overrides() -> None:
             "",
             "",
             "",
+            "",
             "v0.3.0",
             "",
             "2",
@@ -139,6 +146,7 @@ def test_wizard_can_test_mode_prompt_sets_flag(tmp_path: Path, monkeypatch) -> N
             "Build from local gos-as-a-service checkout",
             ["realms-gos"],
             "v0.3.1",
+            "",
             "",
             "",
             "",
@@ -197,6 +205,7 @@ def test_wizard_parses_casals_commanders(tmp_path: Path, monkeypatch) -> None:
             "",
             "",
             "",
+            "",
             "v0.3.0",
             "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa, bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
             "2",
@@ -239,6 +248,7 @@ def test_wizard_parses_monitor_services(tmp_path: Path, monkeypatch) -> None:
             "Build from local gos-as-a-service checkout",
             ["realms-gos"],
             "v0.3.1",
+            "",
             "",
             "",
             "",
