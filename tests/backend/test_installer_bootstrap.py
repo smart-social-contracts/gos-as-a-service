@@ -116,6 +116,7 @@ def test_deploy_steps_with_legacy_codex_includes_installs():
     assert kinds[:2] == ["configure_canister_ids", "grant_frontend_access"]
     assert "extension" in kinds
     assert "codex" in kinds
+    assert kinds[-1] == "resync_extension_frontends"
 
 
 def test_configure_payload_includes_creator_and_portal_origin():

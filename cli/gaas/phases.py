@@ -219,11 +219,12 @@ def _installer_config_json(descriptor: Descriptor) -> str:
 def _casals_settings_json(descriptor: Descriptor, deployer_principal: str) -> str:
     canisters = descriptor.canisters
     threshold = descriptor.threshold_cycles()
+    installer_id = (canisters.get("realm_installer") or "").strip()
     payload: dict = {
         "file_registry_canister_id": canisters.get("file_registry", ""),
         "file_registry_frontend_canister_id": canisters.get("file_registry_frontend", ""),
         "casals_frontend_canister_id": canisters.get("casals_frontend", ""),
-        "realm_installer_canister_id": canisters.get("realm_installer", ""),
+        "delegated_destroy_principals": [installer_id] if installer_id else [],
         "default_min_cycles": threshold,
         "default_topup_cycles": threshold,
         "treasury_reserve": threshold,

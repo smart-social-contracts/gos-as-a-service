@@ -88,6 +88,23 @@ def configure_canister_ids_payload(args: dict) -> tuple[dict, list[str]]:
     return payload, warnings
 
 
+def resync_extension_frontends_args(manifest: dict) -> dict:
+    """Build args for the resync_extension_frontends post-provision step."""
+    return {
+        "registry_canister_id": _resolve_file_registry_canister_id(manifest),
+        "frontend_canister_id": (manifest.get("frontend_canister_id") or "").strip(),
+    }
+
+
+def has_extension_installs(manifest: dict) -> bool:
+    for ext in manifest.get("extensions") or []:
+        if isinstance(ext, str) and ext.strip():
+            return True
+        if isinstance(ext, dict) and (ext.get("id") or "").strip():
+            return True
+    return False
+
+
 def deploy_step_kinds(manifest: dict) -> list[str]:
     """Return ordered deploy step kinds matching ``_build_steps``."""
     kinds = []
@@ -105,6 +122,9 @@ def deploy_step_kinds(manifest: dict) -> list[str]:
         cdx_id = cdx.get("id") if isinstance(cdx, dict) else None
         if cdx_id:
             kinds.append("codex")
+
+    if has_extension_installs(manifest):
+        kinds.append("resync_extension_frontends")
 
     return kinds
 

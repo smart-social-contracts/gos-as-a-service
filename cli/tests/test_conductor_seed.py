@@ -21,6 +21,8 @@ def test_platform_sheet_has_infra_and_deployments() -> None:
     infra = sheet["sections"][0]
     assert infra["stands"][0]["name"] == "governance"
     assert infra["stands"][0]["canisters"][0]["name"] == "multisig"
+    assert infra["stands"][0]["canisters"][0]["wasm_type"] == "multisig"
+    assert infra["stands"][0]["canisters"][0]["teardown_priority"] == 40
     assert sheet["sections"][1]["stands"] == []
 
 

@@ -49,6 +49,8 @@ def platform_sheet() -> dict[str, Any]:
                                 "name": "multisig",
                                 "wasm_key": "orchestration-multisig",
                                 "kind": "backend",
+                                "wasm_type": "multisig",
+                                "teardown_priority": 40,
                             }
                         ],
                     }

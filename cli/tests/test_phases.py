@@ -452,6 +452,7 @@ def test_casals_settings_json_defaults_and_test_mode() -> None:
     assert closed["default_topup_cycles"] == 2_000_000_000_000
     assert closed["treasury_reserve"] == 2_000_000_000_000
     assert closed["create_cycles"] == 2_000_000_000_000
+    assert closed["delegated_destroy_principals"] == ["ccccc-ccccc-ccccc-ccccc-ccccc-ccc"]
     assert "extra_controller_principals" not in closed
 
     open_desc = desc.model_copy(update={"flags": {"can_test_mode": True}})

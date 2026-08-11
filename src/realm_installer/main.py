@@ -37,8 +37,11 @@ from claim_args import build_claim_slug_args
 from bootstrap import (
     configure_canister_ids_args,
     configure_canister_ids_payload,
+    deploy_step_kinds,
     manifest_has_codex_block,
+    resync_extension_frontends_args,
     resolve_legacy_install_lists,
+    has_extension_installs,
 )
 from ic_assets import ensure_frame_ancestor, portal_url_to_origin
 from installer_config import (
@@ -76,11 +79,17 @@ except RuntimeError:
 # ── Inter-canister services ────────────────────────────────────────────
 
 class RealmTargetService(Service):
-    _arg_types = {"install_extension_from_registry": "text", "install_codex_from_registry": "text"}
+    _arg_types = {
+        "install_extension_from_registry": "text",
+        "install_codex_from_registry": "text",
+        "resync_extension_frontends": "text",
+    }
     @service_update
     def install_extension_from_registry(self, args: text) -> text: ...
     @service_update
     def install_codex_from_registry(self, args: text) -> text: ...
+    @service_update
+    def resync_extension_frontends(self, args: text) -> text: ...
 
 class RealmRegistryService(Service):
     @service_update
@@ -118,7 +127,7 @@ class CasalsService(Service):
     @service_update
     def orchestration_configure_baton(self, args: text) -> text: ...
     @service_update
-    def destroy_realm_stand(self, args: text) -> text: ...
+    def destroy_stand(self, args: text) -> text: ...
 
 # ── Entities ───────────────────────────────────────────────────────────
 
@@ -1000,6 +1009,8 @@ def _count_expected_steps(manifest: dict, backend_id: str = "", frontend_id: str
         elif isinstance(ext, dict) and (ext.get("id") or "").strip():
             count += 1
     count += 1  # codex install step
+    if has_extension_installs({"extensions": realm_info.get("extensions") or []}):
+        count += 1  # resync_extension_frontends after extension installs
     return count
 
 
@@ -1056,6 +1067,15 @@ def _build_steps(task, manifest: dict) -> list:
             status="pending",
         ))
         idx += 1
+    if has_extension_installs(manifest):
+        _log.info(f"[{task.name}] step {idx}: resync_extension_frontends")
+        steps.append(DeployStep(
+            task=task, idx=idx, kind="resync_extension_frontends",
+            label="resync_extension_frontends",
+            args_json=json.dumps(resync_extension_frontends_args(manifest)),
+            status="pending",
+        ))
+        idx += 1
     _log.info(f"[{task.name}] built {len(steps)} total steps")
     return steps
 
@@ -1088,6 +1108,9 @@ def _execute_step(task, step):
         elif step.kind == "codex":
             jlog(task.name).info(f"step {step.idx} calling install_codex_from_registry")
             call_result: CallResult = yield target.install_codex_from_registry(json.dumps(args))
+        elif step.kind == "resync_extension_frontends":
+            jlog(task.name).info(f"step {step.idx} calling resync_extension_frontends")
+            call_result: CallResult = yield target.resync_extension_frontends(json.dumps(args))
         else:
             step.error = f"unknown kind: {step.kind}"
             step.status = "failed"
@@ -2262,12 +2285,12 @@ def _destroy_realm_canisters_gen(job, job_id: text, backend_id: text, frontend_i
         "backend_canister_id": backend_id,
         "frontend_canister_id": frontend_id,
     }
-    destroy_res: CallResult = yield casals.destroy_realm_stand(json.dumps(payload))
+    destroy_res: CallResult = yield casals.destroy_stand(json.dumps(payload))
     parsed = _casals_ok(destroy_res)
     errors = parsed.get("errors") or []
     reclaimed = int(parsed.get("total_cycles_reclaimed") or 0)
     jlog(job_id).info(
-        f"casals destroy_realm_stand stand={stand} "
+        f"casals destroy_stand stand={stand} "
         f"total_cycles_reclaimed={reclaimed} "
         f"canisters={len(parsed.get('destroyed') or [])} failed={len(errors)}"
     )
@@ -2389,10 +2412,30 @@ def _casals_find_canister(tree: dict, stand: str, canister_name: str) -> str:
     return ""
 
 
+def _casals_wasm_type(kind: str, name: str = "", wasm_key: str = "") -> str:
+    """Map provision context to Casals wasm_type for create_canister."""
+    k = (kind or "").strip().lower()
+    n = (name or "").strip().lower()
+    wk = (wasm_key or "").strip().lower()
+    if k == "frontend":
+        return "assets"
+    if "baton" in n or wk.startswith("orchestration-baton"):
+        return "baton"
+    if "multisig" in n or wk.startswith("orchestration-multisig"):
+        return "multisig"
+    return "basilisk"
+
+
 def _casals_create_or_reuse_canister(casals, job_id: str, stand: str, name: str,
                                      kind: str, wasm_key: str, install_arg=None):
     """Generator: create a canister via Casals, or reuse one left by a prior attempt."""
-    create_args = {"stand": stand, "name": name, "kind": kind, "wasm_key": wasm_key}
+    create_args = {
+        "stand": stand,
+        "name": name,
+        "kind": kind,
+        "wasm_key": wasm_key,
+        "wasm_type": _casals_wasm_type(kind, name, wasm_key),
+    }
     if install_arg is not None:
         create_args["install_arg"] = install_arg
     create_res: CallResult = yield casals.create_canister(json.dumps(create_args))
@@ -2893,6 +2936,7 @@ def provision_quarter(args: text) -> Async[text]:
         be_res: CallResult = yield casals.create_canister(json.dumps({
             "stand": stand, "name": name,
             "kind": "backend", "wasm_key": backend_wasm_key,
+            "wasm_type": "basilisk",
         }))
         backend_id = (_casals_ok(be_res).get("canister_id") or "").strip()
         if not backend_id:
