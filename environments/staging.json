@@ -21,7 +21,9 @@
     "file_registry": "iebdk-kqaaa-aaaau-agoxq-cai",
     "file_registry_frontend": "rbex3-xyaaa-aaaah-qumma-cai",
     "casals_backend": "jj2e5-iyaaa-aaaac-bffeq-cai",
-    "casals_frontend": "mcqbx-hyaaa-aaaaj-qsarq-cai"
+    "casals_frontend": "mcqbx-hyaaa-aaaaj-qsarq-cai",
+    "marketplace_backend": "jji3o-uyaaa-aaaah-qreja-cai",
+    "marketplace_frontend": "joj52-zaaaa-aaaah-qrejq-cai"
   },
   "casals": {
     "version": "main",
