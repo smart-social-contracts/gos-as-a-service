@@ -33,9 +33,6 @@
   "marketplace": {
     "approver_principal": "ah6ac-cc73l-bb2zc-ni7bh-jov4q-roeyj-6k2ob-mkg5j-pequi-vuaa6-2ae"
   },
-  "multisig": {
-    "backend_id": null
-  },
   "services": {
     "billing_url": "https://billing.realmsgos.dev",
     "billing_service_principal": "ah6ac-cc73l-bb2zc-ni7bh-jov4q-roeyj-6k2ob-mkg5j-pequi-vuaa6-2ae",
