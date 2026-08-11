@@ -20,7 +20,7 @@ gaas prints `Full logs: <path>` immediately after preflight succeeds and again w
 
 ## Single confirmation point
 
-Mutating deploy steps — including IC asset-canister reinstalls for `realm_registry_frontend`, `file_registry_frontend`, and `casals_frontend` (which wipe existing frontend state) — are covered by a single upfront confirmation:
+Mutating deploy steps — including IC asset-canister reinstalls for `realm_registry_frontend` and `casals_frontend` (which wipe existing frontend state) — are covered by a single upfront confirmation:
 
 - Interactive wizard: **Deploy now?** (enhanced message listing asset reinstalls on IC)
 - Descriptor mode on a TTY: same confirmation before the pipeline starts
@@ -166,15 +166,15 @@ Only these names are accepted:
 | `realm_registry_backend` | Credits, slug claims, deployment requests |
 | `realm_registry_frontend` | Create-realm wizard + federation portal |
 | `realm_installer` | Deployment queue + Casals provisioning |
-| `file_registry` | Realms-GOS package store (codices, extensions, marketplace approvals, version catalog) |
-| `file_registry_frontend` | File registry admin UI (GaaS platform) |
+| `file_registry` | **Adopt-only (realms-owned).** Realms-GOS package store (codices, extensions, marketplace approvals, version catalog). gaas never creates/deploys it; set the ID to wire in an existing realms-managed registry. |
+| `file_registry_frontend` | **Adopt-only (realms-owned).** File registry admin UI. gaas never creates/deploys it. |
 | `casals_file_registry` | Casals-owned GOS binary store (realm WASM/frontend bundles, orchestration templates). Created on fresh deploy; omit from legacy descriptors to keep the single-`file_registry` layout. |
 | `casals_backend` | Casals orchestrator backend (conductor) canister ID |
 | `casals_frontend` | Casals orchestration UI (standalone assets canister) |
 
-Leave a key out (or omit the entire `canisters` object) to create that canister during deploy. The GaaS `file_registry` backend ID is generated at build time when created fresh; `casals_file_registry` is created via the cycles ledger (like `casals_backend`).
+Leave a key out (or omit the entire `canisters` object) to create that canister during deploy. `casals_file_registry` is created via the cycles ledger (like `casals_backend`). `file_registry` / `file_registry_frontend` are **never created by gaas** — they are owned by the realms repo and only adopted when their IDs are present in the descriptor.
 
-**Two file registries:** When `casals_file_registry` is present, gaas stores **GOS realm binaries** (backend WASM, frontend asset bundles) and seeds **orchestration templates** there. The GaaS `file_registry` remains the **Realms-GOS package store** for codices, extensions, marketplace namespace approvals, and the version catalog. Casals `set_settings` receives `file_registry_canister_id` pointing at `casals_file_registry` when configured, otherwise the legacy single `file_registry`. When `casals_file_registry` is absent, all seeding and conductor authorization use `file_registry` as before.
+**Two file registries:** gaas stores **GOS realm binaries** (backend WASM, frontend asset bundles) and seeds **orchestration templates** in `casals_file_registry` (falling back to `file_registry` on legacy single-registry descriptors). The realms-owned `file_registry`, when adopted, receives the **Realms-GOS package catalog** seed (codices, extensions, marketplace namespace approvals); when it is absent, that catalog seeding is skipped with a warning and realms must be provisioned with their own package store. Casals `set_settings` receives `file_registry_canister_id` pointing at `casals_file_registry` when configured, otherwise the legacy single `file_registry`.
 
 ### `casals`
 
@@ -260,7 +260,7 @@ After smoke checks and the optional interactive commander-grant step, gaas appli
 | Canister group | Production controllers | Test mode (`can_test_mode: true`) |
 |---|---|---|
 | `casals_backend`, `casals_frontend` | multisig | multisig + deployer identity |
-| Infra (`realm_registry_*`, `realm_installer`, `file_registry*`, `casals_file_registry`) | `casals_backend` | `casals_backend` + deployer |
+| Infra (`realm_registry_*`, `realm_installer`, `casals_file_registry`) | `casals_backend` | `casals_backend` + deployer |
 | Baton / realm canisters (created by conductor) | baton / multisig per role | + deployer via conductor `extra_controller_principals` |
 
 In production (no test mode), gaas loses IC control after this phase — it must remain last.
@@ -295,7 +295,7 @@ Suggested remediation:
   dfx cycles convert --amount=1.5 --network ic
 ```
 
-Default wallet estimate per missing canister: **0.6 TC** (0.1T creation + 0.5T initial funding). Eight platform canisters are budgeted by default (`realm_registry_*`, `realm_installer`, `file_registry*`, `casals_backend`, `casals_frontend`, `casals_file_registry`). Canister headrooms use the descriptor `cycles.threshold_tc` (default **2 TC**) for every platform canister. `casals_backend` additionally includes realm-provisioning budget and, when `multisig.backend_id` is unset, one extra threshold for multisig creation.
+Default wallet estimate per missing canister: **0.6 TC** (0.1T creation + 0.5T initial funding). Six platform canisters are budgeted by default (`realm_registry_*`, `realm_installer`, `casals_backend`, `casals_frontend`, `casals_file_registry`). Adopt-only realms-owned canisters (`file_registry`, `file_registry_frontend`, `marketplace_*`) are never cycle-budgeted. Canister headrooms use the descriptor `cycles.threshold_tc` (default **2 TC**) for every platform canister. `casals_backend` additionally includes realm-provisioning budget and, when `multisig.backend_id` is unset, one extra threshold for multisig creation.
 
 ## Prerequisites
 
@@ -305,7 +305,7 @@ Default wallet estimate per missing canister: **0.6 TC** (0.1T creation + 0.5T i
 | **dfx identity** | Named identity with controller access to target canisters. Create with `dfx identity new <name>`. |
 | **Cycles (IC mainnet)** | Preflight estimates wallet + canister requirements from the descriptor. Check balance: `dfx cycles balance --network ic`. Top up via the [cycles ledger](https://internetcomputer.org/docs/current/developer-docs/setup/cycles/cycles-wallet) or IC faucet for test principals. |
 | **Local replica** | For `--network local`: `dfx start --background` before deploy. Preflight runs `dfx ping local`. |
-| **Node.js / npm** | Required for registry and file-registry frontend builds during the install-frontends phase. |
+| **Node.js / npm** | Required for the registry frontend build during the install-frontends phase. |
 | **Casals checkout (fallback)** | If Casals release artifacts are unavailable, gaas may fall back to a local Casals repo checkout. Keep a clone of [smart-social-contracts/Casals](https://github.com/smart-social-contracts/Casals) handy. |
 
 Validate a descriptor without deploying:
@@ -467,9 +467,9 @@ gaas seed DESCRIPTOR --identity NAME [--network ic|local] [--yes] [--casals-src 
 
 **Seed phases** (artifact pipeline only):
 
-1. Validating descriptor and required canister IDs (`file_registry`, `casals_backend`, and platform canisters used by conductor seed)
-2. Seeding file registry (GOS WASM/frontend bundles, version catalog, codex/extension packages, marketplace namespace approvals)
-3. Seeding conductor orchestra (templates, authorized WASMs, sheet, multisig, platform stand registration, and per-canister cycle policies — `file-registry` min/topup 2T)
+1. Validating descriptor and required canister IDs (`casals_backend`, platform canisters used by conductor seed, and at least one GOS binary registry — `casals_file_registry` preferred, `file_registry` as legacy fallback)
+2. Seeding file registry (GOS WASM/frontend bundles to `casals_file_registry`; version catalog, codex/extension packages, and marketplace namespace approvals to the realms-owned `file_registry` when adopted — skipped with a warning when absent)
+3. Seeding conductor orchestra (templates, authorized WASMs, sheet, multisig, platform stand registration for present canisters, and per-canister cycle policies)
 
 The command prints a summary of uploaded artifact keys/hashes and which WASM hashes were newly authorized vs already authorized on the conductor. Re-running with unchanged artifacts is idempotent.
 

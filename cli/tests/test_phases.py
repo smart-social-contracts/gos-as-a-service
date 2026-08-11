@@ -174,10 +174,13 @@ def test_create_canisters_adopt_vs_create(
 
     mock_create.assert_called()
     assert desc.canisters["realm_registry_backend"] == VALID_CANISTER_ID
-    # 1 adopted + 7 platform created; adopt-only marketplace names are skipped.
-    assert len(desc.canisters) == 8
+    # 1 adopted + 5 platform created; adopt-only marketplace and realms-owned
+    # file_registry names are skipped.
+    assert len(desc.canisters) == 6
     assert "marketplace_backend" not in desc.canisters
     assert "marketplace_frontend" not in desc.canisters
+    assert "file_registry" not in desc.canisters
+    assert "file_registry_frontend" not in desc.canisters
 
 
 def test_registry_init_json_can_test_mode() -> None:
@@ -520,7 +523,12 @@ def test_casals_settings_json_no_monitor_url() -> None:
 def test_infra_canister_names() -> None:
     names = _infra_canister_names()
     assert "realm_registry_backend" in names
-    assert "file_registry_frontend" in names
+    assert "realm_registry_frontend" in names
+    assert "realm_installer" in names
+    # Realms-owned package registry is external; gaas does not manage its
+    # controller topology.
+    assert "file_registry" not in names
+    assert "file_registry_frontend" not in names
     assert "casals_backend" not in names
 
 
@@ -560,7 +568,8 @@ def test_controller_topology_test_mode(
     desc = Descriptor.model_validate(data)
     ctx = DeployContext(identity="deployer", network="ic")
     phase_controller_topology(desc, ctx)
-    assert mock_update.call_count == 8
+    # 6 gaas-managed canisters; realms-owned file_registry pair is untouched.
+    assert mock_update.call_count == 6
     first_call = mock_update.call_args_list[0]
     assert first_call[0][1] == ["aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aac", "deployer-principal"]
 
@@ -937,7 +946,9 @@ def test_phase_install_frontends_no_mid_run_confirm(
 
     phase_install_frontends(descriptor, ctx)
 
-    assert run_log.run_step.call_count == 3
+    # npm install + realm_registry_frontend build only; file_registry_frontend
+    # is realms-owned and no longer built/deployed by gaas.
+    assert run_log.run_step.call_count == 2
     for call in mock_deploy_assets.call_args_list:
         assert call.kwargs.get("yes") is True
         assert call.kwargs.get("mode") == "reinstall"

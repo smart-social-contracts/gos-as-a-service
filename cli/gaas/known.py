@@ -9,8 +9,6 @@ PLATFORM_CANISTER_NAMES: Final[tuple[str, ...]] = (
     "realm_registry_backend",
     "realm_registry_frontend",
     "realm_installer",
-    "file_registry",
-    "file_registry_frontend",
     "casals_backend",
     "casals_frontend",
     "casals_file_registry",
@@ -19,6 +17,8 @@ PLATFORM_CANISTER_NAMES: Final[tuple[str, ...]] = (
 # Valid in descriptors and adopted when present, but never created, deployed,
 # or cycle-budgeted by gaas (external services wired in by configuration).
 ADOPT_ONLY_CANISTER_NAMES: Final[tuple[str, ...]] = (
+    "file_registry",
+    "file_registry_frontend",
     "marketplace_backend",
     "marketplace_frontend",
 )
@@ -38,8 +38,6 @@ DFX_CANISTER_NAMES: Final[dict[str, str | None]] = {
     "realm_registry_backend": "realm_registry_backend",
     "realm_registry_frontend": "realm_registry_frontend",
     "realm_installer": "realm_installer",
-    "file_registry": "file_registry",
-    "file_registry_frontend": "file_registry_frontend",
     "casals_backend": None,
     "casals_frontend": "casals_frontend",
     "casals_file_registry": None,
@@ -48,12 +46,10 @@ DFX_CANISTER_NAMES: Final[dict[str, str | None]] = {
 PLATFORM_BACKEND_WASMS: Final[dict[str, str]] = {
     "realm_registry_backend": "realm_registry_backend.wasm.gz",
     "realm_installer": "realm_installer.wasm.gz",
-    "file_registry": "file_registry.wasm.gz",
 }
 
 PLATFORM_FRONTEND_ARCHIVES: Final[dict[str, str]] = {
     "realm_registry_frontend": "realm_registry_frontend.tar.gz",
-    "file_registry_frontend": "file_registry_frontend.tar.gz",
 }
 
 CASALS_BACKEND_WASM_ASSET: Final[str] = "casals_backend.wasm.gz"

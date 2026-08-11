@@ -68,7 +68,9 @@ def test_wallet_required_partial_create_mix() -> None:
         },
     )
     wallet = next(item for item in plan.items if item.label == "wallet")
-    missing = len(PLATFORM_CANISTER_NAMES) - len(canisters)
+    # file_registry is adopt-only (realms-owned): it does not count as a
+    # platform canister for wallet creation budget.
+    missing = len([n for n in PLATFORM_CANISTER_NAMES if n not in canisters])
     assert wallet.required == missing * (WALLET_CREATE_CYCLES + WALLET_INITIAL_FUNDING)
     assert len(plan.items) == 1 + len(canisters)
 

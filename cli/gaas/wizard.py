@@ -21,6 +21,7 @@ from gaas.descriptor import (
 )
 from gaas.versions import validate_descriptor_version
 from gaas.known import (
+    ADOPT_ONLY_CANISTER_NAMES,
     DEFAULT_CASALS_RELEASE_REPO,
     DEFAULT_CASALS_VERSION,
     DEFAULT_PLATFORM_RELEASE_REPO,
@@ -341,10 +342,16 @@ def run_wizard(
         )
 
     canisters: dict[str, str] = {}
-    console.print("\nExisting canister IDs (leave blank to create new):")
+    console.print(
+        "\nExisting canister IDs (leave blank to create new; adopt-only external "
+        "services like file_registry/marketplace are never created by gaas):"
+    )
     for canister_name in KNOWN_CANISTER_NAMES:
+        hint = ""
+        if canister_name in ADOPT_ONLY_CANISTER_NAMES:
+            hint = " [external, optional]"
         value = prompt.text(
-            f"  {canister_name}:",
+            f"  {canister_name}{hint}:",
             validate=_validate_canister_id,
         ).ask()
         if value is None:

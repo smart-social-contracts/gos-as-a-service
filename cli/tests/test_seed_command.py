@@ -90,12 +90,38 @@ def test_validate_seed_prerequisites_missing_canisters() -> None:
         validate_seed_prerequisites(desc)
 
 
-def test_validate_seed_prerequisites_missing_file_registry() -> None:
+def test_validate_seed_prerequisites_missing_binary_registry() -> None:
+    """Seed fails early when neither casals_file_registry nor file_registry is set."""
     data = dict(SAMPLE_DESCRIPTOR)
-    data["canisters"] = {"casals_backend": VALID_CANISTER_ID}
+    data["canisters"] = {
+        name: VALID_CANISTER_ID
+        for name in (
+            "realm_registry_backend",
+            "realm_registry_frontend",
+            "realm_installer",
+            "casals_backend",
+        )
+    }
     desc = Descriptor.model_validate(data)
-    with pytest.raises(RuntimeError, match="file_registry"):
+    with pytest.raises(RuntimeError, match="GOS binary registry"):
         validate_seed_prerequisites(desc)
+
+
+def test_validate_seed_prerequisites_realms_file_registry_optional() -> None:
+    """A descriptor without the realms-owned file_registry still validates."""
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        name: VALID_CANISTER_ID
+        for name in (
+            "realm_registry_backend",
+            "realm_registry_frontend",
+            "realm_installer",
+            "casals_backend",
+            "casals_file_registry",
+        )
+    }
+    desc = Descriptor.model_validate(data)
+    validate_seed_prerequisites(desc)
 
 
 @patch("gaas.main.run_seed_phases")
