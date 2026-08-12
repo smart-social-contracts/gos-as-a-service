@@ -78,6 +78,11 @@ export const CONFIG = {
 		getCanisterId('marketplace_backend') ||
 		viteEnv.VITE_MARKETPLACE_CANISTER_ID ||
 		viteEnv.CANISTER_ID_MARKETPLACE_BACKEND ||
+		'',
+	casals_backend_canister_id:
+		getCanisterId('casals_backend') ||
+		viteEnv.VITE_CASALS_BACKEND_CANISTER_ID ||
+		viteEnv.CANISTER_ID_CASALS_BACKEND ||
 		''
 };
 

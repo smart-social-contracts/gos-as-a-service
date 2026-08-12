@@ -90,17 +90,29 @@ export function networkInfra(network, config) {
   return { file_registry_canister_id, marketplace_canister_id, ii_derivation_origin };
 }
 
-function buildCasalsBlock(realmName, deployVersion, config) {
+function buildCasalsBlock(realmName, deployVersion, config, formData = {}) {
   const versionKey = normalizeDeployVersion(deployVersion);
   // Always pin the channel: a bare family name resolves conductor-side to the
   // newest *semver* in the family, which would silently pick e.g. 0.4.0 over
   // the main-channel snapshot whenever both are authorized.
-  return {
+  const block = {
     section: config.casals_section || 'Deployments',
     stand: slugify(realmName),
     backend_wasm_key: `realm-backend@${versionKey}`,
     frontend_wasm_key: `realm-assets@${versionKey}`,
   };
+
+  const choice = (formData.subnet_choice || 'automatic').toLowerCase();
+  if (choice === 'european') {
+    block.subnet_type = 'european';
+  } else if (choice === 'other') {
+    const subnetId = (formData.subnet_id || '').trim();
+    if (subnetId) {
+      block.subnet = subnetId;
+    }
+  }
+
+  return block;
 }
 
 /**
@@ -137,7 +149,7 @@ export function buildRealmDeploymentManifest(formData, network, config = {}, opt
   };
 
   if (useCasals) {
-    manifest.casals = buildCasalsBlock(name, deployVersion, config);
+    manifest.casals = buildCasalsBlock(name, deployVersion, config, formData);
   }
 
   const infra = networkInfra(network, config);

@@ -34,6 +34,7 @@ from provision_kick import (
     should_kick_provision_on_enqueue,
 )
 from claim_args import build_claim_slug_args
+from stand_create_args import build_stand_create_args, casals_placement_from_cfg
 from bootstrap import (
     configure_canister_ids_args,
     configure_canister_ids_payload,
@@ -2690,6 +2691,7 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
 
     section = (cas.get("section") or cfg.casals_section or "Deployments").strip()
     stand = (cas.get("stand") or _slugify(realm_name)).strip()
+    subnet, subnet_type = casals_placement_from_cfg(cas)
     backend_wasm_key = (cas.get("backend_wasm_key") or "").strip()
     frontend_wasm_key = (cas.get("frontend_wasm_key") or "").strip()
 
@@ -2724,10 +2726,14 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
         raise RuntimeError(preflight_err)
 
     # 1. Stand (idempotent — a re-run of a partially provisioned job reuses it).
-    stand_res: CallResult = yield casals.create_stand(json.dumps({
-        "section": section, "name": stand,
-        "description": f"realm {realm_name}",
-    }))
+    stand_args = build_stand_create_args(
+        section, stand, f"realm {realm_name}", subnet, subnet_type,
+    )
+    if subnet or subnet_type:
+        jlog(job_id).info(
+            f"stand placement requested: subnet={subnet} subnet_type={subnet_type}",
+        )
+    stand_res: CallResult = yield casals.create_stand(json.dumps(stand_args))
     try:
         _casals_ok(stand_res)
     except RuntimeError as se:

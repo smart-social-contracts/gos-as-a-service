@@ -99,3 +99,57 @@ test('staging and demo networks still use infra fallbacks when config omits IDs'
   assert.equal(demo.file_registry_canister_id, 'vi64l-3aaaa-aaaae-qj4va-cai');
   assert.equal(demo.marketplace_canister_id, 'ehyfg-wyaaa-aaaae-qg3qq-cai');
 });
+
+test('casals block omits subnet keys by default', () => {
+  const manifest = buildRealmDeploymentManifest(
+    { name: 'Auto Realm', gos_implementation: 'realms-gos', subnet_choice: 'automatic' },
+    'ic',
+    TEST_CONFIG,
+    { useCasals: true },
+  );
+  assert.equal(manifest.casals.subnet, undefined);
+  assert.equal(manifest.casals.subnet_type, undefined);
+});
+
+test('casals block emits subnet_type european', () => {
+  const manifest = buildRealmDeploymentManifest(
+    { name: 'EU Realm', gos_implementation: 'realms-gos', subnet_choice: 'european' },
+    'ic',
+    TEST_CONFIG,
+    { useCasals: true },
+  );
+  assert.equal(manifest.casals.subnet_type, 'european');
+  assert.equal(manifest.casals.subnet, undefined);
+});
+
+test('casals block emits explicit subnet id', () => {
+  const manifest = buildRealmDeploymentManifest(
+    {
+      name: 'Pinned Subnet Realm',
+      gos_implementation: 'realms-gos',
+      subnet_choice: 'other',
+      subnet_id: 'abc12-xyz34-abcde-abcdef-abc',
+    },
+    'ic',
+    TEST_CONFIG,
+    { useCasals: true },
+  );
+  assert.equal(manifest.casals.subnet, 'abc12-xyz34-abcde-abcdef-abc');
+  assert.equal(manifest.casals.subnet_type, undefined);
+});
+
+test('casals block never emits empty subnet strings', () => {
+  const manifest = buildRealmDeploymentManifest(
+    {
+      name: 'Empty Subnet Realm',
+      gos_implementation: 'realms-gos',
+      subnet_choice: 'other',
+      subnet_id: '   ',
+    },
+    'ic',
+    TEST_CONFIG,
+    { useCasals: true },
+  );
+  assert.equal(manifest.casals.subnet, undefined);
+  assert.equal(manifest.casals.subnet_type, undefined);
+});
