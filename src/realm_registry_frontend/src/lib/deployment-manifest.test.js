@@ -153,3 +153,51 @@ test('casals block never emits empty subnet strings', () => {
   assert.equal(manifest.casals.subnet, undefined);
   assert.equal(manifest.casals.subnet_type, undefined);
 });
+
+test('staging still gets test_flags when can_test_mode is true', () => {
+  const manifest = buildRealmDeploymentManifest(
+    { name: 'Staging Realm', gos_implementation: 'realms-gos' },
+    'staging',
+    { ...TEST_CONFIG, can_test_mode: true },
+    { useCasals: false },
+  );
+  assert.equal(manifest.can_test_mode, true);
+  assert.equal(manifest.test_flags.test_mode, true);
+  assert.equal(manifest.test_flags.ii_bypass, false);
+});
+
+test('staging still gets test_flags when can_test_mode is undefined', () => {
+  const manifest = buildRealmDeploymentManifest(
+    { name: 'Compat Realm', gos_implementation: 'realms-gos' },
+    'staging',
+    TEST_CONFIG,
+    { useCasals: false },
+  );
+  assert.equal(manifest.can_test_mode, undefined);
+  assert.equal(manifest.test_flags.test_mode, true);
+});
+
+test('production GaaS omits test_flags when can_test_mode is false', () => {
+  const manifest = buildRealmDeploymentManifest(
+    { name: 'Prod Realm', gos_implementation: 'realms-gos' },
+    'staging',
+    { ...TEST_CONFIG, can_test_mode: false },
+    { useCasals: false },
+  );
+  assert.equal(manifest.test_flags, undefined);
+});
+
+test('test network gets full test flag set when can_test_mode is true', () => {
+  const manifest = buildRealmDeploymentManifest(
+    { name: 'Test Realm', gos_implementation: 'realms-gos' },
+    'test',
+    { ...TEST_CONFIG, can_test_mode: true },
+    { useCasals: false },
+  );
+  assert.equal(manifest.can_test_mode, true);
+  assert.equal(manifest.test_flags.test_mode, true);
+  assert.equal(manifest.test_flags.user_self_registration, true);
+  assert.equal(manifest.test_flags.demo_data, true);
+  assert.equal(manifest.test_flags.ii_bypass, true);
+  assert.equal(manifest.test_flags.skip_terms, true);
+});

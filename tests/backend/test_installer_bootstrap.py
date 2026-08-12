@@ -255,6 +255,42 @@ def test_ext_manifest_without_codex_omits_install_lists():
     assert payload["creator_principal"] == "creator-principal-abc"
 
 
+def test_configure_payload_includes_test_flags_and_can_test_mode():
+    manifest = _bootstrap_manifest(
+        can_test_mode=True,
+        test_flags={"test_mode": True, "ii_bypass": True},
+    )
+    args = configure_canister_ids_args(
+        manifest, manifest["target_canister_id"], manifest["frontend_canister_id"]
+    )
+    assert args["can_test_mode"] is True
+    assert args["test_flags"] == {"test_mode": True, "ii_bypass": True}
+    payload, _warnings = configure_canister_ids_payload(args)
+    assert payload["can_test_mode"] is True
+    assert payload["test_flags"] == {"test_mode": True, "ii_bypass": True}
+
+
+def test_configure_payload_omits_ic_network_when_can_test_mode():
+    manifest = _bootstrap_manifest(
+        network="test",
+        can_test_mode=True,
+        test_flags={"test_mode": True, "ii_bypass": True},
+    )
+    args = configure_canister_ids_args(
+        manifest, manifest["target_canister_id"], manifest["frontend_canister_id"]
+    )
+    payload, _warnings = configure_canister_ids_payload(args)
+    assert payload["network"] == "test"
+
+    ic_args = configure_canister_ids_args(
+        {**manifest, "network": "ic"},
+        manifest["target_canister_id"],
+        manifest["frontend_canister_id"],
+    )
+    ic_payload, _warnings = configure_canister_ids_payload(ic_args)
+    assert "network" not in ic_payload
+
+
 def test_casals_path_always_enters_bootstrap_phase():
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     main_path = os.path.join(repo_root, "src/realm_installer/main.py")

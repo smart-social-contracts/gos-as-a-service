@@ -33,6 +33,15 @@ const gaasEnv = runtimeGaasEnv();
 const network = detectNetwork(undefined, gaasEnv);
 const portalHosts = resolvePortalHosts(viteEnv, gaasEnv, network);
 
+function resolveCanTestMode() {
+	const fromFlags = gaasEnv?.flags?.can_test_mode;
+	const fromRoot = gaasEnv?.can_test_mode;
+	const value = fromFlags ?? fromRoot;
+	if (value === true) return true;
+	if (value === false) return false;
+	return undefined;
+}
+
 export { resolveBillingServiceUrl, resolveDeployServiceUrl, resolvePortalBaseUrl, resolvePortalHosts };
 
 export const CONFIG = {
@@ -83,7 +92,8 @@ export const CONFIG = {
 		getCanisterId('casals_backend') ||
 		viteEnv.VITE_CASALS_BACKEND_CANISTER_ID ||
 		viteEnv.CANISTER_ID_CASALS_BACKEND ||
-		''
+		'',
+	can_test_mode: resolveCanTestMode()
 };
 
 function _readFlag(envKey, urlParam) {

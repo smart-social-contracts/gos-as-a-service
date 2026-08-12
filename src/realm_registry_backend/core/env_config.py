@@ -160,3 +160,93 @@ def _set_key(key: str, value: str) -> None:
         cfg.value = value
     else:
         RegistryConfig(key=key, value=value)
+
+
+_PRODUCTION_NETWORKS = frozenset({"ic", "production"})
+
+# JSON keys in manifest test_flags → runtime_flags RegistryConfig attr suffix.
+_TEST_FLAG_ATTRS = {
+    "test_mode": "test_mode",
+    "ii_bypass": "test_mode_ii_bypass",
+    "user_self_registration": "test_mode_user_self_registration",
+    "demo_data": "test_mode_demo_data",
+    "skip_terms": "test_mode_skip_terms",
+    "skip_passport_zkproof": "test_mode_skip_passport_zkproof",
+    "skip_authentication": "test_mode_skip_authentication",
+}
+
+_PORTAL_HOST_NETWORKS = {
+    "test.gos.earth": "test",
+    "staging.gos.earth": "staging",
+    "demo.gos.earth": "demo",
+}
+
+
+def _is_production_network(network: str) -> bool:
+    return (network or "").strip().lower() in _PRODUCTION_NETWORKS
+
+
+def _network_from_portal_url(url: str) -> str:
+    lower = (url or "").strip().lower()
+    for host, net in _PORTAL_HOST_NETWORKS.items():
+        if host in lower:
+            return net
+    return ""
+
+
+def _resolve_logical_network(manifest: dict) -> str:
+    """Pick a non-mainnet logical network for can_test_mode manifests."""
+    incoming = (manifest.get("network") or "").strip()
+    if incoming and not _is_production_network(incoming):
+        return incoming
+
+    from core.runtime_flags import get_network
+
+    registry_net = (get_network() or "").strip()
+    if registry_net and not _is_production_network(registry_net):
+        return registry_net
+
+    portal_net = _network_from_portal_url(get_portal_url())
+    if portal_net:
+        return portal_net
+
+    return "test"
+
+
+def _inherited_test_flags_from_registry() -> dict:
+    from core.runtime_flags import get_flag
+
+    inherited: dict[str, bool] = {}
+    for json_key, attr in _TEST_FLAG_ATTRS.items():
+        if get_flag(attr, False):
+            inherited[json_key] = True
+    if not inherited:
+        inherited = {"test_mode": True, "ii_bypass": True}
+    return inherited
+
+
+def apply_env_inheritance(manifest: dict) -> dict:
+    """Stamp registry env policy onto a deployment/upgrade manifest.
+
+    Mutates and returns *manifest* so realms inherit ``can_test_mode`` and test
+    flags from the registry — not from hardcoded network tables or stale realm
+    network values (e.g. ``ic`` on test.gos.earth).
+    """
+    manifest["can_test_mode"] = is_can_test_mode()
+
+    if manifest["can_test_mode"]:
+        manifest["network"] = _resolve_logical_network(manifest)
+
+        inherited = _inherited_test_flags_from_registry()
+        incoming = manifest.get("test_flags")
+        merged = dict(inherited)
+        if isinstance(incoming, dict):
+            merged.update(incoming)
+        if not merged.get("test_mode"):
+            merged["test_mode"] = True
+        manifest["test_flags"] = merged
+    else:
+        manifest.pop("test_flags", None)
+        manifest["test_flags"] = {}
+
+    return manifest

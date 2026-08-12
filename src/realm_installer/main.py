@@ -770,6 +770,7 @@ def schedule_registration(job_id_val: str):
             fr_id = infra.get("file_registry_canister_id", "")
             mp_id = infra.get("marketplace_canister_id", "")
             network = (manifest.get("network") or "").strip()
+            can_test_mode = bool(manifest.get("can_test_mode"))
             version = (manifest.get("deploy_version") or "").strip()
             test_flags = manifest.get("test_flags") or {}
             test_flags_json = json.dumps(test_flags) if test_flags else ""
@@ -796,8 +797,14 @@ def schedule_registration(job_id_val: str):
                     "file_registry_canister_id": fr_id or None,
                     "marketplace_canister_id": mp_id or None,
                     "installed_version": version or None,
-                    "network": network or None,
                 }
+                net_lower = network.lower()
+                if network and not (
+                    can_test_mode and net_lower in ("ic", "production")
+                ):
+                    link_payload["network"] = network
+                if can_test_mode:
+                    link_payload["can_test_mode"] = True
                 if test_flags_json:
                     link_payload["test_flags_json"] = test_flags_json
                 if token_id:

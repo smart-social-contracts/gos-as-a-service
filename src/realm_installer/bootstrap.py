@@ -49,6 +49,8 @@ def configure_canister_ids_args(manifest: dict, backend_id: str, frontend_id: st
         "realm_registry_canister_id": _resolve_realm_registry_canister_id(manifest),
         "marketplace_canister_id": _resolve_marketplace_canister_id(manifest),
         "network": manifest.get("network", ""),
+        "test_flags": manifest.get("test_flags") or {},
+        "can_test_mode": bool(manifest.get("can_test_mode")),
         "requesting_principal": (manifest.get("requesting_principal") or "").strip(),
         "portal_origin": configured_portal_base(manifest),
     }
@@ -70,8 +72,17 @@ def configure_canister_ids_payload(args: dict) -> tuple[dict, list[str]]:
     if marketplace_id:
         payload["marketplace_canister_id"] = marketplace_id
     network = (args.get("network") or "").strip()
+    can_test_mode = bool(args.get("can_test_mode"))
     if network:
-        payload["network"] = network
+        net_lower = network.lower()
+        if not (can_test_mode and net_lower in ("ic", "production", "")):
+            payload["network"] = network
+
+    test_flags = args.get("test_flags")
+    if isinstance(test_flags, dict) and test_flags:
+        payload["test_flags"] = test_flags
+    if "can_test_mode" in args:
+        payload["can_test_mode"] = bool(args["can_test_mode"])
 
     creator = (args.get("requesting_principal") or "").strip()
     if creator:

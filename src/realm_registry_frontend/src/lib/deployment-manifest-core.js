@@ -31,8 +31,14 @@ export function portalUrlForSlug(slug, network, config = {}) {
   return `${base.replace(/\/$/, '')}/r/${slugify(slug)}`;
 }
 
-function networkTestFlags(network) {
+function networkTestFlags(network, config = {}) {
+  if (config.can_test_mode === false) {
+    return {};
+  }
   const net = (network || 'staging').toLowerCase();
+  if (net === 'ic' || net === 'production') {
+    return {};
+  }
   if (net === 'test') {
     return {
       test_mode: true,
@@ -155,7 +161,11 @@ export function buildRealmDeploymentManifest(formData, network, config = {}, opt
   const infra = networkInfra(network, config);
   if (infra) manifest.infra = infra;
 
-  const testFlags = networkTestFlags(network);
+  if (config.can_test_mode === true) {
+    manifest.can_test_mode = true;
+  }
+
+  const testFlags = networkTestFlags(network, config);
   if (Object.keys(testFlags).length > 0) manifest.test_flags = testFlags;
 
   const slugInput = (formData.slug || '').trim();

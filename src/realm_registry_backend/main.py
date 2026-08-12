@@ -638,6 +638,10 @@ def request_deployment(manifest_json: text) -> Async[text]:
         manifest["requesting_principal"] = caller
         manifest["registry_canister_id"] = str(ic.id())
 
+        from core.env_config import apply_env_inheritance
+
+        apply_env_inheritance(manifest)
+
         installer = RealmInstallerService(Principal.from_str(installer_id))
         call_result: CallResult = yield installer.enqueue_deployment(json.dumps(manifest))
 
@@ -891,7 +895,9 @@ def request_upgrade(args_json: text) -> Async[text]:
             "registry_canister_id": str(ic.id()),
         }
 
-        from core.env_config import get_installer_id
+        from core.env_config import apply_env_inheritance, get_installer_id
+
+        apply_env_inheritance(manifest)
 
         configured_installer_id = get_installer_id()
         installer_id = configured_installer_id or manifest.get("installer_canister_id", "")
