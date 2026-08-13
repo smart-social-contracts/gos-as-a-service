@@ -20,8 +20,28 @@ if (DERIVATION_ORIGIN) {
   console.log(`Using II derivationOrigin: ${DERIVATION_ORIGIN}`);
 }
 
-/** Match Realms portal: 7-day II delegation, no idle logout. */
-const SESSION_MAX_TTL_NS = BigInt(7 * 24 * 60 * 60 * 1_000_000_000);
+/** Default II session: 8 hours (DFINITY recommendation for typical apps). */
+const SESSION_DEFAULT_TTL_NS = BigInt(8 * 60 * 60 * 1_000_000_000);
+/** Remember-me II session: 7 days. */
+const SESSION_REMEMBER_TTL_NS = BigInt(7 * 24 * 60 * 60 * 1_000_000_000);
+
+const REMEMBER_ME_KEY = 'portal:remember_me';
+
+function getRememberMe() {
+  try {
+    return localStorage.getItem(REMEMBER_ME_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function setRememberMe(value) {
+  try {
+    localStorage.setItem(REMEMBER_ME_KEY, value ? '1' : '0');
+  } catch {
+    // storage unavailable
+  }
+}
 
 let authClient;
 
@@ -146,7 +166,7 @@ export async function initializeAuthClient() {
   return authClient;
 }
 
-export async function login({ identityIndex = null } = {}) {
+export async function login({ identityIndex = null, rememberMe = null } = {}) {
   if (getTestModeIIBypass()) {
     const urlParams = new URLSearchParams(window.location.search);
     const asParam = urlParams.get('as');
@@ -180,10 +200,16 @@ export async function login({ identityIndex = null } = {}) {
 
   const client = await initializeAuthClient();
 
+  // Persist remember-me choice so subsequent logins default to it.
+  if (rememberMe !== null) {
+    setRememberMe(rememberMe);
+  }
+  const ttl = getRememberMe() ? SESSION_REMEMBER_TTL_NS : SESSION_DEFAULT_TTL_NS;
+
   return new Promise((resolve) => {
     const loginOpts = {
       identityProvider: II_URL,
-      maxTimeToLive: SESSION_MAX_TTL_NS,
+      maxTimeToLive: ttl,
       onSuccess: () => {
         const identity = client.getIdentity();
         const principal = identity.getPrincipal();

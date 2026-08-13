@@ -7,11 +7,18 @@
   let loading = true;
   let error = '';
   let principalText = '';
+  let rememberMe = false;
 
   $: returnTo = $page.url.searchParams.get('returnTo') || '/';
 
   onMount(async () => {
     try {
+      // Restore remember-me preference
+      try {
+        rememberMe = localStorage.getItem('portal:remember_me') === '1';
+      } catch {
+        // storage unavailable
+      }
       if (await isAuthenticated()) {
         const p = await getPrincipal();
         principalText = p ? p.toText() : '';
@@ -29,7 +36,7 @@
     loading = true;
     error = '';
     try {
-      const { principal } = await login();
+      const { principal } = await login({ rememberMe });
       if (!principal) {
         error = 'Sign-in was cancelled or failed.';
         return;
@@ -62,6 +69,15 @@
       <button type="button" class="btn-primary" on:click={handleLogin} disabled={loading}>
         Sign in with Internet Identity
       </button>
+      <label class="remember-me">
+        <input type="checkbox" bind:checked={rememberMe} />
+        <span>Remember me for 7 days</span>
+      </label>
+      <p class="ttl-hint">
+        {rememberMe
+          ? 'You will stay signed in for 7 days.'
+          : 'You will stay signed in for 8 hours.'}
+      </p>
     {/if}
 
     {#if principalText}
@@ -112,6 +128,22 @@
   .error {
     color: #f87171;
     margin-bottom: 1rem;
+  }
+  .remember-me {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+  .remember-me input {
+    cursor: pointer;
+  }
+  .ttl-hint {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    opacity: 0.7;
   }
   .hint {
     margin-top: 1rem;
