@@ -305,6 +305,16 @@ After smoke checks and the optional interactive commander-grant step, gaas appli
 
 In production (no test mode), gaas loses IC control after this phase — it must remain last.
 
+**Destroy paths (do not confuse with controller topology):**
+
+| Path | Who | Flow |
+|---|---|---|
+| Portal / realm alpha teardown | `realm_installer` (Casals `delegated_destroy_principals`) | Direct Casals `destroy_stand` — **no** multisig vote |
+| Casals Cycles ops (non-controller) | Multisig signers | Propose Motoko `DestroyStand` / `DestroyCanister` → threshold → multisig calls Casals |
+| Casals Cycles emergency | Casals IC controllers | Direct `destroy_stand` / `destroy_canister` |
+
+**`SetCanisterControllers` from the Multisig UI** only works when the multisig is already an IC controller of the target (true for Casals backend/frontend after this phase; **false** for infra, which is controlled by Casals). Change infra controllers **through Casals** while Casals remains a controller. Realms-owned `file_registry` / `file_registry_frontend` are **outside** gaas controller topology entirely — Multisig proposals against them fail unless those canisters separately list the multisig as a controller.
+
 ### `dns`
 
 | Field | Required | Default | Description |
@@ -426,7 +436,10 @@ Deprecated aliases still work for backward compatibility: `flags.open_mode`, `se
 
 gaas descriptors are designed for **any domain** — nothing hardcodes `gos.earth` or `realmsgos.*` in the deploy pipeline. Set `domain`, `services`, and canister IDs to your own infrastructure.
 
-**CSP `frame-ancestors` caveat:** Realms realm frontends ship with a restrictive Content-Security-Policy. The realm installer patches certified assets at provision time to add your portal origin (derived from the descriptor domain) to `frame-ancestors`, so realms embed correctly in your federation portal without manual CSP edits.
+**CSP caveats:**
+
+- **Realm `frame-ancestors`:** Realms realm frontends ship with a restrictive Content-Security-Policy. The realm installer patches certified assets at provision time to add your portal origin (derived from the descriptor domain) to `frame-ancestors`, so realms embed correctly in your federation portal without manual CSP edits.
+- **Casals `connect-src`:** The Casals SPA allowlists IC hosts only. When `services.monitor_url` is set, gaas merges that origin into the Casals frontend `.ic-assets.json5` `connect-src` (and keeps the existing Casals policy) so the Cycles page can reach the off-chain monitor. See [issue #19](https://github.com/smart-social-contracts/gos-as-a-service/issues/19).
 
 ## Troubleshooting
 

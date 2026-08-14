@@ -813,6 +813,7 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
             session=ctx.http,
             conductor_canister_id=descriptor.canisters.get("casals_backend", ""),
             frontend_canister_id=casals_frontend_id,
+            monitor_url=descriptor.services.monitor_url or "",
         )
         if casals_staging.exists():
             shutil.rmtree(casals_staging)

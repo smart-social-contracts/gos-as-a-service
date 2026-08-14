@@ -942,6 +942,7 @@ def test_phase_install_frontends_no_mid_run_confirm(
         "casals_frontend": VALID_CANISTER_ID,
         "casals_backend": VALID_CANISTER_ID,
     }
+    data["services"] = {"monitor_url": "https://casals.realmsops.dev/v1/realms-test"}
     descriptor = Descriptor.model_validate(data)
     ctx = DeployContext(identity="deployer", network="ic", yes=False, work_dir=tmp_path / "work")
 
@@ -953,6 +954,9 @@ def test_phase_install_frontends_no_mid_run_confirm(
     for call in mock_deploy_assets.call_args_list:
         assert call.kwargs.get("yes") is True
         assert call.kwargs.get("mode") == "reinstall"
+    assert mock_casals_dist.call_args.kwargs["monitor_url"] == (
+        "https://casals.realmsops.dev/v1/realms-test"
+    )
 
 
 def _install_backends_descriptor() -> Descriptor:

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import gzip
-import json
 import os
 import shutil
 import sys
@@ -14,6 +13,7 @@ from pathlib import Path
 import requests
 
 from gaas.artifacts import ArtifactError, fetch_release_assets
+from gaas.ic_assets import merge_casals_ic_assets, url_to_origin
 from gaas.runlog import run_subprocess
 from gaas.known import (
     CASALS_BACKEND_WASM_ASSET,
@@ -195,29 +195,35 @@ def _casals_ic_env_cookie_value(conductor_id: str, frontend_id: str = "") -> str
     return urllib.parse.quote("&".join(pairs), safe="")
 
 
+def _casals_frontend_cache_usable(cached: Path) -> bool:
+    """Reject a leftover cookie-only .ic-assets.json5 from older gaas injects."""
+    if not cached.is_dir() or not any(cached.iterdir()):
+        return False
+    assets = cached / ".ic-assets.json5"
+    if not assets.is_file():
+        return True
+    return "Content-Security-Policy" in assets.read_text(encoding="utf-8")
+
+
 def _inject_casals_ic_env_assets(
     dist_dir: Path,
     conductor_id: str,
     frontend_id: str = "",
+    monitor_url: str = "",
 ) -> None:
-    """Set ic_env via .ic-assets.json5 for prebuilt Casals frontend (release tarball).
+    """Merge ic_env cookie (and optional monitor connect-src) into .ic-assets.json5.
 
-    Local builds bake VITE_CANISTER_ID instead. This relies on the assets canister
-    applying custom Set-Cookie headers on HTML responses.
+    Must not overwrite Casals' CSP / cache / Permissions-Policy rules. Local
+    builds bake VITE_CANISTER_ID; the cookie is for prebuilt release tarballs.
     """
+    path = dist_dir / ".ic-assets.json5"
+    existing = path.read_text(encoding="utf-8") if path.is_file() else "[]"
     cookie_val = _casals_ic_env_cookie_value(conductor_id, frontend_id)
-    config = [
-        {
-            "match": "**/*.{html,shtml}",
-            "headers": {
-                "Set-Cookie": f"ic_env={cookie_val}; SameSite=Lax",
-            },
-        },
-    ]
-    (dist_dir / ".ic-assets.json5").write_text(
-        json.dumps(config, indent=2) + "\n",
-        encoding="utf-8",
+    cookie_header = f"ic_env={cookie_val}; SameSite=Lax"
+    merged = merge_casals_ic_assets(
+        existing, cookie_header, url_to_origin(monitor_url)
     )
+    path.write_text(merged, encoding="utf-8")
 
 
 def resolve_casals_frontend_dist(
@@ -229,35 +235,58 @@ def resolve_casals_frontend_dist(
     session: requests.Session | None = None,
     conductor_canister_id: str = "",
     frontend_canister_id: str = "",
+    monitor_url: str = "",
 ) -> Path:
     dest.mkdir(parents=True, exist_ok=True)
     cached = dest / "dist"
-    if cached.is_dir() and any(cached.iterdir()):
-        return cached
+    if _casals_frontend_cache_usable(cached):
+        dist = cached
+    else:
+        if cached.exists():
+            shutil.rmtree(cached)
+        dist = _materialize_casals_frontend_dist(
+            version,
+            release_repo,
+            dest,
+            casals_src=casals_src,
+            session=session,
+            conductor_canister_id=conductor_canister_id,
+        )
 
+    if conductor_canister_id:
+        _inject_casals_ic_env_assets(
+            dist,
+            conductor_canister_id,
+            frontend_canister_id,
+            monitor_url=monitor_url,
+        )
+    return dist
+
+
+def _materialize_casals_frontend_dist(
+    version: str,
+    release_repo: str,
+    dest: Path,
+    *,
+    casals_src: Path | None = None,
+    session: requests.Session | None = None,
+    conductor_canister_id: str = "",
+) -> Path:
     resolved = resolve_deploy_version(version, release_repo, session=session)
     if resolved.source_build:
         repo_root = clone_repo(release_repo, dest.parent / "src-clone")
-        built = build_casals_frontend(
+        return build_casals_frontend(
             repo_root, dest, conductor_canister_id=conductor_canister_id
         )
-        if conductor_canister_id:
-            _inject_casals_ic_env_assets(
-                built, conductor_canister_id, frontend_canister_id
-            )
-        return built
 
     try:
         archive = fetch_casals_frontend_archive(
             resolved.fetch_tag or version, release_repo, dest, session=session
         )
+        cached = dest / "dist"
         cached.mkdir(parents=True, exist_ok=True)
         with tarfile.open(archive, "r:gz") as tar:
             tar.extractall(cached)
-        if conductor_canister_id:
-            _inject_casals_ic_env_assets(
-                cached, conductor_canister_id, frontend_canister_id
-            )
         return cached
     except ArtifactError:
         src = resolve_casals_src(casals_src)
