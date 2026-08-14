@@ -79,6 +79,10 @@ def _run(
     env.update(_DFX_ENV)
     if env_extra:
         env.update(env_extra)
+    # Some environments wrap `dfx` and require --run-deprecated to invoke the
+    # real binary (preferring icp for new work). Inject it so gaas keeps working.
+    if args and args[0] == "dfx" and "--run-deprecated" not in args:
+        args = ["dfx", "--run-deprecated", *args[1:]]
     try:
         result = subprocess.run(
             args,

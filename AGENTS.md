@@ -39,6 +39,27 @@ Portal hosts: `test.gos.earth`, `demo.gos.earth`, `staging.gos.earth`.
 
 Dogfood deployment descriptors: [`environments/`](environments/) — see [docs/GAAS_CLI.md](docs/GAAS_CLI.md) for the `gaas` CLI.
 
+## gaas deploy — mandatory multisig
+
+Every **`gaas new`** deploy must configure the orchestra multisig as **N-of-M** via deploy phase **`configure_multisig`** (Motoko `configure` on the live tree canister). This runs **before** controller topology. Skipping or leaving signers unset yields **1-of-0** in the Multisig UI and **"not a signer"** for Internet Identity logins.
+
+**Agent actions:**
+
+1. Set `multisig.signers` (list of IC principals) and `multisig.threshold` (default `1`) in the environment descriptor under [`environments/`](environments/) (`test.json`, `demo.json`, `staging.json`).
+2. Example — 1-of-1 with one Internet Identity principal:
+
+```json
+"multisig": {
+  "signers": ["<ii-principal>"],
+  "threshold": 1
+}
+```
+
+3. **`casals.commanders`** (Casals UI section access) **≠** **`multisig.signers`** (IC governance approvals). Grant both when the same operator needs UI access and multisig signing.
+4. gaas reconciles `multisig.backend_id` with the live Casals conductor tree; stale descriptor IDs are overwritten automatically.
+
+Full field reference, fallback behaviour, and deploy phase order: [docs/GAAS_CLI.md — `multisig`](docs/GAAS_CLI.md#multisig).
+
 ## Registry / wizard UI (staging)
 
 The **create-realm wizard** and **deployment status page** live in

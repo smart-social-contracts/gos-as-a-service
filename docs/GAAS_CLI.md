@@ -71,6 +71,24 @@ Deploy from a checked-in or hand-authored descriptor:
 gaas new environments/test.json --identity deployer --network ic
 ```
 
+### Wiping backends (`--reinstall-backends`)
+
+By default, backend canisters (`realm_registry_backend`, `realm_installer`, `casals_backend`,
+`casals_file_registry`) are **upgraded in place** — their state survives. Frontend asset
+canisters are always reinstalled (wiped and rebuilt from source).
+
+Pass `--reinstall-backends` to wipe backends via `--mode reinstall` on the same canister IDs
+(nothing is destroyed, no new canisters are created):
+
+```bash
+gaas new environments/test.json --identity deployer --network ic --reinstall-backends
+```
+
+The pipeline re-seeds platform state afterwards (file registry artifacts, conductor orchestra,
+codex catalog, multisig, commanders), but **registry user data — realms, credits, slugs — is
+permanently reset** and not restored. Never use this against a live environment (e.g. staging)
+unless a full clean slate is intended.
+
 ### Annotated example
 
 ```json
@@ -229,11 +247,33 @@ Non-interactive runs (`--yes` or no TTY stdin) skip this step with a one-line no
 
 ### `multisig`
 
-Optional governance multisig canister. When `backend_id` is omitted, gaas creates the multisig via the conductor sheet deploy and writes the ID back to the descriptor.
+Governance multisig canister for IC controller approvals (Casals backend/frontend, baton canisters, etc.). gaas deploys or adopts the canister during **Seeding conductor orchestra** (phase 6); **Configuring multisig signers** (phase 7) is a **mandatory** deploy step that calls the Motoko `configure` method on the live orchestra multisig **before** controller topology (phase 12). Every `gaas new` must leave the multisig configured as N-of-M with real signer principals — otherwise the Multisig UI shows **1-of-0** and logged-in users see **"not a signer"**.
+
+When `backend_id` is omitted, gaas creates the multisig via the conductor sheet deploy and writes the ID back to the descriptor. On every run, gaas **reconciles** `backend_id` with the multisig canister ID in the live Casals conductor tree (`get_tree` → governance stand). A stale descriptor ID is overwritten with a warning; configuration always targets the live tree canister, not a dead or superseded ID.
 
 | Field | Required | Default | Description |
 |---|---|---|---|
-| `backend_id` | no | `null` | Existing orchestration-multisig canister ID to adopt. |
+| `backend_id` | no | `null` | Existing orchestration-multisig canister ID to adopt. Written back from the live conductor tree when it differs from the descriptor (e.g. after `--reinstall-backends` or a prior tree redeploy). |
+| `signers` | no* | `[]` | List of IC principals who may approve governance proposals. **Required for finished governance** — set explicitly in test/demo/staging descriptors (e.g. one Internet Identity principal for 1-of-1). When empty, gaas falls back to the deployer identity as sole 1-of-1 (**legacy bootstrap only**; prefer setting signers explicitly). |
+| `threshold` | no | `1` | Minimum approvals required per proposal (N in N-of-M). Must be ≤ `signers` length (after fallback). |
+
+\*Empty `signers` is accepted but prints a deploy warning and uses the deployer; production and dogfood environments should always list real principals.
+
+**`casals.commanders` ≠ `multisig.signers`:** `casals.commanders` grants **Casals web UI** section-commander access (orchestra dashboard, stand management). `multisig.signers` are the **IC governance** principals who approve on-chain multisig proposals (controller changes, upgrades, etc.). The same Internet Identity principal may appear in both lists, but they control different surfaces.
+
+Example — 1-of-1 with a single Internet Identity principal:
+
+```json
+"multisig": {
+  "backend_id": "rvkmh-liaaa-aaaae-agzoq-cai",
+  "signers": [
+    "3itd6-2sx7g-vefdk-xhebm-fucot-llay5-lhqd6-pkjac-m7mkf-vhwqq-fqe"
+  ],
+  "threshold": 1
+}
+```
+
+Omit `backend_id` on a fresh deploy; gaas creates the multisig and persists the generated ID.
 
 ### `services`
 
@@ -438,7 +478,7 @@ gaas new [DESCRIPTOR] [OPTIONS]
    After the sheet and governance multisig are in place, gaas registers the platform canisters (realm registry, realm installer, GaaS file registry, Casals file registry when present — backends and frontends) under **Infra/platform** in the conductor orchestra. Only canisters tracked in the orchestra tree are monitored by the conductor's cycles autopilot; this registration ensures those platform canisters receive automatic cycle monitoring and top-ups. Cycle thresholds come from `set_settings` using `descriptor.cycles.threshold_tc` (default 2 TC) — one floor for every canister.
 
    Immediately afterward, gaas **primes the conductor cycles snapshot**: it reads `get_tree`, calls `refresh_canisters` in batches of up to three names, then verifies via `get_cycles_cached` that every orchestra canister appears in the persisted snapshot. Missing rows fail the deploy loudly; per-canister refresh errors produce warnings. This prevents a fresh deploy from leaving the Casals Orchestra dashboard at "Canisters: 0".
-7. Configuring multisig signers
+7. **Configuring multisig signers (mandatory)** — reconcile `multisig.backend_id` with the live Casals tree, then call Motoko `configure` with `multisig.signers` and `threshold` (default 1-of-N). Must complete before controller topology; without it the multisig shows 1-of-0 and UI users are not signers. Empty `signers` falls back to deployer-only 1-of-1 (legacy).
 8. Building + installing frontends
 9. Domain wiring (DNS verify + IC registration)
 10. Smoke checks

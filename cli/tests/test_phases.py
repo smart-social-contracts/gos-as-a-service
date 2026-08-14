@@ -23,6 +23,7 @@ from gaas.phases import (
     phase_create_canisters,
     phase_domain_wiring,
     phase_grant_commanders,
+    phase_install_backends,
     phase_install_frontends,
     phase_seed_conductor,
     phase_seed_file_registry,
@@ -952,3 +953,70 @@ def test_phase_install_frontends_no_mid_run_confirm(
     for call in mock_deploy_assets.call_args_list:
         assert call.kwargs.get("yes") is True
         assert call.kwargs.get("mode") == "reinstall"
+
+
+def _install_backends_descriptor() -> Descriptor:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        "realm_registry_backend": VALID_CANISTER_ID,
+        "realm_installer": VALID_CANISTER_ID,
+        "casals_backend": VALID_CANISTER_ID,
+    }
+    return Descriptor.model_validate(data)
+
+
+@patch("gaas.phases.dfx.install_wasm")
+@patch("gaas.phases.dfx.detect_install_mode", return_value="upgrade")
+@patch("gaas.phases.resolve_casals_wasm")
+@patch("gaas.phases.resolve_platform_backend_wasm")
+@patch("gaas.phases._find_repo_root")
+def test_phase_install_backends_upgrades_by_default(
+    _mock_repo_root,
+    mock_platform_wasm,
+    mock_casals_wasm,
+    mock_detect,
+    mock_install,
+    tmp_path: Path,
+) -> None:
+    mock_platform_wasm.return_value = tmp_path / "platform.wasm.gz"
+    mock_casals_wasm.return_value = tmp_path / "casals.wasm.gz"
+    descriptor = _install_backends_descriptor()
+    ctx = DeployContext(identity="deployer", network="ic", work_dir=tmp_path / "work")
+
+    phase_install_backends(descriptor, ctx)
+
+    assert mock_detect.call_count == 3
+    assert mock_install.call_count == 3
+    for call in mock_install.call_args_list:
+        assert call.args[3] == "upgrade"
+
+
+@patch("gaas.phases.dfx.install_wasm")
+@patch("gaas.phases.dfx.detect_install_mode", return_value="upgrade")
+@patch("gaas.phases.resolve_casals_wasm")
+@patch("gaas.phases.resolve_platform_backend_wasm")
+@patch("gaas.phases._find_repo_root")
+def test_phase_install_backends_reinstall_backends_forces_wipe(
+    _mock_repo_root,
+    mock_platform_wasm,
+    mock_casals_wasm,
+    mock_detect,
+    mock_install,
+    tmp_path: Path,
+) -> None:
+    mock_platform_wasm.return_value = tmp_path / "platform.wasm.gz"
+    mock_casals_wasm.return_value = tmp_path / "casals.wasm.gz"
+    descriptor = _install_backends_descriptor()
+    ctx = DeployContext(
+        identity="deployer",
+        network="ic",
+        reinstall_backends=True,
+        work_dir=tmp_path / "work",
+    )
+
+    phase_install_backends(descriptor, ctx)
+
+    mock_detect.assert_not_called()
+    assert mock_install.call_count == 3
+    for call in mock_install.call_args_list:
+        assert call.args[3] == "reinstall"

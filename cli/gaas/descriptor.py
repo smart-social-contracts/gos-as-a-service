@@ -188,6 +188,12 @@ class PlatformConfig(BaseModel):
 
 class MultisigConfig(BaseModel):
     backend_id: str | None = None
+    # Sole / committee signers for the governance multisig. Required for a
+    # finished deploy: phase configure_multisig calls Motoko `configure` with
+    # these principals at `threshold` (default 1 → 1-of-N). When empty, gaas
+    # falls back to the deployer identity only (legacy / bootstrap).
+    signers: list[str] = Field(default_factory=list)
+    threshold: int = 1
 
     @field_validator("backend_id")
     @classmethod
@@ -196,6 +202,29 @@ class MultisigConfig(BaseModel):
             return None
         if not CANISTER_ID_RE.match(value):
             raise ValueError(f"multisig.backend_id: invalid canister ID {value!r}")
+        return value
+
+    @field_validator("signers")
+    @classmethod
+    def validate_signers(cls, value: list[str]) -> list[str]:
+        cleaned: list[str] = []
+        for index, entry in enumerate(value or []):
+            principal = (entry or "").strip()
+            if not principal:
+                raise ValueError(f"multisig.signers[{index}]: principal must be non-empty")
+            if not PRINCIPAL_RE.match(principal):
+                raise ValueError(
+                    f"multisig.signers[{index}]: invalid principal {entry!r}"
+                )
+            if principal not in cleaned:
+                cleaned.append(principal)
+        return cleaned
+
+    @field_validator("threshold")
+    @classmethod
+    def validate_threshold(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("multisig.threshold must be >= 1")
         return value
 
 

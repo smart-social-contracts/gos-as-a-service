@@ -107,6 +107,7 @@ class DeployContext:
     dns_timeout_min: int = 20
     skip_dns_wait: bool = False
     keep_env_file: bool = False
+    reinstall_backends: bool = False
     work_dir: Path | None = None
     http: requests.Session | None = None
     seed_artifacts: list[SeedArtifactSummary] = field(default_factory=list)
@@ -355,6 +356,15 @@ def _find_repo_root(ctx: DeployContext) -> Path:
     return find_gos_repo_root(starts[0])  # raise the canonical error
 
 
+def _backend_install_mode(canister_id: str, ctx: DeployContext) -> str:
+    # reinstall wipes canister state (heap + stable); use only when a clean
+    # slate is intended — the pipeline re-seeds platform state afterwards,
+    # but registry user data (realms, credits, slugs) is NOT restored.
+    if ctx.reinstall_backends:
+        return "reinstall"
+    return dfx.detect_install_mode(canister_id, ctx.network, identity=ctx.identity)
+
+
 def phase_install_backends(descriptor: Descriptor, ctx: DeployContext) -> None:
     platform_version, release_repo = _platform_release(descriptor)
     work = _work_dir(ctx)
@@ -394,7 +404,7 @@ def phase_install_backends(descriptor: Descriptor, ctx: DeployContext) -> None:
                 session=ctx.http,
             )
 
-        mode = dfx.detect_install_mode(canister_id, ctx.network, identity=ctx.identity)
+        mode = _backend_install_mode(canister_id, ctx)
         init_arg = _opt_text_init_arg(init_json) if init_json else "(null)"
         console.print(f"  {canister}: {mode} ({wasm.name})")
         dfx.install_wasm(
@@ -416,7 +426,7 @@ def phase_install_backends(descriptor: Descriptor, ctx: DeployContext) -> None:
             casals_src=ctx.casals_src,
             session=ctx.http,
         )
-        mode = dfx.detect_install_mode(casals_fr_id, ctx.network, identity=ctx.identity)
+        mode = _backend_install_mode(casals_fr_id, ctx)
         console.print(f"  casals_file_registry: {mode} ({wasm.name})")
         dfx.install_wasm(
             casals_fr_id,
@@ -1212,32 +1222,63 @@ def phase_prime_cycles_snapshot(descriptor: Descriptor, ctx: DeployContext) -> N
 
 
 def phase_configure_multisig(descriptor: Descriptor, ctx: DeployContext) -> None:
+    """Mandatory governance step: configure the orchestra multisig as N-of-M.
+
+    Every ``gaas new`` deploy must finish with a configured multisig before
+    controller topology hands IC control to it. Prefer ``multisig.signers`` from
+    the descriptor (e.g. a single Internet Identity principal for 1-of-1). When
+    empty, fall back to the deployer identity (legacy bootstrap only).
+
+    Always reconciles ``multisig.backend_id`` with the live conductor tree so a
+    stale descriptor ID cannot configure the wrong canister.
+    """
     casals_id = descriptor.canisters.get("casals_backend")
     if not casals_id:
         raise RuntimeError("casals_backend ID required")
 
     deployer = dfx.get_principal(ctx.identity)
-    multisig_id = (descriptor.multisig.backend_id or "").strip()
+    descriptor_id = (descriptor.multisig.backend_id or "").strip()
 
-    if multisig_id:
-        console.print(f"  multisig: adopt {multisig_id}")
-    else:
-        tree = get_tree(casals_id, ctx.network, identity=ctx.identity)
-        multisig_id = _find_canister_id(tree, "multisig")
-        if not multisig_id:
-            raise RuntimeError(
-                "multisig not found in conductor tree; run seed_conductor first"
-            )
+    tree = get_tree(casals_id, ctx.network, identity=ctx.identity)
+    tree_id = _find_canister_id(tree, "multisig")
+    if not tree_id:
+        raise RuntimeError(
+            "multisig not found in conductor tree; run seed_conductor first"
+        )
+
+    if descriptor_id and descriptor_id != tree_id:
+        console.print(
+            f"  [yellow]warning: descriptor multisig.backend_id={descriptor_id} "
+            f"differs from live tree {tree_id}; configuring the live canister[/yellow]"
+        )
+    multisig_id = tree_id
+    if descriptor_id != multisig_id:
         descriptor.set_multisig_backend_id(multisig_id)
         _save_descriptor(descriptor, ctx)
-        console.print(f"  multisig: created {multisig_id}")
+    console.print(f"  multisig: {multisig_id}")
 
+    signers = list(descriptor.multisig.signers or [])
+    threshold = int(descriptor.multisig.threshold or 1)
+    if not signers:
+        signers = [deployer]
+        console.print(
+            "  [yellow]multisig.signers empty — using deployer as sole 1-of-1 signer. "
+            "Set multisig.signers in the descriptor for production governance.[/yellow]"
+        )
+    if threshold > len(signers):
+        raise RuntimeError(
+            f"multisig.threshold ({threshold}) exceeds signer count ({len(signers)})"
+        )
+
+    console.print(
+        f"  configuring {threshold}-of-{len(signers)}: {', '.join(signers)}"
+    )
     configure_multisig_signers(
         multisig_id,
-        [deployer],
+        signers,
         ctx.network,
         identity=ctx.identity,
-        threshold=1,
+        threshold=threshold,
     )
 
 

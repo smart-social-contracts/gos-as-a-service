@@ -74,6 +74,7 @@ def _run_deploy_pipeline(
     dns_timeout_min: int = 20,
     skip_dns_wait: bool = False,
     keep_env_file: bool = False,
+    reinstall_backends: bool = False,
 ) -> None:
     ctx = DeployContext(
         identity=identity,
@@ -85,6 +86,7 @@ def _run_deploy_pipeline(
         dns_timeout_min=dns_timeout_min,
         skip_dns_wait=skip_dns_wait,
         keep_env_file=keep_env_file,
+        reinstall_backends=reinstall_backends,
     )
     total = len(PHASES)
     run_log = start_run_log(descriptor.name)
@@ -192,6 +194,15 @@ def new_command(
         "--keep-env-file",
         help="Keep gaas-env.json at the repo root after frontend build",
     ),
+    reinstall_backends: bool = typer.Option(
+        False,
+        "--reinstall-backends",
+        help=(
+            "Wipe backend canisters (registry, installer, conductor) via --mode reinstall "
+            "instead of upgrading in place; platform state is re-seeded, but registry user "
+            "data (realms, credits, slugs) is permanently reset"
+        ),
+    ),
     can_test_mode: bool = typer.Option(
         False,
         "--can-test-mode",
@@ -233,6 +244,7 @@ def new_command(
                 dns_timeout_min=dns_timeout_min,
                 skip_dns_wait=skip_dns_wait,
                 keep_env_file=keep_env_file,
+                reinstall_backends=reinstall_backends,
             )
         else:
             cmd_identity = resolved_identity
@@ -262,6 +274,7 @@ def new_command(
         dns_timeout_min=dns_timeout_min,
         skip_dns_wait=skip_dns_wait,
         keep_env_file=keep_env_file,
+        reinstall_backends=reinstall_backends,
     )
 
 

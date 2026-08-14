@@ -36,7 +36,11 @@
     "approver_principal": "ah6ac-cc73l-bb2zc-ni7bh-jov4q-roeyj-6k2ob-mkg5j-pequi-vuaa6-2ae"
   },
   "multisig": {
-    "backend_id": "3iqx7-eyaaa-aaaae-agyxq-cai"
+    "backend_id": "rvkmh-liaaa-aaaae-agzoq-cai",
+    "signers": [
+      "3itd6-2sx7g-vefdk-xhebm-fucot-llay5-lhqd6-pkjac-m7mkf-vhwqq-fqe"
+    ],
+    "threshold": 1
   },
   "services": {
     "billing_url": "https://billing.realmsgos.dev",
