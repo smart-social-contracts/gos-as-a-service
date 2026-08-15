@@ -11,10 +11,13 @@
   import { authSession } from '$lib/stores/authSession.js';
   import { CONFIG } from '$lib/config.js';
   import { fetchRealmRuntimeFlags } from '$lib/realm-runtime-flags.js';
+  import { fetchDeploymentJobsFromInstaller } from '$lib/installer-queue.js';
+  import { isUnknownSlugError, findJobForSlug, unknownSlugView } from '$lib/unknown-slug.js';
 
   let iframeEl;
   let loading = true;
   let error = '';
+  let slugView = null;
   let realm = null;
   let bridge = null;
   /** When true the embedded realm handles auth locally (test-mode II bypass). */
@@ -27,6 +30,7 @@
   // Bare /r/<slug> always loads the realm root. The realm decides
   // member-dashboard vs public-dashboard vs /join. Deep paths are preserved.
   let rootIframePath = '/';
+  let creatingPollTimer = null;
 
   $: slug = $page.params.slug;
   $: subPath = $page.url.pathname.replace(new RegExp(`^/r/${slug}`), '') || '/';
@@ -46,9 +50,58 @@
 
   onDestroy(() => {
     unsubAuth();
+    stopCreatingPoll();
     bridge?.dispose?.();
     portalDocumentFocus.set(null);
   });
+
+  $: if (browser && slugView?.kind === 'creating') {
+    startCreatingPoll();
+  } else {
+    stopCreatingPoll();
+  }
+
+  function stopCreatingPoll() {
+    if (creatingPollTimer) {
+      clearInterval(creatingPollTimer);
+      creatingPollTimer = null;
+    }
+  }
+
+  function startCreatingPoll() {
+    if (creatingPollTimer) return;
+    creatingPollTimer = setInterval(() => {
+      void pollCreatingSlug();
+    }, 5000);
+  }
+
+  async function pollCreatingSlug() {
+    try {
+      const data = await resolveSlug(slug, { force: true });
+      slugView = null;
+      error = '';
+      stopCreatingPoll();
+      await applyResolved(data);
+    } catch (e) {
+      if (isUnknownSlugError(e, slug)) {
+        let jobs = [];
+        try {
+          jobs = await fetchDeploymentJobsFromInstaller();
+        } catch (_) {
+          jobs = [];
+        }
+        slugView = unknownSlugView(slug, findJobForSlug(jobs, slug));
+        error = slugView.title;
+        if (slugView.kind !== 'creating') {
+          stopCreatingPoll();
+        }
+      } else {
+        slugView = null;
+        error = e instanceof Error ? e.message : String(e);
+        stopCreatingPoll();
+      }
+    }
+  }
 
   async function handlePortalLogin() {
     loggingIn = true;
@@ -69,28 +122,46 @@
     }
   }
 
+  async function applyResolved(data) {
+    realm = {
+      slug: data.slug,
+      backendCanisterId: data.backend_canister_id,
+      frontendCanisterId: data.frontend_canister_id,
+      portalUrl: data.portal_url,
+      loaderProfile: data.loader_profile || 'realms-iframe-v1',
+      env: CONFIG.deploy_queue_network
+    };
+    const flags = await fetchRealmRuntimeFlags(data.backend_canister_id);
+    realmIIBypass = !!flags?.test_mode_ii_bypass;
+    if (realmIIBypass) {
+      needsLogin = false;
+    }
+  }
+
   async function loadRealm() {
     loading = true;
     error = '';
+    slugView = null;
+    stopCreatingPoll();
     bridge?.dispose?.();
     bridge = null;
     try {
       const data = await resolveSlug(slug);
-      realm = {
-        slug: data.slug,
-        backendCanisterId: data.backend_canister_id,
-        frontendCanisterId: data.frontend_canister_id,
-        portalUrl: data.portal_url,
-        loaderProfile: data.loader_profile || 'realms-iframe-v1',
-        env: CONFIG.deploy_queue_network
-      };
-      const flags = await fetchRealmRuntimeFlags(data.backend_canister_id);
-      realmIIBypass = !!flags?.test_mode_ii_bypass;
-      if (realmIIBypass) {
-        needsLogin = false;
-      }
+      await applyResolved(data);
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      if (isUnknownSlugError(e, slug)) {
+        let jobs = [];
+        try {
+          jobs = await fetchDeploymentJobsFromInstaller();
+        } catch (_) {
+          jobs = [];
+        }
+        slugView = unknownSlugView(slug, findJobForSlug(jobs, slug));
+        error = slugView.title;
+      } else {
+        slugView = null;
+        error = e instanceof Error ? e.message : String(e);
+      }
     } finally {
       loading = false;
     }
@@ -115,7 +186,9 @@
         requestAssistantOpen();
       }
     });
-    bridge.syncPath(iframePath);
+    // Do not syncPath here. The iframe already loaded `iframeSrc` (including
+    // portal=1/slug). A host `/join` sync used to `goto('/join')` inside the
+    // frame, strip those params, and reload in a loop.
   }
 
   $: iframePath = subPath === '/' ? rootIframePath : subPath;
@@ -138,8 +211,25 @@
     </div>
   {:else if error}
     <div class="error-box">
-      <p>{error}</p>
-      <a href="/">Back to registry</a>
+      {#if slugView}
+        <p class="error-title">{slugView.title}</p>
+        {#if slugView.body}
+          <p class="error-body">{slugView.body}</p>
+        {/if}
+        {#if slugView.href}
+          <a href={slugView.href}>Open deployment</a>
+        {/if}
+        <a href="/">Back to registry</a>
+        {#if slugView.kind === 'missing'}
+          <a href="/create-realm">Create a realm</a>
+        {/if}
+        {#if slugView.kind === 'creating'}
+          <p class="error-checking">Checking again…</p>
+        {/if}
+      {:else}
+        <p class="error-generic">{error}</p>
+        <a href="/">Back to registry</a>
+      {/if}
     </div>
   {:else if realm}
     <div class="frame-wrap">
@@ -288,8 +378,42 @@
     font-size: 0.85rem;
   }
   .error-box {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
     padding: 2rem;
     text-align: center;
+    background: #fff;
+  }
+  .error-title {
+    margin: 0;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: #525252;
+  }
+  .error-body {
+    margin: 0;
+    font-size: 0.875rem;
+    color: #737373;
+  }
+  .error-generic {
+    margin: 0;
     color: #f87171;
+  }
+  .error-checking {
+    margin: 0.5rem 0 0;
+    font-size: 0.8125rem;
+    color: #a3a3a3;
+  }
+  .error-box a {
+    font-size: 0.875rem;
+    color: #2563eb;
+    text-decoration: none;
+  }
+  .error-box a:hover {
+    text-decoration: underline;
   }
 </style>
