@@ -880,18 +880,23 @@ def schedule_registration(job_id_val: str):
                     jlog(job_id_val).error(f"install_branding_from_registry error: {br_err}")
 
             if frontend_id and backend_id:
-                try:
-                    pin_arg = '(record { prefix = "/custom/" })'
-                    pin_result: CallResult = yield ic.call_raw(
-                        Principal.from_str(frontend_id), "pin_directory",
-                        ic.candid_encode(pin_arg), 0,
-                    )
-                    if isinstance(pin_result, dict) and "Err" in pin_result:
-                        jlog(job_id_val).warning(f"pin_directory failed (non-fatal): {pin_result['Err']}")
-                    else:
-                        jlog(job_id_val).info("pinned /custom/ on frontend")
-                except Exception as pin_err:
-                    jlog(job_id_val).warning(f"pin_directory error (non-fatal): {pin_err}")
+                for prefix in ("/custom/", "/ext/"):
+                    try:
+                        pin_arg = f'(record {{ prefix = "{prefix}" }})'
+                        pin_result: CallResult = yield ic.call_raw(
+                            Principal.from_str(frontend_id), "pin_directory",
+                            ic.candid_encode(pin_arg), 0,
+                        )
+                        if isinstance(pin_result, dict) and "Err" in pin_result:
+                            jlog(job_id_val).warning(
+                                f"pin_directory {prefix} failed (non-fatal): {pin_result['Err']}"
+                            )
+                        else:
+                            jlog(job_id_val).info(f"pinned {prefix} on frontend")
+                    except Exception as pin_err:
+                        jlog(job_id_val).warning(
+                            f"pin_directory {prefix} error (non-fatal): {pin_err}"
+                        )
 
             # Store admin invite hash if present in manifest
             admin_invite_hash = realm_info.get("admin_invite_hash", "")
