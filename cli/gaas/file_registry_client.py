@@ -114,6 +114,29 @@ def namespace_published(
     return False
 
 
+def delete_file(
+    registry_id: str,
+    namespace: str,
+    registry_path: str,
+    network: str,
+    *,
+    identity: str | None = None,
+) -> bool:
+    payload = json.dumps({"namespace": namespace, "path": registry_path})
+    raw = dfx.canister_call(
+        registry_id,
+        "delete_file",
+        dfx.candid_text_arg(payload),
+        network,
+        identity=identity,
+    )
+    try:
+        result = json.loads(raw)
+        return isinstance(result, dict) and result.get("ok") is True
+    except json.JSONDecodeError:
+        return False
+
+
 def upload_file(
     registry_id: str,
     namespace: str,
@@ -125,11 +148,14 @@ def upload_file(
     existing_hashes: dict[str, str] | None = None,
 ) -> str:
     """Return uploaded, skipped, or failed."""
+    size = local_path.stat().st_size
+    if size == 0:
+        return "failed"
+
     if existing_hashes and registry_path in existing_hashes:
         if existing_hashes[registry_path] == sha256_file(local_path):
             return "skipped"
-
-    size = local_path.stat().st_size
+        delete_file(registry_id, namespace, registry_path, network, identity=identity)
     total_chunks = max(1, (size + CHUNK_SIZE - 1) // CHUNK_SIZE)
     content_type = _content_type(registry_path)
 

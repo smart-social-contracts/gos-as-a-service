@@ -1,6 +1,8 @@
 """MIME type mapping for file_registry uploads (realms#292)."""
 
-from gaas.file_registry_client import _content_type
+from pathlib import Path
+
+from gaas.file_registry_client import _content_type, upload_file
 
 
 def test_svg_content_type() -> None:
@@ -9,6 +11,21 @@ def test_svg_content_type() -> None:
 
 def test_ic_assets_json5_content_type() -> None:
     assert _content_type("frontend/dist/.ic-assets.json5") == "application/json"
+
+
+def test_upload_file_rejects_zero_byte_file(tmp_path: Path) -> None:
+    empty = tmp_path / "empty.wasm"
+    empty.write_bytes(b"")
+    assert (
+        upload_file(
+            "registry-id",
+            "ns",
+            "empty.wasm",
+            empty,
+            "ic",
+        )
+        == "failed"
+    )
 
 
 def test_common_frontend_assets() -> None:

@@ -8,10 +8,36 @@ from pathlib import Path
 import pytest
 
 from gaas import conductor_seed
-from gaas.conductor_seed import platform_sheet
+from gaas.conductor_seed import orchestration_template_actions, platform_sheet
 from gaas.descriptor import Descriptor
 from gaas.platform import PlatformError, find_local_assetstorage_wasm
 from tests.conftest import SAMPLE_DESCRIPTOR
+
+
+def test_orchestration_template_actions_skips_when_both_match() -> None:
+    digest = "abc123"
+    needs_upload, needs_authorize = orchestration_template_actions(digest, digest, digest)
+    assert (needs_upload, needs_authorize) == (False, False)
+
+
+@pytest.mark.parametrize(
+    "registry_hash",
+    [None, "", "wrong"],
+)
+def test_orchestration_template_actions_uploads_when_registry_stale(
+    registry_hash: str | None,
+) -> None:
+    digest = "abc123"
+    needs_upload, needs_authorize = orchestration_template_actions(digest, registry_hash, digest)
+    assert needs_upload is True
+    assert needs_authorize is False
+
+
+def test_orchestration_template_actions_authorizes_when_registry_matches() -> None:
+    digest = "abc123"
+    needs_upload, needs_authorize = orchestration_template_actions("wrong", digest, digest)
+    assert needs_upload is False
+    assert needs_authorize is True
 
 
 def test_platform_sheet_has_infra_and_deployments() -> None:

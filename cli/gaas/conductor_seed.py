@@ -24,7 +24,7 @@ CASALS_TEMPLATES_NAMESPACE = "casals-templates"
 # Latest orchestration template versions from Casals seed/templates.json.
 ORCHESTRATION_TEMPLATES: tuple[tuple[str, str, str], ...] = (
     ("orchestration-baton", "1.3.0", "orchestration-baton@1.3.0.wasm.gz"),
-    ("orchestration-multisig", "1.1.0", "orchestration-multisig@1.1.0.wasm.gz"),
+    ("orchestration-multisig", "1.2.0", "orchestration-multisig@1.2.0.wasm.gz"),
 )
 
 
@@ -185,6 +185,17 @@ def _gunzip_bytes(path: Path) -> bytes:
         return handle.read()
 
 
+def orchestration_template_actions(
+    authorized_hash: str | None,
+    registry_hash: str | None,
+    digest: str,
+) -> tuple[bool, bool]:
+    """Return (needs_upload, needs_authorize)."""
+    needs_upload = (registry_hash or "") != digest
+    needs_authorize = (authorized_hash or "") != digest
+    return needs_upload, needs_authorize
+
+
 def _upload_wasm_to_registry(
     registry_id: str,
     namespace: str,
@@ -230,46 +241,63 @@ def seed_orchestration_templates(
         )
 
     existing = list_authorized_keys(casals_id, network, identity=identity)
+    registry_hashes = fetch_namespace_hashes(
+        registry_id, CASALS_TEMPLATES_NAMESPACE, network, identity=identity
+    )
     for family, version, filename in ORCHESTRATION_TEMPLATES:
         key = f"{family}@{version}"
         registry_path = key.replace("@", "@") + ".wasm" if "@" in filename else f"{family}.wasm"
         if family == "orchestration-baton":
             registry_path = "orchestration-baton@1.3.0.wasm"
         elif family == "orchestration-multisig":
-            registry_path = "orchestration-multisig@1.1.0.wasm"
+            registry_path = "orchestration-multisig@1.2.0.wasm"
 
         gz_path = _resolve_template_wasm(casals_root, filename)
         wasm_bytes = _gunzip_bytes(gz_path)
         digest = hashlib.sha256(wasm_bytes).hexdigest()
-        if existing.get(key) == digest:
-            console.print(f"  {key}: already authorized")
+        needs_upload, needs_authorize = orchestration_template_actions(
+            existing.get(key), registry_hashes.get(registry_path), digest
+        )
+        if not needs_upload and not needs_authorize:
+            console.print(f"  {key}: already authorized and on registry")
             continue
 
-        console.print(f"  uploading + authorizing {key}...")
-        _upload_wasm_to_registry(
-            registry_id,
-            CASALS_TEMPLATES_NAMESPACE,
-            registry_path,
-            wasm_bytes,
-            network,
-            identity=identity,
-        )
-        _casals_call(
-            casals_id,
-            "add_authorized_wasm",
-            {
-                "key": family,
-                "version": version,
-                "registry_namespace": CASALS_TEMPLATES_NAMESPACE,
-                "registry_path": registry_path,
-                "wasm_hash": digest,
-                "kind": "backend",
-                "wasm_type": "baton" if family == "orchestration-baton" else "multisig",
-                "description": f"GaaS-seeded {key}",
-            },
-            network,
-            identity=identity,
-        )
+        if needs_upload:
+            if not needs_authorize:
+                console.print(
+                    f"  {key}: re-uploading (registry hash missing or wrong)..."
+                )
+            else:
+                console.print(f"  uploading + authorizing {key}...")
+            _upload_wasm_to_registry(
+                registry_id,
+                CASALS_TEMPLATES_NAMESPACE,
+                registry_path,
+                wasm_bytes,
+                network,
+                identity=identity,
+            )
+            registry_hashes[registry_path] = digest
+        elif needs_authorize:
+            console.print(f"  authorizing {key}...")
+
+        if needs_authorize:
+            _casals_call(
+                casals_id,
+                "add_authorized_wasm",
+                {
+                    "key": family,
+                    "version": version,
+                    "registry_namespace": CASALS_TEMPLATES_NAMESPACE,
+                    "registry_path": registry_path,
+                    "wasm_hash": digest,
+                    "kind": "backend",
+                    "wasm_type": "baton" if family == "orchestration-baton" else "multisig",
+                    "description": f"GaaS-seeded {key}",
+                },
+                network,
+                identity=identity,
+            )
 
 
 def ensure_assetstorage_wasm(
