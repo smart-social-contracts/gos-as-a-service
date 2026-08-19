@@ -68,6 +68,11 @@
     "showing": "显示 {filtered} / {total} 个领域",
     "users": "{count} 位用户"
   },
+  "demo_banner": {
+    "title": "测试模式已启用",
+    "description": "此应用正在测试模式下运行。某些功能的行为可能与生产环境不同。",
+    "dismiss_label": "关闭测试模式通知"
+  },
   "footer": {
     "built_on_ic": "基于互联网计算机构建",
     "local_deployment": "本地部署",

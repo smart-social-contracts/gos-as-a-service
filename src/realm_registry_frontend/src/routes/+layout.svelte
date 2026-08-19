@@ -6,6 +6,7 @@
   import { initI18n } from '$lib/i18n';
   import { ensureRegistryRuntimeFlags } from '$lib/stores/registryRuntimeFlags.js';
   import { syncAuthSession } from '$lib/stores/authSession.js';
+  import TestModeBanner from '$lib/components/TestModeBanner.svelte';
   import RegistryAssistant from '$lib/components/RegistryAssistant.svelte';
   import DeployProgressModal from '$lib/components/DeployProgressModal.svelte';
   import { assistantChrome } from '$lib/assistant-chrome.js';
@@ -48,8 +49,10 @@
 </script>
 
 {#if browser && i18nReady}
+  <TestModeBanner />
   <div
     class="app-shell"
+    class:full-viewport={pathLocksScroll($page.url.pathname)}
     class:assistant-docked={assistantDockPadding}
     class:assistant-resizing={$assistantChrome.resizing}
     style="--assistant-width: {$assistantChrome.width}px"
@@ -80,7 +83,11 @@
 
   .app-shell {
     min-height: 100vh;
+    padding-top: var(--test-mode-banner-height, 0px);
     transition: padding-right 0.25s ease;
+  }
+  .app-shell.full-viewport {
+    padding-top: 0;
   }
   .app-shell.assistant-docked {
     padding-right: var(--assistant-width);

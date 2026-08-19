@@ -63,6 +63,11 @@
     "showing": "Showing {filtered} of {total} realms",
     "users": "{count} users"
   },
+  "demo_banner": {
+    "title": "Test Mode Active",
+    "description": "This application is running in test mode. Some features may behave differently than in production.",
+    "dismiss_label": "Dismiss test mode notice"
+  },
   "footer": {
     "built_on_ic": "Built on the Internet Computer",
     "local_deployment": "Local deployment",

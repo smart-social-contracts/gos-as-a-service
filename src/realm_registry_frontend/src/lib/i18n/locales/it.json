@@ -68,6 +68,11 @@
     "showing": "Visualizzazione di {filtered} su {total} reami",
     "users": "{count} utenti"
   },
+  "demo_banner": {
+    "title": "Modalità test attiva",
+    "description": "Questa applicazione è in esecuzione in modalità test. Alcune funzionalità possono comportarsi diversamente rispetto alla produzione.",
+    "dismiss_label": "Chiudi avviso modalità test"
+  },
   "footer": {
     "built_on_ic": "Costruito su Internet Computer",
     "local_deployment": "Distribuzione locale",

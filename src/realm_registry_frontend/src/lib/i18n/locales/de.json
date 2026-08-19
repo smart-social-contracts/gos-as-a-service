@@ -68,6 +68,11 @@
     "showing": "Zeige {filtered} von {total} Realms",
     "users": "{count} Benutzer"
   },
+  "demo_banner": {
+    "title": "Testmodus aktiv",
+    "description": "Diese Anwendung läuft im Testmodus. Einige Funktionen können sich anders verhalten als in der Produktion.",
+    "dismiss_label": "Hinweis zum Testmodus schließen"
+  },
   "footer": {
     "built_on_ic": "Aufgebaut auf dem Internet Computer",
     "local_deployment": "Lokale Bereitstellung",

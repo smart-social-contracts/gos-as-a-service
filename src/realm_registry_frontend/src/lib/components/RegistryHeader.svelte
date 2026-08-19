@@ -304,7 +304,7 @@
 <style>
   .registry-header {
     position: fixed;
-    top: 0;
+    top: var(--test-mode-banner-height, 0px);
     left: 0;
     right: 0;
     z-index: 200;
@@ -723,7 +723,7 @@
     .hub-panel {
       position: fixed;
       left: 50%;
-      top: calc(0.75rem + 56px + 0.55rem);
+      top: calc(var(--test-mode-banner-height, 0px) + 0.75rem + 56px + 0.55rem);
       transform: translateX(-50%);
       width: min(320px, calc(100vw - 1.5rem));
       min-width: min(280px, calc(100vw - 1.5rem));

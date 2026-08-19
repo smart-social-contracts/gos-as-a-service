@@ -68,6 +68,11 @@
     "showing": "Mostrando {filtered} de {total} reinos",
     "users": "{count} usuarios"
   },
+  "demo_banner": {
+    "title": "Modo de prueba activo",
+    "description": "Esta aplicación se ejecuta en modo de prueba. Algunas funciones pueden comportarse de forma diferente a la producción.",
+    "dismiss_label": "Descartar aviso de modo de prueba"
+  },
   "footer": {
     "built_on_ic": "Construido en Internet Computer",
     "local_deployment": "Despliegue local",

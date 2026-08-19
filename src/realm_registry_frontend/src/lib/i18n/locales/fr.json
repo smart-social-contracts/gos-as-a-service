@@ -68,6 +68,11 @@
     "showing": "Affichage de {filtered} sur {total} royaumes",
     "users": "{count} utilisateurs"
   },
+  "demo_banner": {
+    "title": "Mode test actif",
+    "description": "Cette application fonctionne en mode test. Certaines fonctionnalités peuvent se comporter différemment qu'en production.",
+    "dismiss_label": "Fermer l'avertissement du mode test"
+  },
   "footer": {
     "built_on_ic": "Construit sur l'Internet Computer",
     "local_deployment": "Déploiement local",
