@@ -8,13 +8,15 @@ const BRIDGE_VERSION = '1';
  * Host-side portal bridge: MessageChannel handshake + scoped delegation to iframe.
  * @param {HTMLIFrameElement} iframe
  * @param {{ slug: string, backendCanisterId: string, frontendCanisterId: string, env?: string }} realm
- * @param {{ onAuthState?: (needsLogin: boolean) => void, onFocus?: (focus: { source: string, uri: string, label?: string } | null) => void, onAssistantOpen?: () => void }} [opts]
+ * @param {{ onAuthState?: (needsLogin: boolean) => void, onFocus?: (focus: { source: string, uri: string, label?: string } | null) => void, onAssistantOpen?: () => void, onUiReady?: () => void }} [opts]
  *   `onAuthState(true)` fires when the iframe asks for a delegation but the
  *   portal has no session (the page should offer II sign-in on this origin);
  *   `onAuthState(false)` fires once a delegation is delivered.
  *   `onFocus` receives document focus pushed from the iframe (`focus:push`);
  *   payload may be null to clear.
  *   `onAssistantOpen` fires when the iframe requests opening the mundus assistant.
+ *   `onUiReady` fires when the embedded realm reports real content on screen
+ *   (`ui:ready`); may never fire on older realm builds — callers need a fallback.
  */
 export function attachPortalBridge(iframe, realm, opts = {}) {
 	let port = null;
@@ -77,6 +79,9 @@ export function attachPortalBridge(iframe, realm, opts = {}) {
 				break;
 			case 'assistant:open':
 				opts.onAssistantOpen?.();
+				break;
+			case 'ui:ready':
+				opts.onUiReady?.();
 				break;
 			default:
 				break;

@@ -1,5 +1,6 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
+  import { fade } from 'svelte/transition';
   import { browser } from '$app/environment';
   import { page } from '$app/stores';
   import { resolveSlug } from '$lib/slug-resolver.js';
@@ -31,6 +32,9 @@
   // member-dashboard vs public-dashboard vs /join. Deep paths are preserved.
   let rootIframePath = '/';
   let creatingPollTimer = null;
+  let iframeLoaded = false;
+  let iframeReady = false;
+  let iframeReadyFallbackTimer = null;
 
   $: slug = $page.params.slug;
   $: subPath = $page.url.pathname.replace(new RegExp(`^/r/${slug}`), '') || '/';
@@ -51,9 +55,31 @@
   onDestroy(() => {
     unsubAuth();
     stopCreatingPoll();
+    clearIframeReadyFallback();
     bridge?.dispose?.();
     portalDocumentFocus.set(null);
   });
+
+  function clearIframeReadyFallback() {
+    if (iframeReadyFallbackTimer) {
+      clearTimeout(iframeReadyFallbackTimer);
+      iframeReadyFallbackTimer = null;
+    }
+  }
+
+  function markIframeReady() {
+    if (iframeReady) return;
+    iframeReady = true;
+    clearIframeReadyFallback();
+  }
+
+  function startIframeReadyFallback() {
+    clearIframeReadyFallback();
+    iframeReadyFallbackTimer = setTimeout(() => {
+      iframeReadyFallbackTimer = null;
+      markIframeReady();
+    }, 10000);
+  }
 
   $: if (browser && slugView?.kind === 'creating') {
     startCreatingPoll();
@@ -142,6 +168,9 @@
     loading = true;
     error = '';
     slugView = null;
+    iframeLoaded = false;
+    iframeReady = false;
+    clearIframeReadyFallback();
     stopCreatingPoll();
     bridge?.dispose?.();
     bridge = null;
@@ -169,6 +198,11 @@
 
   function onIframeLoad() {
     if (!iframeEl || !realm) return;
+    // Fires on every iframe navigation, including in-frame reloads — re-arm
+    // the overlay so a reloaded realm gets the same no-blank-gap treatment.
+    iframeLoaded = true;
+    iframeReady = false;
+    startIframeReadyFallback();
     bridge?.dispose?.();
     bridge = attachPortalBridge(iframeEl, realm, {
       onAuthState: (pending) => {
@@ -184,6 +218,9 @@
       },
       onAssistantOpen: () => {
         requestAssistantOpen();
+      },
+      onUiReady: () => {
+        markIframeReady();
       }
     });
     // Do not syncPath here. The iframe already loaded `iframeSrc` (including
@@ -204,12 +241,7 @@
 </svelte:head>
 
 <div class="portal-shell">
-  {#if loading}
-    <div class="loading-state" role="status" aria-live="polite">
-      <div class="loading-spinner" aria-hidden="true"></div>
-      <p class="loading-label">Loading realm</p>
-    </div>
-  {:else if error}
+  {#if error}
     <div class="error-box">
       {#if slugView}
         <p class="error-title">{slugView.title}</p>
@@ -231,35 +263,48 @@
         <a href="/">Back to registry</a>
       {/if}
     </div>
-  {:else if realm}
-    <div class="frame-wrap">
-      <iframe
-        bind:this={iframeEl}
-        title="Realm {slug}"
-        src={iframeSrc}
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
-        referrerpolicy="no-referrer"
-        on:load={onIframeLoad}
-        class="realm-frame"
-      ></iframe>
-      {#if needsLogin && !realmIIBypass}
-        <div class="login-overlay">
-          <div class="login-card">
-            <h2>Sign in to Realms</h2>
-            <p>
-              One Internet Identity login works across every realm on this portal.
-              You'll return to <strong>{slug}</strong> automatically.
-            </p>
-            <button class="login-btn" on:click={handlePortalLogin} disabled={loggingIn}>
-              {loggingIn ? 'Waiting for Internet Identity…' : 'Sign in with Internet Identity'}
-            </button>
-            {#if loginError}
-              <p class="login-error">{loginError}</p>
-            {/if}
+  {:else if realm || loading}
+    {#if realm}
+      <div class="frame-wrap">
+        <iframe
+          bind:this={iframeEl}
+          title="Realm {slug}"
+          src={iframeSrc}
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
+          referrerpolicy="no-referrer"
+          on:load={onIframeLoad}
+          class="realm-frame"
+        ></iframe>
+        {#if needsLogin && !realmIIBypass}
+          <div class="login-overlay">
+            <div class="login-card">
+              <h2>Sign in to Realms</h2>
+              <p>
+                One Internet Identity login works across every realm on this portal.
+                You'll return to <strong>{slug}</strong> automatically.
+              </p>
+              <button class="login-btn" on:click={handlePortalLogin} disabled={loggingIn}>
+                {loggingIn ? 'Waiting for Internet Identity…' : 'Sign in with Internet Identity'}
+              </button>
+              {#if loginError}
+                <p class="login-error">{loginError}</p>
+              {/if}
+            </div>
           </div>
-        </div>
-      {/if}
-    </div>
+        {/if}
+      </div>
+    {/if}
+    {#if loading || (realm && !iframeReady)}
+      <div
+        class="loading-overlay"
+        role="status"
+        aria-live="polite"
+        transition:fade={{ duration: 300 }}
+      >
+        <div class="loading-spinner" aria-hidden="true"></div>
+        <p class="loading-label">{iframeLoaded ? 'Preparing realm…' : 'Loading realm'}</p>
+      </div>
+    {/if}
   {/if}
 </div>
 
@@ -273,6 +318,7 @@
   }
 
   .portal-shell {
+    position: relative;
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -299,8 +345,10 @@
     display: block;
     background: #fff;
   }
-  .loading-state {
-    flex: 1;
+  .loading-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
     display: flex;
     flex-direction: column;
     align-items: center;
