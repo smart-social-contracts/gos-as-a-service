@@ -413,12 +413,14 @@ def test_installer_config_json_includes_ids() -> None:
     data["canisters"] = {
         "realm_registry_backend": VALID_CANISTER_ID,
         "file_registry": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aab",
+        "marketplace_backend": "ccccc-ccccc-ccccc-ccccc-ccccc-ccc",
         "casals_backend": "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
     }
     desc = Descriptor.model_validate(data)
     payload = json.loads(_installer_config_json(desc))
     assert payload["registry_backend_id"] == VALID_CANISTER_ID
     assert payload["file_registry_id"] == "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aab"
+    assert payload["marketplace_id"] == "ccccc-ccccc-ccccc-ccccc-ccccc-ccc"
     assert payload["casals_canister_id"] == "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb"
     assert payload["portal_url"] == "https://test.gos.earth"
     assert payload["provision_via_casals"] is True

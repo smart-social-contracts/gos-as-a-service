@@ -1,6 +1,10 @@
 """Post-install bootstrap helpers for the in-realm setup wizard."""
 
-from installer_config import configured_file_registry_id, configured_portal_base
+from installer_config import (
+    configured_file_registry_id,
+    configured_marketplace_id,
+    configured_portal_base,
+)
 
 
 def _resolve_file_registry_canister_id(manifest: dict) -> str:
@@ -20,6 +24,8 @@ def _resolve_marketplace_canister_id(manifest: dict) -> str:
     return (
         (manifest.get("marketplace_canister_id") or "").strip()
         or (infra.get("marketplace_canister_id") or "").strip()
+        or configured_marketplace_id(manifest.get("network", ""))
+        or ""
     )
 
 

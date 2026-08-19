@@ -13,6 +13,7 @@ from installer_config import (
     InstallerConfig,
     apply_installer_config,
     configured_file_registry_id,
+    configured_marketplace_id,
     installer_config_payload,
 )
 
@@ -22,6 +23,12 @@ _FILE_REGISTRY_IDS = {
     "staging": "iebdk-kqaaa-aaaau-agoxq-cai",
     "demo": "vi64l-3aaaa-aaaae-qj4va-cai",
     "test": "uq2mu-kaaaa-aaaah-avqcq-cai",
+}
+
+_MARKETPLACE_IDS = {
+    "test": "2wldc-niaaa-aaaad-qlxga-cai",
+    "demo": "ehyfg-wyaaa-aaaae-qg3qq-cai",
+    "staging": "jji3o-uyaaa-aaaah-qreja-cai",
 }
 
 
@@ -38,12 +45,27 @@ def test_defaults_use_hardcoded_file_registry_per_network():
     assert configured_file_registry_id("demo") == _FILE_REGISTRY_IDS["demo"]
 
 
+def test_defaults_use_hardcoded_marketplace_per_network():
+    _reset_installer_config()
+    assert configured_marketplace_id("test") == _MARKETPLACE_IDS["test"]
+    assert configured_marketplace_id("demo") == _MARKETPLACE_IDS["demo"]
+    assert configured_marketplace_id("staging") == _MARKETPLACE_IDS["staging"]
+
+
 def test_configure_overrides_file_registry_id():
     _reset_installer_config()
     apply_installer_config({"file_registry_id": "custom-fr-id"})
     assert configured_file_registry_id("test") == "custom-fr-id"
     payload = installer_config_payload()
     assert payload["file_registry_id"] == "custom-fr-id"
+
+
+def test_configure_overrides_marketplace_id():
+    _reset_installer_config()
+    apply_installer_config({"marketplace_id": "custom-mp"})
+    assert configured_marketplace_id("test") == "custom-mp"
+    payload = installer_config_payload()
+    assert payload["marketplace_id"] == "custom-mp"
 
 
 def test_configure_maps_registry_backend_id():

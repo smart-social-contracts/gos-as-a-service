@@ -43,6 +43,8 @@ from bootstrap import (
     resync_extension_frontends_args,
     resolve_legacy_install_lists,
     has_extension_installs,
+    _resolve_file_registry_canister_id,
+    _resolve_marketplace_canister_id,
 )
 from ic_assets import ensure_frame_ancestor, portal_url_to_origin
 from installer_config import (
@@ -766,9 +768,8 @@ def schedule_registration(job_id_val: str):
                 except Exception as founder_err:
                     jlog(job_id_val).error(f"register_founder error: {founder_err}")
 
-            infra = manifest.get("infra") or {}
-            fr_id = infra.get("file_registry_canister_id", "")
-            mp_id = infra.get("marketplace_canister_id", "")
+            fr_id = _resolve_file_registry_canister_id(manifest)
+            mp_id = _resolve_marketplace_canister_id(manifest)
             network = (manifest.get("network") or "").strip()
             can_test_mode = bool(manifest.get("can_test_mode"))
             version = (manifest.get("deploy_version") or "").strip()
@@ -1545,12 +1546,7 @@ def _start_extensions_for_job(job, manifest: dict) -> Async[None]:
     # trusts, and its default approver is its marketplace. A realm that does
     # not know its marketplace yet trusts nobody, so this has to reach the
     # backend before the first install rather than at registration.
-    infra = manifest.get("infra") or {}
-    marketplace_id = (
-        manifest.get("marketplace_canister_id")
-        or infra.get("marketplace_canister_id")
-        or ""
-    )
+    marketplace_id = _resolve_marketplace_canister_id(manifest)
     if not marketplace_id:
         jlog(job.name).warning(
             "no marketplace in manifest: the realm will trust no approver and "

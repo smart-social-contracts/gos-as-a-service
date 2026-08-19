@@ -202,6 +202,20 @@ def test_configure_file_registry_falls_back_to_installer_config():
     assert payload["realm_registry_canister_id"] == "realm-registry-only"
 
 
+def test_configure_marketplace_falls_back_to_network_default():
+    _reset_installer_config()
+    manifest = _bootstrap_manifest(
+        marketplace_canister_id="",
+        infra={"file_registry_canister_id": "file-registry-id"},
+        network="test",
+    )
+    args = configure_canister_ids_args(
+        manifest, manifest["target_canister_id"], manifest["frontend_canister_id"]
+    )
+    payload, _warnings = configure_canister_ids_payload(args)
+    assert payload["marketplace_canister_id"] == "2wldc-niaaa-aaaad-qlxga-cai"
+
+
 def test_ext_manifest_configure_includes_realm_registry():
     ext_manifest = _ext_manifest_for_job(_bootstrap_manifest())
     configure_args = configure_canister_ids_args(

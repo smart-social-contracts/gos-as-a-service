@@ -10,6 +10,12 @@ _FILE_REGISTRY_IDS = {
     "test": "uq2mu-kaaaa-aaaah-avqcq-cai",
 }
 
+_MARKETPLACE_IDS = {
+    "test": "2wldc-niaaa-aaaad-qlxga-cai",
+    "demo": "ehyfg-wyaaa-aaaae-qg3qq-cai",
+    "staging": "jji3o-uyaaa-aaaah-qreja-cai",
+}
+
 
 class InstallerConfig(Entity):
     __alias__ = "key"
@@ -19,6 +25,7 @@ class InstallerConfig(Entity):
     casals_section = String(max_length=64, default="Deployments")
     registry_principal = String(max_length=64, default="")
     file_registry_id = String(max_length=64, default="")
+    marketplace_id = String(max_length=64, default="")
     portal_url = String(max_length=512, default="")
     create_stand_baton = Integer(default=0)
     baton_wasm_key = String(max_length=64, default="orchestration-baton")
@@ -40,6 +47,13 @@ def configured_file_registry_id(network: str = "") -> str:
     return _FILE_REGISTRY_IDS.get((network or "").strip().lower(), "")
 
 
+def configured_marketplace_id(network: str = "") -> str:
+    mid = (get_config().marketplace_id or "").strip()
+    if mid:
+        return mid
+    return _MARKETPLACE_IDS.get((network or "").strip().lower(), "")
+
+
 def configured_portal_base(manifest=None):
     manifest = manifest or {}
     from ic_assets import portal_url_to_origin
@@ -59,6 +73,8 @@ def apply_installer_config(params: dict) -> None:
         cfg.registry_principal = (params.get("registry_principal") or "").strip()
     if "file_registry_id" in params:
         cfg.file_registry_id = (params.get("file_registry_id") or "").strip()
+    if "marketplace_id" in params:
+        cfg.marketplace_id = (params.get("marketplace_id") or "").strip()
     if "casals_canister_id" in params:
         cfg.casals_canister_id = (params.get("casals_canister_id") or "").strip()
     if "casals_section" in params:
@@ -86,6 +102,7 @@ def installer_config_payload() -> dict:
         "success": True,
         "registry_backend_id": cfg.registry_principal or "",
         "file_registry_id": cfg.file_registry_id or "",
+        "marketplace_id": cfg.marketplace_id or "",
         "casals_canister_id": cfg.casals_canister_id or "",
         "casals_section": cfg.casals_section or "Deployments",
         "portal_url": cfg.portal_url or "",

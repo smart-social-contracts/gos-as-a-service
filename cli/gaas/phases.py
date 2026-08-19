@@ -206,6 +206,7 @@ def _installer_config_json(descriptor: Descriptor) -> str:
     payload = {
         "registry_backend_id": canisters.get("realm_registry_backend", ""),
         "file_registry_id": canisters.get("file_registry", ""),
+        "marketplace_id": canisters.get("marketplace_backend", ""),
         "casals_canister_id": canisters.get("casals_backend", ""),
         "casals_section": DEFAULT_CASALS_SECTION,
         "portal_url": _portal_url(descriptor),
