@@ -1458,9 +1458,14 @@ def get_namespace_approval(args: text) -> text:
     return _get_namespace_approval_impl(namespace)
 
 
-@query
+@update
 def get_namespace_approval_icc(namespace: text) -> text:
-    """Inter-canister variant: positional namespace argument."""
+    """Inter-canister variant: positional namespace argument.
+
+    Must be an update: realm install/bootstrap runs as an update, and
+    inter-canister calls from updates are updates. A query-only method
+    is rejected with IC0536 (no update method).
+    """
     return _get_namespace_approval_impl(namespace)
 
 
