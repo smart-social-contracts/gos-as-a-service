@@ -10,6 +10,7 @@
   export let panelOpen = false;
 
   let activeTour = null;
+  let introOpen = false;
 
   function isMobile() {
     return window.matchMedia('(max-width: 767px)').matches;
@@ -19,11 +20,35 @@
     return get(_)(key);
   }
 
+  function destroyActiveTour() {
+    activeTour?.destroy();
+    activeTour = null;
+  }
+
+  function openIntro() {
+    if (!browser) return;
+    destroyActiveTour();
+    introOpen = true;
+  }
+
+  function closeIntro() {
+    introOpen = false;
+  }
+
+  function handleIntroKeydown(event) {
+    if (!introOpen) return;
+    if (event.key === 'Escape') closeIntro();
+  }
+
+  async function continueFromIntro() {
+    introOpen = false;
+    await runTour();
+  }
+
   async function runTour() {
     if (!browser) return;
 
-    activeTour?.destroy();
-    activeTour = null;
+    destroyActiveTour();
 
     panelOpen = false;
     requestAssistantClose();
@@ -61,16 +86,218 @@
   }
 
   onMount(() => {
-    registerTourReplay(runTour);
+    registerTourReplay(openIntro);
   });
 
   onDestroy(() => {
-    activeTour?.destroy();
+    destroyActiveTour();
     registerTourReplay(null);
   });
 </script>
 
+<svelte:window on:keydown={handleIntroKeydown} />
+
+{#if introOpen}
+  <div class="intro-overlay-wrap">
+    <button type="button" class="intro-backdrop" aria-label={$_('tour.intro_close')} on:click={closeIntro}></button>
+    <div
+      class="intro-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="registry-tour-intro-title"
+    >
+      <button
+        type="button"
+        class="intro-close"
+        on:click={closeIntro}
+        aria-label={$_('tour.intro_close')}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 6L6 18M6 6l12 12"></path>
+        </svg>
+      </button>
+
+      <h2 id="registry-tour-intro-title" class="intro-title">{$_('tour.intro_title')}</h2>
+      <p class="intro-lead">{$_('tour.intro_lead')}</p>
+      <p class="intro-body">{$_('tour.intro_body')}</p>
+      <p class="intro-link-wrap">
+        <a
+          class="intro-link"
+          href="https://internetcomputer.org"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {$_('tour.intro_ic_link')}
+        </a>
+      </p>
+      <p class="intro-join">{$_('tour.intro_join')}</p>
+
+      <div class="intro-actions">
+        <button type="button" class="intro-btn intro-btn-secondary" on:click={closeIntro}>
+          {$_('tour.intro_close')}
+        </button>
+        <button type="button" class="intro-btn intro-btn-primary" on:click={continueFromIntro}>
+          {$_('tour.intro_continue')}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
+  .intro-overlay-wrap {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    animation: introFadeIn 0.15s ease-out;
+  }
+
+  .intro-backdrop {
+    position: absolute;
+    inset: 0;
+    border: none;
+    padding: 0;
+    margin: 0;
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(2px);
+    cursor: default;
+  }
+
+  .intro-dialog {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 30rem;
+    background: var(--surface, #fff);
+    border: 1px solid var(--border, #e5e5e5);
+    border-radius: 0.875rem;
+    padding: 1.5rem 1.5rem 1.25rem;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    font-family: var(--font-family);
+    animation: introSlideUp 0.2s ease-out;
+  }
+
+  .intro-close {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .intro-close:hover {
+    background: var(--surface-2);
+  }
+
+  .intro-title {
+    margin: 0 2rem 0.75rem 0;
+    font-size: 1.125rem;
+    font-weight: 700;
+    line-height: 1.3;
+    color: var(--text-primary);
+  }
+
+  .intro-lead {
+    margin: 0 0 0.875rem;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    line-height: 1.55;
+    color: var(--text-primary);
+  }
+
+  .intro-body,
+  .intro-join {
+    margin: 0 0 0.875rem;
+    font-size: 0.9375rem;
+    line-height: 1.6;
+    color: var(--text-secondary);
+  }
+
+  .intro-link-wrap {
+    margin: 0 0 0.875rem;
+  }
+
+  .intro-link {
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    color: var(--text-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .intro-link:hover {
+    color: var(--text-secondary);
+  }
+
+  .intro-actions {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+  }
+
+  .intro-btn {
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-family: var(--font-family);
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+  }
+
+  .intro-btn-secondary {
+    background: var(--surface, #fff);
+    color: var(--text-primary);
+    border-color: var(--border, #d4d4d4);
+  }
+
+  .intro-btn-secondary:hover {
+    background: var(--surface-2, #fafafa);
+  }
+
+  .intro-btn-primary {
+    background: var(--text-primary, #171717);
+    color: var(--surface, #fff);
+  }
+
+  .intro-btn-primary:hover {
+    filter: brightness(1.05);
+  }
+
+  @keyframes introFadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes introSlideUp {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
   :global(.registry-tour-popover) {
     font-family: var(--font-family);
     color: var(--text-primary);

@@ -18,6 +18,7 @@
     "close": "Close Realms menu",
     "tour_title": "What is this?"
   },
+
   "modal": {
     "title": "Create a Realm",
     "subtitle": "Deploy your own governance system in minutes",
@@ -81,6 +82,13 @@
     "progress": "{{current}} of {{total}}",
     "start": "Take a tour",
     "replay": "Take a tour",
+    "intro_title": "What is this?",
+    "intro_lead": "You're looking at a new way to organize humanity.",
+    "intro_body": "Every pin on this map is a Governance Operative System (GOS). Unlike traditional governments, a GOS is transparent and auditable — and it runs on the Internet Computer, a decentralized computing network.",
+    "intro_ic_link": "Learn more at internetcomputer.org",
+    "intro_join": "You can join an existing GOS, or spin up a new one of your own.",
+    "intro_continue": "Explore the interface",
+    "intro_close": "Close",
     "globe_title": "Explore the globe",
     "globe_body": "Realms appear on this 3D map. Click a glowing pin to fly there and open its details.",
     "rail_title": "Quick actions",
@@ -116,8 +124,8 @@
     "sign_in_ii": "Sign in with Internet Identity"
   },
   "about": {
-    "title": "About Realms",
-    "body": "You are seeing a map of Governance Operating Systems (GOS, for short).\n\nGOSs are decentralized digital implementations of governance that, as opposed to traditional governments, prevent the opacity that makes corruption and inefficiency of governments possible.\nWe believe that GOSs will play a paramount role in the development of human civilization.\n\nJoin us!",
+    "title": "What is this?",
+    "body": "You're looking at a new way to organize humanity.\n\nEvery pin on this map is a Governance Operative System (GOS). Unlike traditional governments, a GOS is transparent and auditable — and it runs on the Internet Computer, a decentralized computing network (internetcomputer.org).\n\nYou can join an existing GOS, or spin up a new one of your own.",
     "close": "Close",
     "github": "GitHub"
   },
