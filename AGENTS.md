@@ -58,6 +58,7 @@ Every **`gaas new`** deploy must configure the orchestra multisig as **N-of-M** 
 
 3. **`casals.commanders`** (Casals UI section access) **≠** **`multisig.signers`** (IC governance approvals). Grant both when the same operator needs UI access and multisig signing.
 4. gaas reconciles `multisig.backend_id` with the live Casals conductor tree; stale descriptor IDs are overwritten automatically.
+5. **Destroy:** portal/realm teardown uses `delegated_destroy` (installer → Casals) without a multisig vote. Casals Cycles ops destroy for non-controllers goes through Motoko `DestroyStand` / `DestroyCanister`. Multisig `SetCanisterControllers` only works when the multisig is already an IC controller of the target (Casals yes; infra/realms `file_registry` no — see [Controller topology](docs/GAAS_CLI.md#controller-topology-final-phase)).
 
 Full field reference, fallback behaviour, and deploy phase order: [docs/GAAS_CLI.md — `multisig`](docs/GAAS_CLI.md#multisig).
 
