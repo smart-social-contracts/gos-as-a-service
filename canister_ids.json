@@ -37,6 +37,7 @@
   "casals_frontend": {
     "demo": "hvwpv-aiaaa-aaaam-ajddq-cai",
     "staging": "mcqbx-hyaaa-aaaaj-qsarq-cai",
-    "test": "qic2k-baaaa-aaaae-agvga-cai"
+    "test": "qic2k-baaaa-aaaae-agvga-cai",
+    "ic": "qic2k-baaaa-aaaae-agvga-cai"
   }
 }
