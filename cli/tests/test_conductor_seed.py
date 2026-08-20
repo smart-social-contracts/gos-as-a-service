@@ -366,6 +366,73 @@ def test_authorize_gos_entry_frontend_works_without_bundle_namespace(
     assert frontend_calls[0]["registry_namespace"] == "wasm/realm-assetstorage/main"
 
 
+def test_authorize_gos_entry_chora_backend_uses_motoko_wasm_type(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _write_assetstorage_wasm(tmp_path)
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["gos"] = [
+        {
+            "implementation": "chora-gos",
+            "version": "main",
+            "release_repo": "smart-social-contracts/chora",
+            "artifacts": {
+                "backend_wasm_key": "chora-backend",
+                "frontend_wasm_key": "chora-assets",
+            },
+            "loader_profile": "chora-iframe-v1",
+        }
+    ]
+    desc = Descriptor.model_validate(data)
+    entry = desc.gos[0]
+    casals_calls: list[tuple[str, dict]] = []
+
+    monkeypatch.setattr(
+        conductor_seed,
+        "resolve_deploy_version",
+        lambda *_a, **_k: type("R", (), {"catalog_version": "main"})(),
+    )
+    monkeypatch.setattr(
+        conductor_seed,
+        "fetch_namespace_hashes",
+        lambda _rid, ns, *_a, **_k: (
+            {"chora_backend.wasm.gz": "chorahash"}
+            if ns == "wasm/chora-backend/main"
+            else {}
+        ),
+    )
+    monkeypatch.setattr(
+        conductor_seed,
+        "list_authorized_keys",
+        lambda *_a, **_k: {},
+    )
+    monkeypatch.setattr(
+        conductor_seed,
+        "_casals_call",
+        lambda _cid, method, payload, _net, **_: casals_calls.append((method, payload))
+        or {"ok": True},
+    )
+    monkeypatch.setattr(conductor_seed, "upload_file", lambda *_a, **_k: "uploaded")
+
+    conductor_seed.authorize_gos_entry(
+        "qthgp-3yaaa-aaaae-agveq-cai",
+        "uq2mu-kaaaa-aaaah-avqcq-cai",
+        desc,
+        entry,
+        "ic",
+        repo_root=tmp_path,
+    )
+
+    backend_calls = [
+        payload
+        for method, payload in casals_calls
+        if method == "add_authorized_wasm" and payload.get("kind") == "backend"
+    ]
+    assert len(backend_calls) == 1
+    assert backend_calls[0]["wasm_type"] == "motoko"
+    assert backend_calls[0]["key"] == "chora-backend"
+
+
 def test_canister_names_collects_all_registered() -> None:
     tree = {
         "sections": [

@@ -13,6 +13,7 @@ from rich.console import Console
 from gaas import dfx
 from gaas.runlog import get_run_log, run_subprocess
 from gaas.descriptor import Descriptor
+from gaas.known import GOS_IMPLEMENTATIONS
 from gaas.file_registry_client import fetch_namespace_hashes, upload_file
 from gaas.platform import find_local_assetstorage_wasm, resolve_casals_src
 from gaas.versions import resolve_deploy_version
@@ -360,6 +361,9 @@ def authorize_gos_entry(
     backend_hash = backend_hashes[backend_path]
 
     existing = list_authorized_keys(casals_id, network, identity=identity)
+    impl = GOS_IMPLEMENTATIONS.get(entry.implementation)
+    wasm_type = impl.wasm_type if impl else "basilisk"
+
     backend_key = f"{entry.artifacts.backend_wasm_key}@{version}"
     if existing.get(backend_key) == backend_hash:
         backend_status = "already_authorized"
@@ -377,7 +381,7 @@ def authorize_gos_entry(
                 "registry_path": backend_path,
                 "wasm_hash": backend_hash,
                 "kind": "backend",
-                "wasm_type": "basilisk",
+                "wasm_type": wasm_type,
                 "description": f"GaaS {entry.implementation} backend {version}",
             },
             network,

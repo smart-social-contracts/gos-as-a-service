@@ -93,6 +93,7 @@ class GosImplementation:
     artifacts: GosArtifactKeys
     loader_profile: str
     catalog: GosCatalog | None = None
+    wasm_type: str = "basilisk"
     available: bool = True
     unavailable_reason: str | None = None
 
@@ -128,8 +129,8 @@ GOS_IMPLEMENTATIONS: Final[dict[str, GosImplementation]] = {
             frontend_asset="chora_frontend.tar.gz",
         ),
         loader_profile="chora-iframe-v1",
-        available=False,
-        unavailable_reason="in development",
+        wasm_type="motoko",
+        available=True,
     ),
 }
 

@@ -56,6 +56,41 @@ def test_resolve_gos_artifacts_main_build_wiring(tmp_path: Path) -> None:
     assert got_frontend == frontend
 
 
+def test_resolve_gos_artifacts_chora_main_build_wiring(tmp_path: Path) -> None:
+    from gaas.source_build import resolve_gos_artifacts
+
+    backend = tmp_path / "chora_backend.wasm.gz"
+    frontend = tmp_path / "chora_frontend.tar.gz"
+    backend.write_bytes(b"wasm")
+    frontend.write_bytes(b"tar")
+
+    with patch("gaas.source_build.clone_repo") as clone_mock, patch(
+        "gaas.source_build.build_chora_gos_artifacts",
+        return_value=(backend, frontend),
+    ) as build_mock, patch(
+        "gaas.source_build.build_realms_gos_artifacts"
+    ) as realms_build_mock:
+        clone_mock.return_value = tmp_path / "clone"
+        out_dir = tmp_path / "artifacts"
+        got_backend, got_frontend = resolve_gos_artifacts(
+            implementation="chora-gos",
+            version="main",
+            release_repo="smart-social-contracts/chora",
+            backend_asset="chora_backend.wasm.gz",
+            frontend_asset="chora_frontend.tar.gz",
+            dest_dir=out_dir,
+            clone_parent=tmp_path / "src-clone",
+        )
+
+    clone_mock.assert_called_once_with(
+        "smart-social-contracts/chora", tmp_path / "src-clone", refresh=True
+    )
+    build_mock.assert_called_once()
+    realms_build_mock.assert_not_called()
+    assert got_backend == backend
+    assert got_frontend == frontend
+
+
 def test_phase_seed_file_registry_main_namespace_and_catalog(
     descriptor_main: Descriptor, tmp_path: Path
 ) -> None:

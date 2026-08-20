@@ -100,6 +100,68 @@ def _tar_directory(source: Path, archive: Path) -> None:
             tar.add(item, arcname=item.name)
 
 
+def _gzip_wasm_to(dest: Path, wasm_src: Path) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if wasm_src.suffix == ".gz":
+        shutil.copy2(wasm_src, dest)
+        return
+    with wasm_src.open("rb") as src, gzip.open(dest, "wb") as gz:
+        shutil.copyfileobj(src, gz)
+
+
+def _find_chora_backend_wasm(repo_root: Path) -> Path:
+    """Locate Motoko backend wasm after ``icp build chora_backend``.
+
+    icp writes the canonical artifact to ``.icp/cache/artifacts/chora_backend``
+    (raw wasm, no extension). Do not walk replica state under ``.icp``.
+    """
+    icp_root = repo_root / ".icp"
+    canonical = icp_root / "cache" / "artifacts" / "chora_backend"
+    if canonical.is_file():
+        return canonical
+
+    candidates: list[Path] = []
+    for root in (icp_root / "cache" / "artifacts", icp_root / "canisters"):
+        if not root.is_dir():
+            continue
+        for path in root.rglob("*"):
+            if not path.is_file():
+                continue
+            name = path.name
+            if name == "chora_backend" or (
+                "chora_backend" in name and name.endswith((".wasm", ".wasm.gz"))
+            ):
+                candidates.append(path)
+
+    if not candidates:
+        raise SourceBuildError(
+            "Chora backend build did not produce wasm under "
+            f"{icp_root} (expected .icp/cache/artifacts/chora_backend)"
+        )
+    return max(candidates, key=lambda path: path.stat().st_mtime)
+
+
+def build_chora_gos_artifacts(repo_root: Path, dest_dir: Path) -> tuple[Path, Path]:
+    """Build Chora GOS release assets from an icp-cli checkout."""
+    run_subprocess(["icp", "build", "chora_backend"], cwd=repo_root, check=True)
+
+    backend_src = _find_chora_backend_wasm(repo_root)
+
+    fe_dir = repo_root / "src" / "chora_frontend"
+    run_subprocess(["npm", "install"], cwd=fe_dir, check=True)
+    run_subprocess(["npm", "run", "build"], cwd=fe_dir, check=True)
+    dist = fe_dir / "dist"
+    if not dist.is_dir() or not any(dist.iterdir()):
+        raise SourceBuildError(f"Chora frontend build did not produce {dist}")
+
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    backend_out = dest_dir / "chora_backend.wasm.gz"
+    frontend_out = dest_dir / "chora_frontend.tar.gz"
+    _gzip_wasm_to(backend_out, backend_src)
+    _tar_directory(dist, frontend_out)
+    return backend_out, frontend_out
+
+
 def build_realms_gos_artifacts(repo_root: Path, dest_dir: Path) -> tuple[Path, Path]:
     """Build Realms GOS release assets mirroring ``release.yml``."""
     py = ensure_basilisk_python(repo_root)
@@ -199,15 +261,21 @@ def resolve_gos_artifacts(
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     if resolved.source_build:
-        if implementation != "realms-gos":
-            raise ArtifactError(
-                f"source build for {implementation!r} is not supported "
-                f"(only realms-gos)"
-            )
         repo_root = clone_repo(
             release_repo, clone_parent, refresh=resolved.source_build
         )
-        backend_file, frontend_file = build_realms_gos_artifacts(repo_root, dest_dir)
+        if implementation == "realms-gos":
+            backend_file, frontend_file = build_realms_gos_artifacts(
+                repo_root, dest_dir
+            )
+        elif implementation == "chora-gos":
+            backend_file, frontend_file = build_chora_gos_artifacts(
+                repo_root, dest_dir
+            )
+        else:
+            raise ArtifactError(
+                f"source build for {implementation!r} is not supported"
+            )
         if backend_file.name != backend_asset or frontend_file.name != frontend_asset:
             raise SourceBuildError(
                 f"built asset names mismatch: {backend_file.name}, {frontend_file.name}"

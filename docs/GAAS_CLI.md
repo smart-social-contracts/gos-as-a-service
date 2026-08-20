@@ -163,7 +163,7 @@ Schema is enforced by `cli/gaas/descriptor.py` and `cli/gaas/known.py`.
 
 | Field | Required | Default | Description |
 |---|---|---|---|
-| `implementation` | **yes** | — | GOS id. Known: `realms-gos` (available), `chora-gos` (not yet available). |
+| `implementation` | **yes** | — | GOS id. Known: `realms-gos`, `chora-gos` (both available in `known.py`; live env descriptors must list `chora-gos` before the wizard offers it). |
 | `version` | **yes** | — | Release tag `vX.Y.Z` (e.g. `v0.4.0`), `latest` (newest GitHub release at deploy time), or `main` (build from upstream HEAD — unreproducible; recommended for test/local only). |
 | `release_repo` | **yes** | — | GitHub repo slug (`owner/repo`) for release artifacts. |
 | `artifacts.backend_wasm_key` | **yes** | — | File-registry namespace key for backend WASM. Default for `realms-gos`: `realm-backend`. |
@@ -323,10 +323,12 @@ In production (no test mode), gaas loses IC control after this phase — it must
 
 ### Known GOS implementations (`known.py`)
 
-| ID | Label | Default version | Release repo | Loader profile |
-|---|---|---|---|---|
-| `realms-gos` | Realms GOS | `v0.3.1` | `smart-social-contracts/realms` | `realms-iframe-v1` |
-| `chora-gos` | Chora GOS | `v0.1.0` | `smart-social-contracts/chora` | `chora-iframe-v1` (unavailable) |
+| ID | Label | Default version | Release repo | Loader profile | Backend `wasm_type` |
+|---|---|---|---|---|---|
+| `realms-gos` | Realms GOS | `v0.3.1` | `smart-social-contracts/realms` | `realms-iframe-v1` | `basilisk` |
+| `chora-gos` | Chora GOS | `v0.1.0` | `smart-social-contracts/chora` | `chora-iframe-v1` | `motoko` |
+
+`chora-gos` builds from source with `icp build chora_backend` when the descriptor pins `main`. Casals authorization uses each implementation's `wasm_type` for backend WASM (`basilisk` for Realms, `motoko` for Chora). Live environment descriptors (`staging.json`, `demo.json`, `test.json`) must declare a `chora-gos` entry before the create-realm wizard can offer Chora on that network.
 
 ### Cycles estimate (`known.py` / preflight)
 
