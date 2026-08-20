@@ -1,4 +1,4 @@
-import { buildGosManifestBlock } from './gos-implementations.js';
+import { buildGosManifestBlock, getGosImplementation } from './gos-implementations.js';
 
 export function slugify(name) {
   return (
@@ -98,14 +98,18 @@ export function networkInfra(network, config) {
 
 function buildCasalsBlock(realmName, deployVersion, config, formData = {}) {
   const versionKey = normalizeDeployVersion(deployVersion);
+  const gosImplId = formData.gos_implementation || 'realms-gos';
+  const gosImpl = getGosImplementation(gosImplId);
+  const backendKey = gosImpl?.backendWasmKey || 'realm-backend';
+  const frontendKey = gosImpl?.frontendWasmKey || 'realm-assets';
   // Always pin the channel: a bare family name resolves conductor-side to the
   // newest *semver* in the family, which would silently pick e.g. 0.4.0 over
   // the main-channel snapshot whenever both are authorized.
   const block = {
     section: config.casals_section || 'Deployments',
     stand: slugify(realmName),
-    backend_wasm_key: `realm-backend@${versionKey}`,
-    frontend_wasm_key: `realm-assets@${versionKey}`,
+    backend_wasm_key: `${backendKey}@${versionKey}`,
+    frontend_wasm_key: `${frontendKey}@${versionKey}`,
   };
 
   const choice = (formData.subnet_choice || 'automatic').toLowerCase();

@@ -72,6 +72,29 @@ test('casals wasm keys always pin the channel (main must not collapse to bare fa
   assert.equal(pinnedManifest.casals.frontend_wasm_key, 'realm-assets@0.4.0');
 });
 
+test('chora-gos casals wasm keys use chora artifact families', () => {
+  const mainManifest = buildRealmDeploymentManifest(
+    { name: 'Chora Realm', gos_implementation: 'chora-gos' },
+    'staging',
+    TEST_CONFIG,
+    { deployVersion: 'main', useCasals: true },
+  );
+  assert.equal(mainManifest.gos.implementation, 'chora-gos');
+  assert.equal(mainManifest.gos.loader_profile, 'chora-iframe-v1');
+  assert.equal(mainManifest.gos.ggg_conformance, '1.0');
+  assert.equal(mainManifest.casals.backend_wasm_key, 'chora-backend@main');
+  assert.equal(mainManifest.casals.frontend_wasm_key, 'chora-assets@main');
+
+  const pinnedManifest = buildRealmDeploymentManifest(
+    { name: 'Chora Pinned', gos_implementation: 'chora-gos' },
+    'staging',
+    TEST_CONFIG,
+    { deployVersion: '0.4.0', useCasals: true },
+  );
+  assert.equal(pinnedManifest.casals.backend_wasm_key, 'chora-backend@0.4.0');
+  assert.equal(pinnedManifest.casals.frontend_wasm_key, 'chora-assets@0.4.0');
+});
+
 test('test network infra omits stale hardcoded canister fallbacks', () => {
   const infra = networkInfra('test', {});
   assert.equal(infra, null);

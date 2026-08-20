@@ -14,10 +14,22 @@ const DEFAULT_GOS_METADATA = {
 	},
 	'chora-gos': {
 		name: 'Chora GOS',
-		tagline: 'A second GOS implementation',
+		tagline: 'Law-as-inference — the Monad drafts from citizen wishes',
 		description:
-			'In development. The gos.earth platform is implementation-agnostic — any GGG-conforming GOS can join.',
-		gggConformance: null
+			'GGG-compliant Motoko governance on the Internet Computer — citizen wishes, inference, and the Monad.',
+		gggConformance: '1.0'
+	}
+};
+
+/** Casals wasm family names per GOS implementation (gaas-env does not send these). */
+const GOS_ARTIFACT_KEYS = {
+	'realms-gos': {
+		backendWasmKey: 'realm-backend',
+		frontendWasmKey: 'realm-assets'
+	},
+	'chora-gos': {
+		backendWasmKey: 'chora-backend',
+		frontendWasmKey: 'chora-assets'
 	}
 };
 
@@ -30,17 +42,19 @@ const DEFAULT_GOS_IMPLEMENTATIONS = [
 			'GGG-compliant governance with extensions, codices, treasury, justice and more.',
 		available: true,
 		loaderProfile: 'realms-iframe-v1',
-		gggConformance: '1.0'
+		gggConformance: '1.0',
+		...GOS_ARTIFACT_KEYS['realms-gos']
 	},
 	{
 		id: 'chora-gos',
 		name: 'Chora GOS',
-		tagline: 'A second GOS implementation',
+		tagline: 'Law-as-inference — the Monad drafts from citizen wishes',
 		description:
-			'In development. The gos.earth platform is implementation-agnostic — any GGG-conforming GOS can join.',
-		available: false,
-		loaderProfile: null,
-		gggConformance: null
+			'GGG-compliant Motoko governance on the Internet Computer — citizen wishes, inference, and the Monad.',
+		available: true,
+		loaderProfile: 'chora-iframe-v1',
+		gggConformance: '1.0',
+		...GOS_ARTIFACT_KEYS['chora-gos']
 	}
 ];
 
@@ -58,6 +72,10 @@ export function buildGosImplementationsFromEnv(gosEntries) {
 			description: '',
 			gggConformance: null
 		};
+		const artifactKeys = GOS_ARTIFACT_KEYS[entry.implementation] || {
+			backendWasmKey: 'realm-backend',
+			frontendWasmKey: 'realm-assets'
+		};
 		return {
 			id: entry.implementation,
 			name: meta.name,
@@ -66,6 +84,7 @@ export function buildGosImplementationsFromEnv(gosEntries) {
 			available: entry.available ?? false,
 			loaderProfile: entry.loader_profile ?? null,
 			gggConformance: meta.gggConformance ?? null,
+			...artifactKeys,
 			...(entry.version ? { defaultVersion: entry.version } : {})
 		};
 	});
