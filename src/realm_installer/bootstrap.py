@@ -113,6 +113,45 @@ def resync_extension_frontends_args(manifest: dict) -> dict:
     }
 
 
+def gos_implementation(manifest: dict) -> str:
+    gos = manifest.get("gos") or {}
+    if isinstance(gos, dict):
+        return (gos.get("implementation") or "").strip()
+    return ""
+
+
+def uses_realms_bootstrap(manifest: dict) -> bool:
+    """Realms-only post-install (set_canister_config_json / grant_frontend_access).
+
+    Missing/blank implementation stays Realms so existing jobs keep working.
+    """
+    impl = gos_implementation(manifest)
+    return impl in ("", "realms-gos")
+
+
+def uses_chora_bootstrap(manifest: dict) -> bool:
+    return gos_implementation(manifest) == "chora-gos"
+
+
+def enter_setup_args(manifest: dict, backend_id: str) -> dict:
+    """Build args for the enter_setup deploy step."""
+    return {
+        "backend_canister_id": backend_id,
+        "creator_principal": (manifest.get("requesting_principal") or "").strip(),
+        "realm_registry_canister_id": _resolve_realm_registry_canister_id(manifest),
+    }
+
+
+def needs_enter_setup_step(manifest: dict, backend_id: str = "") -> bool:
+    if not uses_chora_bootstrap(manifest):
+        return False
+    backend = (backend_id or manifest.get("target_canister_id") or "").strip()
+    if backend:
+        return True
+    deploy_scope = (manifest.get("deploy_scope") or "both").strip()
+    return deploy_scope == "both"
+
+
 def has_extension_installs(manifest: dict) -> bool:
     for ext in manifest.get("extensions") or []:
         if isinstance(ext, str) and ext.strip():
@@ -127,7 +166,9 @@ def deploy_step_kinds(manifest: dict) -> list[str]:
     kinds = []
     frontend_id = manifest.get("frontend_canister_id", "")
     backend_id = manifest.get("target_canister_id", "")
-    if frontend_id and backend_id:
+    if needs_enter_setup_step(manifest, backend_id):
+        kinds.append("enter_setup")
+    if uses_realms_bootstrap(manifest) and frontend_id and backend_id:
         kinds.extend(["configure_canister_ids", "grant_frontend_access"])
 
     for ext in manifest.get("extensions") or []:

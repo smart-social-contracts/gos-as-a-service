@@ -11,8 +11,13 @@ from bootstrap import (  # noqa: E402
     configure_canister_ids_args,
     configure_canister_ids_payload,
     deploy_step_kinds,
+    enter_setup_args,
+    gos_implementation,
     manifest_has_codex_block,
+    needs_enter_setup_step,
     resolve_legacy_install_lists,
+    uses_chora_bootstrap,
+    uses_realms_bootstrap,
 )
 from installer_config import (  # noqa: E402
     InstallerConfig,
@@ -312,3 +317,52 @@ def test_casals_path_always_enters_bootstrap_phase():
         source = fh.read()
     assert "entering bootstrap/extensions phase (casals path)" in source
     assert "no extensions/codex; scheduling registration (casals path)" not in source
+
+
+def test_chora_gos_skips_realms_bootstrap_steps():
+    manifest = _bootstrap_manifest(
+        gos={"implementation": "chora-gos"},
+    )
+    assert gos_implementation(manifest) == "chora-gos"
+    assert uses_chora_bootstrap(manifest)
+    assert not uses_realms_bootstrap(manifest)
+    assert deploy_step_kinds(manifest) == ["enter_setup"]
+
+
+def test_chora_gos_with_extensions_skips_configure_and_grant():
+    manifest = _bootstrap_manifest(
+        gos={"implementation": "chora-gos"},
+        extensions=[{"id": "leftover-ext"}],
+    )
+    kinds = deploy_step_kinds(manifest)
+    assert "configure_canister_ids" not in kinds
+    assert "grant_frontend_access" not in kinds
+    assert kinds[0] == "enter_setup"
+    assert "extension" in kinds
+    assert "resync_extension_frontends" in kinds
+
+
+def test_enter_setup_args_from_manifest():
+    manifest = _bootstrap_manifest(
+        gos={"implementation": "chora-gos"},
+        registry_canister_id="realm-registry-id",
+        requesting_principal="creator-principal-abc",
+    )
+    args = enter_setup_args(manifest, manifest["target_canister_id"])
+    assert args == {
+        "backend_canister_id": "backend-principal",
+        "creator_principal": "creator-principal-abc",
+        "realm_registry_canister_id": "realm-registry-id",
+    }
+    assert needs_enter_setup_step(manifest, manifest["target_canister_id"])
+
+
+def test_realms_gos_explicit_still_has_configure_and_grant():
+    manifest = _bootstrap_manifest(
+        gos={"implementation": "realms-gos"},
+    )
+    assert uses_realms_bootstrap(manifest)
+    assert deploy_step_kinds(manifest) == [
+        "configure_canister_ids",
+        "grant_frontend_access",
+    ]

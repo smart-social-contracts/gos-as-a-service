@@ -39,10 +39,14 @@ from bootstrap import (
     configure_canister_ids_args,
     configure_canister_ids_payload,
     deploy_step_kinds,
+    enter_setup_args,
     manifest_has_codex_block,
+    needs_enter_setup_step,
     resync_extension_frontends_args,
     resolve_legacy_install_lists,
     has_extension_installs,
+    uses_chora_bootstrap,
+    uses_realms_bootstrap,
     _resolve_file_registry_canister_id,
     _resolve_marketplace_canister_id,
 )
@@ -1012,7 +1016,9 @@ def _count_expected_steps(manifest: dict, backend_id: str = "", frontend_id: str
     count = 0
     deploy_scope = (manifest.get("deploy_scope") or "both").strip()
     has_pair = bool((backend_id or "").strip() and (frontend_id or "").strip())
-    if has_pair or deploy_scope == "both":
+    if needs_enter_setup_step(manifest, backend_id):
+        count += 1
+    if uses_realms_bootstrap(manifest) and (has_pair or deploy_scope == "both"):
         count += 2  # configure_canister_ids + grant_frontend_access
     if not manifest_has_codex_block(manifest):
         return count
@@ -1034,7 +1040,15 @@ def _build_steps(task, manifest: dict) -> list:
 
     frontend_id = manifest.get("frontend_canister_id", "")
     backend_id = manifest.get("target_canister_id", "")
-    if frontend_id and backend_id:
+    if needs_enter_setup_step(manifest, backend_id):
+        _log.info(f"[{task.name}] step {idx}: enter_setup backend={backend_id}")
+        steps.append(DeployStep(
+            task=task, idx=idx, kind="enter_setup", label="enter_setup",
+            args_json=json.dumps(enter_setup_args(manifest, backend_id)),
+            status="pending",
+        ))
+        idx += 1
+    if uses_realms_bootstrap(manifest) and frontend_id and backend_id:
         _log.info(f"[{task.name}] step {idx}: configure_canister_ids frontend={frontend_id}")
         steps.append(DeployStep(
             task=task, idx=idx, kind="configure_canister_ids", label="configure_canister_ids",
@@ -1109,6 +1123,10 @@ def _execute_step(task, step):
 
         if step.kind == "configure_canister_ids":
             yield from _execute_configure_canister_ids(task, step, args)
+            return
+
+        if step.kind == "enter_setup":
+            yield from _execute_enter_setup(task, step, args)
             return
 
         if step.kind == "grant_frontend_access":
@@ -1202,6 +1220,68 @@ def _execute_configure_canister_ids(task, step, args):
     step.status = "completed"
     step.result_json = json.dumps({"frontend_canister_id": frontend_id})[:1990]
     jlog(task.name).info(f"step {step.idx} frontend canister id configured on backend")
+    step.completed_at = now_s()
+
+
+def _execute_enter_setup(task, step, args):
+    """Put a new Chora realm into in-realm setup (founding citizen + registry link)."""
+    backend_id = (args.get("backend_canister_id") or "").strip()
+    creator = (args.get("creator_principal") or "").strip()
+    registry_id = (args.get("realm_registry_canister_id") or "").strip()
+    if not backend_id:
+        step.error = "missing backend_canister_id"
+        step.status = "failed"
+        step.completed_at = now_s()
+        return
+    if not creator:
+        step.error = "missing creator_principal"
+        step.status = "failed"
+        step.completed_at = now_s()
+        return
+
+    jlog(task.name).info(
+        f"entering setup on backend {backend_id}: creator={creator[:8]}…, "
+        f"registry={registry_id or '–'}"
+    )
+    escaped_registry = registry_id.replace("\\", "\\\\").replace('"', '\\"')
+    setup_arg = f'(principal "{creator}", "{escaped_registry}")'
+    setup_result: CallResult = yield ic.call_raw(
+        Principal.from_str(backend_id), "enter_setup",
+        ic.candid_encode(setup_arg), 0,
+    )
+    if isinstance(setup_result, dict) and "Err" in setup_result:
+        step.error = f"enter_setup failed: {setup_result['Err']}"[:1990]
+        step.status = "failed"
+        jlog(task.name).error(f"step {step.idx} enter_setup failed: {step.error}")
+        step.completed_at = now_s()
+        return
+
+    try:
+        raw = unwrap_call_result(setup_result)
+        if isinstance(raw, (bytes, bytearray)):
+            raw = ic.candid_decode(raw)
+        if isinstance(raw, dict):
+            err = raw.get("err")
+            if err is None and raw.get("Err") is not None:
+                err = raw["Err"]
+            if err is not None:
+                step.error = f"enter_setup failed: {err}"[:1990]
+                step.status = "failed"
+                jlog(task.name).error(f"step {step.idx} enter_setup failed: {step.error}")
+                step.completed_at = now_s()
+                return
+    except Exception as exc:
+        step.error = f"enter_setup failed: {exc}"[:1990]
+        step.status = "failed"
+        jlog(task.name).error(f"step {step.idx} enter_setup exception: {step.error[:300]}")
+        step.completed_at = now_s()
+        return
+
+    step.status = "completed"
+    step.result_json = json.dumps(
+        {"creator_principal": creator, "realm_registry_canister_id": registry_id or None}
+    )[:1990]
+    jlog(task.name).info(f"step {step.idx} enter_setup completed OK")
     step.completed_at = now_s()
 
 
@@ -1565,6 +1645,9 @@ def _start_extensions_for_job(job, manifest: dict) -> Async[None]:
         "requesting_principal": (manifest.get("requesting_principal") or "").strip(),
         "federation": manifest.get("federation") or {},
     }
+    gos = manifest.get("gos")
+    if isinstance(gos, dict) and gos:
+        ext_manifest["gos"] = gos
     ext_list = []
     codex_list = []
     has_codex_block = manifest_has_codex_block(manifest)
