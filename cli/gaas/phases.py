@@ -38,7 +38,6 @@ from gaas.conductor_seed import (
     _section_names,
 )
 from gaas.file_registry_client import (
-    approve_marketplace_namespaces,
     ensure_version_catalog_entry,
     fetch_namespace_hashes,
     namespace_published,
@@ -615,7 +614,6 @@ def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None
 
     work = _work_dir(ctx)
     seeded_catalog_sources: set[tuple[str, str]] = set()
-    marketplace_namespaces: list[str] = []
     for entry in descriptor.gos:
         resolved = resolve_deploy_version(
             entry.version, entry.release_repo, session=ctx.http
@@ -721,7 +719,7 @@ def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None
                     f"(no catalog declared)"
                 )
             elif catalog_key not in seeded_catalog_sources:
-                seeded = seed_codex_catalog(
+                seed_codex_catalog(
                     realms_registry_id,
                     entry.release_repo,
                     entry.version,
@@ -734,24 +732,12 @@ def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None
                     else None,
                     session=ctx.http,
                 )
-                marketplace_namespaces.extend(seeded)
                 seeded_catalog_sources.add(catalog_key)
         elif catalog_spec is not None:
             console.print(
                 f"  skip codex/extension catalog seed for {entry.implementation} "
                 f"(file_registry absent)"
             )
-
-    if realms_registry_id and marketplace_namespaces:
-        console.print(
-            f"  approving {len(set(marketplace_namespaces))} codex/extension namespace(s)"
-        )
-        approve_marketplace_namespaces(
-            realms_registry_id,
-            marketplace_namespaces,
-            ctx.network,
-            identity=ctx.identity,
-        )
 
 
 def _is_interactive(ctx: DeployContext) -> bool:

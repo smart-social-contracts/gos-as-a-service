@@ -431,7 +431,7 @@ export interface FederationService {
   'federation_message' : ActorMethod<[string], string>,
 }
 export interface FileRegistryService {
-  'set_namespace_approval' : ActorMethod<[string], string>,
+  'get_extension_manifest' : ActorMethod<[string], string>,
 }
 export interface ForceTransferArg {
   'to' : NftAccount,
