@@ -63,7 +63,7 @@ function getCanisterIdDefines() {
     return {};
   }
 
-  const idsPath = '../../canister_ids.json';
+  const idsPath = join(repoRoot, 'canister_ids.json');
   const defines = {};
 
   if (!existsSync(idsPath)) return defines;
@@ -87,7 +87,7 @@ function getCanisterIdDefines() {
 
 // Inject the full canister_ids.json map for runtime resolution (single tarball, multi-env deploy).
 function getCanisterIdsDefine() {
-  const idsPath = '../../canister_ids.json';
+  const idsPath = join(repoRoot, 'canister_ids.json');
   if (!existsSync(idsPath)) return {};
 
   try {

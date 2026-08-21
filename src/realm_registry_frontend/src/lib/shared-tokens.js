@@ -18,7 +18,7 @@ export const SHARED_TOKEN_CATALOG = [
 		symbol: 'REALMS',
 		description: 'The shared mundus-wide token, common to all realms',
 		ledgers: {
-			staging: '2rqin-xaaaa-aaaah-qunsq-cai',
+			staging: 'cj65k-laaaa-aaaac-bfxqq-cai',
 			demo: 'xbkkh-syaaa-aaaah-qq3ya-cai',
 			test: 'nusyl-jiaaa-aaaae-qj6mq-cai'
 		},

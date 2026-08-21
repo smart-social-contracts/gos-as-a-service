@@ -374,6 +374,7 @@ export interface RealmRegistryService {
 export interface RealmTargetService {
   'install_codex_from_registry' : ActorMethod<[string], string>,
   'install_extension_from_registry' : ActorMethod<[string], string>,
+  'resync_extension_frontends' : ActorMethod<[string], string>,
 }
 export type RejectionCode = { 'NoError' : null } |
   { 'CanisterError' : null } |
