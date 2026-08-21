@@ -21,7 +21,6 @@ Additional endpoints:
 Storage layout (persistent filesystem, survives upgrades):
   /registry/_namespaces.json        index of all namespaces
   /registry/_acl.json               {namespace: [principal_str, ...]}
-  /registry/_approvals.json         {namespace: {status, approver, decided_at, notes, files}}
   /registry/{namespace}/_meta.json  {files: {path: {size, content_type, sha256, updated}}}
   /registry/{namespace}/{path}      actual file content
   /registry/_chunks/                temporary chunk staging area
@@ -56,10 +55,6 @@ REGISTRY_DIR = "/registry"
 CHUNKS_DIR = "/registry/_chunks"
 NAMESPACES_FILE = "/registry/_namespaces.json"
 ACL_FILE = "/registry/_acl.json"
-APPROVALS_FILE = "/registry/_approvals.json"
-
-APPROVAL_APPROVED = "approved"
-APPROVAL_REJECTED = "rejected"
 
 CONTENT_TYPES = {
     ".py":   "text/plain",
@@ -160,35 +155,6 @@ def _save_acl(acl: dict):
     _ensure_dirs()
     with open(ACL_FILE, "w") as f:
         f.write(json.dumps(acl))
-
-
-def _load_approvals() -> dict:
-    try:
-        with open(APPROVALS_FILE, "r") as f:
-            return json.loads(f.read())
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {}
-
-
-def _save_approvals(approvals: dict):
-    _ensure_dirs()
-    with open(APPROVALS_FILE, "w") as f:
-        f.write(json.dumps(approvals))
-
-
-def _file_hashes(namespace: str) -> dict:
-    """Return {path: sha256} for every file in a namespace."""
-    meta = _load_meta(namespace)
-    files = meta.get("files", {})
-    return {path: info.get("sha256", "") for path, info in files.items()}
-
-
-def _invalidate_approval(namespace: str):
-    """Drop any stored approval when namespace content changes."""
-    approvals = _load_approvals()
-    if namespace in approvals:
-        del approvals[namespace]
-        _save_approvals(approvals)
 
 
 def _load_meta(namespace: str) -> dict:
@@ -388,22 +354,6 @@ def _require_publisher(namespace: str) -> str | None:
 # (or the "codex/" legacy namespace) — an arbitrary marketplace upload must
 # not be able to claim codex powers.
 CODEX_CURATORS_ACL_KEY = "_codex_curators"
-APPROVERS_ACL_KEY = "_approvers"
-
-
-def _require_approver() -> str | None:
-    """Controller, or a principal on the ``_approvers`` ACL (marketplace in prod)."""
-    if ic.is_controller(ic.caller()):
-        return None
-    caller = ic.caller().to_str()
-    acl = _load_acl()
-    if caller in acl.get(APPROVERS_ACL_KEY, []):
-        return None
-    return json.dumps({
-        "error": (
-            "Unauthorized: recording an approval requires approver rights on this registry"
-        )
-    })
 
 
 def _require_codex_curator() -> str | None:
@@ -1066,7 +1016,6 @@ def store_file(args: text) -> text:
         "updated": ic.time(),
     }
     _save_meta(namespace, meta)
-    _invalidate_approval(namespace)
 
     return json.dumps({
         "ok": True,
@@ -1100,7 +1049,6 @@ def delete_file(args: text) -> text:
     meta = _load_meta(namespace)
     meta.get("files", {}).pop(path, None)
     _save_meta(namespace, meta)
-    _invalidate_approval(namespace)
 
     return json.dumps({"ok": True, "namespace": namespace, "path": path})
 
@@ -1203,9 +1151,6 @@ def _delete_namespace_impl(namespace: str, namespaces: dict) -> int:
     acl = _load_acl()
     acl.pop(namespace, None)
     _save_acl(acl)
-    approvals = _load_approvals()
-    approvals.pop(namespace, None)
-    _save_approvals(approvals)
     return freed
 
 
@@ -1218,7 +1163,6 @@ def _delete_wasm_file(namespace: str, path: str) -> int:
         meta = _load_meta(namespace)
         meta.get("files", {}).pop(path, None)
         _save_meta(namespace, meta)
-        _invalidate_approval(namespace)
         return size
     except (FileNotFoundError, OSError):
         return 0
@@ -1412,122 +1356,6 @@ def revoke_publish(args: text) -> text:
 
 
 # ---------------------------------------------------------------------------
-# Namespace approval (marketplace review gate)
-# ---------------------------------------------------------------------------
-
-def _get_namespace_approval_impl(namespace: str) -> str:
-    namespaces = _load_namespaces()
-    if namespace not in namespaces:
-        return json.dumps({"error": f"Namespace '{namespace}' not found"})
-
-    approvals = _load_approvals()
-    approval = approvals.get(namespace)
-    if not approval:
-        return json.dumps({
-            "namespace": namespace,
-            "approved": False,
-            "status": "unapproved",
-        })
-
-    current_files = _file_hashes(namespace)
-    stored_files = approval.get("files", {})
-    content_matches = current_files == stored_files
-    status = approval.get("status", "unapproved")
-    approved = status == APPROVAL_APPROVED and content_matches
-
-    return json.dumps({
-        "namespace": namespace,
-        "approved": approved,
-        "status": status,
-        "approver": approval.get("approver", ""),
-        "decided_at": approval.get("decided_at", 0),
-        "notes": approval.get("notes", ""),
-        "content_matches": content_matches,
-        "file_count": len(stored_files),
-    })
-
-
-@query
-def get_namespace_approval(args: text) -> text:
-    """Return approval status for a namespace.
-
-    Args (JSON): {"namespace": str}
-    """
-    params = json.loads(args)
-    namespace = params["namespace"]
-    return _get_namespace_approval_impl(namespace)
-
-
-@update
-def get_namespace_approval_icc(namespace: text) -> text:
-    """Inter-canister variant: positional namespace argument.
-
-    Must be an update: realm install/bootstrap runs as an update, and
-    inter-canister calls from updates are updates. A query-only method
-    is rejected with IC0536 (no update method).
-    """
-    return _get_namespace_approval_impl(namespace)
-
-
-@update
-def set_namespace_approval(args: text) -> text:
-    """Record a reviewer's decision, snapshotting current file hashes.
-
-    Args (JSON): {
-        "namespace": str,
-        "status": "approved"|"rejected"  (default "approved"),
-        "notes": str  (optional)
-    }
-    Caller must be a controller or on the ``_approvers`` ACL.
-    """
-    err = _require_approver()
-    if err:
-        return err
-
-    params = json.loads(args)
-    namespace = params["namespace"]
-    status = params.get("status", APPROVAL_APPROVED)
-    notes = params.get("notes", "")
-
-    if status not in (APPROVAL_APPROVED, APPROVAL_REJECTED):
-        return json.dumps({
-            "error": (
-                f"status must be '{APPROVAL_APPROVED}' or '{APPROVAL_REJECTED}', "
-                f"got '{status}'"
-            )
-        })
-
-    namespaces = _load_namespaces()
-    if namespace not in namespaces:
-        return json.dumps({"error": f"Namespace '{namespace}' not found"})
-
-    files = _file_hashes(namespace)
-    if status == APPROVAL_APPROVED and not files:
-        return json.dumps({"error": f"Namespace '{namespace}' has no files to approve"})
-
-    caller = ic.caller().to_str()
-    decided_at = ic.time()
-    approvals = _load_approvals()
-    approvals[namespace] = {
-        "status": status,
-        "approver": caller,
-        "decided_at": decided_at,
-        "notes": notes,
-        "files": files,
-    }
-    _save_approvals(approvals)
-
-    return json.dumps({
-        "ok": True,
-        "namespace": namespace,
-        "status": status,
-        "approver": caller,
-        "decided_at": decided_at,
-        "file_count": len(files),
-    })
-
-
-# ---------------------------------------------------------------------------
 # Chunked upload — for files > 1 MB (e.g. WASMs)
 # ---------------------------------------------------------------------------
 
@@ -1668,7 +1496,6 @@ def finalize_chunked_file(args: text) -> text:
         "updated": ic.time(),
     }
     _save_meta(namespace, meta)
-    _invalidate_approval(namespace)
 
     return json.dumps({
         "ok": True,
@@ -1814,7 +1641,6 @@ def finalize_chunked_file_step(args: text) -> text:
         "updated": ic.time(),
     }
     _save_meta(namespace, meta)
-    _invalidate_approval(namespace)
 
     return json.dumps({
         "ok": True,
