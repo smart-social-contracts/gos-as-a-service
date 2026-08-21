@@ -13,6 +13,7 @@ from rich.table import Table
 
 from gaas import dfx
 from gaas.descriptor import Descriptor
+from gaas.destroy import destroy_via_casals
 from gaas.dns import render_dns_records
 from gaas.known import DEFAULT_REQUIRED_CYCLES
 from gaas.phases import DeployContext, PHASES, run_phases, run_seed_phases
@@ -75,6 +76,7 @@ def _run_deploy_pipeline(
     skip_dns_wait: bool = False,
     keep_env_file: bool = False,
     reinstall_backends: bool = False,
+    destroy_except_frontend: bool = False,
 ) -> None:
     ctx = DeployContext(
         identity=identity,
@@ -87,6 +89,7 @@ def _run_deploy_pipeline(
         skip_dns_wait=skip_dns_wait,
         keep_env_file=keep_env_file,
         reinstall_backends=reinstall_backends,
+        destroy_except_frontend=destroy_except_frontend,
     )
     total = len(PHASES)
     run_log = start_run_log(descriptor.name)
@@ -203,6 +206,17 @@ def new_command(
             "data (realms, credits, slugs) is permanently reset"
         ),
     ),
+    destroy_except_frontend: bool = typer.Option(
+        False,
+        "--destroy-except-realm-registry-frontend",
+        help=(
+            "Drain-destroy all canisters except DNS-mapped frontends "
+            "(realm_registry_frontend for *.gos.earth; marketplace_frontend for "
+            "*.realmsgos.org when present). Other frontends are destroyed. "
+            "Evacuates the Casals treasury to the cycles wallet, then recreates "
+            "the rest of the platform"
+        ),
+    ),
     can_test_mode: bool = typer.Option(
         False,
         "--can-test-mode",
@@ -245,6 +259,7 @@ def new_command(
                 skip_dns_wait=skip_dns_wait,
                 keep_env_file=keep_env_file,
                 reinstall_backends=reinstall_backends,
+                destroy_except_frontend=destroy_except_frontend,
             )
         else:
             cmd_identity = resolved_identity
@@ -275,6 +290,7 @@ def new_command(
         skip_dns_wait=skip_dns_wait,
         keep_env_file=keep_env_file,
         reinstall_backends=reinstall_backends,
+        destroy_except_frontend=destroy_except_frontend,
     )
 
 
@@ -346,6 +362,55 @@ def status_command(
         except dfx.DfxError as exc:
             table.add_row(name, canister_id, f"error: {exc}")
     console.print(table)
+
+
+@app.command("destroy")
+def destroy_command(
+    descriptor: Path = typer.Argument(..., help="Descriptor JSON path"),
+    stand: Optional[str] = typer.Option(None, "--stand", help="Casals stand name to destroy"),
+    canister_id: Optional[str] = typer.Option(
+        None,
+        "--canister-id",
+        help="Single canister ID to destroy via Casals drain-then-delete",
+    ),
+    identity: str = typer.Option(..., "--identity", help="dfx identity"),
+    network: str = typer.Option("ic", "--network", help="Target network: ic or local"),
+    yes: bool = typer.Option(False, "--yes", help="Skip interactive confirmation"),
+    platform: bool = typer.Option(
+        False,
+        "--platform",
+        help="Allow destroying a descriptor platform canister by ID",
+    ),
+) -> None:
+    """Destroy a Casals stand or canister (drain cycles, then delete)."""
+    if network not in {"ic", "local"}:
+        console.print("[red]--network must be 'ic' or 'local'[/red]")
+        raise typer.Exit(code=1)
+
+    desc = Descriptor.load(descriptor)
+    if not yes:
+        if not typer.confirm(
+            "Destroy via Casals (drain cycles then delete)? This cannot be undone."
+        ):
+            raise typer.Exit(code=1)
+
+    try:
+        result = destroy_via_casals(
+            desc,
+            network=network,
+            identity=identity,
+            stand=stand,
+            canister_id=canister_id,
+            allow_platform=platform,
+        )
+    except RuntimeError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    reclaimed = result.get("total_cycles_reclaimed") or result.get("cycles_reclaimed")
+    if reclaimed is not None:
+        console.print(f"Cycles reclaimed: {int(reclaimed):,}")
+    console.print("[green]Destroy complete.[/green]")
 
 
 if __name__ == "__main__":

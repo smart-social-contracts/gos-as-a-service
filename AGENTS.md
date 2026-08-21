@@ -36,9 +36,34 @@ Casals conductors (external platform provisioner; operated by realms fleet ops):
 | demo | `jo3cj-faaaa-aaaac-bffea-cai` |
 | staging | `jj2e5-iyaaa-aaaac-bffeq-cai` |
 
-Portal hosts: `test.gos.earth`, `demo.gos.earth`, `staging.gos.earth`.
+Portal hosts: `test.gos.earth`, `demo.gos.earth`, `staging.gos.earth` → **`realm_registry_frontend`**. Realms marketplace hosts (`*.realmsgos.org`) → **`marketplace_frontend`** when declared in the descriptor (see below).
 
 Dogfood deployment descriptors: [`environments/`](environments/) — see [docs/GAAS_CLI.md](docs/GAAS_CLI.md) for the `gaas` CLI.
+
+## DNS-mapped frontends — why we keep `realm_registry_frontend` and `marketplace_frontend`
+
+`*.gos.earth` does **not** point at “the GaaS stack.” Registrar records and IC custom-domain registration bind the portal hostname to **one canister ID**: `realm_registry_frontend` (staging: `77243-aqaaa-aaaau-aggza-cai` → `staging.gos.earth`).
+
+`*.realmsgos.org` is DNS-mapped the same way to **`marketplace_frontend`** when that canister is in the environment descriptor (staging: `h4gmt-waaaa-aaaac-bfxoq-cai`).
+
+Deleting either canister would:
+
+- Break the public URL immediately (the ID in DNS / IC domain tables would be `IC0301`)
+- Force new registrar records **and** a new IC boundary-node domain registration
+- Cost hours of downtime and risk losing the hostname
+
+A deleted canister ID **cannot be reused**. The replacement frontend would be a new ID, so DNS must be redone.
+
+**Other frontends are not DNS-mapped** (`casals_frontend`, file-registry UI, realm UIs). They can be destroyed and recreated with new IDs. Only the DNS-mapped frontends must survive a full rebuild.
+
+**Cycle-safe rebuild** (drain-destroy everything else, including other frontends; evacuate treasury to the cycles wallet; recreate; adopt the existing DNS canisters):
+
+```bash
+gaas new environments/staging.json --identity deployer --network ic --yes \
+  --destroy-except-realm-registry-frontend
+```
+
+Never `dfx canister delete` on these canisters (or any fat canister) — leftover cycles are burned, and you would still have to remap DNS. Wipe assets in place (`reinstall`) or use the flag above. Details: [docs/GAAS_CLI.md](docs/GAAS_CLI.md#rebuild-except-realm-registry-frontend---destroy-except-realm-registry-frontend).
 
 ## gaas deploy — mandatory multisig
 
@@ -58,7 +83,7 @@ Every **`gaas new`** deploy must configure the orchestra multisig as **N-of-M** 
 
 3. **`casals.commanders`** (Casals UI section access) **≠** **`multisig.signers`** (IC governance approvals). Grant both when the same operator needs UI access and multisig signing.
 4. gaas reconciles `multisig.backend_id` with the live Casals conductor tree; stale descriptor IDs are overwritten automatically.
-5. **Destroy:** portal/realm teardown uses `delegated_destroy` (installer → Casals) without a multisig vote. Casals Cycles ops destroy for non-controllers goes through Motoko `DestroyStand` / `DestroyCanister`. Multisig `SetCanisterControllers` only works when the multisig is already an IC controller of the target (Casals yes; infra/realms `file_registry` no — see [Controller topology](docs/GAAS_CLI.md#controller-topology-final-phase)).
+5. **Destroy:** portal/realm teardown uses `delegated_destroy` (installer → Casals) without a multisig vote; the installer **refuses** destroy when `casals_canister_id` is unset (no raw IC delete). Operators and agents must **never** run `dfx canister delete`. Use `gaas destroy` or Casals `destroy_stand` / `destroy_canister`. Platform canisters are wiped in place (`gaas new --reinstall-backends`), not deleted. A full rebuild that **keeps DNS-mapped frontends** (`realm_registry_frontend` for `*.gos.earth`; `marketplace_frontend` for `*.realmsgos.org` when in the descriptor) is `gaas new --destroy-except-realm-registry-frontend` — see [DNS-mapped frontends](#dns-mapped-frontends--why-we-keep-realm_registry_frontend-and-marketplace_frontend). Casals Cycles ops destroy for non-controllers goes through Motoko `DestroyStand` / `DestroyCanister`. Multisig `SetCanisterControllers` only works when the multisig is already an IC controller of the target (Casals yes; infra/realms `file_registry` no — see [Controller topology](docs/GAAS_CLI.md#controller-topology-final-phase)).
 
 Full field reference, fallback behaviour, and deploy phase order: [docs/GAAS_CLI.md — `multisig`](docs/GAAS_CLI.md#multisig).
 

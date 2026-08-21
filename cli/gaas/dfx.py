@@ -58,6 +58,23 @@ class DfxError(RuntimeError):
         self.stdout = stdout
 
 
+CANISTER_DELETE_FORBIDDEN = (
+    "dfx canister delete burns leftover cycles; use Casals drain-then-delete "
+    "or gaas new --destroy-except-realm-registry-frontend instead"
+)
+
+
+def reject_canister_delete(args: list[str]) -> None:
+    """Refuse raw `dfx canister delete` — it burns leftover cycles."""
+    for index, arg in enumerate(args):
+        if arg == "canister" and index + 1 < len(args) and args[index + 1] == "delete":
+            raise DfxError(
+                CANISTER_DELETE_FORBIDDEN,
+                command=args,
+                stderr=CANISTER_DELETE_FORBIDDEN,
+            )
+
+
 @dataclass(frozen=True)
 class CanisterStatus:
     canister_id: str
@@ -74,7 +91,10 @@ def _run(
     cwd: str | Path | None = None,
     timeout: int | None = None,
     env_extra: dict[str, str] | None = None,
+    allow_canister_delete: bool = False,
 ) -> subprocess.CompletedProcess[str]:
+    if not allow_canister_delete:
+        reject_canister_delete(args)
     env = os.environ.copy()
     env.update(_DFX_ENV)
     if env_extra:
@@ -610,3 +630,62 @@ def detect_install_mode(canister_id: str, network: str, *, identity: str | None 
     if status.module_hash_missing:
         return "install"
     return "upgrade"
+
+
+def is_canister_not_found_error(exc: BaseException | str) -> bool:
+    text = str(exc)
+    return "IC0301" in text or "not found" in text.lower()
+
+
+def delete_canister(*_args: object, **_kwargs: object) -> None:
+    raise DfxError(
+        CANISTER_DELETE_FORBIDDEN,
+        command=["dfx", "canister", "delete"],
+        stderr=CANISTER_DELETE_FORBIDDEN,
+    )
+
+
+def delete_dust_canister(
+    canister_id: str,
+    network: str,
+    *,
+    identity: str | None = None,
+    max_cycles: int = 500_000_000_000,
+) -> None:
+    """Delete a canister only when its balance is at or below ``max_cycles``."""
+    status = canister_status(canister_id, network, identity=identity)
+    balance = parse_canister_cycles_balance(status.raw)
+    if balance is None or balance > max_cycles:
+        raise DfxError(
+            f"refusing canister delete: balance {balance} exceeds dust limit {max_cycles}",
+            command=["dfx", "canister", "delete", canister_id],
+            stderr=f"balance {balance}",
+        )
+    args = [
+        "dfx",
+        "canister",
+        "--network",
+        network,
+        "delete",
+        canister_id,
+        "--yes",
+    ]
+    if identity:
+        args.extend(["--identity", identity])
+    _run(args, allow_canister_delete=True)
+
+
+def get_wallet(network: str, *, identity: str | None = None) -> str:
+    args = ["dfx", "identity", "get-wallet", "--network", network]
+    if identity:
+        args.extend(["--identity", identity])
+    result = _run(args, check=True)
+    wallet = result.stdout.strip()
+    if not wallet:
+        raise DfxError(
+            "dfx identity get-wallet returned empty output",
+            command=args,
+            stderr=result.stderr,
+            stdout=result.stdout,
+        )
+    return wallet

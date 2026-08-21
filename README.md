@@ -48,6 +48,25 @@ flowchart LR
 6. Installer notifies registry via `deployment_succeeded` (capture hold) or `deployment_failed` (release hold).
 7. Slug is claimed so the realm is reachable at `{slug}.gos.earth` → `/r/{slug}`.
 
+## DNS-mapped frontend canisters
+
+**`*.gos.earth`** (`staging.gos.earth`, `demo.gos.earth`, `test.gos.earth`) is mapped in DNS and IC custom-domain tables to **`realm_registry_frontend`** — the wizard + federation site.
+
+**`*.realmsgos.org`** is mapped the same way to **`marketplace_frontend`** when that canister is in the environment descriptor.
+
+For both, the canister ID is part of the hostname contract — a deleted ID cannot be reused, so replacing it means new registrar records and a new IC domain registration (hours of downtime).
+
+Other frontends (`casals_frontend`, file-registry UI, realm UIs) are **not** DNS-mapped apex targets. They can be destroyed and recreated.
+
+To rebuild an environment without touching DNS mappings, `gaas` drain-destroys everything else (including other frontends), parks leftover cycles on the cycles wallet, and **adopts** the existing DNS-mapped frontend IDs:
+
+```bash
+gaas new environments/staging.json --identity deployer --network ic --yes \
+  --destroy-except-realm-registry-frontend
+```
+
+Do not `dfx canister delete` the DNS canisters. See [AGENTS.md](./AGENTS.md#dns-mapped-frontends--why-we-keep-realm_registry_frontend-and-marketplace_frontend) and [docs/GAAS_CLI.md](./docs/GAAS_CLI.md#rebuild-except-realm-registry-frontend---destroy-except-realm-registry-frontend).
+
 ## Deploy cost
 
 Each realm deployment costs **5 credits**. Credits are topped up via Stripe (billing service); the registry holds credits at enqueue time and settles when the installer reports success or failure.

@@ -32,6 +32,21 @@ class InstallerConfig(Entity):
     cycle_threshold_cycles = Integer(default=2_000_000_000_000)
 
 
+CASALS_DESTROY_REQUIRED = (
+    "casals_canister_id is required to destroy canisters; "
+    "refusing raw IC delete_canister (it burns leftover cycles)"
+)
+
+
+def require_casals_for_destroy(casals_id: str = "") -> str:
+    cid = (casals_id or "").strip()
+    if not cid:
+        cid = (get_config().casals_canister_id or "").strip()
+    if not cid:
+        raise RuntimeError(CASALS_DESTROY_REQUIRED)
+    return cid
+
+
 def get_config() -> InstallerConfig:
     list(InstallerConfig.instances())
     cfg = InstallerConfig["singleton"]

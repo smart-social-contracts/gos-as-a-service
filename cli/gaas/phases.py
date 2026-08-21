@@ -14,12 +14,14 @@ from pathlib import Path
 from typing import Any, Callable, Protocol
 
 import requests
+import typer
 from rich.console import Console
 from rich.table import Table
 
 from gaas import dfx
 from gaas.artifacts import fetch_release_assets
 from gaas.descriptor import CANISTER_ID_RE, Descriptor
+from gaas.destroy import destroy_except_frontend
 from gaas.dns import render_dns_records, wait_for_dns
 from gaas.domain_reg import attempt_domain_registration
 from gaas.codex_seed import seed_codex_catalog
@@ -108,6 +110,7 @@ class DeployContext:
     skip_dns_wait: bool = False
     keep_env_file: bool = False
     reinstall_backends: bool = False
+    destroy_except_frontend: bool = False
     work_dir: Path | None = None
     http: requests.Session | None = None
     seed_artifacts: list[SeedArtifactSummary] = field(default_factory=list)
@@ -270,6 +273,40 @@ def _opt_text_init_arg(config_json: str) -> str:
         return "(null)"
     escaped = config_json.replace("\\", "\\\\").replace('"', '\\"')
     return f'(opt "{escaped}")'
+
+
+def phase_destroy_except_frontend(descriptor: Descriptor, ctx: DeployContext) -> None:
+    if not ctx.destroy_except_frontend:
+        return
+
+    if not ctx.yes:
+        confirmed = typer.confirm(
+            "Destroy ALL platform canisters except DNS-mapped frontends "
+            f"(realm_registry_frontend {descriptor.canisters.get('realm_registry_frontend', '?')}"
+            + (
+                f", marketplace_frontend {descriptor.canisters.get('marketplace_frontend', '?')}"
+                if (descriptor.canisters.get("marketplace_frontend") or "").strip()
+                else ""
+            )
+            + ")? "
+            "Other frontends are destroyed. Cycles go to your cycles wallet; "
+            "DNS-mapped frontend IDs are kept. This cannot be undone.",
+            default=False,
+        )
+        if not confirmed:
+            raise RuntimeError("destroy-except-realm-registry-frontend aborted")
+
+    result = destroy_except_frontend(
+        descriptor,
+        network=ctx.network,
+        identity=ctx.identity,
+    )
+    console.print(
+        f"  Cycles reclaimed: {int(result['cycles_reclaimed']):,}; "
+        f"evacuated to wallet: {int(result['cycles_evacuated']):,}"
+    )
+    console.print(f"  Preserved frontends: {', '.join(result['preserved_frontend_ids'])}")
+    _save_descriptor(descriptor, ctx)
 
 
 def phase_validate(descriptor: Descriptor, ctx: DeployContext) -> None:
@@ -1467,6 +1504,11 @@ def run_seed_phases(
 
 
 PHASES: list[tuple[str, str, PhaseFunc]] = [
+    (
+        "destroy_except_frontend",
+        "Destroying canisters except realm registry frontend",
+        phase_destroy_except_frontend,
+    ),
     ("validate", "Validating descriptor, identity, cycles", phase_validate),
     ("create_canisters", "Creating canisters", phase_create_canisters),
     ("install_backends", "Installing backends", phase_install_backends),

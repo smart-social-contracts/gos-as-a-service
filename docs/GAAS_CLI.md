@@ -89,6 +89,40 @@ codex catalog, multisig, commanders), but **registry user data — realms, credi
 permanently reset** and not restored. Never use this against a live environment (e.g. staging)
 unless a full clean slate is intended.
 
+### Rebuild except DNS-mapped frontends (`--destroy-except-realm-registry-frontend`)
+
+By default (and with `--reinstall-backends`), platform canisters keep the **same IDs** — backends are
+upgraded or reinstalled in place; only Casals-managed realm stands are drain-deleted via `gaas destroy`.
+
+Pass `--destroy-except-realm-registry-frontend` when DNS-mapped frontends must stay on-chain but
+everything else — including other frontends such as `casals_frontend` — should be recreated:
+
+- **`realm_registry_frontend`** — required; `*.gos.earth` (e.g. staging `77243-aqaaa-aaaau-aggza-cai`)
+- **`marketplace_frontend`** — preserved when present in the descriptor; `*.realmsgos.org`
+
+```bash
+gaas new environments/staging.json --identity deployer --network ic --yes --destroy-except-realm-registry-frontend
+```
+
+This **first phase**:
+
+1. Drain-destroys every orchestra/registry/platform canister except DNS-mapped frontends
+2. Converts leftover ICP in the Casals treasury
+3. Evacuates cycles to your **cycles wallet** (not the frontends — asset canisters cannot fund creates)
+4. Dust-deletes the Casals conductor when balance ≤ 500B cycles
+5. Clears destroyed IDs from the descriptor (DNS-mapped frontend IDs kept)
+
+Then the normal pipeline runs: create/install/seed backends and **adopts** the existing DNS-mapped frontends.
+Compatible with `--reinstall-backends` (new backends are empty anyway).
+
+| Mode | Canister IDs | DNS frontends | Other frontends | User/registry data |
+|---|---|---|---|---|
+| default | same | reinstalled in place | reinstalled in place | kept |
+| `--reinstall-backends` | same | reinstalled | reinstalled | wiped (re-seeded platform state) |
+| `--destroy-except-realm-registry-frontend` | new (except DNS frontends) | adopted | destroyed, then new | wiped |
+
+Never run raw `dfx canister delete` — it burns leftover cycles.
+
 ### Annotated example
 
 ```json

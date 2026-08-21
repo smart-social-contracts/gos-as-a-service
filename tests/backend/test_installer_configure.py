@@ -2,9 +2,11 @@
 
 import json
 import os
+import re
 import sys
 
 import _cdk as basilisk
+import pytest
 
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, os.path.join(_REPO_ROOT, "src/realm_installer"))
@@ -95,3 +97,34 @@ def test_apply_installer_config_from_json():
     assert out["success"] is True
     assert out["file_registry_id"] == "configured-fr"
     assert configured_file_registry_id("test") == "configured-fr"
+
+
+def test_require_casals_for_destroy_empty_raises():
+    _reset_installer_config()
+    from installer_config import CASALS_DESTROY_REQUIRED, require_casals_for_destroy
+
+    with pytest.raises(RuntimeError, match=re.escape(CASALS_DESTROY_REQUIRED)):
+        require_casals_for_destroy("")
+
+
+def test_require_casals_for_destroy_missing_raises():
+    _reset_installer_config()
+    from installer_config import CASALS_DESTROY_REQUIRED, require_casals_for_destroy
+
+    with pytest.raises(RuntimeError, match=re.escape(CASALS_DESTROY_REQUIRED)):
+        require_casals_for_destroy()
+
+
+def test_require_casals_for_destroy_explicit_id():
+    _reset_installer_config()
+    from installer_config import require_casals_for_destroy
+
+    assert require_casals_for_destroy("casals-explicit") == "casals-explicit"
+
+
+def test_require_casals_for_destroy_uses_stored_config():
+    _reset_installer_config()
+    from installer_config import require_casals_for_destroy
+
+    apply_installer_config({"casals_canister_id": "stored-casals-id"})
+    assert require_casals_for_destroy() == "stored-casals-id"

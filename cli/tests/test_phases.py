@@ -21,6 +21,7 @@ from gaas.phases import (
     phase_configure_backends,
     phase_controller_topology,
     phase_create_canisters,
+    phase_destroy_except_frontend,
     phase_domain_wiring,
     phase_grant_commanders,
     phase_install_backends,
@@ -37,6 +38,7 @@ from tests.conftest import SAMPLE_DESCRIPTOR, VALID_CANISTER_ID
 def test_phases_order() -> None:
     ids = [phase_id for phase_id, _title, _func in PHASES]
     assert ids == [
+        "destroy_except_frontend",
         "validate",
         "create_canisters",
         "install_backends",
@@ -51,6 +53,41 @@ def test_phases_order() -> None:
         "grant_commanders",
         "controller_topology",
     ]
+
+
+@patch("gaas.phases.destroy_except_frontend")
+def test_phase_destroy_except_frontend_noop_when_flag_false(mock_destroy: MagicMock) -> None:
+    desc = Descriptor.model_validate(SAMPLE_DESCRIPTOR)
+    ctx = DeployContext(identity="deployer", network="ic", destroy_except_frontend=False)
+    phase_destroy_except_frontend(desc, ctx)
+    mock_destroy.assert_not_called()
+
+
+@patch("gaas.phases._save_descriptor")
+@patch("gaas.phases.destroy_except_frontend")
+def test_phase_destroy_except_frontend_runs_and_saves(
+    mock_destroy: MagicMock,
+    mock_save: MagicMock,
+    tmp_path: Path,
+) -> None:
+    desc = Descriptor.model_validate(SAMPLE_DESCRIPTOR)
+    path = tmp_path / "env.json"
+    desc.save(path)
+    ctx = DeployContext(
+        identity="deployer",
+        network="ic",
+        yes=True,
+        destroy_except_frontend=True,
+        descriptor_path=path,
+    )
+    mock_destroy.return_value = {
+        "cycles_reclaimed": 100,
+        "cycles_evacuated": 200,
+        "preserved_frontend_ids": [VALID_CANISTER_ID],
+    }
+    phase_destroy_except_frontend(desc, ctx)
+    mock_destroy.assert_called_once()
+    mock_save.assert_called_once()
 
 
 @patch("gaas.phases.seed_codex_catalog")
@@ -112,7 +149,7 @@ def test_run_phases_validate_failure(mock_preflight) -> None:
     with pytest.raises(RuntimeError, match="preflight failed"):
         run_phases(desc, ctx)
 
-    assert ctx.completed_phases == []
+    assert ctx.completed_phases == ["destroy_except_frontend"]
 
 
 @patch("gaas.phases.dfx.top_up_canister")

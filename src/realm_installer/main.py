@@ -59,6 +59,7 @@ from installer_config import (
     configured_portal_base,
     get_config,
     installer_config_payload,
+    require_casals_for_destroy,
 )
 
 from basilisk import (
@@ -1396,7 +1397,7 @@ def _schedule_step_runner(task_id: str, delay_s: int = 0):
 
 # Shared land-NFT backend per network (Casals infra stand "nft", not per-realm).
 _SHARED_NFT_CANISTERS = {
-    "staging": "27sff-mqaaa-aaaah-quntq-cai",
+    "staging": "ca5ww-5iaaa-aaaac-bfxra-cai",
     "demo": "6hrip-iiaaa-aaaaf-qdoha-cai",
     "test": "eelas-yyaaa-aaaao-qps7a-cai",
 }
@@ -1409,8 +1410,8 @@ def _shared_nft_canister_id(network: str) -> str:
 _SHARED_TOKEN_LEDGERS = {
     "staging": {
         "REALMS": {
-            "ledger": "2rqin-xaaaa-aaaah-qunsq-cai",
-            "indexer": "2rqin-xaaaa-aaaah-qunsq-cai",
+            "ledger": "cj65k-laaaa-aaaac-bfxqq-cai",
+            "indexer": "cj65k-laaaa-aaaac-bfxqq-cai",
             "decimals": 8,
             "token_type": "shared",
         },
@@ -2335,36 +2336,13 @@ def _fetch_realm_stage_gen(backend_id: text):
     return (data.get("realm_stage") or "alpha").strip().lower()
 
 
-def _try_delete_canister_gen(canister_id: text, job_id: text):
-    """Best-effort IC canister teardown when the installer is a controller."""
-    if not (canister_id or "").strip():
-        return
-    cid = canister_id.strip()
-    try:
-        stop_res: CallResult = yield management_canister.stop_canister(
-            {"canister_id": Principal.from_str(cid)})
-        unwrap_call_result(stop_res)
-        del_res: CallResult = yield management_canister.delete_canister(
-            {"canister_id": Principal.from_str(cid)})
-        unwrap_call_result(del_res)
-        jlog(job_id).info(f"deleted canister {cid}")
-    except Exception as e:
-        jlog(job_id).warning(f"could not delete canister {cid} (non-fatal): {e}")
-
-
 def _destroy_realm_canisters_gen(job, job_id: text, backend_id: text, frontend_id: text):
     """Tear down realm canisters via Casals so cycles are drained back into its
-    treasury before deletion. When Casals is configured, a Casals failure aborts
-    the destroy (no direct-delete fallback — the IC burns a deleted canister's
-    remaining cycles, so falling back would silently lose them)."""
+    treasury before deletion. Refuses when Casals is unset — the IC burns a
+    deleted canister's remaining cycles, so raw delete is never used."""
     manifest = json.loads(job.manifest_json or "{}")
     cfg = _config()
-    casals_id = (cfg.casals_canister_id or "").strip()
-    if not casals_id:
-        jlog(job_id).info("casals_canister_id not configured; using direct delete")
-        yield from _try_delete_canister_gen(frontend_id, job_id)
-        yield from _try_delete_canister_gen(backend_id, job_id)
-        return
+    casals_id = require_casals_for_destroy(cfg.casals_canister_id)
 
     cas = manifest.get("casals", {}) or {}
     realm_info = manifest.get("realm", {}) or {}

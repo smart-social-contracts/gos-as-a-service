@@ -1,6 +1,18 @@
 """Parsing tests for dfx output helpers."""
 
-from gaas.dfx import parse_controllers, parse_cycles_balance, parse_module_hash
+import pytest
+
+from gaas.dfx import (
+    CANISTER_DELETE_FORBIDDEN,
+    DfxError,
+    delete_canister,
+    delete_dust_canister,
+    get_wallet,
+    parse_controllers,
+    parse_cycles_balance,
+    parse_module_hash,
+    reject_canister_delete,
+)
 
 
 def test_parse_controllers_principal_ending_in_digits():
@@ -140,6 +152,73 @@ def test_update_canister_settings_passes_controllers(monkeypatch) -> None:
     assert "multisig-id" in args
     assert "deployer-id" in args
 
+
+def test_reject_canister_delete_blocks_raw_delete() -> None:
+    with pytest.raises(DfxError, match="burns leftover cycles"):
+        reject_canister_delete(["dfx", "canister", "delete", "abc", "--yes"])
+
+
+def test_reject_canister_delete_allows_status() -> None:
+    reject_canister_delete(["dfx", "canister", "status", "abc"])
+
+
+def test_delete_canister_always_raises() -> None:
+    with pytest.raises(DfxError, match=CANISTER_DELETE_FORBIDDEN):
+        delete_canister()
+
+
+def test_delete_dust_canister_refuses_when_fat(monkeypatch) -> None:
+    from gaas import dfx
+
+    monkeypatch.setattr(
+        dfx,
+        "canister_status",
+        lambda *_a, **_k: dfx.CanisterStatus(
+            canister_id="abc",
+            status="running",
+            raw="Balance: 1_000_000_000_000 cycles",
+        ),
+    )
+
+    with pytest.raises(DfxError, match="refusing canister delete"):
+        delete_dust_canister("abc", "ic", identity="deployer", max_cycles=500_000_000_000)
+
+
+def test_delete_dust_canister_allows_dust(monkeypatch) -> None:
+    from gaas import dfx
+
+    captured: dict = {}
+
+    def fake_run(args, **kwargs):
+        captured["args"] = args
+        captured["allow"] = kwargs.get("allow_canister_delete")
+
+    monkeypatch.setattr(
+        dfx,
+        "canister_status",
+        lambda *_a, **_k: dfx.CanisterStatus(
+            canister_id="abc",
+            status="running",
+            raw="Balance: 100_000_000_000 cycles",
+        ),
+    )
+    monkeypatch.setattr(dfx, "_run", fake_run)
+    delete_dust_canister("abc", "ic", identity="deployer", max_cycles=500_000_000_000)
+    assert captured["allow"] is True
+    assert "delete" in captured["args"]
+
+
+def test_get_wallet(monkeypatch) -> None:
+    from gaas import dfx
+
+    monkeypatch.setattr(
+        dfx,
+        "_run",
+        lambda args, **kwargs: type(
+            "R", (), {"stdout": "wallet-principal\n", "stderr": "", "returncode": 0}
+        )(),
+    )
+    assert get_wallet("ic", identity="deployer") == "wallet-principal"
 
 
 def test_parse_candid_string_preserves_json_escaped_backslash_before_n():

@@ -274,7 +274,10 @@ def _materialize_casals_frontend_dist(
 ) -> Path:
     resolved = resolve_deploy_version(version, release_repo, session=session)
     if resolved.source_build:
-        repo_root = clone_repo(release_repo, dest.parent / "src-clone")
+        src = resolve_casals_src(casals_src)
+        repo_root = src if src is not None else clone_repo(
+            release_repo, dest.parent / "src-clone"
+        )
         return build_casals_frontend(
             repo_root, dest, conductor_canister_id=conductor_canister_id
         )
@@ -316,7 +319,10 @@ def resolve_casals_wasm(
 
     resolved = resolve_deploy_version(version, release_repo, session=session)
     if resolved.source_build:
-        repo_root = clone_repo(release_repo, dest.parent / "src-clone")
+        src = resolve_casals_src(casals_src)
+        repo_root = src if src is not None else clone_repo(
+            release_repo, dest.parent / "src-clone"
+        )
         return build_casals_wasm(repo_root, dest)
 
     try:
@@ -411,7 +417,10 @@ def resolve_casals_file_registry_wasm(
 
     resolved = resolve_deploy_version(version, release_repo, session=session)
     if resolved.source_build:
-        repo_root = clone_repo(release_repo, dest.parent / "src-clone")
+        src = resolve_casals_src(casals_src)
+        repo_root = src if src is not None else clone_repo(
+            release_repo, dest.parent / "src-clone"
+        )
         return build_casals_file_registry_wasm(repo_root, dest)
 
     try:
