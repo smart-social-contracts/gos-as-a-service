@@ -51,10 +51,7 @@ def configure_canister_ids_args(manifest: dict, backend_id: str, frontend_id: st
     return {
         "backend_canister_id": backend_id,
         "frontend_canister_id": frontend_id,
-        "file_registry_canister_id": _resolve_file_registry_canister_id(manifest),
         "realm_registry_canister_id": _resolve_realm_registry_canister_id(manifest),
-        "marketplace_canister_id": _resolve_marketplace_canister_id(manifest),
-        "network": manifest.get("network", ""),
         "test_flags": manifest.get("test_flags") or {},
         "can_test_mode": bool(manifest.get("can_test_mode")),
         "requesting_principal": (manifest.get("requesting_principal") or "").strip(),
@@ -68,21 +65,9 @@ def configure_canister_ids_payload(args: dict) -> tuple[dict, list[str]]:
     frontend_id = args.get("frontend_canister_id", "")
     payload = {"frontend_canister_id": frontend_id}
 
-    file_registry_id = (args.get("file_registry_canister_id") or "").strip()
-    if file_registry_id:
-        payload["file_registry_canister_id"] = file_registry_id
     realm_registry_id = (args.get("realm_registry_canister_id") or "").strip()
     if realm_registry_id:
         payload["realm_registry_canister_id"] = realm_registry_id
-    marketplace_id = (args.get("marketplace_canister_id") or "").strip()
-    if marketplace_id:
-        payload["marketplace_canister_id"] = marketplace_id
-    network = (args.get("network") or "").strip()
-    can_test_mode = bool(args.get("can_test_mode"))
-    if network:
-        net_lower = network.lower()
-        if not (can_test_mode and net_lower in ("ic", "production", "")):
-            payload["network"] = network
 
     test_flags = args.get("test_flags")
     if isinstance(test_flags, dict) and test_flags:
@@ -108,7 +93,6 @@ def configure_canister_ids_payload(args: dict) -> tuple[dict, list[str]]:
 def resync_extension_frontends_args(manifest: dict) -> dict:
     """Build args for the resync_extension_frontends post-provision step."""
     return {
-        "registry_canister_id": _resolve_file_registry_canister_id(manifest),
         "frontend_canister_id": (manifest.get("frontend_canister_id") or "").strip(),
     }
 
@@ -139,12 +123,12 @@ def enter_setup_args(manifest: dict, backend_id: str) -> dict:
         "backend_canister_id": backend_id,
         "creator_principal": (manifest.get("requesting_principal") or "").strip(),
         "realm_registry_canister_id": _resolve_realm_registry_canister_id(manifest),
+        "environment": (manifest.get("network") or "").strip(),
     }
 
 
 def needs_enter_setup_step(manifest: dict, backend_id: str = "") -> bool:
-    if not uses_chora_bootstrap(manifest):
-        return False
+    """True when the deploy includes a backend (or will deploy both canisters)."""
     backend = (backend_id or manifest.get("target_canister_id") or "").strip()
     if backend:
         return True

@@ -16,6 +16,7 @@ from bootstrap import (  # noqa: E402
     manifest_has_codex_block,
     needs_enter_setup_step,
     resolve_legacy_install_lists,
+    resync_extension_frontends_args,
     uses_chora_bootstrap,
     uses_realms_bootstrap,
 )
@@ -37,8 +38,6 @@ def _bootstrap_manifest(**overrides):
         "target_canister_id": "backend-principal",
         "frontend_canister_id": "frontend-principal",
         "registry_canister_id": "realm-registry-id",
-        "infra": {"file_registry_canister_id": "file-registry-id"},
-        "marketplace_canister_id": "marketplace-id",
         "network": "test",
         "requesting_principal": "creator-principal-abc",
         "federation": {"portal_url": "https://portal.example/r/my-realm"},
@@ -61,29 +60,16 @@ def _legacy_codex_manifest(**overrides):
 def _ext_manifest_for_job(manifest):
     """Build the deploy-task manifest shape used after _start_extensions_for_job."""
     network = (manifest.get("network") or "").strip()
-    file_registry_id = (
-        manifest.get("file_registry_canister_id")
-        or (manifest.get("infra") or {}).get("file_registry_canister_id")
-        or ""
-    )
     realm_registry_id = (
         manifest.get("realm_registry_canister_id")
         or manifest.get("registry_canister_id")
         or ""
     )
-    marketplace_id = (
-        manifest.get("marketplace_canister_id")
-        or (manifest.get("infra") or {}).get("marketplace_canister_id")
-        or ""
-    )
     ext_manifest = {
         "target_canister_id": manifest["target_canister_id"],
         "frontend_canister_id": manifest["frontend_canister_id"],
-        "registry_canister_id": file_registry_id,
-        "file_registry_canister_id": file_registry_id,
         "realm_registry_canister_id": realm_registry_id,
         "infra": manifest.get("infra") or {},
-        "marketplace_canister_id": marketplace_id,
         "network": network,
         "requesting_principal": manifest.get("requesting_principal", ""),
         "federation": manifest.get("federation") or {},
@@ -110,6 +96,7 @@ def test_manifest_with_legacy_codex_has_codex_block():
 def test_deploy_steps_without_codex_only_bootstrap():
     ext_manifest = _ext_manifest_for_job(_bootstrap_manifest())
     assert deploy_step_kinds(ext_manifest) == [
+        "enter_setup",
         "configure_canister_ids",
         "grant_frontend_access",
     ]
@@ -118,7 +105,11 @@ def test_deploy_steps_without_codex_only_bootstrap():
 def test_deploy_steps_with_legacy_codex_includes_installs():
     ext_manifest = _ext_manifest_for_job(_legacy_codex_manifest())
     kinds = deploy_step_kinds(ext_manifest)
-    assert kinds[:2] == ["configure_canister_ids", "grant_frontend_access"]
+    assert kinds[:3] == [
+        "enter_setup",
+        "configure_canister_ids",
+        "grant_frontend_access",
+    ]
     assert "extension" in kinds
     assert "codex" in kinds
     assert kinds[-1] == "resync_extension_frontends"
@@ -134,8 +125,9 @@ def test_configure_payload_includes_creator_and_portal_origin():
     assert payload["creator_principal"] == "creator-principal-abc"
     assert payload["portal_origin"] == "https://portal.example"
     assert payload["frontend_canister_id"] == "frontend-principal"
-    assert payload["file_registry_canister_id"] == "file-registry-id"
     assert payload["realm_registry_canister_id"] == "realm-registry-id"
+    assert "file_registry_canister_id" not in payload
+    assert "marketplace_canister_id" not in payload
 
 
 def test_configure_payload_realm_registry_from_explicit_field():
@@ -150,75 +142,21 @@ def test_configure_payload_realm_registry_from_explicit_field():
     assert payload["realm_registry_canister_id"] == "explicit-realm-registry"
 
 
-def test_configure_marketplace_from_infra():
+def test_configure_payload_omits_realms_file_registry_and_marketplace():
     manifest = _bootstrap_manifest(
-        marketplace_canister_id="",
         infra={
-            "file_registry_canister_id": "file-registry-id",
+            "file_registry_canister_id": "infra-file-registry",
             "marketplace_canister_id": "infra-marketplace-id",
         },
-    )
-    args = configure_canister_ids_args(
-        manifest, manifest["target_canister_id"], manifest["frontend_canister_id"]
-    )
-    payload, _warnings = configure_canister_ids_payload(args)
-    assert payload["marketplace_canister_id"] == "infra-marketplace-id"
-
-
-def test_configure_marketplace_prefers_top_level_over_infra():
-    manifest = _bootstrap_manifest(
         marketplace_canister_id="top-level-marketplace",
-        infra={
-            "file_registry_canister_id": "file-registry-id",
-            "marketplace_canister_id": "infra-marketplace-id",
-        },
     )
     args = configure_canister_ids_args(
         manifest, manifest["target_canister_id"], manifest["frontend_canister_id"]
     )
     payload, _warnings = configure_canister_ids_payload(args)
-    assert payload["marketplace_canister_id"] == "top-level-marketplace"
-
-
-def test_configure_file_registry_from_infra_not_registry_canister_id():
-    """registry_canister_id is the realm registry; file registry lives in infra."""
-    manifest = _bootstrap_manifest(
-        registry_canister_id="realm-registry-only",
-        infra={"file_registry_canister_id": "infra-file-registry"},
-    )
-    args = configure_canister_ids_args(
-        manifest, manifest["target_canister_id"], manifest["frontend_canister_id"]
-    )
-    payload, _warnings = configure_canister_ids_payload(args)
-    assert payload["file_registry_canister_id"] == "infra-file-registry"
-    assert payload["realm_registry_canister_id"] == "realm-registry-only"
-    assert "file-registry-id" not in payload.values()
-
-
-def test_configure_file_registry_falls_back_to_installer_config():
-    _reset_installer_config()
-    apply_installer_config({"file_registry_id": "configured-fr-id"})
-    manifest = _bootstrap_manifest(infra={}, registry_canister_id="realm-registry-only")
-    args = configure_canister_ids_args(
-        manifest, manifest["target_canister_id"], manifest["frontend_canister_id"]
-    )
-    payload, _warnings = configure_canister_ids_payload(args)
-    assert payload["file_registry_canister_id"] == "configured-fr-id"
-    assert payload["realm_registry_canister_id"] == "realm-registry-only"
-
-
-def test_configure_marketplace_falls_back_to_network_default():
-    _reset_installer_config()
-    manifest = _bootstrap_manifest(
-        marketplace_canister_id="",
-        infra={"file_registry_canister_id": "file-registry-id"},
-        network="test",
-    )
-    args = configure_canister_ids_args(
-        manifest, manifest["target_canister_id"], manifest["frontend_canister_id"]
-    )
-    payload, _warnings = configure_canister_ids_payload(args)
-    assert payload["marketplace_canister_id"] == "2wldc-niaaa-aaaad-qlxga-cai"
+    assert "file_registry_canister_id" not in payload
+    assert "marketplace_canister_id" not in payload
+    assert "network" not in payload
 
 
 def test_ext_manifest_configure_includes_realm_registry():
@@ -229,8 +167,8 @@ def test_ext_manifest_configure_includes_realm_registry():
         ext_manifest["frontend_canister_id"],
     )
     payload, _warnings = configure_canister_ids_payload(configure_args)
-    assert payload["file_registry_canister_id"] == "file-registry-id"
     assert payload["realm_registry_canister_id"] == "realm-registry-id"
+    assert "file_registry_canister_id" not in payload
 
 
 def test_configure_missing_requesting_principal_warns_and_proceeds():
@@ -289,25 +227,12 @@ def test_configure_payload_includes_test_flags_and_can_test_mode():
     assert payload["test_flags"] == {"test_mode": True, "ii_bypass": True}
 
 
-def test_configure_payload_omits_ic_network_when_can_test_mode():
+def test_resync_extension_frontends_only_passes_frontend():
     manifest = _bootstrap_manifest(
-        network="test",
-        can_test_mode=True,
-        test_flags={"test_mode": True, "ii_bypass": True},
+        infra={"file_registry_canister_id": "infra-file-registry"},
     )
-    args = configure_canister_ids_args(
-        manifest, manifest["target_canister_id"], manifest["frontend_canister_id"]
-    )
-    payload, _warnings = configure_canister_ids_payload(args)
-    assert payload["network"] == "test"
-
-    ic_args = configure_canister_ids_args(
-        {**manifest, "network": "ic"},
-        manifest["target_canister_id"],
-        manifest["frontend_canister_id"],
-    )
-    ic_payload, _warnings = configure_canister_ids_payload(ic_args)
-    assert "network" not in ic_payload
+    args = resync_extension_frontends_args(manifest)
+    assert args == {"frontend_canister_id": "frontend-principal"}
 
 
 def test_casals_path_always_enters_bootstrap_phase():
@@ -347,12 +272,14 @@ def test_enter_setup_args_from_manifest():
         gos={"implementation": "chora-gos"},
         registry_canister_id="realm-registry-id",
         requesting_principal="creator-principal-abc",
+        network="staging",
     )
     args = enter_setup_args(manifest, manifest["target_canister_id"])
     assert args == {
         "backend_canister_id": "backend-principal",
         "creator_principal": "creator-principal-abc",
         "realm_registry_canister_id": "realm-registry-id",
+        "environment": "staging",
     }
     assert needs_enter_setup_step(manifest, manifest["target_canister_id"])
 
@@ -363,6 +290,17 @@ def test_realms_gos_explicit_still_has_configure_and_grant():
     )
     assert uses_realms_bootstrap(manifest)
     assert deploy_step_kinds(manifest) == [
+        "enter_setup",
+        "configure_canister_ids",
+        "grant_frontend_access",
+    ]
+
+
+def test_blank_gos_implementation_gets_enter_setup_and_realms_bootstrap():
+    manifest = _bootstrap_manifest(gos={"implementation": ""})
+    assert uses_realms_bootstrap(manifest)
+    assert deploy_step_kinds(manifest) == [
+        "enter_setup",
         "configure_canister_ids",
         "grant_frontend_access",
     ]

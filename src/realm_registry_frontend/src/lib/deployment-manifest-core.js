@@ -70,30 +70,9 @@ function networkTestFlags(network, config = {}) {
 }
 
 export function networkInfra(network, config) {
-  const net = (network || config.default_deploy_queue_network || 'staging').toLowerCase();
-  // test is rebuilt from scratch by gaas; IDs must come from __GAAS_ENV__ injection.
-  // A stale hardcoded fallback is worse than none (dead marketplace trust anchor).
-  const fileRegistryFallbacks =
-    net === 'test'
-      ? null
-      : {
-          staging: 'iebdk-kqaaa-aaaau-agoxq-cai',
-          demo: 'vi64l-3aaaa-aaaae-qj4va-cai',
-        };
-  const marketplaceFallbacks =
-    net === 'test'
-      ? null
-      : {
-          staging: 'jji3o-uyaaa-aaaah-qreja-cai',
-          demo: 'ehyfg-wyaaa-aaaae-qg3qq-cai',
-        };
-  const file_registry_canister_id =
-    config.file_registry_canister_id || (fileRegistryFallbacks?.[net] || '');
-  const marketplace_canister_id =
-    config.marketplace_canister_id || (marketplaceFallbacks?.[net] || '');
   const ii_derivation_origin = config.ii_derivation_origin || '';
-  if (!file_registry_canister_id && !marketplace_canister_id && !ii_derivation_origin) return null;
-  return { file_registry_canister_id, marketplace_canister_id, ii_derivation_origin };
+  if (!ii_derivation_origin) return null;
+  return { ii_derivation_origin };
 }
 
 function buildCasalsBlock(realmName, deployVersion, config, formData = {}) {
