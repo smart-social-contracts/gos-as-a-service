@@ -223,7 +223,7 @@ Only these names are accepted:
 | `casals_backend` | Casals orchestrator backend (conductor) canister ID |
 | `casals_frontend` | Casals orchestration UI (standalone assets canister) |
 
-Leave a key out (or omit the entire `canisters` object) to create that canister during deploy. `casals_file_registry` is created via the cycles ledger (like `casals_backend`). `file_registry` / `file_registry_frontend` are **never created by gaas** — they are owned by the realms repo and only adopted when their IDs are present in the descriptor.
+Leave a key out (or omit the entire `canisters` object) to create that canister during deploy. `casals_backend` and `casals_file_registry` are created with `icp canister create --detached` from the **cycles ledger** (never `dfx ledger create-canister`, which spends ICP). Stale descriptor IDs that return `IC0301` are dropped and recreated. `file_registry` / `file_registry_frontend` are **never created by gaas** — they are owned by the realms repo and only adopted when their IDs are present in the descriptor.
 
 **Two file registries:** gaas stores **GOS realm binaries** (backend WASM, frontend asset bundles) and seeds **orchestration templates** in `casals_file_registry` (falling back to `file_registry` on legacy single-registry descriptors). The realms-owned `file_registry`, when adopted, receives the **Realms-GOS package catalog** seed (codices, extensions, marketplace namespace approvals); when it is absent, that catalog seeding is skipped with a warning and realms must be provisioned with their own package store. Casals `set_settings` receives `file_registry_canister_id` pointing at `casals_file_registry` when configured, otherwise the legacy single `file_registry`.
 

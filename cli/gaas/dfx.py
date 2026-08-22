@@ -29,6 +29,11 @@ _DFX_ENV = {
 _CANISTER_ID_OUTPUT_RE = re.compile(
     r"([a-z0-9]{5}(?:-[a-z0-9]{5}){3,10}-[a-z0-9]{3})"
 )
+# Created canisters always end in the -cai CRC. The looser pattern above also
+# matches user principals (e.g. …-2ae) and must not be used to parse creates.
+_CREATED_CANISTER_ID_RE = re.compile(
+    r"([a-z0-9]{5}(?:-[a-z0-9]{5}){3,10}-cai)"
+)
 _MODULE_HASH_NONE_RE = re.compile(r"module\s*hash:\s*none", re.I)
 _MODULE_HASH_RE = re.compile(r"module\s*hash:\s*(0x[0-9a-f]+|none)", re.I)
 _CONTROLLERS_RE = re.compile(r"controllers:\s*(.+)", re.I)
@@ -366,15 +371,40 @@ def ping_local() -> bool:
 
 def _parse_created_canister_id(result: subprocess.CompletedProcess[str]) -> str:
     combined = result.stdout + "\n" + result.stderr
-    match = _CANISTER_ID_OUTPUT_RE.search(combined)
-    if not match:
+    matches = _CREATED_CANISTER_ID_RE.findall(combined)
+    if not matches:
         raise DfxError(
-            "could not parse canister ID from dfx output",
+            "could not parse canister ID from create output",
             command=result.args if isinstance(result.args, list) else [],
             stderr=result.stderr,
             stdout=result.stdout,
         )
-    return match.group(1)
+    return matches[-1]
+
+
+def forget_canister_id(
+    name: str,
+    network: str,
+    *,
+    ids_path: Path | None = None,
+) -> None:
+    """Drop a stale dfx mapping so the next create mints a new canister ID."""
+    path = ids_path or Path("canister_ids.json")
+    if not path.is_file():
+        return
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    entry = data.get(name)
+    if not isinstance(entry, dict) or network not in entry:
+        return
+    del entry[network]
+    if entry:
+        data[name] = entry
+    else:
+        del data[name]
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
 def create_canister(
@@ -383,6 +413,7 @@ def create_canister(
     *,
     identity: str | None = None,
     with_cycles: int | None = None,
+    ids_path: Path | None = None,
 ) -> str:
     args = [
         "dfx",
@@ -398,7 +429,17 @@ def create_canister(
     if with_cycles is not None:
         args.extend(["--with-cycles", str(with_cycles)])
     result = _run(args, check=True)
-    return _parse_created_canister_id(result)
+    canister_id = _parse_created_canister_id(result)
+    try:
+        canister_status(canister_id, network, identity=identity)
+    except DfxError as exc:
+        if not is_canister_not_found_error(exc):
+            raise
+        forget_canister_id(name, network, ids_path=ids_path)
+        result = _run(args, check=True)
+        canister_id = _parse_created_canister_id(result)
+        canister_status(canister_id, network, identity=identity)
+    return canister_id
 
 
 def create_canister_via_ledger(
@@ -406,21 +447,34 @@ def create_canister_via_ledger(
     *,
     identity: str | None = None,
     controller: str | None = None,
+    with_cycles: int | None = None,
 ) -> str:
+    """Create an unnamed canister from the caller's cycles ledger (never ICP)."""
     if network != "ic":
         return create_canister_local(network, identity=identity, controller=controller)
     principal = controller or get_principal(identity)
+    cycles = with_cycles if with_cycles is not None else DEFAULT_CYCLES_PER_CANISTER
     args = [
-        "dfx",
-        "ledger",
-        "create-canister",
+        "icp",
+        "canister",
+        "create",
+        "--detached",
+        "--cycles",
+        str(cycles),
+        "-n",
+        "ic",
+        "--controller",
         principal,
-        "--network",
-        network,
+        "--quiet",
     ]
     if identity:
         args.extend(["--identity", identity])
-    args.extend(["--amount", "0.001"])
+    if "--with-icp" in args or any(arg.startswith("--with-icp=") for arg in args):
+        raise DfxError(
+            "refusing icp canister create --with-icp (would spend ICP)",
+            command=args,
+            stderr="--with-icp",
+        )
     result = _run(args, check=True)
     return _parse_created_canister_id(result)
 

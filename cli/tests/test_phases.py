@@ -221,6 +221,52 @@ def test_create_canisters_adopt_vs_create(
     assert "file_registry_frontend" not in desc.canisters
 
 
+@patch("gaas.phases.dfx.forget_canister_id")
+@patch("gaas.phases.dfx.create_canister_via_ledger")
+@patch("gaas.phases.dfx.create_canister")
+@patch("gaas.phases.dfx.canister_status")
+@patch("gaas.phases.dfx.get_principal")
+@patch("gaas.phases.dfx.use_identity")
+def test_create_canisters_drops_stale_ic0301_ids(
+    _use_identity,
+    mock_principal,
+    mock_status,
+    mock_create,
+    mock_ledger_create,
+    mock_forget,
+    tmp_path: Path,
+) -> None:
+    from gaas.dfx import DfxError
+
+    mock_principal.return_value = "aaaaa-aa"
+    mock_status.side_effect = DfxError("IC0301", command=[], stderr="IC0301")
+    mock_create.return_value = "yhw3g-fyaaa-aaaas-qgorq-cai"
+    mock_ledger_create.return_value = "qthgp-3yaaa-aaaae-agveq-cai"
+
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {"realm_registry_backend": VALID_CANISTER_ID}
+    desc = Descriptor.model_validate(data)
+    path = tmp_path / "env.gaas.json"
+    desc.save(path)
+    ctx = DeployContext(
+        identity="deployer",
+        network="ic",
+        descriptor_path=path,
+    )
+
+    phase_create_canisters(desc, ctx)
+
+    mock_forget.assert_called()
+    assert desc.canisters["realm_registry_backend"] == "yhw3g-fyaaa-aaaas-qgorq-cai"
+    # 1 adopted + 5 platform created; adopt-only marketplace and realms-owned
+    # file_registry names are skipped.
+    assert len(desc.canisters) == 6
+    assert "marketplace_backend" not in desc.canisters
+    assert "marketplace_frontend" not in desc.canisters
+    assert "file_registry" not in desc.canisters
+    assert "file_registry_frontend" not in desc.canisters
+
+
 def test_registry_init_json_can_test_mode() -> None:
     desc = Descriptor.model_validate(SAMPLE_DESCRIPTOR)
     default_json = json.loads(_registry_config_json(desc))

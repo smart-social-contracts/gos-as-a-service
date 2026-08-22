@@ -1,12 +1,18 @@
 """Parsing tests for dfx output helpers."""
 
+import json
+
 import pytest
 
 from gaas.dfx import (
     CANISTER_DELETE_FORBIDDEN,
     DfxError,
+    _parse_created_canister_id,
+    create_canister,
+    create_canister_via_ledger,
     delete_canister,
     delete_dust_canister,
+    forget_canister_id,
     get_wallet,
     parse_controllers,
     parse_cycles_balance,
@@ -261,6 +267,130 @@ def test_recover_canister_cycles_to_ledger(monkeypatch) -> None:
     assert captured["args"][0] == "icp"
     assert captured["args"][1:4] == ["canister", "delete", "abc"]
     assert "--no-recover-cycles" not in captured["args"]
+
+
+def test_parse_created_canister_id_requires_cai_suffix() -> None:
+    result = type(
+        "R",
+        (),
+        {
+            "args": ["icp", "canister", "create"],
+            "stdout": (
+                "Creating canister with controller "
+                "ah6ac-cc73l-bb2zc-ni7bh-jov4q-roeyj-6k2ob-mkg5j-pequi-vuaa6-2ae\n"
+            ),
+            "stderr": "Created: yhw3g-fyaaa-aaaas-qgorq-cai\n",
+        },
+    )()
+    assert _parse_created_canister_id(result) == "yhw3g-fyaaa-aaaas-qgorq-cai"
+
+
+def test_parse_created_canister_id_rejects_user_principal_only() -> None:
+    result = type(
+        "R",
+        (),
+        {
+            "args": ["dfx", "ledger", "create-canister"],
+            "stdout": "",
+            "stderr": (
+                "Error: not enough cycles from 0.001 ICP for "
+                "ah6ac-cc73l-bb2zc-ni7bh-jov4q-roeyj-6k2ob-mkg5j-pequi-vuaa6-2ae\n"
+            ),
+        },
+    )()
+    with pytest.raises(DfxError, match="could not parse canister ID"):
+        _parse_created_canister_id(result)
+
+
+def test_create_canister_via_ledger_uses_cycles_ledger(monkeypatch) -> None:
+    captured: dict = {}
+
+    def fake_run(args, **kwargs):
+        captured["args"] = args
+        return type(
+            "R",
+            (),
+            {
+                "args": args,
+                "stdout": "yhw3g-fyaaa-aaaas-qgorq-cai\n",
+                "stderr": "",
+                "returncode": 0,
+            },
+        )()
+
+    monkeypatch.setattr("gaas.dfx._run", fake_run)
+    canister_id = create_canister_via_ledger(
+        "ic",
+        identity="deployer",
+        controller="aaaaa-aa",
+        with_cycles=1_000_000_000_000,
+    )
+    assert canister_id == "yhw3g-fyaaa-aaaas-qgorq-cai"
+    assert captured["args"][0:4] == ["icp", "canister", "create", "--detached"]
+    assert "--cycles" in captured["args"]
+    assert "ledger" not in captured["args"]
+    assert "--with-icp" not in captured["args"]
+    assert "--amount" not in captured["args"]
+
+
+def test_forget_canister_id_drops_network_mapping(tmp_path) -> None:
+    path = tmp_path / "canister_ids.json"
+    path.write_text(
+        '{"realm_installer": {"ic": "dead-id", "test": "keep-me"}}\n',
+        encoding="utf-8",
+    )
+    forget_canister_id("realm_installer", "ic", ids_path=path)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data["realm_installer"] == {"test": "keep-me"}
+
+
+def test_create_canister_retries_after_ic0301(monkeypatch, tmp_path) -> None:
+    from gaas import dfx
+
+    calls = {"n": 0}
+    ids_path = tmp_path / "canister_ids.json"
+    ids_path.write_text(
+        '{"realm_installer": {"ic": "gudtl-kyaaa-aaaae-ag2tq-cai"}}\n',
+        encoding="utf-8",
+    )
+
+    def fake_run(args, **kwargs):
+        calls["n"] += 1
+        canister_id = (
+            "gudtl-kyaaa-aaaae-ag2tq-cai"
+            if calls["n"] == 1
+            else "yhw3g-fyaaa-aaaas-qgorq-cai"
+        )
+        return type(
+            "R",
+            (),
+            {
+                "args": args,
+                "stdout": f"Canister {canister_id} already created\n",
+                "stderr": "",
+                "returncode": 0,
+            },
+        )()
+
+    def fake_status(canister_id, *_a, **_k):
+        if canister_id.startswith("gudtl"):
+            raise DfxError("IC0301", command=[], stderr="IC0301")
+        return dfx.CanisterStatus(
+            canister_id=canister_id, status="running", raw="Status: Running"
+        )
+
+    monkeypatch.setattr(dfx, "_run", fake_run)
+    monkeypatch.setattr(dfx, "canister_status", fake_status)
+    canister_id = create_canister(
+        "realm_installer",
+        "ic",
+        identity="deployer",
+        ids_path=ids_path,
+    )
+    assert canister_id == "yhw3g-fyaaa-aaaas-qgorq-cai"
+    assert calls["n"] == 2
+    leftover = json.loads(ids_path.read_text()).get("realm_installer", {})
+    assert "ic" not in leftover
 
 
 def test_get_wallet(monkeypatch) -> None:

@@ -334,15 +334,27 @@ def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
     for name in KNOWN_CANISTER_NAMES:
         existing_id = descriptor.canisters.get(name)
         if existing_id:
-            status = dfx.canister_status(existing_id, ctx.network, identity=ctx.identity)
-            controllers = status.controllers
-            if controllers and principal not in controllers:
-                raise RuntimeError(
-                    f"identity {principal!r} is not a controller of adopted canister "
-                    f"{name} ({existing_id}); controllers: {', '.join(controllers)}"
+            try:
+                status = dfx.canister_status(
+                    existing_id, ctx.network, identity=ctx.identity
                 )
-            console.print(f"  {name}: adopt {existing_id} ({status.status})")
-            continue
+            except dfx.DfxError as exc:
+                if not dfx.is_canister_not_found_error(exc):
+                    raise
+                console.print(f"  {name}: stale {existing_id} (IC0301), creating new")
+                descriptor.canisters.pop(name, None)
+                dfx_name = DFX_CANISTER_NAMES.get(name)
+                if dfx_name:
+                    dfx.forget_canister_id(dfx_name, ctx.network)
+            else:
+                controllers = status.controllers
+                if controllers and principal not in controllers:
+                    raise RuntimeError(
+                        f"identity {principal!r} is not a controller of adopted canister "
+                        f"{name} ({existing_id}); controllers: {', '.join(controllers)}"
+                    )
+                console.print(f"  {name}: adopt {existing_id} ({status.status})")
+                continue
 
         if name in ADOPT_ONLY_CANISTER_NAMES:
             continue
@@ -360,14 +372,8 @@ def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
                 ctx.network,
                 identity=ctx.identity,
                 controller=principal,
+                with_cycles=cycles,
             )
-            if cycles and ctx.network == "ic":
-                dfx.top_up_canister(
-                    canister_id,
-                    cycles,
-                    ctx.network,
-                    identity=ctx.identity,
-                )
 
         descriptor.set_canister_id(name, canister_id)
         _save_descriptor(descriptor, ctx)
