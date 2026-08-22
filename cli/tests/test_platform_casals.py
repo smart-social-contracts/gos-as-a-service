@@ -142,6 +142,20 @@ def test_cookie_only_cache_is_not_usable(tmp_path: Path) -> None:
     assert _casals_frontend_cache_usable(cached) is False
 
 
+def test_ensure_local_canister_mapping_copies_ic_id(tmp_path: Path) -> None:
+    from gaas.platform import _ensure_local_canister_mapping
+
+    ids = tmp_path / "canister_ids.json"
+    ids.write_text(
+        '{"realm_registry_backend": {"ic": "fntsr-aqaaa-aaaae-ag22a-cai"}}\n',
+        encoding="utf-8",
+    )
+    _ensure_local_canister_mapping(tmp_path, "realm_registry_backend")
+    data = json.loads(ids.read_text(encoding="utf-8"))
+    assert data["realm_registry_backend"]["local"] == "fntsr-aqaaa-aaaae-ag22a-cai"
+    assert data["realm_registry_backend"]["ic"] == "fntsr-aqaaa-aaaae-ag22a-cai"
+
+
 def test_casals_policy_cache_is_usable(tmp_path: Path) -> None:
     cached = tmp_path / "dist"
     cached.mkdir()

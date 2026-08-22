@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import gzip
+import json
 import os
 import shutil
 import sys
@@ -484,12 +485,34 @@ def find_local_assetstorage_wasm(repo_root: Path | None = None) -> Path:
     )
 
 
+def _ensure_local_canister_mapping(repo_root: Path, name: str) -> None:
+    """dfx build --network local requires a mapping even though it only compiles."""
+    path = repo_root / "canister_ids.json"
+    data: dict = {}
+    if path.is_file():
+        try:
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            loaded = {}
+        if isinstance(loaded, dict):
+            data = loaded
+    entry = data.get(name)
+    if not isinstance(entry, dict):
+        entry = {}
+    if entry.get("local"):
+        return
+    entry["local"] = entry.get("ic") or "uxrrr-q7777-77774-qaada-cai"
+    data[name] = entry
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
 def _local_backend_wasm(repo_root: Path, canister: str) -> Path:
     from gaas import dfx
 
     dfx_name = DFX_CANISTER_NAMES.get(canister)
     if not dfx_name:
         raise PlatformError(f"no local dfx build mapping for {canister}")
+    _ensure_local_canister_mapping(repo_root, dfx_name)
     dfx.build_canister(dfx_name, "local", cwd=repo_root, env_extra=_basilisk_env(repo_root))
     gz = repo_root / ".dfx" / "local" / "canisters" / dfx_name / f"{dfx_name}.wasm.gz"
     if gz.is_file():
