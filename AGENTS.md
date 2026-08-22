@@ -56,7 +56,7 @@ A deleted canister ID **cannot be reused**. The replacement frontend would be a 
 
 **Other frontends are not DNS-mapped** (`casals_frontend`, file-registry UI, realm UIs). They can be destroyed and recreated with new IDs. Only the DNS-mapped frontends must survive a full rebuild.
 
-**Cycle-safe rebuild** (drain-destroy everything else, including other frontends; evacuate treasury to the cycles wallet; recreate; adopt the existing DNS canisters):
+**Cycle-safe rebuild** (drain-destroy everything else, including other frontends; refund treasury to the cycles ledger; recreate; adopt the existing DNS canisters):
 
 ```bash
 gaas new environments/staging.json --identity deployer --network ic --yes \

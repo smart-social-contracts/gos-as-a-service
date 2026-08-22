@@ -11,6 +11,7 @@ from gaas.dfx import (
     parse_controllers,
     parse_cycles_balance,
     parse_module_hash,
+    recover_canister_cycles_to_ledger,
     reject_canister_delete,
 )
 
@@ -162,6 +163,10 @@ def test_reject_canister_delete_allows_status() -> None:
     reject_canister_delete(["dfx", "canister", "status", "abc"])
 
 
+def test_reject_canister_delete_allows_icp_recover() -> None:
+    reject_canister_delete(["icp", "canister", "delete", "abc", "-n", "ic"])
+
+
 def test_delete_canister_always_raises() -> None:
     with pytest.raises(DfxError, match=CANISTER_DELETE_FORBIDDEN):
         delete_canister()
@@ -206,6 +211,39 @@ def test_delete_dust_canister_allows_dust(monkeypatch) -> None:
     delete_dust_canister("abc", "ic", identity="deployer", max_cycles=500_000_000_000)
     assert captured["allow"] is True
     assert "delete" in captured["args"]
+
+
+def test_recover_canister_cycles_to_ledger(monkeypatch) -> None:
+    from gaas import dfx
+
+    captured: dict = {}
+
+    def fake_run(args, **kwargs):
+        captured["args"] = args
+        captured["allow"] = kwargs.get("allow_canister_delete")
+        return type("R", (), {"stdout": "deleted\n", "stderr": "", "returncode": 0})()
+
+    monkeypatch.setattr(
+        dfx,
+        "canister_status",
+        lambda *a, **k: type(
+            "S",
+            (),
+            {
+                "canister_id": "abc",
+                "status": "running",
+                "raw": "Balance: 12_000_000_000_000 cycles",
+            },
+        )(),
+    )
+    monkeypatch.setattr(dfx, "parse_canister_cycles_balance", lambda raw: 12_000_000_000_000)
+    monkeypatch.setattr(dfx, "_run", fake_run)
+    recovered = recover_canister_cycles_to_ledger("abc", "ic", identity="deployer")
+    assert recovered == 12_000_000_000_000
+    assert captured["allow"] is True
+    assert captured["args"][0] == "icp"
+    assert captured["args"][1:4] == ["canister", "delete", "abc"]
+    assert "--no-recover-cycles" not in captured["args"]
 
 
 def test_get_wallet(monkeypatch) -> None:

@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from gaas import dfx
+from gaas.conductor_seed import get_tree
 from gaas.descriptor import Descriptor
 from gaas.known import KNOWN_CANISTER_NAMES, PLATFORM_CANISTER_NAMES
 
@@ -109,6 +110,17 @@ def _preserved_frontend_ids(descriptor: Descriptor) -> list[str]:
     if marketplace_id:
         preserved.append(marketplace_id)
     return preserved
+
+
+def _tree_canister_ids(tree: dict[str, Any]) -> list[str]:
+    ids: list[str] = []
+    for section in tree.get("sections") or []:
+        for stand in section.get("stands") or []:
+            for canister in stand.get("canisters") or []:
+                cid = (canister.get("canister_id") or "").strip()
+                if cid:
+                    ids.append(cid)
+    return ids
 
 
 def _also_destroy_targets(
@@ -317,12 +329,29 @@ def destroy_except_frontend(
     preserved_frontend_ids = _preserved_frontend_ids(descriptor)
     preserve_set = set(preserved_frontend_ids)
 
-    wallet = dfx.get_wallet(network, identity=identity)
     deployer_principal = dfx.get_principal(identity)
 
-    for name, canister_id in _also_destroy_targets(
+    # Casals can only drain canisters it controls. Many tree canisters
+    # (realms, batons, product stands) list deployer/baton but not Casals.
+    prepared: set[str] = set()
+    tree = get_tree(casals_id, network, identity=identity)
+    for canister_id in _tree_canister_ids(tree):
+        if canister_id in preserve_set or canister_id == casals_id:
+            continue
+        ensure_casals_controller(
+            canister_id,
+            casals_id=casals_id,
+            deployer_principal=deployer_principal,
+            network=network,
+            identity=identity,
+        )
+        prepared.add(canister_id)
+
+    for _name, canister_id in _also_destroy_targets(
         descriptor, preserve_ids=preserve_set, casals_id=casals_id
     ):
+        if canister_id in prepared:
+            continue
         ensure_casals_controller(
             canister_id,
             casals_id=casals_id,
@@ -350,28 +379,12 @@ def destroy_except_frontend(
 
     convert_treasury_icp(casals_id, network=network, identity=identity)
 
-    cycles_evacuated = evacuate_treasury_to_wallet(
-        casals_id,
-        wallet=wallet,
-        network=network,
-        identity=identity,
-    )
-
-    status = dfx.canister_status(casals_id, network, identity=identity)
-    leftover = dfx.parse_canister_cycles_balance(status.raw)
-    if leftover is None:
-        raise RuntimeError(f"could not read Casals balance for {casals_id}")
-    if leftover > CONDUCTOR_DELETE_MAX:
-        raise RuntimeError(
-            f"Casals still holds {leftover} cycles "
-            f"(refusing delete above {CONDUCTOR_DELETE_MAX})"
-        )
-
-    dfx.delete_dust_canister(
+    # Refund the whole treasury to the cycles ledger. Do not use a dfx cycles
+    # wallet (often unset) and do not dfx-delete a fat conductor (burns cycles).
+    cycles_evacuated = dfx.recover_canister_cycles_to_ledger(
         casals_id,
         network,
         identity=identity,
-        max_cycles=CONDUCTOR_DELETE_MAX,
     )
 
     destroyed_ids = {
@@ -390,7 +403,7 @@ def destroy_except_frontend(
     return {
         "ok": True,
         "preserved_frontend_ids": preserved_frontend_ids,
-        "wallet": wallet,
+        "wallet": "",
         "cycles_reclaimed": cycles_reclaimed,
         "cycles_evacuated": cycles_evacuated,
         "destroyed": orchestra_destroyed + extra_destroyed,

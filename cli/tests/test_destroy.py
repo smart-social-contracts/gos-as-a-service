@@ -13,6 +13,7 @@ from gaas.descriptor import Descriptor
 from gaas.destroy import (
     CONDUCTOR_DELETE_MAX,
     FRONTEND_NAME,
+    _tree_canister_ids,
     also_destroy_descriptor_canisters,
     clear_destroyed_descriptor_ids,
     destroy_except_frontend,
@@ -219,23 +220,23 @@ def _full_descriptor(tmp_path: Path) -> Descriptor:
     return Descriptor.load(path)
 
 
-@patch("gaas.destroy.dfx.delete_dust_canister")
+@patch("gaas.destroy.dfx.recover_canister_cycles_to_ledger")
 @patch("gaas.destroy.dfx.canister_status")
 @patch("gaas.destroy.dfx.get_principal")
-@patch("gaas.destroy.dfx.get_wallet")
 @patch("gaas.destroy.dfx.canister_call")
 @patch("gaas.destroy.ensure_casals_controller")
+@patch("gaas.destroy.get_tree", return_value={"sections": []})
 def test_destroy_except_frontend_orchestra_loop_and_extras(
+    _mock_tree: MagicMock,
     mock_ensure: MagicMock,
     mock_call: MagicMock,
-    mock_wallet: MagicMock,
     mock_principal: MagicMock,
     mock_status: MagicMock,
-    mock_dust_delete: MagicMock,
+    mock_recover: MagicMock,
     tmp_path: Path,
 ) -> None:
     desc = _full_descriptor(tmp_path)
-    mock_wallet.return_value = WALLET_ID
+    mock_recover.return_value = 100_000_000_000
     mock_principal.return_value = DEPLOYER_PRINCIPAL
 
     orchestra_batches = [
@@ -271,7 +272,7 @@ def test_destroy_except_frontend_orchestra_loop_and_extras(
 
     assert result["ok"] is True
     assert result["preserved_frontend_ids"] == [FRONTEND_ID]
-    assert result["wallet"] == WALLET_ID
+    assert result["cycles_evacuated"] == 100_000_000_000
     orchestra_preserve = json.loads(
         _parse_candid_string(mock_call.call_args_list[0][0][2])
     )["preserve"]
@@ -280,28 +281,28 @@ def test_destroy_except_frontend_orchestra_loop_and_extras(
     assert mock_call.call_args_list[1][0][1] == "destroy_orchestra"
     convert_payload = json.loads(_parse_candid_string(mock_call.call_args_list[-1][0][2]))
     assert convert_payload == {}
-    mock_dust_delete.assert_called_once()
+    mock_recover.assert_called_once_with(CASALS_ID, "ic", identity="deployer")
     assert desc.canisters == {FRONTEND_NAME: FRONTEND_ID}
     assert desc.multisig.backend_id is None
 
 
-@patch("gaas.destroy.dfx.delete_dust_canister")
+@patch("gaas.destroy.dfx.recover_canister_cycles_to_ledger")
 @patch("gaas.destroy.dfx.canister_status")
 @patch("gaas.destroy.dfx.get_principal")
-@patch("gaas.destroy.dfx.get_wallet")
 @patch("gaas.destroy.dfx.canister_call")
 @patch("gaas.destroy.ensure_casals_controller")
-def test_destroy_except_frontend_refuses_fat_casals(
+@patch("gaas.destroy.get_tree", return_value={"sections": []})
+def test_destroy_except_frontend_recovers_fat_casals_to_ledger(
+    _mock_tree: MagicMock,
     _mock_ensure: MagicMock,
     mock_call: MagicMock,
-    mock_wallet: MagicMock,
     mock_principal: MagicMock,
     mock_status: MagicMock,
-    mock_dust_delete: MagicMock,
+    mock_recover: MagicMock,
     tmp_path: Path,
 ) -> None:
     desc = _full_descriptor(tmp_path)
-    mock_wallet.return_value = WALLET_ID
+    mock_recover.return_value = CONDUCTOR_DELETE_MAX + 1
     mock_principal.return_value = DEPLOYER_PRINCIPAL
     mock_call.side_effect = [
         json.dumps({"ok": True, "destroyed": [], "remaining": 0, "done": True, "cycles_reclaimed": 0}),
@@ -309,28 +310,18 @@ def test_destroy_except_frontend_refuses_fat_casals(
         json.dumps({"ok": True, "cycles_reclaimed": 0}),
         json.dumps({"ok": True, "cycles_reclaimed": 0}),
         json.dumps({"ok": True}),
-        json.dumps({"ok": True, "deposited": 0}),
     ]
     mock_status.side_effect = [
         CanisterStatus(canister_id=REGISTRY_ID, status="running", raw=""),
         CanisterStatus(canister_id=INSTALLER_ID, status="running", raw=""),
         CanisterStatus(canister_id="ccccc-ccccc-ccccc-ccccc-ccccc-ccc", status="running", raw=""),
-        CanisterStatus(
-            canister_id=CASALS_ID,
-            status="running",
-            raw="Balance: 20_000_000_000_000 cycles",
-        ),
-        CanisterStatus(
-            canister_id=CASALS_ID,
-            status="running",
-            raw=f"Balance: {CONDUCTOR_DELETE_MAX + 1} cycles",
-        ),
     ]
 
-    with pytest.raises(RuntimeError, match="refusing delete"):
-        destroy_except_frontend(desc, network="ic", identity="deployer")
+    result = destroy_except_frontend(desc, network="ic", identity="deployer")
 
-    mock_dust_delete.assert_not_called()
+    assert result["ok"] is True
+    assert result["cycles_evacuated"] == CONDUCTOR_DELETE_MAX + 1
+    mock_recover.assert_called_once_with(CASALS_ID, "ic", identity="deployer")
 
 
 @patch("gaas.destroy.dfx.update_canister_settings")
@@ -448,19 +439,19 @@ def test_evacuate_to_wallet_not_frontend(mock_status: MagicMock, mock_casals: Ma
 MARKETPLACE_FRONTEND_ID = "h4gmt-waaaa-aaaac-bfxoq-cai"
 
 
-@patch("gaas.destroy.dfx.delete_dust_canister")
+@patch("gaas.destroy.dfx.recover_canister_cycles_to_ledger")
 @patch("gaas.destroy.dfx.canister_status")
 @patch("gaas.destroy.dfx.get_principal")
-@patch("gaas.destroy.dfx.get_wallet")
 @patch("gaas.destroy.dfx.canister_call")
 @patch("gaas.destroy.ensure_casals_controller")
+@patch("gaas.destroy.get_tree", return_value={"sections": []})
 def test_destroy_except_frontend_preserves_marketplace_when_present(
+    _mock_tree: MagicMock,
     mock_ensure: MagicMock,
     mock_call: MagicMock,
-    mock_wallet: MagicMock,
     mock_principal: MagicMock,
     mock_status: MagicMock,
-    mock_dust_delete: MagicMock,
+    mock_recover: MagicMock,
     tmp_path: Path,
 ) -> None:
     data = dict(SAMPLE_DESCRIPTOR)
@@ -477,28 +468,17 @@ def test_destroy_except_frontend_preserves_marketplace_when_present(
     desc.save(path)
     desc = Descriptor.load(path)
 
-    mock_wallet.return_value = WALLET_ID
+    mock_recover.return_value = 100_000_000_000
     mock_principal.return_value = DEPLOYER_PRINCIPAL
     mock_call.side_effect = [
         json.dumps({"ok": True, "destroyed": [], "remaining": 0, "done": True, "cycles_reclaimed": 0}),
         json.dumps({"ok": True, "cycles_reclaimed": 5}),
         json.dumps({"ok": True, "cycles_reclaimed": 3}),
         json.dumps({"ok": True}),
-        json.dumps({"ok": True, "deposited": 0}),
     ]
     mock_status.side_effect = [
         CanisterStatus(canister_id=REGISTRY_ID, status="running", raw=""),
         CanisterStatus(canister_id=INSTALLER_ID, status="running", raw=""),
-        CanisterStatus(
-            canister_id=CASALS_ID,
-            status="running",
-            raw="Balance: 100_000_000_000 cycles",
-        ),
-        CanisterStatus(
-            canister_id=CASALS_ID,
-            status="running",
-            raw="Balance: 100_000_000_000 cycles",
-        ),
     ]
 
     result = destroy_except_frontend(desc, network="ic", identity="deployer")
@@ -512,7 +492,7 @@ def test_destroy_except_frontend_preserves_marketplace_when_present(
         FRONTEND_NAME: FRONTEND_ID,
         "marketplace_frontend": MARKETPLACE_FRONTEND_ID,
     }
-    mock_dust_delete.assert_called_once()
+    mock_recover.assert_called_once_with(CASALS_ID, "ic", identity="deployer")
 
 
 def test_clear_destroyed_descriptor_ids_keeps_both_dns_frontends() -> None:
@@ -568,3 +548,64 @@ def test_new_cli_passes_destroy_except_frontend_flag(mock_run: MagicMock, tmp_pa
     assert result.exit_code == 0, result.output
     ctx = mock_run.call_args[0][1]
     assert ctx.destroy_except_frontend is True
+
+
+def test_tree_canister_ids_walks_sections() -> None:
+    tree = {
+        "sections": [
+            {
+                "stands": [
+                    {
+                        "canisters": [
+                            {"canister_id": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa"},
+                            {"canister_id": " "},
+                            {"name": "no-id"},
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+    assert _tree_canister_ids(tree) == ["aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa"]
+
+
+@patch("gaas.destroy.dfx.recover_canister_cycles_to_ledger")
+@patch("gaas.destroy.dfx.canister_status")
+@patch("gaas.destroy.dfx.get_principal")
+@patch("gaas.destroy.dfx.canister_call")
+@patch("gaas.destroy.ensure_casals_controller")
+@patch("gaas.destroy.get_tree")
+def test_destroy_except_frontend_prepares_tree_controllers(
+    mock_tree: MagicMock,
+    mock_ensure: MagicMock,
+    mock_call: MagicMock,
+    mock_principal: MagicMock,
+    mock_status: MagicMock,
+    mock_recover: MagicMock,
+    tmp_path: Path,
+) -> None:
+    desc = _full_descriptor(tmp_path)
+    tree_id = "ttttt-ttttt-ttttt-ttttt-ttttt-ttt"
+    mock_tree.return_value = {
+        "sections": [{"stands": [{"canisters": [{"canister_id": tree_id}]}]}]
+    }
+    mock_recover.return_value = 1
+    mock_principal.return_value = DEPLOYER_PRINCIPAL
+    mock_call.side_effect = [
+        json.dumps({"ok": True, "destroyed": [], "remaining": 0, "done": True, "cycles_reclaimed": 0}),
+        json.dumps({"ok": True, "cycles_reclaimed": 0}),
+        json.dumps({"ok": True, "cycles_reclaimed": 0}),
+        json.dumps({"ok": True, "cycles_reclaimed": 0}),
+        json.dumps({"ok": True}),
+    ]
+    mock_status.side_effect = [
+        CanisterStatus(canister_id=REGISTRY_ID, status="running", raw=""),
+        CanisterStatus(canister_id=INSTALLER_ID, status="running", raw=""),
+        CanisterStatus(canister_id="ccccc-ccccc-ccccc-ccccc-ccccc-ccc", status="running", raw=""),
+    ]
+
+    destroy_except_frontend(desc, network="ic", identity="deployer")
+
+    prepared = [call.args[0] for call in mock_ensure.call_args_list]
+    assert tree_id in prepared
+    assert FRONTEND_ID not in prepared

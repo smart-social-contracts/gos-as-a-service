@@ -107,10 +107,9 @@ gaas new environments/staging.json --identity deployer --network ic --yes --dest
 This **first phase**:
 
 1. Drain-destroys every orchestra/registry/platform canister except DNS-mapped frontends
-2. Converts leftover ICP in the Casals treasury
-3. Evacuates cycles to your **cycles wallet** (not the frontends — asset canisters cannot fund creates)
-4. Dust-deletes the Casals conductor when balance ≤ 500B cycles
-5. Clears destroyed IDs from the descriptor (DNS-mapped frontend IDs kept)
+2. Converts leftover ICP in the Casals treasury to cycles
+3. Deletes the Casals conductor via `icp canister delete`, refunding remaining cycles to your **cycles ledger** (not a dfx wallet, and not the DNS frontends)
+4. Clears destroyed IDs from the descriptor (DNS-mapped frontend IDs kept)
 
 Then the normal pipeline runs: create/install/seed backends and **adopts** the existing DNS-mapped frontends.
 Compatible with `--reinstall-backends` (new backends are empty anyway).

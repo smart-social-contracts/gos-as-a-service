@@ -288,7 +288,7 @@ def phase_destroy_except_frontend(descriptor: Descriptor, ctx: DeployContext) ->
                 else ""
             )
             + ")? "
-            "Other frontends are destroyed. Cycles go to your cycles wallet; "
+            "Other frontends are destroyed. Cycles go to your cycles ledger; "
             "DNS-mapped frontend IDs are kept. This cannot be undone.",
             default=False,
         )
@@ -302,7 +302,7 @@ def phase_destroy_except_frontend(descriptor: Descriptor, ctx: DeployContext) ->
     )
     console.print(
         f"  Cycles reclaimed: {int(result['cycles_reclaimed']):,}; "
-        f"evacuated to wallet: {int(result['cycles_evacuated']):,}"
+        f"refunded to cycles ledger: {int(result['cycles_evacuated']):,}"
     )
     console.print(f"  Preserved frontends: {', '.join(result['preserved_frontend_ids'])}")
     _save_descriptor(descriptor, ctx)

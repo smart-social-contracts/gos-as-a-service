@@ -58,7 +58,7 @@ For both, the canister ID is part of the hostname contract — a deleted ID cann
 
 Other frontends (`casals_frontend`, file-registry UI, realm UIs) are **not** DNS-mapped apex targets. They can be destroyed and recreated.
 
-To rebuild an environment without touching DNS mappings, `gaas` drain-destroys everything else (including other frontends), parks leftover cycles on the cycles wallet, and **adopts** the existing DNS-mapped frontend IDs:
+To rebuild an environment without touching DNS mappings, `gaas` drain-destroys everything else (including other frontends), refunds leftover cycles to the cycles ledger, and **adopts** the existing DNS-mapped frontend IDs:
 
 ```bash
 gaas new environments/staging.json --identity deployer --network ic --yes \

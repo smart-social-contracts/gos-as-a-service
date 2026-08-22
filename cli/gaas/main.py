@@ -213,7 +213,7 @@ def new_command(
             "Drain-destroy all canisters except DNS-mapped frontends "
             "(realm_registry_frontend for *.gos.earth; marketplace_frontend for "
             "*.realmsgos.org when present). Other frontends are destroyed. "
-            "Evacuates the Casals treasury to the cycles wallet, then recreates "
+            "Refunds the Casals treasury to the cycles ledger, then recreates "
             "the rest of the platform"
         ),
     ),

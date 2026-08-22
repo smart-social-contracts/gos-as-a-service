@@ -65,7 +65,13 @@ CANISTER_DELETE_FORBIDDEN = (
 
 
 def reject_canister_delete(args: list[str]) -> None:
-    """Refuse raw `dfx canister delete` — it burns leftover cycles."""
+    """Refuse raw `dfx canister delete` — it burns leftover cycles.
+
+    ``icp canister delete`` is allowed: it refunds liquid cycles to the
+    caller's cycles ledger unless ``--no-recover-cycles`` is passed.
+    """
+    if not args or args[0] != "dfx":
+        return
     for index, arg in enumerate(args):
         if arg == "canister" and index + 1 < len(args) and args[index + 1] == "delete":
             raise DfxError(
@@ -673,6 +679,39 @@ def delete_dust_canister(
     if identity:
         args.extend(["--identity", identity])
     _run(args, allow_canister_delete=True)
+
+
+def recover_canister_cycles_to_ledger(
+    canister_id: str,
+    network: str,
+    *,
+    identity: str | None = None,
+) -> int:
+    """Delete a canister and refund its liquid cycles to the caller's cycles ledger.
+
+    Uses ``icp canister delete`` (shim + cycles ledger). Never pass
+    ``--no-recover-cycles`` — that burns the leftover balance.
+    """
+    status = canister_status(canister_id, network, identity=identity)
+    balance = parse_canister_cycles_balance(status.raw) or 0
+    args = [
+        "icp",
+        "canister",
+        "delete",
+        canister_id,
+        "-n",
+        "ic" if network == "ic" else network,
+    ]
+    if identity:
+        args.extend(["--identity", identity])
+    if "--no-recover-cycles" in args:
+        raise DfxError(
+            "refusing icp canister delete --no-recover-cycles (would burn leftover cycles)",
+            command=args,
+            stderr="--no-recover-cycles",
+        )
+    _run(args, check=True, allow_canister_delete=True)
+    return balance
 
 
 def get_wallet(network: str, *, identity: str | None = None) -> str:
