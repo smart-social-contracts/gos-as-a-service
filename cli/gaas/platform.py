@@ -10,6 +10,7 @@ import sys
 import tarfile
 import urllib.parse
 from pathlib import Path
+from typing import Final
 
 import requests
 
@@ -485,9 +486,22 @@ def find_local_assetstorage_wasm(repo_root: Path | None = None) -> Path:
     )
 
 
+_BACKEND_BUILD_SOURCES: Final[dict[str, tuple[str, str]]] = {
+    "realm_registry_backend": (
+        "src/realm_registry_backend/main.py",
+        "src/realm_registry_backend/realm_registry_backend.did",
+    ),
+    "realm_installer": (
+        "src/realm_installer/main.py",
+        "src/realm_installer/realm_installer.did",
+    ),
+}
+
+
 def _ensure_local_canister_mapping(repo_root: Path, name: str) -> None:
-    """dfx build --network local requires a mapping even though it only compiles."""
-    path = repo_root / "canister_ids.json"
+    """Write a dummy local ID so leftover dfx --network local builds can resolve."""
+    path = repo_root / ".dfx" / "local" / "canister_ids.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
     data: dict = {}
     if path.is_file():
         try:
@@ -501,7 +515,15 @@ def _ensure_local_canister_mapping(repo_root: Path, name: str) -> None:
         entry = {}
     if entry.get("local"):
         return
-    entry["local"] = entry.get("ic") or "uxrrr-q7777-77774-qaada-cai"
+    root_ids = repo_root / "canister_ids.json"
+    ic_id = None
+    if root_ids.is_file():
+        try:
+            root = json.loads(root_ids.read_text(encoding="utf-8"))
+            ic_id = (root.get(name) or {}).get("ic")
+        except (OSError, json.JSONDecodeError, AttributeError):
+            ic_id = None
+    entry["local"] = ic_id or "uxrrr-q7777-77774-qaada-cai"
     data[name] = entry
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
@@ -512,15 +534,29 @@ def _local_backend_wasm(repo_root: Path, canister: str) -> Path:
     dfx_name = DFX_CANISTER_NAMES.get(canister)
     if not dfx_name:
         raise PlatformError(f"no local dfx build mapping for {canister}")
-    _ensure_local_canister_mapping(repo_root, dfx_name)
-    dfx.build_canister(dfx_name, "local", cwd=repo_root, env_extra=_basilisk_env(repo_root))
+    source = _BACKEND_BUILD_SOURCES.get(canister)
+    env_extra = dict(_basilisk_env(repo_root) or {})
+    if source:
+        src, did = source
+        env_extra["CANISTER_CANDID_PATH"] = str(repo_root / did)
+        dfx._run(
+            ["python", "-m", "basilisk", dfx_name, src],
+            cwd=repo_root,
+            env_extra=env_extra,
+            check=True,
+        )
+    else:
+        _ensure_local_canister_mapping(repo_root, dfx_name)
+        dfx.build_canister(
+            dfx_name, "local", cwd=repo_root, env_extra=env_extra or None
+        )
     gz = repo_root / ".dfx" / "local" / "canisters" / dfx_name / f"{dfx_name}.wasm.gz"
     if gz.is_file():
         return _ensure_uncompressed_wasm(gz)
     plain = repo_root / ".basilisk" / dfx_name / f"{dfx_name}.wasm"
     if plain.is_file():
         return plain
-    raise PlatformError(f"dfx build {dfx_name} did not produce WASM under {repo_root}")
+    raise PlatformError(f"local build of {dfx_name} did not produce WASM under {repo_root}")
 
 
 def fetch_platform_backend(

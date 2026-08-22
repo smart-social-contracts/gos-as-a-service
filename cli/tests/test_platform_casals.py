@@ -151,9 +151,9 @@ def test_ensure_local_canister_mapping_copies_ic_id(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     _ensure_local_canister_mapping(tmp_path, "realm_registry_backend")
-    data = json.loads(ids.read_text(encoding="utf-8"))
+    local_ids = tmp_path / ".dfx" / "local" / "canister_ids.json"
+    data = json.loads(local_ids.read_text(encoding="utf-8"))
     assert data["realm_registry_backend"]["local"] == "fntsr-aqaaa-aaaae-ag22a-cai"
-    assert data["realm_registry_backend"]["ic"] == "fntsr-aqaaa-aaaae-ag22a-cai"
 
 
 def test_casals_policy_cache_is_usable(tmp_path: Path) -> None:
