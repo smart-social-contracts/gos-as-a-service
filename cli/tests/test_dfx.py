@@ -154,6 +154,23 @@ def test_update_canister_settings_passes_controllers(monkeypatch) -> None:
     assert "deployer-id" in args
 
 
+def test_prepare_dfx_args_skips_run_deprecated_when_stock_dfx(monkeypatch) -> None:
+    from gaas import dfx
+
+    monkeypatch.setattr(dfx, "_DFX_ACCEPTS_RUN_DEPRECATED", False)
+    args = dfx._prepare_dfx_args(["dfx", "identity", "get-principal", "--identity", "deployer"])
+    assert args[0:2] == ["dfx", "identity"]
+    assert "--run-deprecated" not in args
+
+
+def test_prepare_dfx_args_injects_run_deprecated_when_wrapper_dfx(monkeypatch) -> None:
+    from gaas import dfx
+
+    monkeypatch.setattr(dfx, "_DFX_ACCEPTS_RUN_DEPRECATED", True)
+    args = dfx._prepare_dfx_args(["dfx", "identity", "get-principal"])
+    assert args[0:2] == ["dfx", "--run-deprecated"]
+
+
 def test_reject_canister_delete_blocks_raw_delete() -> None:
     with pytest.raises(DfxError, match="burns leftover cycles"):
         reject_canister_delete(["dfx", "canister", "delete", "abc", "--yes"])

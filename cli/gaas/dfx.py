@@ -41,6 +41,36 @@ _CERTIFIED_ASSETS_WASM_URL = (
 _ASSET_DEPLOY_ATTEMPTS = 3
 _ASSET_DEPLOY_RETRY_DELAY_S = 5
 _TRANSIENT_ASSET_SYNC_RE = re.compile(r"IC0536|Failed to list assets", re.I)
+_DFX_ACCEPTS_RUN_DEPRECATED: bool | None = None
+
+
+def _dfx_accepts_run_deprecated() -> bool:
+    """Operator hosts wrap ``dfx`` and require ``--run-deprecated``; stock dfx rejects it."""
+    global _DFX_ACCEPTS_RUN_DEPRECATED
+    if _DFX_ACCEPTS_RUN_DEPRECATED is not None:
+        return _DFX_ACCEPTS_RUN_DEPRECATED
+    try:
+        result = subprocess.run(
+            ["dfx", "--run-deprecated", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        _DFX_ACCEPTS_RUN_DEPRECATED = result.returncode == 0
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+        _DFX_ACCEPTS_RUN_DEPRECATED = False
+    return _DFX_ACCEPTS_RUN_DEPRECATED
+
+
+def _prepare_dfx_args(args: list[str]) -> list[str]:
+    if (
+        args
+        and args[0] == "dfx"
+        and "--run-deprecated" not in args
+        and _dfx_accepts_run_deprecated()
+    ):
+        return ["dfx", "--run-deprecated", *args[1:]]
+    return args
 
 
 class DfxError(RuntimeError):
@@ -106,9 +136,8 @@ def _run(
     if env_extra:
         env.update(env_extra)
     # Some environments wrap `dfx` and require --run-deprecated to invoke the
-    # real binary (preferring icp for new work). Inject it so gaas keeps working.
-    if args and args[0] == "dfx" and "--run-deprecated" not in args:
-        args = ["dfx", "--run-deprecated", *args[1:]]
+    # real binary. Stock dfx rejects the flag, so probe before injecting.
+    args = _prepare_dfx_args(args)
     try:
         result = subprocess.run(
             args,
