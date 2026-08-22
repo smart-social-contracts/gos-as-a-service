@@ -156,6 +156,25 @@ def test_ensure_local_canister_mapping_copies_ic_id(tmp_path: Path) -> None:
     assert data["realm_registry_backend"]["local"] == "fntsr-aqaaa-aaaae-ag22a-cai"
 
 
+def test_resolve_casals_file_registry_prefers_gos_cache(tmp_path, monkeypatch) -> None:
+    from gaas import platform as plat
+
+    gos = tmp_path / "gos"
+    (gos / "src" / "file_registry").mkdir(parents=True)
+    (gos / "src" / "file_registry" / "main.py").write_text("#", encoding="utf-8")
+    (gos / "dfx.json").write_text("{}", encoding="utf-8")
+    for marker in ("src/realm_registry_backend", "src/realm_installer"):
+        (gos / marker).mkdir(parents=True, exist_ok=True)
+    dest = tmp_path / "work"
+    dest.mkdir()
+    cached = dest / "casals_file_registry" / "file_registry.wasm"
+    cached.parent.mkdir(parents=True)
+    cached.write_bytes(b"wasm")
+    monkeypatch.setattr(plat, "find_gos_repo_root", lambda start=None: gos)
+    path = plat.resolve_casals_file_registry_wasm("main", "unused/repo", dest)
+    assert path == cached
+
+
 def test_casals_policy_cache_is_usable(tmp_path: Path) -> None:
     cached = tmp_path / "dist"
     cached.mkdir()

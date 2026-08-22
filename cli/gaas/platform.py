@@ -403,6 +403,29 @@ def fetch_casals_file_registry_wasm(
     )
 
 
+def _build_gos_file_registry_wasm(repo_root: Path, dest: Path) -> Path:
+    """Build the GOS file_registry (finalize_chunked_file_step) for Casals."""
+    from gaas import dfx
+
+    dest.mkdir(parents=True, exist_ok=True)
+    output = dest / "file_registry.wasm"
+    built = repo_root / ".basilisk" / "file_registry" / "file_registry.wasm"
+    env_extra = dict(_basilisk_env(repo_root) or {})
+    env_extra["CANISTER_CANDID_PATH"] = str(
+        repo_root / "src" / "file_registry" / "file_registry.did"
+    )
+    dfx._run(
+        ["python", "-m", "basilisk", "file_registry", "src/file_registry/main.py"],
+        cwd=repo_root,
+        env_extra=env_extra,
+        check=True,
+    )
+    if not built.is_file():
+        raise PlatformError(f"GOS file_registry build did not produce {built}")
+    shutil.copy2(built, output)
+    return output
+
+
 def resolve_casals_file_registry_wasm(
     version: str,
     release_repo: str,
@@ -413,6 +436,18 @@ def resolve_casals_file_registry_wasm(
 ) -> Path:
     dest = work_dir / "casals_file_registry"
     dest.mkdir(parents=True, exist_ok=True)
+    try:
+        gos_root = find_gos_repo_root()
+    except PlatformError:
+        gos_root = None
+    if gos_root is not None and (
+        gos_root / "src" / "file_registry" / "main.py"
+    ).is_file():
+        cached_gos = dest / "file_registry.wasm"
+        if cached_gos.is_file():
+            return cached_gos
+        return _build_gos_file_registry_wasm(gos_root, dest)
+
     cached = dest / "ic_file_registry.wasm"
     if cached.is_file():
         return cached
