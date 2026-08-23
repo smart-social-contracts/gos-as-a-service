@@ -506,19 +506,14 @@ def find_local_assetstorage_wasm(repo_root: Path | None = None) -> Path:
     from gaas import dfx
 
     try:
-        cache = dfx._run(["dfx", "cache", "show"], check=True).stdout.strip()
-        cache_path = Path(cache) / "assetstorage.wasm.gz"
-        if cache_path.is_file():
-            return cache_path
-    except dfx.DfxError:
-        pass
-
-    raise PlatformError(
-        "certified-assets canister wasm (assetstorage.wasm.gz) not found; "
-        "deploy a platform frontend with dfx first (creates "
-        ".dfx/ic/canisters/*/assetstorage.wasm.gz) or install dfx so its cache "
-        "contains assetstorage.wasm.gz"
-    )
+        return dfx.find_assetstorage_wasm()
+    except Exception as exc:
+        raise PlatformError(
+            "certified-assets canister wasm (assetstorage.wasm.gz) not found; "
+            "deploy a platform frontend with dfx first (creates "
+            ".dfx/ic/canisters/*/assetstorage.wasm.gz) or install dfx so its cache "
+            "contains assetstorage.wasm.gz"
+        ) from exc
 
 
 _BACKEND_BUILD_SOURCES: Final[dict[str, tuple[str, str]]] = {
