@@ -78,7 +78,7 @@ class RunLog:
             _console.print(f"[red]{name} failed (exit {result.returncode})[/red]")
             if tail:
                 _console.print("[dim]--- last lines from log ---[/dim]")
-                _console.print(tail)
+                _console.print(tail, highlight=False)
             raise CommandError(
                 f"command failed: {' '.join(cmd)}",
                 cmd=cmd,
@@ -109,7 +109,7 @@ class RunLog:
             _console.print("failed")
             raise
         elapsed = time.monotonic() - start
-        _console.print(f"done ({format_duration(elapsed)})")
+        _console.print(f"done ({format_duration(elapsed)})", highlight=False)
         return result
 
     def close(self) -> None:
