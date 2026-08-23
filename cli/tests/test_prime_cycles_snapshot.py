@@ -101,6 +101,14 @@ def test_verify_cycles_snapshot_raises_when_name_missing() -> None:
         verify_cycles_snapshot_covers_tree(["a", "b"], _snapshot_for_names(["a"]))
 
 
+def test_verify_cycles_snapshot_allows_failed_refresh_names() -> None:
+    names = ["a", "b"]
+    snapshot = _snapshot_for_names(["a"])
+    assert verify_cycles_snapshot_covers_tree(
+        names, snapshot, allow_missing=["b"]
+    ) == ["b"]
+
+
 @patch("gaas.phases.dfx.canister_call")
 @patch("gaas.phases.get_tree")
 def test_phase_prime_cycles_snapshot_batches_seven_canisters(
@@ -199,6 +207,34 @@ def test_phase_prime_cycles_snapshot_raises_when_snapshot_missing_canister(
 
     with pytest.raises(RuntimeError, match="missing conductor canisters"):
         phase_prime_cycles_snapshot(desc, ctx)
+
+
+@patch("gaas.phases.dfx.canister_call")
+@patch("gaas.phases.get_tree")
+def test_phase_prime_cycles_snapshot_warns_when_refresh_cannot_status(
+    mock_get_tree: MagicMock,
+    mock_call: MagicMock,
+) -> None:
+    names = ["canister-1", "canister-2"]
+    mock_get_tree.return_value = _tree_with_canisters(2)
+
+    def refresh_side_effect(canister_id, method, arg, network, *, identity=None, query=False):
+        del canister_id, network, identity
+        if query and method == "get_cycles_cached":
+            return json.dumps(_snapshot_for_names(["canister-1"]))
+        batch = _refresh_arg_canisters(arg)
+        if "canister-2" in batch:
+            return json.dumps({"ok": False, "error": "not a controller"})
+        return json.dumps(_snapshot_for_names(batch))
+
+    mock_call.side_effect = refresh_side_effect
+
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {"casals_backend": CASALS_BACKEND_ID}
+    desc = Descriptor.model_validate(data)
+    ctx = DeployContext(identity="deployer", network="ic")
+
+    phase_prime_cycles_snapshot(desc, ctx)
 
 
 @patch("gaas.phases.dfx.canister_call")

@@ -1157,21 +1157,29 @@ def _canister_row_has_error(row: dict[str, Any] | None) -> bool:
 
 
 def verify_cycles_snapshot_covers_tree(
-    tree_names: list[str], snapshot: dict[str, Any]
+    tree_names: list[str],
+    snapshot: dict[str, Any],
+    *,
+    allow_missing: list[str] | None = None,
 ) -> list[str]:
     """Ensure every tree canister appears in the snapshot.
 
-    Returns names whose snapshot row has status ``error``. Raises ``RuntimeError``
-    when a tree canister is missing from the snapshot entirely.
+    Returns names whose snapshot row has status ``error``, plus any
+    ``allow_missing`` names that never got a row (refresh failed before
+    Casals is a controller). Raises ``RuntimeError`` when a tree canister
+    is missing and was not in ``allow_missing``.
     """
     by_name = _cycles_snapshot_by_name(snapshot)
+    allowed = {name for name in (allow_missing or []) if name}
     missing = [name for name in tree_names if name not in by_name]
-    if missing:
+    unexpected = [name for name in missing if name not in allowed]
+    if unexpected:
         raise RuntimeError(
             "cycles snapshot missing conductor canisters after refresh: "
-            + ", ".join(sorted(missing))
+            + ", ".join(sorted(unexpected))
         )
-    return [name for name in tree_names if _canister_row_has_error(by_name.get(name))]
+    errored = [name for name in tree_names if _canister_row_has_error(by_name.get(name))]
+    return errored
 
 
 def _call_refresh_canisters(
@@ -1258,9 +1266,18 @@ def phase_prime_cycles_snapshot(descriptor: Descriptor, ctx: DeployContext) -> N
         query=True,
     )
     snapshot = json.loads(cached_raw)
-    error_names = verify_cycles_snapshot_covers_tree(names, snapshot)
+    error_names = verify_cycles_snapshot_covers_tree(
+        names, snapshot, allow_missing=failed
+    )
+    by_name = _cycles_snapshot_by_name(snapshot)
     for name in error_names:
-        row = _cycles_snapshot_by_name(snapshot)[name]
+        row = by_name.get(name)
+        if row is None:
+            console.print(
+                f"  [yellow]warning: {name} not in cycles snapshot yet "
+                "(Casals is not a controller until controller_topology)[/yellow]"
+            )
+            continue
         detail = row.get("error") or row.get("status") or "error"
         console.print(f"  [yellow]warning: {name} cycles status error: {detail}[/yellow]")
 
