@@ -76,6 +76,9 @@ def test_package_namespace_conventions() -> None:
     assert package_namespace("syntropia", "0.8.9", namespace_prefix="ext") == (
         "ext/syntropia/0.8.9"
     )
+    assert package_namespace("syntropia", "0.8.9", namespace_prefix="codex") == (
+        "codex/syntropia/0.8.9"
+    )
     assert package_namespace("legacy", "1.0.0", namespace_prefix="codex") == (
         "codex/legacy/1.0.0"
     )
@@ -87,7 +90,7 @@ def test_collect_unified_codex_skips_tests_readme_pycache(tmp_path: Path) -> Non
 
     assert package_id == "syntropia"
     assert version == "0.8.9"
-    assert prefix == "ext"
+    assert prefix == "codex"
     paths = {spec.registry_path for spec in uploads}
     assert paths == {"manifest.json", "backend/entry.py", "backend/data.json"}
     assert not any("tests/" in path for path in paths)
@@ -321,7 +324,7 @@ def test_publish_codex_dir_publishes_namespace_on_upload(
 
     mock_publish.assert_called_once_with(
         VALID_CANISTER_ID,
-        "ext/syntropia/0.8.9",
+        "codex/syntropia/0.8.9",
         "local",
         identity="deployer",
     )

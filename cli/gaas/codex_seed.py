@@ -327,7 +327,7 @@ def collect_codex_uploads(source_dir: Path) -> tuple[str, str, str, list[UploadS
         return (
             package_id,
             version,
-            "ext",
+            "codex",
             collect_extension_uploads(source_dir, package_id),
         )
 
