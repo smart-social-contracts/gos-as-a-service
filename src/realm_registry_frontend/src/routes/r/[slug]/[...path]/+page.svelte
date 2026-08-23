@@ -14,6 +14,7 @@
   import { fetchRealmRuntimeFlags } from '$lib/realm-runtime-flags.js';
   import { fetchDeploymentJobsFromInstaller } from '$lib/installer-queue.js';
   import { isUnknownSlugError, findJobForSlug, unknownSlugView } from '$lib/unknown-slug.js';
+  import RealmsSphereLoader from '$lib/components/RealmsSphereLoader.svelte';
 
   let iframeEl;
   let loading = true;
@@ -301,7 +302,7 @@
         aria-live="polite"
         transition:fade={{ duration: 300 }}
       >
-        <div class="loading-spinner" aria-hidden="true"></div>
+        <RealmsSphereLoader size={72} />
         <p class="loading-label">{iframeLoaded ? 'Preparing realm…' : 'Loading realm'}</p>
       </div>
     {/if}
@@ -356,14 +357,6 @@
     gap: 1.25rem;
     background: #fff;
   }
-  .loading-spinner {
-    width: 2rem;
-    height: 2rem;
-    border: 2px solid #e5e5e5;
-    border-top-color: #525252;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
   .loading-label {
     margin: 0;
     font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -371,11 +364,6 @@
     font-weight: 500;
     letter-spacing: 0.02em;
     color: #737373;
-  }
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
   .login-overlay {
     position: absolute;
