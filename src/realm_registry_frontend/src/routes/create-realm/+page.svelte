@@ -786,6 +786,9 @@
                       <div class="codex-radio-dot"></div>
                     {/if}
                   </div>
+                  {#if impl.icon}
+                    <img class="codex-icon" src={impl.icon} alt="" />
+                  {/if}
                   <div class="codex-info">
                     <span class="codex-name">{impl.name}</span>
                     <span class="codex-tagline">{impl.tagline}</span>
@@ -798,6 +801,9 @@
                   aria-disabled="true"
                 >
                   <div class="codex-radio"></div>
+                  {#if impl.icon}
+                    <img class="codex-icon" src={impl.icon} alt="" />
+                  {/if}
                   <div class="codex-info">
                     <span class="codex-name">
                       {impl.name}
@@ -2181,7 +2187,7 @@
 
   .codex-card {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 0.75rem;
     padding: 1rem;
     border: 2px solid #E5E5E5;
@@ -2230,6 +2236,13 @@
     border: 1px solid #E5E5E5;
     border-radius: 9999px;
     vertical-align: middle;
+  }
+
+  .codex-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    object-fit: contain;
+    flex-shrink: 0;
   }
 
   .codex-radio {

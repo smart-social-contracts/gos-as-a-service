@@ -27,6 +27,13 @@ test('registry includes monad-gos as available with monad-iframe-v1 loader', () 
   assert.equal(monadGos.available, true);
   assert.equal(monadGos.loaderProfile, 'monad-iframe-v1');
   assert.equal(monadGos.gggConformance, '1.0');
+  assert.equal(monadGos.icon, '/images/monad-gos-icon.png');
+});
+
+test('registry does not include icon for realms-gos', () => {
+  const realms = GOS_IMPLEMENTATIONS.find((impl) => impl.id === 'realms-gos');
+  assert.ok(realms);
+  assert.ok(!realms.icon);
 });
 
 test('getGosImplementation returns matching entry or undefined', () => {
@@ -105,11 +112,20 @@ test('buildGosImplementationsFromEnv maps gaas-env gos entries', () => {
       loader_profile: 'realms-iframe-v1',
       available: true,
     },
+    {
+      implementation: 'monad-gos',
+      version: 'v0.1.0',
+      loader_profile: 'monad-iframe-v1',
+      available: true,
+    },
   ]);
-  assert.equal(list.length, 1);
+  assert.equal(list.length, 2);
   assert.equal(list[0].id, 'realms-gos');
   assert.equal(list[0].available, true);
   assert.equal(list[0].loaderProfile, 'realms-iframe-v1');
+  assert.equal(list[0].icon, null);
+  assert.equal(list[1].id, 'monad-gos');
+  assert.equal(list[1].icon, '/images/monad-gos-icon.png');
 });
 
 test('resolveGosImplementations falls back to defaults without gaas-env', () => {

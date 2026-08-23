@@ -17,7 +17,8 @@ const DEFAULT_GOS_METADATA = {
 		tagline: 'Law-as-inference — the Monad drafts from citizen wishes',
 		description:
 			'GGG-compliant Motoko governance on the Internet Computer — citizen wishes, inference, and the Monad.',
-		gggConformance: '1.0'
+		gggConformance: '1.0',
+		icon: '/images/monad-gos-icon.png'
 	}
 };
 
@@ -54,6 +55,7 @@ const DEFAULT_GOS_IMPLEMENTATIONS = [
 		available: true,
 		loaderProfile: 'monad-iframe-v1',
 		gggConformance: '1.0',
+		icon: '/images/monad-gos-icon.png',
 		...GOS_ARTIFACT_KEYS['monad-gos']
 	}
 ];
@@ -84,6 +86,7 @@ export function buildGosImplementationsFromEnv(gosEntries) {
 			available: entry.available ?? false,
 			loaderProfile: entry.loader_profile ?? null,
 			gggConformance: meta.gggConformance ?? null,
+			icon: meta.icon ?? null,
 			...artifactKeys,
 			...(entry.version ? { defaultVersion: entry.version } : {})
 		};
