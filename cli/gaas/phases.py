@@ -193,16 +193,34 @@ def _registry_runtime_config_json(descriptor: Descriptor, network: str) -> str |
   """
     if not _resolve_can_test_mode(descriptor):
         return None
+    net = (descriptor.name or network or "staging").strip().lower()
+    # Match portal manifest defaults: only the test environment skips II for portal auth.
+    ii_bypass = net == "test"
     payload: dict = {
         "test_flags": {
             "test_mode": True,
-            "ii_bypass": True,
+            "ii_bypass": ii_bypass,
         }
     }
     # Registry runtime_flags rejects test flags when network=ic; omit on mainnet.
     if network != "ic":
         payload["network"] = network
     return json.dumps(payload)
+
+
+def verify_registry_runtime_flags(runtime_json: str, flags: dict[str, Any]) -> list[str]:
+    """Return the flag names the registry did not store as requested.
+
+    ``get_runtime_flags`` prefixes every test flag with ``test_mode_`` except
+    ``test_mode`` itself, so map the request keys before comparing.
+    """
+    requested = json.loads(runtime_json).get("test_flags", {})
+    mismatched: list[str] = []
+    for key, expected in requested.items():
+        attr = "test_mode" if key == "test_mode" else f"test_mode_{key}"
+        if bool(flags.get(attr)) != bool(expected):
+            mismatched.append(attr)
+    return mismatched
 
 
 def _installer_config_json(descriptor: Descriptor) -> str:
@@ -582,10 +600,11 @@ def phase_configure_backends(descriptor: Descriptor, ctx: DeployContext) -> None
             query=True,
         )
         flags = json.loads(flags_raw)
-        if not flags.get("test_mode") or not flags.get("test_mode_ii_bypass"):
+        mismatched = verify_registry_runtime_flags(runtime_json, flags)
+        if mismatched:
             raise RuntimeError(
                 "registry runtime flags mismatch after set_canister_config_json: "
-                f"{flags!r}"
+                f"{mismatched} in {flags!r}"
             )
         console.print("  registry runtime test flags verified")
 
