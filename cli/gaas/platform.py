@@ -102,10 +102,9 @@ def build_casals_wasm(casals_root: Path, dest: Path) -> Path:
     output = dest / "casals_backend.wasm"
     if output.is_file():
         return output
+    # Never reuse .basilisk/ from the checkout: it survives source edits, so a
+    # local Casals fix would silently ship as the previous build.
     built = casals_root / ".basilisk" / "casals_backend" / "casals_backend.wasm"
-    if built.is_file():
-        shutil.copy2(built, output)
-        return output
     py = _basilisk_python(casals_root)
     env = {
         **os.environ,

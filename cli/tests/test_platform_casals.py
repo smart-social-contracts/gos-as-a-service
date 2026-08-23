@@ -180,3 +180,25 @@ def test_casals_policy_cache_is_usable(tmp_path: Path) -> None:
     cached.mkdir()
     (cached / ".ic-assets.json5").write_text(_CASALS_ASSETS, encoding="utf-8")
     assert _casals_frontend_cache_usable(cached) is True
+
+
+def test_build_casals_wasm_rebuilds_over_a_stale_checkout_artifact(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """A local Casals edit must not ship as the previous .basilisk/ build."""
+    from gaas import platform
+
+    casals_root = tmp_path / "Casals"
+    built = casals_root / ".basilisk" / "casals_backend" / "casals_backend.wasm"
+    built.parent.mkdir(parents=True)
+    built.write_bytes(b"stale")
+
+    def fake_run(cmd, **kwargs):
+        built.write_bytes(b"fresh")
+
+    monkeypatch.setattr(platform, "_basilisk_python", lambda root: Path("python"))
+    monkeypatch.setattr(platform, "run_subprocess", fake_run)
+
+    output = platform.build_casals_wasm(casals_root, tmp_path / "work")
+
+    assert output.read_bytes() == b"fresh"
