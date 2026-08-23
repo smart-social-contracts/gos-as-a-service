@@ -302,7 +302,7 @@
         aria-live="polite"
         transition:fade={{ duration: 300 }}
       >
-        <RealmsSphereLoader size={72} />
+        <RealmsSphereLoader size={128} />
         <p class="loading-label">{iframeLoaded ? 'Preparing realm…' : 'Loading realm'}</p>
       </div>
     {/if}
@@ -354,16 +354,16 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 1.25rem;
+    gap: 1.5rem;
     background: #fff;
   }
   .loading-label {
     margin: 0;
     font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-size: 0.9375rem;
-    font-weight: 500;
-    letter-spacing: 0.02em;
-    color: #737373;
+    font-size: 1.0625rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: #171717;
   }
   .login-overlay {
     position: absolute;
