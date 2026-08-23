@@ -1105,6 +1105,65 @@ def test_phase_install_frontends_no_mid_run_confirm(
     )
 
 
+@patch("gaas.phases.build_marketplace_frontend")
+@patch("gaas.phases.dfx.get_principal", return_value="aaaaa-aa")
+@patch("gaas.phases.dfx.deploy_assets_canister")
+@patch("gaas.phases.resolve_casals_frontend_dist")
+@patch("gaas.phases.frontend_dist_dir")
+@patch("gaas.phases.write_gaas_env", return_value=Path("/tmp/gaas-env.json"))
+@patch("gaas.phases._find_repo_root")
+@patch("gaas.phases.get_run_log")
+def test_phase_install_frontends_reinstalls_marketplace_onto_existing_id(
+    mock_get_run_log,
+    mock_repo_root,
+    _write_env,
+    mock_frontend_dist,
+    mock_casals_dist,
+    mock_deploy_assets,
+    _mock_principal,
+    mock_build_marketplace,
+    tmp_path: Path,
+) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    dist = repo_root / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("<html></html>", encoding="utf-8")
+    mock_repo_root.return_value = repo_root
+    mock_frontend_dist.return_value = dist
+    mock_casals_dist.return_value = dist
+    mock_get_run_log.return_value = MagicMock()
+
+    marketplace_frontend_id = "ccccc-ccccc-ccccc-ccccc-ccc"
+    marketplace_backend_id = "ddddd-ddddd-ddddd-ddddd-ddd"
+    file_registry_id = "eeeee-eeeee-eeeee-eeeee-eee"
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        "realm_registry_frontend": VALID_CANISTER_ID,
+        "file_registry_frontend": VALID_CANISTER_ID,
+        "casals_frontend": VALID_CANISTER_ID,
+        "casals_backend": VALID_CANISTER_ID,
+        "marketplace_frontend": marketplace_frontend_id,
+        "marketplace_backend": marketplace_backend_id,
+        "file_registry": file_registry_id,
+    }
+    descriptor = Descriptor.model_validate(data)
+    ctx = DeployContext(identity="deployer", network="ic", yes=True, work_dir=tmp_path / "work")
+
+    phase_install_frontends(descriptor, ctx)
+
+    mock_build_marketplace.assert_called_once()
+    assert mock_build_marketplace.call_args.kwargs["marketplace_backend_id"] == (
+        marketplace_backend_id
+    )
+    assert mock_build_marketplace.call_args.kwargs["file_registry_id"] == file_registry_id
+    assert mock_deploy_assets.call_count == 4
+    marketplace_deploy = mock_deploy_assets.call_args_list[-1]
+    assert marketplace_deploy.args[0] == "marketplace_frontend"
+    assert marketplace_deploy.args[1] == marketplace_frontend_id
+    assert marketplace_deploy.kwargs.get("mode") == "reinstall"
+
+
 def _install_backends_descriptor() -> Descriptor:
     data = dict(SAMPLE_DESCRIPTOR)
     data["canisters"] = {
