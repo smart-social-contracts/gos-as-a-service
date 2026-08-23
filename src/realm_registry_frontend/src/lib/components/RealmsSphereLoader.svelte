@@ -5,7 +5,6 @@
 
 <div class="sphere-stage" style="--sphere-size: {size}px" aria-hidden="true">
   <span class="sphere-halo"></span>
-  <span class="sphere-ring"></span>
   <img
     src="/images/logo_sphere_only.svg"
     alt=""
@@ -30,21 +29,11 @@
     border-radius: 50%;
     background: radial-gradient(
       circle,
-      rgba(23, 23, 23, 0.14) 0%,
-      rgba(23, 23, 23, 0.05) 46%,
+      rgba(115, 115, 115, 0.16) 0%,
+      rgba(115, 115, 115, 0.05) 46%,
       transparent 72%
     );
     animation: sphere-glow 2.2s ease-in-out infinite;
-  }
-
-  .sphere-ring {
-    position: absolute;
-    inset: -8%;
-    border-radius: 50%;
-    border: 1.5px solid transparent;
-    border-top-color: rgba(23, 23, 23, 0.55);
-    border-right-color: rgba(23, 23, 23, 0.12);
-    animation: sphere-orbit 1.6s linear infinite;
   }
 
   .sphere-mark {
@@ -52,28 +41,22 @@
     display: block;
     width: calc(var(--sphere-size, 128px) * 0.86);
     height: auto;
-    opacity: 0.95;
-    filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.2));
+    /* Black SVG → mid-gray (#737373). */
+    filter: brightness(0) invert(0.45) drop-shadow(0 8px 18px rgba(115, 115, 115, 0.28));
     animation: sphere-breathe 2.2s ease-in-out infinite;
-  }
-
-  @keyframes sphere-orbit {
-    to {
-      transform: rotate(360deg);
-    }
   }
 
   @keyframes sphere-breathe {
     0%,
     100% {
-      opacity: 0.82;
+      opacity: 0.78;
       transform: scale(0.96);
-      filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.14));
+      filter: brightness(0) invert(0.45) drop-shadow(0 4px 10px rgba(115, 115, 115, 0.18));
     }
     50% {
       opacity: 1;
       transform: scale(1.04);
-      filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.24));
+      filter: brightness(0) invert(0.45) drop-shadow(0 12px 24px rgba(115, 115, 115, 0.32));
     }
   }
 
@@ -91,19 +74,14 @@
 
   @media (prefers-reduced-motion: reduce) {
     .sphere-mark,
-    .sphere-halo,
-    .sphere-ring {
+    .sphere-halo {
       animation: none;
     }
 
     .sphere-mark {
-      opacity: 0.96;
+      opacity: 0.92;
       transform: none;
-      filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.16));
-    }
-
-    .sphere-ring {
-      border-top-color: rgba(23, 23, 23, 0.35);
+      filter: brightness(0) invert(0.45) drop-shadow(0 6px 14px rgba(115, 115, 115, 0.22));
     }
   }
 </style>

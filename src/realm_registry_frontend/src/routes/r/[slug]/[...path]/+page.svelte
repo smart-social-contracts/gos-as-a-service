@@ -363,7 +363,7 @@
     font-size: 1.0625rem;
     font-weight: 600;
     letter-spacing: 0.04em;
-    color: #171717;
+    color: #737373;
   }
   .login-overlay {
     position: absolute;
