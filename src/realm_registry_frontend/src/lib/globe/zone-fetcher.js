@@ -1,4 +1,5 @@
 import { ZONE_DATA_RESOLUTION } from './globe-config.js';
+import { isTerritoryZone } from './hex-data.js';
 
 export function isLocalDevelopment() {
   if (typeof window === 'undefined') return false;
@@ -150,11 +151,13 @@ export async function fetchZoneData(filteredRealms) {
         const data = JSON.parse(response);
 
         if (data.success && data.zones?.length > 0) {
+          const zones = data.zones.filter(isTerritoryZone);
+          if (!zones.length) return null;
           return {
             realmId: realm.id,
             realmName: realm.name,
             realmIndex: index,
-            zones: data.zones,
+            zones,
             totalUsers: data.total_users,
           };
         }
