@@ -29,6 +29,9 @@ export function ensureProtocol(url) {
 export function icAssetBaseUrlForCanister(canisterId) {
   if (!canisterId || !String(canisterId).trim()) return '';
   const id = String(canisterId).trim();
+  if (typeof window === 'undefined') {
+    return `https://${id}.icp0.io`;
+  }
   if (isLocalDevelopment()) {
     const port = window.location.port || '4943';
     return `http://${id}.localhost:${port}`;
@@ -72,6 +75,20 @@ export function resolveRealmAssetUrl(realm, assetPath) {
 
 export function resolvedRealmLogoUrl(realm) {
   return resolveRealmAssetUrl(realm, '/custom/logo.png') || null;
+}
+
+/** Paths a realm frontend may serve for its branding logo. */
+export const BRANDING_LOGO_PATHS = ['/custom/logo.png', '/logo.png'];
+
+/**
+ * Candidate branding-logo URLs for a realm frontend canister.
+ * Empty when `frontendCanisterId` is missing.
+ */
+export function brandingLogoUrls(frontendCanisterId) {
+  const id = frontendCanisterId && String(frontendCanisterId).trim();
+  if (!id) return [];
+  const realm = { frontend_canister_id: id };
+  return BRANDING_LOGO_PATHS.map((path) => resolveRealmAssetUrl(realm, path)).filter(Boolean);
 }
 
 export function formatFullDate(timestamp) {
