@@ -13,7 +13,7 @@ _FILE_REGISTRY_IDS = {
 _MARKETPLACE_IDS = {
     "test": "2wldc-niaaa-aaaad-qlxga-cai",
     "demo": "ehyfg-wyaaa-aaaae-qg3qq-cai",
-    "staging": "jji3o-uyaaa-aaaah-qreja-cai",
+    "staging": "l5qpy-wqaaa-aaaah-qu2mq-cai",
 }
 
 

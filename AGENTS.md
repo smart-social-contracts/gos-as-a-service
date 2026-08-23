@@ -26,7 +26,7 @@ scripts/infra_dev_deploy.sh     # Fast dfx deploy (registry | installer)
 | realm_registry_frontend | `qtank-3qaaa-aaaaa-qhb6q-cai` | `2zaor-5yaaa-aaaac-qbxaa-cai` | `77243-aqaaa-aaaau-aggza-cai` |
 | realm_installer | `fltjm-tyaaa-aaaap-qunhq-cai` | `2s4td-daaaa-aaaao-bazmq-cai` | `lusjm-wqaaa-aaaau-ago7q-cai` |
 | file_registry | `uq2mu-kaaaa-aaaah-avqcq-cai` | `vi64l-3aaaa-aaaae-qj4va-cai` | `iebdk-kqaaa-aaaau-agoxq-cai` |
-| marketplace_backend | `2wldc-niaaa-aaaad-qlxga-cai` | `ehyfg-wyaaa-aaaae-qg3qq-cai` | `jji3o-uyaaa-aaaah-qreja-cai` |
+| marketplace_backend | `2wldc-niaaa-aaaad-qlxga-cai` | `ehyfg-wyaaa-aaaae-qg3qq-cai` | `l5qpy-wqaaa-aaaah-qu2mq-cai` |
 
 Casals conductors (external platform provisioner; operated by realms fleet ops):
 
