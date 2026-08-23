@@ -12,6 +12,7 @@ from gaas.descriptor import Descriptor, MultisigConfig, PlatformConfig, Services
 from gaas.phases import (
     PHASES,
     DeployContext,
+    _ensure_casals_backend_did,
     _installer_config_json,
     _casals_settings_json,
     _infra_canister_names,
@@ -1009,6 +1010,7 @@ def test_phase_install_frontends_no_mid_run_confirm(
 ) -> None:
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
+    (repo_root / "casals_backend.did").write_text("service : {}", encoding="utf-8")
     dist = repo_root / "dist"
     dist.mkdir()
     (dist / "index.html").write_text("<html></html>", encoding="utf-8")
@@ -1042,6 +1044,45 @@ def test_phase_install_frontends_no_mid_run_confirm(
     assert mock_casals_dist.call_args.kwargs["monitor_url"] == (
         "https://casals.realmsops.dev/v1/realms-test"
     )
+
+
+def test_ensure_casals_backend_did_copies_from_casals_src(tmp_path: Path) -> None:
+    repo_root = tmp_path / "gos"
+    casals_src = tmp_path / "Casals"
+    repo_root.mkdir()
+    casals_src.mkdir()
+    (casals_src / "src").mkdir()
+    (casals_src / "src" / "main.py").write_text("# casals\n", encoding="utf-8")
+    (casals_src / "casals_backend.did").write_text("service : { greet : () -> (text) }\n")
+    ctx = DeployContext(identity="deployer", network="ic", casals_src=casals_src)
+
+    dest = _ensure_casals_backend_did(repo_root, ctx)
+
+    assert dest == repo_root / "casals_backend.did"
+    assert dest.read_text(encoding="utf-8") == "service : { greet : () -> (text) }\n"
+
+
+def test_ensure_casals_backend_did_keeps_existing_file(tmp_path: Path) -> None:
+    repo_root = tmp_path / "gos"
+    repo_root.mkdir()
+    dest = repo_root / "casals_backend.did"
+    dest.write_text("service : { existing : () -> () }\n", encoding="utf-8")
+    ctx = DeployContext(identity="deployer", network="ic")
+
+    assert _ensure_casals_backend_did(repo_root, ctx) == dest
+    assert dest.read_text(encoding="utf-8") == "service : { existing : () -> () }\n"
+
+
+def test_ensure_casals_backend_did_requires_casals_src(tmp_path: Path) -> None:
+    from gaas.platform import PlatformError
+
+    repo_root = tmp_path / "gos"
+    repo_root.mkdir()
+    ctx = DeployContext(identity="deployer", network="ic")
+
+    with patch("gaas.phases.resolve_casals_src", return_value=None):
+        with pytest.raises(PlatformError, match="casals_backend.did is missing"):
+            _ensure_casals_backend_did(repo_root, ctx)
 
 
 def _install_backends_descriptor() -> Descriptor:

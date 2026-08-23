@@ -61,6 +61,7 @@ from gaas.platform import (
     frontend_dist_dir,
     resolve_casals_file_registry_wasm,
     resolve_casals_frontend_dist,
+    resolve_casals_src,
     resolve_casals_wasm,
     resolve_platform_backend_wasm,
 )
@@ -750,6 +751,25 @@ def _is_interactive(ctx: DeployContext) -> bool:
     return not ctx.yes and sys.stdin.isatty()
 
 
+def _ensure_casals_backend_did(repo_root: Path, ctx: DeployContext) -> Path:
+    """Copy the gitignored Casals Candid into the GOS repo for dfx generate."""
+    dest = repo_root / "casals_backend.did"
+    if dest.is_file() and dest.stat().st_size > 0:
+        return dest
+    src_root = resolve_casals_src(ctx.casals_src)
+    if src_root is None:
+        raise PlatformError(
+            "casals_backend.did is missing and no Casals checkout was found; "
+            "pass --casals-src or copy casals_backend.did into the GOS repo root"
+        )
+    source = src_root / "casals_backend.did"
+    if not source.is_file():
+        raise PlatformError(f"Casals checkout {src_root} has no casals_backend.did")
+    shutil.copy2(source, dest)
+    console.print(f"  copied {source} -> {dest}")
+    return dest
+
+
 def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
     platform_version, release_repo = _platform_release(descriptor)
     repo_root = _find_repo_root(ctx)
@@ -757,6 +777,7 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
     casals_staging = repo_root / "casals_frontend_dist"
 
     try:
+        _ensure_casals_backend_did(repo_root, ctx)
         gaas_env_path = write_gaas_env(
             repo_root, descriptor, ctx.network, deployer_principal=dfx.get_principal(ctx.identity)
         )
