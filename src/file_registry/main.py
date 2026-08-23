@@ -21,6 +21,7 @@ Additional endpoints:
 Storage layout (persistent filesystem, survives upgrades):
   /registry/_namespaces.json        index of all namespaces
   /registry/_acl.json               {namespace: [principal_str, ...]}
+  /registry/_approvals.json         {namespace: approval record}
   /registry/{namespace}/_meta.json  {files: {path: {size, content_type, sha256, updated}}}
   /registry/{namespace}/{path}      actual file content
   /registry/_chunks/                temporary chunk staging area
@@ -55,6 +56,9 @@ REGISTRY_DIR = "/registry"
 CHUNKS_DIR = "/registry/_chunks"
 NAMESPACES_FILE = "/registry/_namespaces.json"
 ACL_FILE = "/registry/_acl.json"
+APPROVALS_FILE = "/registry/_approvals.json"
+APPROVERS_NAMESPACE = "_approvers"
+VALID_APPROVAL_STATUSES = frozenset({"approved", "rejected"})
 
 CONTENT_TYPES = {
     ".py":   "text/plain",
@@ -155,6 +159,50 @@ def _save_acl(acl: dict):
     _ensure_dirs()
     with open(ACL_FILE, "w") as f:
         f.write(json.dumps(acl))
+
+
+def _load_approvals() -> dict:
+    try:
+        with open(APPROVALS_FILE, "r") as f:
+            return json.loads(f.read())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def _save_approvals(approvals: dict):
+    _ensure_dirs()
+    with open(APPROVALS_FILE, "w") as f:
+        f.write(json.dumps(approvals))
+
+
+def _current_file_hashes(namespace: str) -> dict:
+    meta = _load_meta(namespace)
+    return {
+        path: info.get("sha256", "")
+        for path, info in meta.get("files", {}).items()
+    }
+
+
+def _content_matches(namespace: str, snapshot: dict) -> bool:
+    return _current_file_hashes(namespace) == snapshot
+
+
+def _approval_get_payload(namespace: str, record: dict | None) -> dict:
+    if not record:
+        return {"approved": False, "status": "unapproved", "namespace": namespace}
+
+    status = record.get("status", "unapproved")
+    snapshot = record.get("file_hashes") or {}
+    matches = _content_matches(namespace, snapshot)
+    return {
+        "namespace": namespace,
+        "approved": status == "approved" and matches,
+        "status": status,
+        "content_matches": matches,
+        "approver": record.get("approver", ""),
+        "approved_at": record.get("approved_at", 0),
+        "file_count": len(snapshot),
+    }
 
 
 def _load_meta(namespace: str) -> dict:
@@ -368,6 +416,22 @@ def _require_codex_curator() -> str | None:
             "Unauthorized: publishing a codex package (kind: codex) requires "
             "codex-curator rights on this registry"
         )
+    })
+
+
+def _require_approver() -> str | None:
+    """Controller or publisher on the ``_approvers`` namespace may set approvals."""
+    if ic.is_controller(ic.caller()):
+        return None
+    caller = ic.caller().to_str()
+    acl = _load_acl()
+    if caller in acl.get(APPROVERS_NAMESPACE, []):
+        return None
+    return json.dumps({
+        "error": (
+            "Unauthorized: caller is not a controller or "
+            f"publisher on '{APPROVERS_NAMESPACE}'"
+        ),
     })
 
 
@@ -636,6 +700,31 @@ def get_stats() -> text:
 def get_acl() -> text:
     """Return the full publisher ACL: {namespace: [principal_str]}."""
     return json.dumps(_load_acl())
+
+
+@query
+def get_namespace_approval(args: text) -> text:
+    """Return marketplace approval state for a namespace.
+
+    Args (JSON): {"namespace": str}
+    """
+    try:
+        params = json.loads(args)
+    except json.JSONDecodeError as e:
+        return json.dumps({"error": f"Invalid JSON: {e}"})
+
+    namespace = (params.get("namespace") or "").strip()
+    if not namespace:
+        return json.dumps({"error": "namespace is required"})
+
+    approvals = _load_approvals()
+    return json.dumps(_approval_get_payload(namespace, approvals.get(namespace)))
+
+
+@query
+def get_namespace_approval_icc(namespace: text) -> text:
+    """Inter-canister variant of get_namespace_approval (positional text arg)."""
+    return get_namespace_approval(json.dumps({"namespace": namespace}))
 
 
 # ---------------------------------------------------------------------------
@@ -1330,6 +1419,58 @@ def grant_publish(args: text) -> text:
         _save_acl(acl)
 
     return json.dumps({"ok": True, "namespace": namespace, "principal": principal})
+
+
+@update
+def set_namespace_approval(args: text) -> text:
+    """Record a marketplace approval decision bound to current file hashes.
+
+    Args (JSON): {"namespace": str, "status": "approved"|"rejected", "notes": str}
+    Caller must be a controller or a publisher on ``_approvers``.
+    """
+    err = _require_approver()
+    if err:
+        return err
+
+    try:
+        params = json.loads(args)
+    except json.JSONDecodeError as e:
+        return json.dumps({"error": f"Invalid JSON: {e}"})
+
+    namespace = (params.get("namespace") or "").strip()
+    if not namespace:
+        return json.dumps({"error": "namespace is required"})
+
+    status = (params.get("status") or "").strip().lower()
+    if status not in VALID_APPROVAL_STATUSES:
+        return json.dumps({
+            "error": f"status must be one of: {', '.join(sorted(VALID_APPROVAL_STATUSES))}",
+        })
+
+    file_hashes = _current_file_hashes(namespace)
+    if not file_hashes:
+        return json.dumps({"error": f"Namespace '{namespace}' has no files"})
+
+    notes = params.get("notes") or ""
+    caller_str = ic.caller().to_str()
+    now = ic.time()
+
+    approvals = _load_approvals()
+    approvals[namespace] = {
+        "status": status,
+        "notes": notes,
+        "approver": caller_str,
+        "approved_at": now,
+        "file_hashes": file_hashes,
+    }
+    _save_approvals(approvals)
+
+    return json.dumps({
+        "ok": True,
+        "namespace": namespace,
+        "file_count": len(file_hashes),
+        "status": status,
+    })
 
 
 @update

@@ -160,6 +160,8 @@ service : {
   "list_files_icc" : (text) -> (text) query;
   "get_stats" : () -> (text) query;
   "get_acl" : () -> (text) query;
+  "get_namespace_approval" : (text) -> (text) query;
+  "get_namespace_approval_icc" : (text) -> (text) query;
   "list_extensions" : () -> (text) query;
   "list_codices" : () -> (text) query;
   "latest_version" : (text) -> (text) query;
@@ -175,6 +177,7 @@ service : {
   "delete_namespace" : (text) -> (text);
   "purge_old_versions" : (text) -> (text);
   "grant_publish" : (text) -> (text);
+  "set_namespace_approval" : (text) -> (text);
   "revoke_publish" : (text) -> (text);
   "store_file_chunk" : (text) -> (text);
   "finalize_chunked_file" : (text) -> (text);
