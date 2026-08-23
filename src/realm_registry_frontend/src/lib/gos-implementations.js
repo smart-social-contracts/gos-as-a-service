@@ -12,8 +12,8 @@ const DEFAULT_GOS_METADATA = {
 			'GGG-compliant governance with extensions, codices, treasury, justice and more.',
 		gggConformance: '1.0'
 	},
-	'chora-gos': {
-		name: 'Chora GOS',
+	'monad-gos': {
+		name: 'Monad GOS',
 		tagline: 'Law-as-inference — the Monad drafts from citizen wishes',
 		description:
 			'GGG-compliant Motoko governance on the Internet Computer — citizen wishes, inference, and the Monad.',
@@ -27,9 +27,9 @@ const GOS_ARTIFACT_KEYS = {
 		backendWasmKey: 'realm-backend',
 		frontendWasmKey: 'realm-assets'
 	},
-	'chora-gos': {
-		backendWasmKey: 'chora-backend',
-		frontendWasmKey: 'chora-assets'
+	'monad-gos': {
+		backendWasmKey: 'monad-backend',
+		frontendWasmKey: 'monad-assets'
 	}
 };
 
@@ -46,15 +46,15 @@ const DEFAULT_GOS_IMPLEMENTATIONS = [
 		...GOS_ARTIFACT_KEYS['realms-gos']
 	},
 	{
-		id: 'chora-gos',
-		name: 'Chora GOS',
+		id: 'monad-gos',
+		name: 'Monad GOS',
 		tagline: 'Law-as-inference — the Monad drafts from citizen wishes',
 		description:
 			'GGG-compliant Motoko governance on the Internet Computer — citizen wishes, inference, and the Monad.',
 		available: true,
-		loaderProfile: 'chora-iframe-v1',
+		loaderProfile: 'monad-iframe-v1',
 		gggConformance: '1.0',
-		...GOS_ARTIFACT_KEYS['chora-gos']
+		...GOS_ARTIFACT_KEYS['monad-gos']
 	}
 ];
 

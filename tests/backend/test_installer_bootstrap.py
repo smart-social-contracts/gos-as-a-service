@@ -17,7 +17,7 @@ from bootstrap import (  # noqa: E402
     needs_enter_setup_step,
     resolve_legacy_install_lists,
     resync_extension_frontends_args,
-    uses_chora_bootstrap,
+    uses_monad_gos_bootstrap,
     uses_realms_bootstrap,
 )
 from installer_config import (  # noqa: E402
@@ -244,19 +244,19 @@ def test_casals_path_always_enters_bootstrap_phase():
     assert "no extensions/codex; scheduling registration (casals path)" not in source
 
 
-def test_chora_gos_skips_realms_bootstrap_steps():
+def test_monad_gos_skips_realms_bootstrap_steps():
     manifest = _bootstrap_manifest(
-        gos={"implementation": "chora-gos"},
+        gos={"implementation": "monad-gos"},
     )
-    assert gos_implementation(manifest) == "chora-gos"
-    assert uses_chora_bootstrap(manifest)
+    assert gos_implementation(manifest) == "monad-gos"
+    assert uses_monad_gos_bootstrap(manifest)
     assert not uses_realms_bootstrap(manifest)
     assert deploy_step_kinds(manifest) == ["enter_setup"]
 
 
-def test_chora_gos_with_extensions_skips_configure_and_grant():
+def test_monad_gos_with_extensions_skips_configure_and_grant():
     manifest = _bootstrap_manifest(
-        gos={"implementation": "chora-gos"},
+        gos={"implementation": "monad-gos"},
         extensions=[{"id": "leftover-ext"}],
     )
     kinds = deploy_step_kinds(manifest)
@@ -269,7 +269,7 @@ def test_chora_gos_with_extensions_skips_configure_and_grant():
 
 def test_enter_setup_args_from_manifest():
     manifest = _bootstrap_manifest(
-        gos={"implementation": "chora-gos"},
+        gos={"implementation": "monad-gos"},
         registry_canister_id="realm-registry-id",
         requesting_principal="creator-principal-abc",
         network="staging",

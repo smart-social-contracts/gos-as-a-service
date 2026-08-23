@@ -101,19 +101,19 @@ def test_phase_seed_file_registry_skips_undeclared_catalog(
     mock_seed_catalog: MagicMock,
     tmp_path: Path,
 ) -> None:
-    mock_hashes.return_value = {"chora_backend.wasm.gz": "abc"}
+    mock_hashes.return_value = {"monad_backend.wasm.gz": "abc"}
 
     data = dict(SAMPLE_DESCRIPTOR)
     data["gos"] = [
         {
-            "implementation": "chora-gos",
+            "implementation": "monad-gos",
             "version": "v0.1.0",
-            "release_repo": "smart-social-contracts/chora-gos",
+            "release_repo": "smart-social-contracts/monad-gos",
             "artifacts": {
-                "backend_wasm_key": "chora-backend",
-                "frontend_wasm_key": "chora-assets",
+                "backend_wasm_key": "monad-backend",
+                "frontend_wasm_key": "monad-assets",
             },
-            "loader_profile": "chora-iframe-v1",
+            "loader_profile": "monad-iframe-v1",
         }
     ]
     data["canisters"] = {

@@ -45,7 +45,7 @@ from bootstrap import (
     resync_extension_frontends_args,
     resolve_legacy_install_lists,
     has_extension_installs,
-    uses_chora_bootstrap,
+    uses_monad_gos_bootstrap,
     uses_realms_bootstrap,
     _resolve_file_registry_canister_id,
     _resolve_marketplace_canister_id,
@@ -1225,7 +1225,7 @@ def _execute_configure_canister_ids(task, step, args):
 
 
 def _execute_enter_setup(task, step, args):
-    """Put a new Chora realm into in-realm setup (founding citizen + registry link)."""
+    """Put a new Monad GOS realm into in-realm setup (founding citizen + registry link)."""
     backend_id = (args.get("backend_canister_id") or "").strip()
     creator = (args.get("creator_principal") or "").strip()
     registry_id = (args.get("realm_registry_canister_id") or "").strip()

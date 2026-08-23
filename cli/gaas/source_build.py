@@ -109,14 +109,14 @@ def _gzip_wasm_to(dest: Path, wasm_src: Path) -> None:
         shutil.copyfileobj(src, gz)
 
 
-def _find_chora_backend_wasm(repo_root: Path) -> Path:
-    """Locate Motoko backend wasm after ``icp build chora_backend``.
+def _find_monad_backend_wasm(repo_root: Path) -> Path:
+    """Locate Motoko backend wasm after ``icp build monad_backend``.
 
-    icp writes the canonical artifact to ``.icp/cache/artifacts/chora_backend``
+    icp writes the canonical artifact to ``.icp/cache/artifacts/monad_backend``
     (raw wasm, no extension). Do not walk replica state under ``.icp``.
     """
     icp_root = repo_root / ".icp"
-    canonical = icp_root / "cache" / "artifacts" / "chora_backend"
+    canonical = icp_root / "cache" / "artifacts" / "monad_backend"
     if canonical.is_file():
         return canonical
 
@@ -128,35 +128,35 @@ def _find_chora_backend_wasm(repo_root: Path) -> Path:
             if not path.is_file():
                 continue
             name = path.name
-            if name == "chora_backend" or (
-                "chora_backend" in name and name.endswith((".wasm", ".wasm.gz"))
+            if name == "monad_backend" or (
+                "monad_backend" in name and name.endswith((".wasm", ".wasm.gz"))
             ):
                 candidates.append(path)
 
     if not candidates:
         raise SourceBuildError(
-            "Chora backend build did not produce wasm under "
-            f"{icp_root} (expected .icp/cache/artifacts/chora_backend)"
+            "Monad GOS backend build did not produce wasm under "
+            f"{icp_root} (expected .icp/cache/artifacts/monad_backend)"
         )
     return max(candidates, key=lambda path: path.stat().st_mtime)
 
 
-def build_chora_gos_artifacts(repo_root: Path, dest_dir: Path) -> tuple[Path, Path]:
-    """Build Chora GOS release assets from an icp-cli checkout."""
-    run_subprocess(["icp", "build", "chora_backend"], cwd=repo_root, check=True)
+def build_monad_gos_artifacts(repo_root: Path, dest_dir: Path) -> tuple[Path, Path]:
+    """Build Monad GOS release assets from an icp-cli checkout."""
+    run_subprocess(["icp", "build", "monad_backend"], cwd=repo_root, check=True)
 
-    backend_src = _find_chora_backend_wasm(repo_root)
+    backend_src = _find_monad_backend_wasm(repo_root)
 
-    fe_dir = repo_root / "src" / "chora_frontend"
+    fe_dir = repo_root / "src" / "monad_frontend"
     run_subprocess(["npm", "install"], cwd=fe_dir, check=True)
     run_subprocess(["npm", "run", "build"], cwd=fe_dir, check=True)
     dist = fe_dir / "dist"
     if not dist.is_dir() or not any(dist.iterdir()):
-        raise SourceBuildError(f"Chora frontend build did not produce {dist}")
+        raise SourceBuildError(f"Monad GOS frontend build did not produce {dist}")
 
     dest_dir.mkdir(parents=True, exist_ok=True)
-    backend_out = dest_dir / "chora_backend.wasm.gz"
-    frontend_out = dest_dir / "chora_frontend.tar.gz"
+    backend_out = dest_dir / "monad_backend.wasm.gz"
+    frontend_out = dest_dir / "monad_frontend.tar.gz"
     _gzip_wasm_to(backend_out, backend_src)
     _tar_directory(dist, frontend_out)
     return backend_out, frontend_out
@@ -268,8 +268,8 @@ def resolve_gos_artifacts(
             backend_file, frontend_file = build_realms_gos_artifacts(
                 repo_root, dest_dir
             )
-        elif implementation == "chora-gos":
-            backend_file, frontend_file = build_chora_gos_artifacts(
+        elif implementation == "monad-gos":
+            backend_file, frontend_file = build_monad_gos_artifacts(
                 repo_root, dest_dir
             )
         else:

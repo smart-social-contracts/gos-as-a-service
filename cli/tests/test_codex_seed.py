@@ -436,7 +436,7 @@ def test_phase_seed_file_registry_skips_without_catalog(
     mock_hashes.return_value = {"realm_backend.wasm.gz": "abc"}
 
     data = dict(SAMPLE_DESCRIPTOR)
-    data["gos"] = [{**data["gos"][0], "catalog": None, "implementation": "chora-gos"}]
+    data["gos"] = [{**data["gos"][0], "catalog": None, "implementation": "monad-gos"}]
     data["canisters"] = {
         "file_registry": VALID_CANISTER_ID,
         "realm_registry_backend": VALID_CANISTER_ID,

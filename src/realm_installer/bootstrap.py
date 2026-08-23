@@ -113,8 +113,8 @@ def uses_realms_bootstrap(manifest: dict) -> bool:
     return impl in ("", "realms-gos")
 
 
-def uses_chora_bootstrap(manifest: dict) -> bool:
-    return gos_implementation(manifest) == "chora-gos"
+def uses_monad_gos_bootstrap(manifest: dict) -> bool:
+    return gos_implementation(manifest) == "monad-gos"
 
 
 def enter_setup_args(manifest: dict, backend_id: str) -> dict:
