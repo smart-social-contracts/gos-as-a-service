@@ -507,10 +507,10 @@
     voucherSuccess = null;
     
     try {
-      const { buildBillingIdentityPayload, II_REQUIRED_MESSAGE } = await import('$lib/ii-proof.js');
+      const { buildBillingIdentityPayload, billingIdentityHeaders, II_REQUIRED_MESSAGE } = await import('$lib/ii-proof.js');
       let billingExtras;
       try {
-        billingExtras = await buildBillingIdentityPayload();
+        billingExtras = await buildBillingIdentityPayload({ promptLogin: true });
       } catch (err) {
         voucherError = err?.message === II_REQUIRED_MESSAGE ? II_REQUIRED_MESSAGE : (err?.message || II_REQUIRED_MESSAGE);
         return;
@@ -520,6 +520,7 @@
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...billingIdentityHeaders(billingExtras.identity),
         },
         body: JSON.stringify({
           principal_id: userPrincipal.toText(),
@@ -557,10 +558,10 @@
     topUpError = null;
     
     try {
-      const { buildBillingIdentityPayload, II_REQUIRED_MESSAGE } = await import('$lib/ii-proof.js');
+      const { buildBillingIdentityPayload, billingIdentityHeaders, II_REQUIRED_MESSAGE } = await import('$lib/ii-proof.js');
       let billingExtras;
       try {
-        billingExtras = await buildBillingIdentityPayload();
+        billingExtras = await buildBillingIdentityPayload({ promptLogin: true });
       } catch (err) {
         topUpError = err?.message === II_REQUIRED_MESSAGE ? II_REQUIRED_MESSAGE : (err?.message || II_REQUIRED_MESSAGE);
         return;
@@ -570,6 +571,7 @@
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...billingIdentityHeaders(billingExtras.identity),
         },
         body: JSON.stringify({
           principal_id: userPrincipal.toText(),

@@ -14,25 +14,57 @@ export function serializeDelegationIdentity(identity) {
 }
 
 /**
- * Build billing POST extras: registry canister id + optional II identity proof.
+ * Build billing POST body fields from a delegation chain proof.
  *
- * @returns {Promise<{ registry_canister_id: string, identity?: object }>}
+ * @param {object} proof
+ * @param {string} registryCanisterId
+ * @returns {{ registry_canister_id: string, identity: object }}
  */
-export async function buildBillingIdentityPayload() {
-	const { CONFIG, getTestModeIIBypass } = await import('$lib/config.js');
-	const { getIdentity } = await import('$lib/auth.js');
-	const identity = await getIdentity();
-	const proof = serializeDelegationIdentity(identity);
+export function buildBillingPayloadFromProof(proof, registryCanisterId) {
 	if (!proof) {
-		if (getTestModeIIBypass()) {
-			return { registry_canister_id: CONFIG.realm_registry_backend_canister_id || '' };
-		}
 		throw new Error(II_REQUIRED_MESSAGE);
 	}
 	return {
-		registry_canister_id: CONFIG.realm_registry_backend_canister_id || '',
+		registry_canister_id: registryCanisterId || '',
 		identity: proof,
 	};
+}
+
+/**
+ * Headers billing accepts as an alternate II proof carrier.
+ *
+ * @param {object} proof
+ * @returns {Record<string, string>}
+ */
+export function billingIdentityHeaders(proof) {
+	return { 'X-IC-Identity': JSON.stringify(proof) };
+}
+
+/**
+ * Build billing POST extras: registry canister id + II identity proof.
+ *
+ * Portal test-mode II bypass uses deterministic keys without a delegation chain;
+ * billing still requires proof, so we fall back to the real AuthClient session or
+ * prompt for Internet Identity when `promptLogin` is true.
+ *
+ * @param {{ promptLogin?: boolean }} [options]
+ * @returns {Promise<{ registry_canister_id: string, identity: object }>}
+ */
+export async function buildBillingIdentityPayload({ promptLogin = false } = {}) {
+	const { CONFIG } = await import('$lib/config.js');
+	const { getIdentity, getBillingDelegationIdentity, loginForBilling } = await import('$lib/auth.js');
+
+	let proof = serializeDelegationIdentity(await getIdentity());
+
+	if (!proof) {
+		proof = serializeDelegationIdentity(await getBillingDelegationIdentity());
+	}
+
+	if (!proof && promptLogin) {
+		proof = serializeDelegationIdentity(await loginForBilling());
+	}
+
+	return buildBillingPayloadFromProof(proof, CONFIG.realm_registry_backend_canister_id || '');
 }
 
 export { II_REQUIRED_MESSAGE };

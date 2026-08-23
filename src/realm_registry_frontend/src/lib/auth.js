@@ -44,6 +44,8 @@ function setRememberMe(value) {
 }
 
 let authClient;
+/** Real II AuthClient used for billing proof when portal test bypass is active. */
+let billingAuthClient;
 
 let _testIdentity = null;
 let _testLoggedIn = false;
@@ -272,6 +274,59 @@ export async function getIdentity() {
     return client.getIdentity();
   }
   return null;
+}
+
+async function initializeBillingAuthClient() {
+  if (!billingAuthClient) {
+    billingAuthClient = await AuthClient.create({
+      keyType: 'Ed25519',
+      idleOptions: { disableIdle: true },
+    });
+  }
+  return billingAuthClient;
+}
+
+/** Real II session for billing — never uses portal test-bypass mock identities. */
+export async function getBillingDelegationIdentity() {
+  const client = await initializeBillingAuthClient();
+  if (await client.isAuthenticated()) {
+    return client.getIdentity();
+  }
+  return null;
+}
+
+/**
+ * Prompt Internet Identity when billing needs a delegation chain (e.g. voucher redeem).
+ * Does not replace portal test-bypass auth.
+ *
+ * @returns {Promise<import('@dfinity/agent').Identity>}
+ */
+export async function loginForBilling({ rememberMe = null } = {}) {
+  const client = await initializeBillingAuthClient();
+  if (await client.isAuthenticated()) {
+    return client.getIdentity();
+  }
+
+  if (rememberMe !== null) {
+    setRememberMe(rememberMe);
+  }
+  const ttl = getRememberMe() ? SESSION_REMEMBER_TTL_NS : SESSION_DEFAULT_TTL_NS;
+
+  return new Promise((resolve, reject) => {
+    const loginOpts = {
+      identityProvider: II_URL,
+      maxTimeToLive: ttl,
+      onSuccess: () => resolve(client.getIdentity()),
+      onError: (error) => {
+        console.error('Billing II login failed:', error);
+        reject(error);
+      },
+    };
+    if (!CONFIG.federation_portal && DERIVATION_ORIGIN) {
+      loginOpts.derivationOrigin = DERIVATION_ORIGIN;
+    }
+    client.login(loginOpts);
+  });
 }
 
 if (typeof window !== 'undefined') {
