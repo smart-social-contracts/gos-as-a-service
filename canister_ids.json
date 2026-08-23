@@ -2,7 +2,14 @@
   "casals_frontend": {
     "demo": "hvwpv-aiaaa-aaaam-ajddq-cai",
     "ic": "fdr7z-3aaaa-aaaae-ag23a-cai",
+    "staging": "fdr7z-3aaaa-aaaae-ag23a-cai",
     "test": "qic2k-baaaa-aaaae-agvga-cai"
+  },
+  "casals_backend": {
+    "demo": "jo3cj-faaaa-aaaac-bffea-cai",
+    "ic": "rbuam-sqaaa-aaaab-qhe5a-cai",
+    "staging": "rbuam-sqaaa-aaaab-qhe5a-cai",
+    "test": "qthgp-3yaaa-aaaae-agveq-cai"
   },
   "file_registry": {
     "demo": "vi64l-3aaaa-aaaae-qj4va-cai",
@@ -27,11 +34,13 @@
   "realm_installer": {
     "demo": "2s4td-daaaa-aaaao-bazmq-cai",
     "ic": "fksuf-niaaa-aaaae-ag22q-cai",
+    "staging": "fksuf-niaaa-aaaae-ag22q-cai",
     "test": "fltjm-tyaaa-aaaap-qunhq-cai"
   },
   "realm_registry_backend": {
     "demo": "rhw4p-gqaaa-aaaac-qbw7q-cai",
     "ic": "fntsr-aqaaa-aaaae-ag22a-cai",
+    "staging": "fntsr-aqaaa-aaaae-ag22a-cai",
     "test": "yhw3g-fyaaa-aaaas-qgorq-cai"
   },
   "realm_registry_frontend": {
