@@ -13,6 +13,7 @@ from gaas.phases import (
     PHASES,
     DeployContext,
     _ensure_casals_backend_did,
+    sanitize_casals_candid,
     _installer_config_json,
     _casals_settings_json,
     _infra_canister_names,
@@ -1071,6 +1072,35 @@ def test_ensure_casals_backend_did_keeps_existing_file(tmp_path: Path) -> None:
 
     assert _ensure_casals_backend_did(repo_root, ctx) == dest
     assert dest.read_text(encoding="utf-8") == "service : { existing : () -> () }\n"
+
+
+def test_sanitize_casals_candid_rewrites_empty_variant_cases() -> None:
+    raw = (
+        "type AssetPermission = variant { Commit : ; Prepare : ; ManagePermissions :  };\n"
+        "type Ok = record { decimals : nat32 };\n"
+    )
+    cleaned = sanitize_casals_candid(raw)
+    assert "Commit;" in cleaned
+    assert "Prepare;" in cleaned
+    assert "ManagePermissions }" in cleaned
+    assert "decimals : nat32" in cleaned
+    assert ": ;" not in cleaned
+
+
+def test_ensure_casals_backend_did_sanitizes_existing_file(tmp_path: Path) -> None:
+    repo_root = tmp_path / "gos"
+    repo_root.mkdir()
+    dest = repo_root / "casals_backend.did"
+    dest.write_text(
+        "type AssetPermission = variant { Commit : ; Prepare : ; ManagePermissions :  };\n",
+        encoding="utf-8",
+    )
+    ctx = DeployContext(identity="deployer", network="ic")
+
+    assert _ensure_casals_backend_did(repo_root, ctx) == dest
+    text = dest.read_text(encoding="utf-8")
+    assert ": ;" not in text
+    assert "Commit;" in text
 
 
 def test_ensure_casals_backend_did_requires_casals_src(tmp_path: Path) -> None:

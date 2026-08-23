@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import sys
 import tarfile
@@ -751,10 +752,21 @@ def _is_interactive(ctx: DeployContext) -> bool:
     return not ctx.yes and sys.stdin.isatty()
 
 
+def sanitize_casals_candid(text: str) -> str:
+    """Make basilisk-emitted empty variant cases parseable by dfx generate."""
+    cleaned = re.sub(r"(\w+)\s*:\s*;", r"\1;", text)
+    return re.sub(r"(\w+)\s*:\s*}", r"\1 }", cleaned)
+
+
 def _ensure_casals_backend_did(repo_root: Path, ctx: DeployContext) -> Path:
     """Copy the gitignored Casals Candid into the GOS repo for dfx generate."""
     dest = repo_root / "casals_backend.did"
     if dest.is_file() and dest.stat().st_size > 0:
+        original = dest.read_text(encoding="utf-8")
+        cleaned = sanitize_casals_candid(original)
+        if cleaned != original:
+            dest.write_text(cleaned, encoding="utf-8")
+            console.print(f"  sanitized empty variant cases in {dest}")
         return dest
     src_root = resolve_casals_src(ctx.casals_src)
     if src_root is None:
@@ -765,7 +777,10 @@ def _ensure_casals_backend_did(repo_root: Path, ctx: DeployContext) -> Path:
     source = src_root / "casals_backend.did"
     if not source.is_file():
         raise PlatformError(f"Casals checkout {src_root} has no casals_backend.did")
-    shutil.copy2(source, dest)
+    dest.write_text(
+        sanitize_casals_candid(source.read_text(encoding="utf-8")),
+        encoding="utf-8",
+    )
     console.print(f"  copied {source} -> {dest}")
     return dest
 
