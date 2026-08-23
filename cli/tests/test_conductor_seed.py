@@ -640,3 +640,100 @@ def test_ensure_platform_stand_skips_existing_canisters(monkeypatch) -> None:
         ),
     ]
 
+
+def test_remove_casals_system_file_registry_bootstrap_deletes_stale_row(monkeypatch) -> None:
+    calls: list[tuple[str, dict]] = []
+    casals_fr = "s7wqs-pqaaa-aaaan-q6nyq-cai"
+
+    def fake_get_tree(_casals_id, _network, *, identity=None):
+        return {
+            "sections": [
+                {
+                    "name": "Casals",
+                    "stands": [
+                        {
+                            "name": "System",
+                            "canisters": [
+                                {
+                                    "name": "file_registry",
+                                    "canister_id": "",
+                                    "status": "registered",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+
+    def fake_call(casals_id, method, payload, network, *, identity=None, query=False):
+        calls.append((method, payload))
+        return {"ok": True}
+
+    monkeypatch.setattr(conductor_seed, "get_tree", fake_get_tree)
+    monkeypatch.setattr(conductor_seed, "_casals_call", fake_call)
+
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {"casals_file_registry": casals_fr}
+    desc = Descriptor.model_validate(data)
+
+    assert (
+        conductor_seed.remove_casals_system_file_registry_bootstrap(
+            "rbuam-sqaaa-aaaab-qhe5a-cai", desc, "ic", identity="deployer"
+        )
+        is True
+    )
+    assert calls == [("delete_canister", {"canister": "file_registry"})]
+
+
+def test_remove_casals_system_file_registry_bootstrap_noop_without_casals_fr(
+    monkeypatch,
+) -> None:
+    calls: list[tuple[str, dict]] = []
+
+    monkeypatch.setattr(
+        conductor_seed,
+        "_casals_call",
+        lambda *args, **kwargs: calls.append((args[1], args[2])),
+    )
+
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {"file_registry": "ddddd-ddddd-ddddd-ddddd-ddddd-ddd"}
+    desc = Descriptor.model_validate(data)
+
+    assert (
+        conductor_seed.remove_casals_system_file_registry_bootstrap(
+            "rbuam-sqaaa-aaaab-qhe5a-cai", desc, "ic"
+        )
+        is False
+    )
+    assert calls == []
+
+
+def test_ensure_platform_stand_skips_empty_canister_id(monkeypatch) -> None:
+    calls: list[tuple[str, dict]] = []
+    monkeypatch.setattr(
+        conductor_seed,
+        "get_tree",
+        lambda *_a, **_k: {
+            "sections": [
+                {
+                    "name": "Infra",
+                    "stands": [{"name": "platform", "canisters": []}],
+                }
+            ]
+        },
+    )
+    monkeypatch.setattr(
+        conductor_seed,
+        "_casals_call",
+        lambda _cid, method, payload, _net, **_: calls.append((method, payload)) or {"ok": True},
+    )
+
+    conductor_seed.ensure_platform_stand(
+        "qthgp-3yaaa-aaaae-agveq-cai",
+        [("file-registry", "", "backend")],
+        "ic",
+    )
+    assert not any(method == "register_canister" for method, _ in calls)
+

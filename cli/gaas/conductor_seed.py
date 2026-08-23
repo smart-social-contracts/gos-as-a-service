@@ -22,6 +22,14 @@ console = Console()
 
 CASALS_TEMPLATES_NAMESPACE = "casals-templates"
 
+# Casals bootstrap.py registers the settings file_registry_canister_id under this
+# stand/name. GaaS owns the binary registry as casals-file-registry on Infra/platform
+# instead, so the bootstrap row is stale noise (and can stick around with an empty id
+# after a wiped descriptor key).
+CASALS_SYSTEM_SECTION = "Casals"
+CASALS_SYSTEM_STAND = "System"
+CASALS_BOOTSTRAP_FILE_REGISTRY = "file_registry"
+
 # Latest orchestration template versions from Casals seed/templates.json.
 ORCHESTRATION_TEMPLATES: tuple[tuple[str, str, str], ...] = (
     ("orchestration-baton", "1.3.0", "orchestration-baton@1.3.0.wasm.gz"),
@@ -135,6 +143,80 @@ def _canister_names(tree: dict[str, Any]) -> set[str]:
                 if name:
                     names.add(name)
     return names
+
+
+def _find_canister_in_stand(
+    tree: dict[str, Any],
+    *,
+    section: str,
+    stand: str,
+    name: str,
+) -> dict[str, Any] | None:
+    for sec in tree.get("sections") or []:
+        if (sec.get("name") or "").strip() != section:
+            continue
+        for st in sec.get("stands") or []:
+            if (st.get("name") or "").strip() != stand:
+                continue
+            for canister in st.get("canisters") or []:
+                if (canister.get("name") or "").strip() == name:
+                    return canister
+    return None
+
+
+def remove_casals_system_file_registry_bootstrap(
+    casals_id: str,
+    descriptor: Descriptor,
+    network: str,
+    *,
+    identity: str | None = None,
+) -> bool:
+    """Drop Casals/System/file_registry when gaas registers casals-file-registry on Infra/platform.
+
+    Casals set_settings bootstraps a legacy ``file_registry`` row under Casals/System.
+    GaaS registers the binary registry as ``casals-file-registry`` on Infra/platform
+    instead. After environment wipes the bootstrap row can linger with an empty
+    canister id while settings already point at ``casals_file_registry``.
+    """
+    platform_registry_id = (descriptor.canisters.get("casals_file_registry") or "").strip()
+    if not platform_registry_id:
+        return False
+
+    tree = get_tree(casals_id, network, identity=identity)
+    row = _find_canister_in_stand(
+        tree,
+        section=CASALS_SYSTEM_SECTION,
+        stand=CASALS_SYSTEM_STAND,
+        name=CASALS_BOOTSTRAP_FILE_REGISTRY,
+    )
+    if row is None:
+        return False
+
+    row_id = (row.get("canister_id") or "").strip()
+    if row_id == platform_registry_id:
+        console.print(
+            f"  remove duplicate Casals/System/{CASALS_BOOTSTRAP_FILE_REGISTRY} "
+            f"(same id as Infra/platform/casals-file-registry)"
+        )
+    elif not row_id:
+        console.print(
+            f"  remove stale Casals/System/{CASALS_BOOTSTRAP_FILE_REGISTRY} "
+            "(empty canister id)"
+        )
+    else:
+        console.print(
+            f"  remove stale Casals/System/{CASALS_BOOTSTRAP_FILE_REGISTRY} "
+            f"(id {row_id} != casals_file_registry {platform_registry_id})"
+        )
+
+    _casals_call(
+        casals_id,
+        "delete_canister",
+        {"canister": CASALS_BOOTSTRAP_FILE_REGISTRY},
+        network,
+        identity=identity,
+    )
+    return True
 
 
 def list_authorized_keys(
@@ -501,6 +583,10 @@ def ensure_platform_stand(
     tree = get_tree(casals_id, network, identity=identity)
     existing = _canister_names(tree)
     for name, canister_id, kind in platform_canisters:
+        canister_id = (canister_id or "").strip()
+        if not canister_id:
+            console.print(f"  {name}: skip (no canister id)")
+            continue
         if name in existing:
             console.print(f"  {name}: skip (already registered)")
         else:

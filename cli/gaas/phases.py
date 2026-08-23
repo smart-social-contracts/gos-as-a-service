@@ -34,6 +34,7 @@ from gaas.conductor_seed import (
     ensure_section_commanders,
     ensure_sheet_and_deploy_multisig,
     get_tree,
+    remove_casals_system_file_registry_bootstrap,
     seed_orchestration_templates,
     _find_canister_id,
     _section_names,
@@ -244,9 +245,8 @@ def _casals_settings_json(descriptor: Descriptor, deployer_principal: str) -> st
     threshold = descriptor.threshold_cycles()
     file_registry_id = (
         canisters.get("casals_file_registry") or canisters.get("file_registry", "")
-    )
+    ).strip()
     payload: dict = {
-        "file_registry_canister_id": file_registry_id,
         "casals_frontend_canister_id": canisters.get("casals_frontend", ""),
         "realm_installer_canister_id": canisters.get("realm_installer", ""),
         "default_min_cycles": threshold,
@@ -255,6 +255,8 @@ def _casals_settings_json(descriptor: Descriptor, deployer_principal: str) -> st
         "create_cycles": threshold,
         "monitor_enabled": False,
     }
+    if file_registry_id:
+        payload["file_registry_canister_id"] = file_registry_id
     file_registry_frontend_id = canisters.get("file_registry_frontend")
     if file_registry_frontend_id:
         payload["file_registry_frontend_canister_id"] = file_registry_frontend_id
@@ -1105,6 +1107,9 @@ def phase_seed_conductor(descriptor: Descriptor, ctx: DeployContext) -> None:
     ensure_sheet_and_deploy_multisig(
         casals_id, ctx.network, identity=ctx.identity
     )
+    remove_casals_system_file_registry_bootstrap(
+        casals_id, descriptor, ctx.network, identity=ctx.identity
+    )
     platform_canisters: list[tuple[str, str, str]] = []
     for name, key, kind in (
         ("realm-registry-backend", "realm_registry_backend", "backend"),
@@ -1114,7 +1119,7 @@ def phase_seed_conductor(descriptor: Descriptor, ctx: DeployContext) -> None:
         ("file-registry-frontend", "file_registry_frontend", "frontend"),
         ("casals-file-registry", "casals_file_registry", "backend"),
     ):
-        canister_id = descriptor.canisters.get(key)
+        canister_id = (descriptor.canisters.get(key) or "").strip()
         if not canister_id:
             # Adopt-only / optional canisters are registered only when present.
             if key in ("casals_file_registry", "file_registry", "file_registry_frontend"):
