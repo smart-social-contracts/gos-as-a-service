@@ -360,9 +360,9 @@ In production (no test mode), gaas loses IC control after this phase — it must
 | ID | Label | Default version | Release repo | Loader profile | Backend `wasm_type` |
 |---|---|---|---|---|---|
 | `realms-gos` | Realms GOS | `v0.3.1` | `smart-social-contracts/realms` | `realms-iframe-v1` | `basilisk` |
-| `chora-gos` | Chora GOS | `v0.1.0` | `smart-social-contracts/chora` | `chora-iframe-v1` | `motoko` |
+| `chora-gos` | Chora GOS | `v0.1.0` | `smart-social-contracts/chora-gos` | `chora-iframe-v1` | `motoko` |
 
-`chora-gos` builds from source with `icp build chora_backend` when the descriptor pins `main`. Casals authorization uses each implementation's `wasm_type` for backend WASM (`basilisk` for Realms, `motoko` for Chora). Live environment descriptors (`staging.json`, `demo.json`, `test.json`) must declare a `chora-gos` entry before the create-realm wizard can offer Chora on that network.
+Pinned versions download `chora_backend.wasm.gz` and `chora_frontend.tar.gz` from public `chora-gos` GitHub releases. `chora-gos` builds from source with `icp build chora_backend` when the descriptor pins `main`. Casals authorization uses each implementation's `wasm_type` for backend WASM (`basilisk` for Realms, `motoko` for Chora). Live environment descriptors (`staging.json`, `demo.json`, `test.json`) must declare a `chora-gos` entry before the create-realm wizard can offer Chora on that network.
 
 ### Cycles estimate (`known.py` / preflight)
 

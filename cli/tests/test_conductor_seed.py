@@ -375,7 +375,7 @@ def test_authorize_gos_entry_chora_backend_uses_motoko_wasm_type(
         {
             "implementation": "chora-gos",
             "version": "main",
-            "release_repo": "smart-social-contracts/chora",
+            "release_repo": "smart-social-contracts/chora-gos",
             "artifacts": {
                 "backend_wasm_key": "chora-backend",
                 "frontend_wasm_key": "chora-assets",

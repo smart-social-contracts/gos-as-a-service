@@ -108,7 +108,7 @@ def test_phase_seed_file_registry_skips_undeclared_catalog(
         {
             "implementation": "chora-gos",
             "version": "v0.1.0",
-            "release_repo": "smart-social-contracts/chora",
+            "release_repo": "smart-social-contracts/chora-gos",
             "artifacts": {
                 "backend_wasm_key": "chora-backend",
                 "frontend_wasm_key": "chora-assets",

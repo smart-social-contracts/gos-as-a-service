@@ -75,7 +75,7 @@ def test_resolve_gos_artifacts_chora_main_build_wiring(tmp_path: Path) -> None:
         got_backend, got_frontend = resolve_gos_artifacts(
             implementation="chora-gos",
             version="main",
-            release_repo="smart-social-contracts/chora",
+            release_repo="smart-social-contracts/chora-gos",
             backend_asset="chora_backend.wasm.gz",
             frontend_asset="chora_frontend.tar.gz",
             dest_dir=out_dir,
@@ -83,7 +83,7 @@ def test_resolve_gos_artifacts_chora_main_build_wiring(tmp_path: Path) -> None:
         )
 
     clone_mock.assert_called_once_with(
-        "smart-social-contracts/chora", tmp_path / "src-clone", refresh=True
+        "smart-social-contracts/chora-gos", tmp_path / "src-clone", refresh=True
     )
     build_mock.assert_called_once()
     realms_build_mock.assert_not_called()
