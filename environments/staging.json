@@ -31,7 +31,10 @@
     "realm_installer": "fksuf-niaaa-aaaae-ag22q-cai",
     "casals_backend": "rbuam-sqaaa-aaaab-qhe5a-cai",
     "casals_frontend": "fdr7z-3aaaa-aaaae-ag23a-cai",
-    "casals_file_registry": "s7wqs-pqaaa-aaaan-q6nyq-cai"
+    "casals_file_registry": "s7wqs-pqaaa-aaaan-q6nyq-cai",
+    "file_registry": "feqzn-wyaaa-aaaae-ag23q-cai",
+    "file_registry_frontend": "m4td3-eaaaa-aaaao-qqbva-cai",
+    "marketplace_backend": "l5qpy-wqaaa-aaaah-qu2mq-cai"
   },
   "casals": {
     "version": "main",
