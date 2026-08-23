@@ -593,9 +593,7 @@
 
 <div class="page-shell">
   <header class="site-header">
-    <a href="/" class="site-logo-link">
-      <img src="/images/logo_horizontal.svg" alt="Realms Logo" class="site-logo" />
-    </a>
+    <a href="/" class="site-home-link">Home</a>
     <AuthControls
       {authLoading}
       {isLoggedIn}
@@ -1163,14 +1161,15 @@
     padding: 1rem 2rem 0;
   }
 
-  .site-logo-link {
-    display: inline-flex;
-    align-items: center;
+  .site-home-link {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: #171717;
+    text-decoration: none;
   }
 
-  .site-logo {
-    height: 48px;
-    width: auto;
+  .site-home-link:hover {
+    color: #525252;
   }
 
   .invitation-gate {

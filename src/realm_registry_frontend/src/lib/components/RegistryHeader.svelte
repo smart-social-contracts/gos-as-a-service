@@ -13,7 +13,6 @@
 
   const dispatch = createEventDispatcher();
   const CASALS_FALLBACK_URL = 'https://mcqbx-hyaaa-aaaaj-qsarq-cai.icp0.io';
-  const LOGO_SRC = '/images/logo_sphere_only.svg';
 
   $: architectureUrl = casalsUrl || CASALS_FALLBACK_URL;
 
@@ -84,15 +83,19 @@
     <div class="logo-hub" data-tour="top-rail">
       <button
         type="button"
-        class="logo-btn"
+        class="corner-btn"
         class:active={showHub}
         on:click|stopPropagation={toggleHub}
         title={showHub ? $_('hub.close') : $_('hub.open')}
         aria-label={showHub ? $_('hub.close') : $_('hub.open')}
         aria-expanded={showHub}
       >
-        <span class="logo-glow" aria-hidden="true"></span>
-        <img src={LOGO_SRC} alt="" class="logo-img" width="60" height="60" />
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+          <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+          <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+          <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+        </svg>
       </button>
 
       {#if showHub}
@@ -376,135 +379,6 @@
       inset 0 1px 0 rgba(255, 255, 255, 0.8);
   }
 
-  .logo-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    width: 60px;
-    height: 60px;
-    padding: 0;
-    border: none;
-    border-radius: 0;
-    background: transparent;
-    box-shadow: none;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    cursor: pointer;
-    flex-shrink: 0;
-    transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
-  }
-
-  .logo-btn:hover {
-    transform: scale(1.05);
-  }
-
-  .logo-btn.active {
-    transform: scale(1.02);
-  }
-
-  .logo-glow {
-    position: absolute;
-    inset: 4px;
-    border-radius: 50%;
-    pointer-events: none;
-    opacity: 0.55;
-    transition: opacity 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
-  }
-
-  .logo-btn:not(.active):not(:hover) .logo-glow {
-    animation: logo-halo 5s cubic-bezier(0.45, 0, 0.2, 1) infinite;
-  }
-
-  .logo-btn:hover .logo-glow,
-  .logo-btn.active .logo-glow {
-    animation: none;
-    opacity: 1;
-    transform: scale(1.04);
-    box-shadow:
-      0 0 0 1px rgba(0, 0, 0, 0.22),
-      0 0 14px 5px rgba(0, 0, 0, 0.32),
-      0 0 28px 12px rgba(0, 0, 0, 0.18),
-      0 0 44px 20px rgba(255, 255, 255, 0.42);
-  }
-
-  @keyframes logo-halo {
-    0%,
-    62%,
-    100% {
-      opacity: 0.42;
-      transform: scale(0.94);
-      box-shadow:
-        0 0 0 0 rgba(0, 0, 0, 0),
-        0 0 10px 3px rgba(0, 0, 0, 0.1),
-        0 0 18px 8px rgba(255, 255, 255, 0.12);
-    }
-    74% {
-      opacity: 0.85;
-      transform: scale(1.02);
-      box-shadow:
-        0 0 0 1px rgba(0, 0, 0, 0.28),
-        0 0 16px 6px rgba(0, 0, 0, 0.38),
-        0 0 32px 14px rgba(0, 0, 0, 0.22),
-        0 0 52px 22px rgba(255, 255, 255, 0.5);
-    }
-    82% {
-      opacity: 1;
-      transform: scale(1.06);
-      box-shadow:
-        0 0 0 2px rgba(0, 0, 0, 0.34),
-        0 0 20px 8px rgba(0, 0, 0, 0.48),
-        0 0 40px 18px rgba(0, 0, 0, 0.28),
-        0 0 64px 28px rgba(255, 255, 255, 0.58);
-    }
-    90% {
-      opacity: 0.72;
-      transform: scale(1);
-      box-shadow:
-        0 0 0 1px rgba(0, 0, 0, 0.2),
-        0 0 14px 5px rgba(0, 0, 0, 0.26),
-        0 0 28px 12px rgba(0, 0, 0, 0.14),
-        0 0 40px 18px rgba(255, 255, 255, 0.32);
-    }
-  }
-
-  .logo-img {
-    position: relative;
-    z-index: 1;
-    display: block;
-    width: 60px;
-    height: 60px;
-    object-fit: contain;
-    pointer-events: none;
-    transition: filter 0.25s ease;
-    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.18));
-  }
-
-  .logo-btn:not(.active):not(:hover) .logo-img {
-    animation: logo-core-glow 5s cubic-bezier(0.45, 0, 0.2, 1) infinite;
-  }
-
-  .logo-btn:hover .logo-img,
-  .logo-btn.active .logo-img {
-    animation: none;
-    filter:
-      drop-shadow(0 0 2px rgba(0, 0, 0, 0.45))
-      drop-shadow(0 0 8px rgba(0, 0, 0, 0.28));
-  }
-
-  @keyframes logo-core-glow {
-    0%,
-    62%,
-    100% {
-      filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.16));
-    }
-    82% {
-      filter:
-        drop-shadow(0 0 3px rgba(0, 0, 0, 0.55))
-        drop-shadow(0 0 10px rgba(0, 0, 0, 0.32));
-    }
-  }
-
   .hub-panel {
     display: flex;
     flex-direction: column;
@@ -749,16 +623,6 @@
       width: 56px;
       height: 56px;
     }
-
-    .logo-btn {
-      width: 56px;
-      height: 56px;
-    }
-
-    .logo-img {
-      width: 56px;
-      height: 56px;
-    }
   }
 
   @media (max-width: 480px) {
@@ -776,39 +640,11 @@
       height: 20px;
     }
 
-    .logo-btn {
-      width: 44px;
-      height: 44px;
-    }
-
-    .logo-img {
-      width: 44px;
-      height: 44px;
-    }
-
     .hub-panel {
       top: calc(0.75rem + 44px + 0.55rem);
       width: min(300px, calc(100vw - 1.25rem));
       min-width: min(260px, calc(100vw - 1.25rem));
       max-width: min(300px, calc(100vw - 1.25rem));
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .logo-btn:not(.active):not(:hover) .logo-glow {
-      animation: none;
-      opacity: 0.75;
-      box-shadow:
-        0 0 0 1px rgba(0, 0, 0, 0.22),
-        0 0 16px 6px rgba(0, 0, 0, 0.24),
-        0 0 32px 14px rgba(255, 255, 255, 0.35);
-    }
-
-    .logo-btn:not(.active):not(:hover) .logo-img {
-      animation: none;
-      filter:
-        drop-shadow(0 0 2px rgba(0, 0, 0, 0.4))
-        drop-shadow(0 0 8px rgba(0, 0, 0, 0.22));
     }
   }
 </style>

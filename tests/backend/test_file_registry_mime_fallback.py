@@ -14,7 +14,7 @@ _spec.loader.exec_module(_main)
 
 def test_effective_list_content_type_guesses_svg_when_octet_stream():
     assert (
-        _main._effective_list_content_type("images/logo.svg", "application/octet-stream")
+        _main._effective_list_content_type("images/sample.svg", "application/octet-stream")
         == "image/svg+xml"
     )
 

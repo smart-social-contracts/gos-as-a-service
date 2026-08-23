@@ -6,7 +6,7 @@ from gaas.file_registry_client import _content_type, upload_file
 
 
 def test_svg_content_type() -> None:
-    assert _content_type("frontend/dist/images/logo_sphere_only.svg") == "image/svg+xml"
+    assert _content_type("frontend/dist/images/internet-computer-icp-logo.svg") == "image/svg+xml"
 
 
 def test_ic_assets_json5_content_type() -> None:

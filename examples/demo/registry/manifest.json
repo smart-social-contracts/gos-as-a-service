@@ -1,6 +1,5 @@
 {
   "name": "Demo Registry",
   "type": "registry",
-  "description": "Central registry for the demo mundus",
-  "logo": "logo.svg"
+  "description": "Central registry for the demo mundus"
 }
