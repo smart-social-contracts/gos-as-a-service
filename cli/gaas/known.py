@@ -12,13 +12,13 @@ PLATFORM_CANISTER_NAMES: Final[tuple[str, ...]] = (
     "casals_backend",
     "casals_frontend",
     "casals_file_registry",
-)
-
-# Valid in descriptors and adopted when present, but never created, deployed,
-# or cycle-budgeted by gaas (external services wired in by configuration).
-ADOPT_ONLY_CANISTER_NAMES: Final[tuple[str, ...]] = (
     "file_registry",
     "file_registry_frontend",
+)
+
+# Valid in descriptors and adopted when present, but never created or deployed by
+# gaas: their source lives in the realms repo, so gaas cannot rebuild them.
+ADOPT_ONLY_CANISTER_NAMES: Final[tuple[str, ...]] = (
     "marketplace_backend",
     "marketplace_frontend",
 )
@@ -41,6 +41,8 @@ DFX_CANISTER_NAMES: Final[dict[str, str | None]] = {
     "casals_backend": None,
     "casals_frontend": "casals_frontend",
     "casals_file_registry": None,
+    "file_registry": "file_registry",
+    "file_registry_frontend": "file_registry_frontend",
 }
 
 PLATFORM_BACKEND_WASMS: Final[dict[str, str]] = {

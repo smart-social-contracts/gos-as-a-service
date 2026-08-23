@@ -363,6 +363,13 @@ def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
             except dfx.DfxError as exc:
                 if not dfx.is_canister_not_found_error(exc):
                     raise
+                if name in ADOPT_ONLY_CANISTER_NAMES:
+                    raise RuntimeError(
+                        f"{name} {existing_id} no longer exists (IC0301) and gaas cannot "
+                        f"build it — {name} is deployed from the realms repo. Recreate it "
+                        f"there, then record the new ID under canisters.{name} in the "
+                        "descriptor and re-run."
+                    )
                 console.print(f"  {name}: stale {existing_id} (IC0301), creating new")
                 descriptor.canisters.pop(name, None)
                 dfx_name = DFX_CANISTER_NAMES.get(name)
@@ -379,6 +386,10 @@ def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
                 continue
 
         if name in ADOPT_ONLY_CANISTER_NAMES:
+            console.print(
+                f"  [yellow]{name}: not deployed[/yellow] (built in the realms repo; "
+                f"set canisters.{name} once it exists)"
+            )
             continue
 
         dfx_name = DFX_CANISTER_NAMES.get(name)
@@ -482,20 +493,24 @@ def phase_install_backends(descriptor: Descriptor, ctx: DeployContext) -> None:
             yes=True,
         )
 
-    casals_fr_id = descriptor.canisters.get("casals_file_registry")
-    if casals_fr_id:
-        wasm = resolve_casals_file_registry_wasm(
-            descriptor.casals.version,
-            descriptor.casals.release_repo,
-            work / "casals",
-            casals_src=ctx.casals_src,
-            session=ctx.http,
-        )
-        mode = _backend_install_mode(casals_fr_id, ctx)
-        console.print(f"  casals_file_registry: {mode} ({wasm.name})")
+    file_registry_wasm: Path | None = None
+    for name in ("casals_file_registry", "file_registry"):
+        registry_id = descriptor.canisters.get(name)
+        if not registry_id:
+            continue
+        if file_registry_wasm is None:
+            file_registry_wasm = resolve_casals_file_registry_wasm(
+                descriptor.casals.version,
+                descriptor.casals.release_repo,
+                work / "casals",
+                casals_src=ctx.casals_src,
+                session=ctx.http,
+            )
+        mode = _backend_install_mode(registry_id, ctx)
+        console.print(f"  {name}: {mode} ({file_registry_wasm.name})")
         dfx.install_wasm(
-            casals_fr_id,
-            str(wasm),
+            registry_id,
+            str(file_registry_wasm),
             ctx.network,
             mode,
             "(null)",
@@ -839,7 +854,12 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
 
         work = _work_dir(ctx)
 
-        for canister in ("realm_registry_frontend",):
+        # file_registry_frontend ships a prebuilt dist/, so it needs no npm build.
+        frontends = ["realm_registry_frontend"]
+        if descriptor.canisters.get("file_registry_frontend"):
+            frontends.append("file_registry_frontend")
+
+        for canister in frontends:
             canister_id = descriptor.canisters.get(canister)
             if not canister_id:
                 raise RuntimeError(f"missing canister ID for {canister}")

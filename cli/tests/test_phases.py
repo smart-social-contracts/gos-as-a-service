@@ -214,13 +214,13 @@ def test_create_canisters_adopt_vs_create(
 
     mock_create.assert_called()
     assert desc.canisters["realm_registry_backend"] == VALID_CANISTER_ID
-    # 1 adopted + 5 platform created; adopt-only marketplace and realms-owned
-    # file_registry names are skipped.
-    assert len(desc.canisters) == 6
+    # 1 adopted + 7 platform created, including the GOS-owned file registry pair.
+    assert len(desc.canisters) == 8
+    assert desc.canisters["file_registry"]
+    assert desc.canisters["file_registry_frontend"]
+    # Only the realms-owned marketplace canisters stay adopt-only.
     assert "marketplace_backend" not in desc.canisters
     assert "marketplace_frontend" not in desc.canisters
-    assert "file_registry" not in desc.canisters
-    assert "file_registry_frontend" not in desc.canisters
 
 
 @patch("gaas.phases.dfx.forget_canister_id")
@@ -260,13 +260,47 @@ def test_create_canisters_drops_stale_ic0301_ids(
 
     mock_forget.assert_called()
     assert desc.canisters["realm_registry_backend"] == "yhw3g-fyaaa-aaaas-qgorq-cai"
-    # 1 adopted + 5 platform created; adopt-only marketplace and realms-owned
-    # file_registry names are skipped.
-    assert len(desc.canisters) == 6
+    # A stale platform ID is replaced, not dropped: a wiped environment must come
+    # back complete, including the GOS-owned file registry pair.
+    assert len(desc.canisters) == 8
+    assert desc.canisters["file_registry"]
+    assert desc.canisters["file_registry_frontend"]
     assert "marketplace_backend" not in desc.canisters
     assert "marketplace_frontend" not in desc.canisters
-    assert "file_registry" not in desc.canisters
-    assert "file_registry_frontend" not in desc.canisters
+
+
+@patch("gaas.phases.dfx.forget_canister_id")
+@patch("gaas.phases.dfx.create_canister_via_ledger")
+@patch("gaas.phases.dfx.create_canister")
+@patch("gaas.phases.dfx.canister_status")
+@patch("gaas.phases.dfx.get_principal")
+@patch("gaas.phases.dfx.use_identity")
+def test_create_canisters_rejects_dead_adopt_only_id(
+    _use_identity,
+    mock_principal,
+    mock_status,
+    mock_create,
+    mock_ledger_create,
+    _mock_forget,
+    tmp_path: Path,
+) -> None:
+    """A destroyed marketplace canister must stop the deploy, not disappear."""
+    from gaas.dfx import DfxError
+
+    mock_principal.return_value = "aaaaa-aa"
+    mock_status.side_effect = DfxError("IC0301", command=[], stderr="IC0301")
+    mock_create.return_value = "yhw3g-fyaaa-aaaas-qgorq-cai"
+    mock_ledger_create.return_value = "qthgp-3yaaa-aaaae-agveq-cai"
+
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {"marketplace_backend": VALID_CANISTER_ID}
+    desc = Descriptor.model_validate(data)
+    path = tmp_path / "env.gaas.json"
+    desc.save(path)
+    ctx = DeployContext(identity="deployer", network="ic", descriptor_path=path)
+
+    with pytest.raises(RuntimeError, match="marketplace_backend"):
+        phase_create_canisters(desc, ctx)
 
 
 def test_registry_init_json_can_test_mode() -> None:
@@ -350,7 +384,7 @@ def test_registry_config_json_installer_id_and_flags() -> None:
 
 def test_registry_runtime_config_json_can_test_mode() -> None:
     desc = Descriptor.model_validate(SAMPLE_DESCRIPTOR)
-    # No billing_url → derived can test mode.
+    # No billing_url → derived can test mode. Descriptor name "test" enables II bypass.
     ic_payload = json.loads(_registry_runtime_config_json(desc, "ic"))
     assert ic_payload == {
         "test_flags": {"test_mode": True, "ii_bypass": True},
@@ -361,6 +395,12 @@ def test_registry_runtime_config_json_can_test_mode() -> None:
     assert local_payload == {
         "test_flags": {"test_mode": True, "ii_bypass": True},
         "network": "local",
+    }
+
+    staging_desc = desc.model_copy(update={"name": "staging", "domain": "staging.gos.earth"})
+    staging_payload = json.loads(_registry_runtime_config_json(staging_desc, "ic"))
+    assert staging_payload == {
+        "test_flags": {"test_mode": True, "ii_bypass": False},
     }
 
     billed_closed = desc.model_copy(
@@ -818,9 +858,21 @@ def test_platform_descriptor_optional() -> None:
     assert with_platform.platform.version == "v0.3.1"
 
 
+def test_casals_settings_json_omits_empty_file_registry_canister_id() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        "casals_frontend": "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+        "realm_installer": "ccccc-ccccc-ccccc-ccccc-ccccc-ccc",
+    }
+    desc = Descriptor.model_validate(data)
+    payload = json.loads(_casals_settings_json(desc, "deployer-principal"))
+    assert "file_registry_canister_id" not in payload
+
+
 @patch("gaas.phases.ensure_section_commanders")
 @patch("gaas.phases.ensure_deployments_commander")
 @patch("gaas.phases.ensure_platform_stand")
+@patch("gaas.phases.remove_casals_system_file_registry_bootstrap")
 @patch("gaas.phases.ensure_sheet_and_deploy_multisig")
 @patch("gaas.phases.authorize_gos_entry")
 @patch("gaas.phases.seed_orchestration_templates")
@@ -828,6 +880,7 @@ def test_phase_seed_conductor_registers_platform_canisters(
     _seed_templates,
     _authorize,
     _sheet,
+    mock_remove_bootstrap,
     mock_platform_stand,
     _deployments_commander,
     _section_commanders,
@@ -846,6 +899,9 @@ def test_phase_seed_conductor_registers_platform_canisters(
     ctx = DeployContext(identity="deployer", network="ic")
     phase_seed_conductor(desc, ctx)
 
+    mock_remove_bootstrap.assert_called_once_with(
+        "fffff-fffff-fffff-fffff-fffff-fff", desc, "ic", identity="deployer"
+    )
     mock_platform_stand.assert_called_once()
     args = mock_platform_stand.call_args[0]
     assert args[0] == "fffff-fffff-fffff-fffff-fffff-fff"
