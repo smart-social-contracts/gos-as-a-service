@@ -87,7 +87,7 @@ def complete_realm_setup(realm_backend_canister_id: str) -> dict:
     if not realm_id:
         return {"success": False, "error": "realm_backend_canister_id is required"}
     caller = str(ic.caller())
-    if caller != realm_id:
+    if caller != realm_id and not ic.is_controller(ic.caller()):
         return {
             "success": False,
             "error": f"Caller {caller} does not match realm backend {realm_id}",
