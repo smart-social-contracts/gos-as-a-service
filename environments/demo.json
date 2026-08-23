@@ -12,6 +12,16 @@
         "frontend_wasm_key": "realm-assets"
       },
       "loader_profile": "realms-iframe-v1"
+    },
+    {
+      "implementation": "chora-gos",
+      "version": "main",
+      "release_repo": "smart-social-contracts/chora-gos",
+      "artifacts": {
+        "backend_wasm_key": "chora-backend",
+        "frontend_wasm_key": "chora-assets"
+      },
+      "loader_profile": "chora-iframe-v1"
     }
   ],
   "canisters": {
