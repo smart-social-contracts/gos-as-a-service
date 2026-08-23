@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from gaas.descriptor import Descriptor, MultisigConfig, PlatformConfig, ServicesConfig
+from gaas.known import ADOPT_ONLY_CANISTER_NAMES
 from gaas.phases import (
     PHASES,
     DeployContext,
@@ -214,13 +215,10 @@ def test_create_canisters_adopt_vs_create(
 
     mock_create.assert_called()
     assert desc.canisters["realm_registry_backend"] == VALID_CANISTER_ID
-    # 1 adopted + 7 platform created, including the GOS-owned file registry pair.
-    assert len(desc.canisters) == 8
-    assert desc.canisters["file_registry"]
-    assert desc.canisters["file_registry_frontend"]
-    # Only the realms-owned marketplace canisters stay adopt-only.
-    assert "marketplace_backend" not in desc.canisters
-    assert "marketplace_frontend" not in desc.canisters
+    # 1 adopted + 5 platform created; the realms-owned stack stays adopt-only.
+    assert len(desc.canisters) == 6
+    for name in ADOPT_ONLY_CANISTER_NAMES:
+        assert name not in desc.canisters
 
 
 @patch("gaas.phases.dfx.forget_canister_id")
@@ -260,13 +258,10 @@ def test_create_canisters_drops_stale_ic0301_ids(
 
     mock_forget.assert_called()
     assert desc.canisters["realm_registry_backend"] == "yhw3g-fyaaa-aaaas-qgorq-cai"
-    # A stale platform ID is replaced, not dropped: a wiped environment must come
-    # back complete, including the GOS-owned file registry pair.
-    assert len(desc.canisters) == 8
-    assert desc.canisters["file_registry"]
-    assert desc.canisters["file_registry_frontend"]
-    assert "marketplace_backend" not in desc.canisters
-    assert "marketplace_frontend" not in desc.canisters
+    # A stale platform ID is replaced, not dropped.
+    assert len(desc.canisters) == 6
+    for name in ADOPT_ONLY_CANISTER_NAMES:
+        assert name not in desc.canisters
 
 
 @patch("gaas.phases.dfx.forget_canister_id")
@@ -284,7 +279,7 @@ def test_create_canisters_rejects_dead_adopt_only_id(
     _mock_forget,
     tmp_path: Path,
 ) -> None:
-    """A destroyed marketplace canister must stop the deploy, not disappear."""
+    """A destroyed adopt-only canister must stop the deploy, not disappear."""
     from gaas.dfx import DfxError
 
     mock_principal.return_value = "aaaaa-aa"
@@ -293,13 +288,13 @@ def test_create_canisters_rejects_dead_adopt_only_id(
     mock_ledger_create.return_value = "qthgp-3yaaa-aaaae-agveq-cai"
 
     data = dict(SAMPLE_DESCRIPTOR)
-    data["canisters"] = {"marketplace_backend": VALID_CANISTER_ID}
+    data["canisters"] = {"file_registry": VALID_CANISTER_ID}
     desc = Descriptor.model_validate(data)
     path = tmp_path / "env.gaas.json"
     desc.save(path)
     ctx = DeployContext(identity="deployer", network="ic", descriptor_path=path)
 
-    with pytest.raises(RuntimeError, match="marketplace_backend"):
+    with pytest.raises(RuntimeError, match="file_registry"):
         phase_create_canisters(desc, ctx)
 
 

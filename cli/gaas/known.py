@@ -12,13 +12,15 @@ PLATFORM_CANISTER_NAMES: Final[tuple[str, ...]] = (
     "casals_backend",
     "casals_frontend",
     "casals_file_registry",
-    "file_registry",
-    "file_registry_frontend",
 )
 
 # Valid in descriptors and adopted when present, but never created or deployed by
-# gaas: their source lives in the realms repo, so gaas cannot rebuild them.
+# gaas. This repo builds the file-registry artifacts, but the canisters holding
+# the realms product stack are deployed by `realms env deploy`, so creating them
+# here would stand up a second, empty registry alongside the real one.
 ADOPT_ONLY_CANISTER_NAMES: Final[tuple[str, ...]] = (
+    "file_registry",
+    "file_registry_frontend",
     "marketplace_backend",
     "marketplace_frontend",
 )
@@ -41,8 +43,6 @@ DFX_CANISTER_NAMES: Final[dict[str, str | None]] = {
     "casals_backend": None,
     "casals_frontend": "casals_frontend",
     "casals_file_registry": None,
-    "file_registry": "file_registry",
-    "file_registry_frontend": "file_registry_frontend",
 }
 
 PLATFORM_BACKEND_WASMS: Final[dict[str, str]] = {

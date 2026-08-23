@@ -493,24 +493,20 @@ def phase_install_backends(descriptor: Descriptor, ctx: DeployContext) -> None:
             yes=True,
         )
 
-    file_registry_wasm: Path | None = None
-    for name in ("casals_file_registry", "file_registry"):
-        registry_id = descriptor.canisters.get(name)
-        if not registry_id:
-            continue
-        if file_registry_wasm is None:
-            file_registry_wasm = resolve_casals_file_registry_wasm(
-                descriptor.casals.version,
-                descriptor.casals.release_repo,
-                work / "casals",
-                casals_src=ctx.casals_src,
-                session=ctx.http,
-            )
-        mode = _backend_install_mode(registry_id, ctx)
-        console.print(f"  {name}: {mode} ({file_registry_wasm.name})")
+    casals_fr_id = descriptor.canisters.get("casals_file_registry")
+    if casals_fr_id:
+        wasm = resolve_casals_file_registry_wasm(
+            descriptor.casals.version,
+            descriptor.casals.release_repo,
+            work / "casals",
+            casals_src=ctx.casals_src,
+            session=ctx.http,
+        )
+        mode = _backend_install_mode(casals_fr_id, ctx)
+        console.print(f"  casals_file_registry: {mode} ({wasm.name})")
         dfx.install_wasm(
-            registry_id,
-            str(file_registry_wasm),
+            casals_fr_id,
+            str(wasm),
             ctx.network,
             mode,
             "(null)",
@@ -854,12 +850,7 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
 
         work = _work_dir(ctx)
 
-        # file_registry_frontend ships a prebuilt dist/, so it needs no npm build.
-        frontends = ["realm_registry_frontend"]
-        if descriptor.canisters.get("file_registry_frontend"):
-            frontends.append("file_registry_frontend")
-
-        for canister in frontends:
+        for canister in ("realm_registry_frontend",):
             canister_id = descriptor.canisters.get(canister)
             if not canister_id:
                 raise RuntimeError(f"missing canister ID for {canister}")
