@@ -251,6 +251,11 @@ def upload_directory(
         for fname in sorted(files):
             local = Path(root) / fname
             rel = local.relative_to(dist_dir).as_posix()
+            # Realm static trees sometimes contain empty placeholders
+            # (e.g. images/error.svg). Those are not useful in the registry
+            # and must not fail the whole seed.
+            if local.stat().st_size == 0:
+                continue
             result = upload_file(
                 registry_id,
                 namespace,
