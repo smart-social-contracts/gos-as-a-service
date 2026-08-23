@@ -178,6 +178,8 @@ del _wsys
 # End WASI stdlib compatibility patches
 # ============================================================================
 
+__basilisk_features__ = ["shell", "browse"]
+
 import json
 import traceback
 

@@ -8,6 +8,9 @@ PROVISION_HEARTBEAT_INTERVAL_S = 600
 # Fresh in-progress lock — concurrent kicks within this window are benign skips.
 PROVISION_ACTIVE_STALE_S = 30 * 60
 
+# Heartbeat retries these even when ``failed`` remains in global terminal statuses.
+HEARTBEAT_RETRY_STATUSES = ("pending", "provisioning", "failed")
+
 
 class ProvisionAlreadyInProgress(Exception):
     """Raised when another provision pass already holds the job lock."""
@@ -51,17 +54,18 @@ def provisioning_job_ids_for_heartbeat(
     now_s: int,
     stale_s: int = PROVISION_ACTIVE_STALE_S,
 ) -> list[str]:
-    """Return job IDs in ``provisioning`` that the heartbeat should retry.
+    """Return job IDs the heartbeat should retry (pending/provisioning/failed).
 
     Skips jobs with a fresh ``provision_active_at`` lock; includes jobs whose
-    lock is stale so a crashed pass can be retried.
+    lock is stale so a crashed pass can be retried. ``failed`` is always
+    retryable here even when present in ``terminal_statuses``.
     """
     out: list[str] = []
     for job in jobs:
         status = (getattr(job, "status", None) or "pending")
-        if status in terminal_statuses:
+        if status in terminal_statuses and status != "failed":
             continue
-        if status != "provisioning":
+        if status not in HEARTBEAT_RETRY_STATUSES:
             continue
         if provision_lock_is_fresh(job, now_s=now_s, stale_s=stale_s):
             continue

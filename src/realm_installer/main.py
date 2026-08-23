@@ -5,6 +5,8 @@ and realm registration. The off-chain realms-deployer polls for pending jobs,
 deploys via dfx, and reports back.
 """
 
+__basilisk_features__ = ["shell", "browse"]
+
 import hashlib
 import json
 import traceback
@@ -2773,8 +2775,14 @@ def _provision_via_casals_gen(job_id: str):
     job = DeploymentJob[job_id]
     if job is None:
         raise RuntimeError(f"unknown job_id: {job_id}")
-    if (job.status or "pending") not in ("pending", "provisioning"):
-        raise RuntimeError(f"job in '{job.status}', expected 'pending' or 'provisioning'")
+    status = job.status or "pending"
+    if status not in ("pending", "provisioning", "failed"):
+        raise RuntimeError(
+            f"job in '{job.status}', expected 'pending', 'provisioning', or 'failed'"
+        )
+    if status == "failed":
+        job.error = ""
+        job.status = "provisioning"
 
     claim_provision_lock(job, now_s=now_s())
     try:

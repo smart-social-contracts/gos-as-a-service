@@ -78,7 +78,29 @@ def test_provisioning_job_ids_for_heartbeat_skips_fresh_lock():
         terminal_statuses=("failed", "completed"),
         now_s=now,
     )
-    assert ids == ["job_d", "job_e"]
+    assert ids == ["job_b", "job_c", "job_d", "job_e"]
+
+
+def test_provisioning_job_ids_for_heartbeat_retries_failed_without_lock():
+    now = 1_700_000_000
+    jobs = [_FakeJob("job_failed", "failed", provision_active_at=0)]
+    ids = provisioning_job_ids_for_heartbeat(
+        jobs,
+        terminal_statuses=("failed", "completed", "cancelled"),
+        now_s=now,
+    )
+    assert ids == ["job_failed"]
+
+
+def test_provisioning_job_ids_for_heartbeat_skips_failed_with_fresh_lock():
+    now = 1_700_000_000
+    jobs = [_FakeJob("job_failed", "failed", provision_active_at=now - 60)]
+    ids = provisioning_job_ids_for_heartbeat(
+        jobs,
+        terminal_statuses=("failed", "completed"),
+        now_s=now,
+    )
+    assert ids == []
 
 
 def test_claim_provision_lock_rejects_concurrent_pass():
