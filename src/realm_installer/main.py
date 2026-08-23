@@ -39,6 +39,7 @@ from bootstrap import (
     configure_canister_ids_args,
     configure_canister_ids_payload,
     deploy_step_kinds,
+    build_enter_setup_candid,
     enter_setup_args,
     manifest_has_codex_block,
     needs_enter_setup_step,
@@ -961,6 +962,8 @@ def schedule_registration(job_id_val: str):
             j = DeploymentJob[job_id_val]
             if j:
                 j.status = "completed"
+                # Dashboard treats any leftover error string as "not finished".
+                j.error = ""
                 j.completed_at = now_s()
                 schedule_registry_settlement(job_id_val, success=True)
         except Exception as e:
@@ -1244,8 +1247,8 @@ def _execute_enter_setup(task, step, args):
         f"entering setup on backend {backend_id}: creator={creator[:8]}…, "
         f"registry={registry_id or '–'}"
     )
-    escaped_registry = registry_id.replace("\\", "\\\\").replace('"', '\\"')
-    setup_arg = f'(principal "{creator}", "{escaped_registry}")'
+    environment = (args.get("environment") or "").strip()
+    setup_arg = build_enter_setup_candid(creator, registry_id, environment)
     setup_result: CallResult = yield ic.call_raw(
         Principal.from_str(backend_id), "enter_setup",
         ic.candid_encode(setup_arg), 0,
@@ -2246,6 +2249,35 @@ def cancel_deployment(job_id: text) -> ResultJobCancel:
     except Exception as e:
         return ResultJobCancel(Err=ie(str(e)))
 
+
+@update
+def finalize_deployment(job_id: text) -> ResultJobCancel:
+    """Controller-only: mark a job completed and clear residual step errors.
+
+    Use when the realm is already registered (slug claimed) but the job is
+    stuck in ``registering`` or ``completed`` with an error string — the
+    portal treats any error as unfinished.
+    """
+    try:
+        if not ic.is_controller(ic.caller()):
+            return ResultJobCancel(Err=ie("unauthorized: controller only"))
+        list(DeploymentJob.instances())
+        job = DeploymentJob[job_id]
+        if job is None:
+            return ResultJobCancel(Err=ie(f"unknown job_id: {job_id}"))
+        prev = job.status or "pending"
+        job.status = "completed"
+        job.error = ""
+        if not int(job.completed_at or 0):
+            job.completed_at = now_s()
+        schedule_registry_settlement(job_id, success=True)
+        jlog(job_id).info(f"finalized by controller (was {prev})")
+        return ResultJobCancel(Ok=JobStatusAck(
+            job_id=job_id, prev_status=prev, status="completed", noop=prev == "completed",
+        ))
+    except Exception as e:
+        return ResultJobCancel(Err=ie(str(e)))
+
 @update
 def delete_deployment_job(job_id: text) -> ResultJobCancel:
     """Remove a terminal failed deployment record. Only the job owner may delete."""
@@ -2593,7 +2625,7 @@ def _run_deferred_baton_handoff(job: DeploymentJob):
     payload = decode_baton_handoff_payload(raw)
     stand = (payload.get("stand") or "").strip()
     casals_id = (payload.get("casals_id") or "").strip()
-    baton_key = (payload.get("baton_key") or cfg.baton_wasm_key or "orchestration-baton").strip()
+    baton_key = (payload.get("baton_key") or cfg.baton_wasm_key or "orchestration-baton@1.3.0").strip()
     backend_id = (payload.get("backend_id") or job.backend_canister_id or "").strip()
     hand_targets = hand_targets_from_payload(payload)
 
@@ -2663,7 +2695,7 @@ def _casals_config_view(cfg) -> CasalsConfigView:
         casals_section=cfg.casals_section or "Deployments",
         registry_principal=cfg.registry_principal or "",
         create_stand_baton=bool(cfg.create_stand_baton),
-        baton_wasm_key=cfg.baton_wasm_key or "orchestration-baton",
+        baton_wasm_key=cfg.baton_wasm_key or "orchestration-baton@1.3.0",
     )
 
 
@@ -2855,7 +2887,7 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
         baton_canister_id=baton_id,
     ):
         baton_key = (cas.get("baton_wasm_key") or cfg.baton_wasm_key
-                     or "orchestration-baton").strip()
+                     or "orchestration-baton@1.3.0").strip()
         hand_targets = []
         if want_backend and backend_id:
             hand_targets.append((f"{stand}-backend", backend_id))

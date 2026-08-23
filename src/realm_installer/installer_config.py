@@ -5,7 +5,8 @@ import json
 from ic_python_db import Entity, Integer, String
 
 _FILE_REGISTRY_IDS = {
-    "staging": "iebdk-kqaaa-aaaau-agoxq-cai",
+    # Do not hardcode a wiped staging ID here. gaas configure() must set
+    # file_registry_id on the live installer.
     "demo": "vi64l-3aaaa-aaaae-qj4va-cai",
     "test": "uq2mu-kaaaa-aaaah-avqcq-cai",
 }
@@ -28,7 +29,7 @@ class InstallerConfig(Entity):
     marketplace_id = String(max_length=64, default="")
     portal_url = String(max_length=512, default="")
     create_stand_baton = Integer(default=0)
-    baton_wasm_key = String(max_length=64, default="orchestration-baton")
+    baton_wasm_key = String(max_length=64, default="orchestration-baton@1.3.0")
     cycle_threshold_cycles = Integer(default=2_000_000_000_000)
 
 
@@ -101,7 +102,7 @@ def apply_installer_config(params: dict) -> None:
     if "create_stand_baton" in params:
         cfg.create_stand_baton = 1 if params["create_stand_baton"] else 0
     if "baton_wasm_key" in params:
-        cfg.baton_wasm_key = (params.get("baton_wasm_key") or "orchestration-baton").strip()
+        cfg.baton_wasm_key = (params.get("baton_wasm_key") or "orchestration-baton@1.3.0").strip()
     if "cycle_threshold_cycles" in params:
         cfg.cycle_threshold_cycles = int(params.get("cycle_threshold_cycles") or 0)
 

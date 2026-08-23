@@ -462,6 +462,7 @@ def test_installer_config_json_includes_ids() -> None:
     assert payload["portal_url"] == "https://test.gos.earth"
     assert payload["provision_via_casals"] is True
     assert payload["create_stand_baton"] is True
+    assert payload["baton_wasm_key"] == "orchestration-baton@1.3.0"
     assert payload["cycle_threshold_cycles"] == 2_000_000_000_000
 
 

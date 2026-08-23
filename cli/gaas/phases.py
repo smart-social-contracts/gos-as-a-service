@@ -214,6 +214,7 @@ def _installer_config_json(descriptor: Descriptor) -> str:
         "portal_url": _portal_url(descriptor),
         "provision_via_casals": True,
         "create_stand_baton": True,
+        "baton_wasm_key": "orchestration-baton@1.3.0",
         "cycle_threshold_cycles": descriptor.threshold_cycles(),
     }
     return json.dumps(payload)
