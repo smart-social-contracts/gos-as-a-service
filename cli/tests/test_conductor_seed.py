@@ -366,21 +366,21 @@ def test_authorize_gos_entry_frontend_works_without_bundle_namespace(
     assert frontend_calls[0]["registry_namespace"] == "wasm/realm-assetstorage/main"
 
 
-def test_authorize_gos_entry_chora_backend_uses_motoko_wasm_type(
+def test_authorize_gos_entry_monad_gos_backend_uses_motoko_wasm_type(
     tmp_path: Path, monkeypatch
 ) -> None:
     _write_assetstorage_wasm(tmp_path)
     data = dict(SAMPLE_DESCRIPTOR)
     data["gos"] = [
         {
-            "implementation": "chora-gos",
+            "implementation": "monad-gos",
             "version": "main",
-            "release_repo": "smart-social-contracts/chora-gos",
+            "release_repo": "smart-social-contracts/monad-gos",
             "artifacts": {
-                "backend_wasm_key": "chora-backend",
-                "frontend_wasm_key": "chora-assets",
+                "backend_wasm_key": "monad-backend",
+                "frontend_wasm_key": "monad-assets",
             },
-            "loader_profile": "chora-iframe-v1",
+            "loader_profile": "monad-iframe-v1",
         }
     ]
     desc = Descriptor.model_validate(data)
@@ -396,8 +396,8 @@ def test_authorize_gos_entry_chora_backend_uses_motoko_wasm_type(
         conductor_seed,
         "fetch_namespace_hashes",
         lambda _rid, ns, *_a, **_k: (
-            {"chora_backend.wasm.gz": "chorahash"}
-            if ns == "wasm/chora-backend/main"
+            {"monad_backend.wasm.gz": "monadhash"}
+            if ns == "wasm/monad-backend/main"
             else {}
         ),
     )
@@ -430,7 +430,7 @@ def test_authorize_gos_entry_chora_backend_uses_motoko_wasm_type(
     ]
     assert len(backend_calls) == 1
     assert backend_calls[0]["wasm_type"] == "motoko"
-    assert backend_calls[0]["key"] == "chora-backend"
+    assert backend_calls[0]["key"] == "monad-backend"
 
 
 def test_canister_names_collects_all_registered() -> None:

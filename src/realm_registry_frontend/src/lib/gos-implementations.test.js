@@ -21,17 +21,17 @@ test('registry includes realms-gos as available with realms-iframe-v1 loader', (
   assert.equal(realms.gggConformance, '1.0');
 });
 
-test('registry includes chora-gos as available with chora-iframe-v1 loader', () => {
-  const chora = GOS_IMPLEMENTATIONS.find((impl) => impl.id === 'chora-gos');
-  assert.ok(chora);
-  assert.equal(chora.available, true);
-  assert.equal(chora.loaderProfile, 'chora-iframe-v1');
-  assert.equal(chora.gggConformance, '1.0');
+test('registry includes monad-gos as available with monad-iframe-v1 loader', () => {
+  const monadGos = GOS_IMPLEMENTATIONS.find((impl) => impl.id === 'monad-gos');
+  assert.ok(monadGos);
+  assert.equal(monadGos.available, true);
+  assert.equal(monadGos.loaderProfile, 'monad-iframe-v1');
+  assert.equal(monadGos.gggConformance, '1.0');
 });
 
 test('getGosImplementation returns matching entry or undefined', () => {
   assert.equal(getGosImplementation('realms-gos')?.name, 'Realms GOS');
-  assert.equal(getGosImplementation('chora-gos')?.available, true);
+  assert.equal(getGosImplementation('monad-gos')?.available, true);
   assert.equal(getGosImplementation('unknown'), undefined);
   assert.equal(getGosImplementation(), undefined);
 });
@@ -40,8 +40,8 @@ test('visibleWizardSteps returns platform-only wizard flow', () => {
   const steps = visibleWizardSteps('realms-gos');
   assert.deepEqual(steps.map((s) => s.id), ['platform', 'basics', 'deploy']);
 
-  const choraSteps = visibleWizardSteps('chora-gos');
-  assert.deepEqual(choraSteps.map((s) => s.id), ['platform', 'basics', 'deploy']);
+  const monadGosSteps = visibleWizardSteps('monad-gos');
+  assert.deepEqual(monadGosSteps.map((s) => s.id), ['platform', 'basics', 'deploy']);
 });
 
 test('buildGosManifestBlock includes correct fields for realms-gos', () => {
@@ -52,12 +52,12 @@ test('buildGosManifestBlock includes correct fields for realms-gos', () => {
   assert.equal(block.loader_profile, 'realms-iframe-v1');
 });
 
-test('buildGosManifestBlock includes correct fields for chora-gos', () => {
-  const block = buildGosManifestBlock('chora-gos', '0.4.0');
-  assert.equal(block.implementation, 'chora-gos');
+test('buildGosManifestBlock includes correct fields for monad-gos', () => {
+  const block = buildGosManifestBlock('monad-gos', '0.4.0');
+  assert.equal(block.implementation, 'monad-gos');
   assert.equal(block.version, '0.4.0');
   assert.equal(block.ggg_conformance, '1.0');
-  assert.equal(block.loader_profile, 'chora-iframe-v1');
+  assert.equal(block.loader_profile, 'monad-iframe-v1');
 });
 
 test('buildGosManifestBlock version reflects deploy_version', () => {
@@ -116,5 +116,5 @@ test('resolveGosImplementations falls back to defaults without gaas-env', () => 
   const list = resolveGosImplementations(undefined);
   assert.equal(list.length, 2);
   assert.ok(list.some((impl) => impl.id === 'realms-gos'));
-  assert.ok(list.some((impl) => impl.id === 'chora-gos'));
+  assert.ok(list.some((impl) => impl.id === 'monad-gos'));
 });
