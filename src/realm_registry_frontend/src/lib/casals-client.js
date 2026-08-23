@@ -1,6 +1,9 @@
 import { building } from '$app/environment';
 import { CONFIG } from './config.js';
 import { detectNetwork, getCanisterId } from './network.js';
+import { parseSubnetList } from './subnet-list-parse.js';
+
+export { parseSubnetList } from './subnet-list-parse.js';
 
 function isBuildingOrTesting() {
   return building || process.env.NODE_ENV === 'test';
@@ -54,29 +57,6 @@ async function createCasalsActor() {
 function getActorPromise() {
   if (!actorPromise) actorPromise = createCasalsActor();
   return actorPromise;
-}
-
-function parseSubnetId(entry) {
-  if (typeof entry === 'string') return entry.trim();
-  if (entry && typeof entry === 'object') {
-    const id =
-      entry.id ?? entry.subnet_id ?? entry.subnetId ?? entry.principal ?? entry.subnet;
-    if (typeof id === 'string') return id.trim();
-  }
-  return '';
-}
-
-export function parseSubnetList(raw) {
-  let data = raw;
-  if (typeof raw === 'string') {
-    try {
-      data = JSON.parse(raw);
-    } catch {
-      return [];
-    }
-  }
-  if (!Array.isArray(data)) return [];
-  return [...new Set(data.map(parseSubnetId).filter(Boolean))];
 }
 
 export async function listSubnets() {
