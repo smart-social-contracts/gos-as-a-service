@@ -1,6 +1,7 @@
 """file_registry namespace approval helpers (marketplace install gate)."""
 
 import importlib.util
+import json
 import os
 import sys
 import tempfile
@@ -103,6 +104,35 @@ def test_save_and_load_approvals():
         _main._save_approvals(data)
         assert _main._load_approvals() == data
     finally:
+        _restore_registry(orig)
+
+
+def test_list_namespaces_includes_approved_flag():
+    orig = _with_temp_registry()
+    orig_ns = _main.NAMESPACES_FILE
+    try:
+        _main.NAMESPACES_FILE = os.path.join(_main.REGISTRY_DIR, "_namespaces.json")
+        ns = "ext/voting/1.0.0"
+        _main._save_namespaces({
+            ns: {"namespace": ns, "created": 0, "owner": "x", "description": ""},
+        })
+        _main._save_meta(ns, {
+            "files": {"manifest.json": {"sha256": "abc123", "size": 1}},
+        })
+        listing = json.loads(_main.list_namespaces())
+        assert listing[0]["namespace"] == ns
+        assert listing[0]["approved"] is False
+
+        _main._save_approvals({
+            ns: {
+                "status": "approved",
+                "file_hashes": {"manifest.json": "abc123"},
+            },
+        })
+        listing = json.loads(_main.list_namespaces())
+        assert listing[0]["approved"] is True
+    finally:
+        _main.NAMESPACES_FILE = orig_ns
         _restore_registry(orig)
 
 

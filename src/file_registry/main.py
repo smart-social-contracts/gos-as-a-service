@@ -462,11 +462,13 @@ def _codex_manifest_gate(namespace: str, path: str, content: bytes) -> str | Non
 def list_namespaces() -> text:
     """Return JSON list of all namespaces with file counts and sizes."""
     namespaces = _load_namespaces()
+    approvals = _load_approvals()
     result = []
     for ns_name, ns_info in namespaces.items():
         meta = _load_meta(ns_name)
         files = meta.get("files", {})
         total_bytes = sum(f.get("size", 0) for f in files.values())
+        approval = _approval_get_payload(ns_name, approvals.get(ns_name))
         result.append({
             "namespace": ns_name,
             "file_count": len(files),
@@ -474,6 +476,7 @@ def list_namespaces() -> text:
             "created": ns_info.get("created", 0),
             "owner": ns_info.get("owner", ""),
             "description": ns_info.get("description", ""),
+            "approved": approval["approved"],
         })
     result.sort(key=lambda x: x["namespace"])
     return json.dumps(result)
