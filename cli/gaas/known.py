@@ -12,14 +12,14 @@ PLATFORM_CANISTER_NAMES: Final[tuple[str, ...]] = (
     "casals_backend",
     "casals_frontend",
     "casals_file_registry",
-)
-
-# Valid in descriptors and adopted when present, but never created, deployed,
-# or cycle-budgeted by gaas (external services wired in by configuration).
-ADOPT_ONLY_CANISTER_NAMES: Final[tuple[str, ...]] = (
     "file_registry",
     "file_registry_frontend",
     "marketplace_backend",
+)
+
+# DNS-mapped marketplace SPA: adopt the existing canister ID, never mint a new
+# one. Recreate + reinstall assets onto that ID after destroy-except-frontend.
+ADOPT_ONLY_CANISTER_NAMES: Final[tuple[str, ...]] = (
     "marketplace_frontend",
 )
 
@@ -41,15 +41,21 @@ DFX_CANISTER_NAMES: Final[dict[str, str | None]] = {
     "casals_backend": None,
     "casals_frontend": "casals_frontend",
     "casals_file_registry": None,
+    "file_registry": "file_registry",
+    "file_registry_frontend": "file_registry_frontend",
+    "marketplace_backend": None,
+    "marketplace_frontend": "marketplace_frontend",
 }
 
 PLATFORM_BACKEND_WASMS: Final[dict[str, str]] = {
     "realm_registry_backend": "realm_registry_backend.wasm.gz",
     "realm_installer": "realm_installer.wasm.gz",
+    "file_registry": "file_registry.wasm.gz",
 }
 
 PLATFORM_FRONTEND_ARCHIVES: Final[dict[str, str]] = {
     "realm_registry_frontend": "realm_registry_frontend.tar.gz",
+    "file_registry_frontend": "file_registry_frontend.tar.gz",
 }
 
 CASALS_BACKEND_WASM_ASSET: Final[str] = "casals_backend.wasm.gz"

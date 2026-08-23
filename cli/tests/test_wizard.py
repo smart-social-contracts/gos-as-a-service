@@ -6,11 +6,15 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from gaas.wizard import deploy_confirmation_message, run_wizard
-from gaas.known import KNOWN_CANISTER_NAMES
+from gaas.known import ADOPT_ONLY_CANISTER_NAMES, KNOWN_CANISTER_NAMES, PLATFORM_CANISTER_NAMES
 
 
 def test_wizard_prompts_for_casals_file_registry() -> None:
     assert "casals_file_registry" in KNOWN_CANISTER_NAMES
+    assert "file_registry" in PLATFORM_CANISTER_NAMES
+    assert "file_registry_frontend" in PLATFORM_CANISTER_NAMES
+    assert "marketplace_backend" in PLATFORM_CANISTER_NAMES
+    assert ADOPT_ONLY_CANISTER_NAMES == ("marketplace_frontend",)
 
 
 def test_deploy_confirmation_message_mentions_asset_reinstalls() -> None:
@@ -18,6 +22,7 @@ def test_deploy_confirmation_message_mentions_asset_reinstalls() -> None:
     assert "realm_registry_frontend" in message
     assert "file_registry_frontend" in message
     assert "casals_frontend" in message
+    assert "marketplace_frontend" in message
     assert "wipes existing frontend state" in message
 
 

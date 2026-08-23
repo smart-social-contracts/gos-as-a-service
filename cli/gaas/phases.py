@@ -9,9 +9,10 @@ import sys
 import tarfile
 import tempfile
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Protocol
+from typing import Any, Callable, Iterator, Protocol
 
 import requests
 import typer
@@ -53,6 +54,11 @@ from gaas.known import (
     DEFAULT_PLATFORM_RELEASE_REPO,
     DFX_CANISTER_NAMES,
     KNOWN_CANISTER_NAMES,
+)
+from gaas.marketplace import (
+    build_marketplace_backend_wasm,
+    build_marketplace_frontend,
+    configure_marketplace_backend,
 )
 from gaas.platform import (
     PlatformError,
@@ -259,6 +265,8 @@ def _infra_canister_names() -> tuple[str, ...]:
         "realm_registry_backend",
         "realm_registry_frontend",
         "realm_installer",
+        "file_registry",
+        "file_registry_frontend",
     )
 
 
@@ -274,6 +282,27 @@ def _opt_text_init_arg(config_json: str) -> str:
         return "(null)"
     escaped = config_json.replace("\\", "\\\\").replace('"', '\\"')
     return f'(opt "{escaped}")'
+
+
+@contextmanager
+def _injected_file_registry_id(index_html: Path, canister_id: str) -> Iterator[None]:
+    """Temporarily stamp the live file_registry ID into a frontend index.html."""
+    if not canister_id or not index_html.is_file():
+        yield
+        return
+    original = index_html.read_text(encoding="utf-8")
+    snippet = (
+        f"<script>window.__FILE_REGISTRY_CANISTER_ID__={json.dumps(canister_id)};</script>\n"
+    )
+    if "</head>" in original:
+        updated = original.replace("</head>", snippet + "</head>", 1)
+    else:
+        updated = snippet + original
+    index_html.write_text(updated, encoding="utf-8")
+    try:
+        yield
+    finally:
+        index_html.write_text(original, encoding="utf-8")
 
 
 def phase_destroy_except_frontend(descriptor: Descriptor, ctx: DeployContext) -> None:
@@ -488,6 +517,57 @@ def phase_install_backends(descriptor: Descriptor, ctx: DeployContext) -> None:
             "(null)",
             identity=ctx.identity,
             yes=True,
+        )
+
+    file_registry_id = descriptor.canisters.get("file_registry")
+    if file_registry_id:
+        wasm = resolve_platform_backend_wasm(
+            "file_registry",
+            platform_version=platform_version,
+            release_repo=release_repo,
+            work_dir=work,
+            repo_root=repo_root,
+            session=ctx.http,
+        )
+        mode = _backend_install_mode(file_registry_id, ctx)
+        console.print(f"  file_registry: {mode} ({wasm.name})")
+        dfx.install_wasm(
+            file_registry_id,
+            str(wasm),
+            ctx.network,
+            mode,
+            "(null)",
+            identity=ctx.identity,
+            yes=True,
+        )
+
+    marketplace_id = descriptor.canisters.get("marketplace_backend")
+    if marketplace_id:
+        if repo_root is None:
+            try:
+                repo_root = _find_repo_root(ctx)
+            except PlatformError:
+                repo_root = work
+        wasm = build_marketplace_backend_wasm(
+            descriptor,
+            gos_repo_root=repo_root,
+            work_dir=work,
+        )
+        mode = _backend_install_mode(marketplace_id, ctx)
+        console.print(f"  marketplace_backend: {mode} ({wasm.name})")
+        dfx.install_wasm(
+            marketplace_id,
+            str(wasm),
+            ctx.network,
+            mode,
+            "(null)",
+            identity=ctx.identity,
+            yes=True,
+        )
+        configure_marketplace_backend(
+            descriptor,
+            network=ctx.network,
+            identity=ctx.identity,
         )
 
 
@@ -840,6 +920,55 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
                 f"({format_duration(time.monotonic() - start)})"
             )
 
+        file_registry_frontend_id = descriptor.canisters.get("file_registry_frontend")
+        if file_registry_frontend_id:
+            canister = "file_registry_frontend"
+            dist = frontend_dist_dir(
+                canister,
+                platform_version=platform_version,
+                release_repo=release_repo,
+                work_dir=work,
+                repo_root=repo_root,
+                session=ctx.http,
+            )
+            if not dist.is_dir() or not any(dist.iterdir()):
+                if platform_version:
+                    archive = fetch_platform_frontend_archive(
+                        canister,
+                        platform_version,
+                        release_repo,
+                        work / "frontends" / canister,
+                        session=ctx.http,
+                    )
+                    extract_dir = work / "frontends" / canister / "dist"
+                    extract_dir.mkdir(parents=True, exist_ok=True)
+                    with tarfile.open(archive, "r:gz") as tar:
+                        tar.extractall(extract_dir)
+                    dist = extract_dir
+                else:
+                    raise RuntimeError(f"frontend build produced empty dist for {canister}")
+
+            dfx_name = DFX_CANISTER_NAMES[canister]
+            if not dfx_name:
+                raise RuntimeError(f"no dfx mapping for {canister}")
+            file_registry_id = descriptor.canisters.get("file_registry") or ""
+            console.print(f"  {canister}: reinstall assets to {file_registry_frontend_id}")
+            start = time.monotonic()
+            with _injected_file_registry_id(dist / "index.html", file_registry_id):
+                dfx.deploy_assets_canister(
+                    dfx_name,
+                    file_registry_frontend_id,
+                    ctx.network,
+                    repo_root=repo_root,
+                    identity=ctx.identity,
+                    mode="reinstall",
+                    yes=True,
+                )
+            console.print(
+                f"  {canister}: reinstall assets done "
+                f"({format_duration(time.monotonic() - start)})"
+            )
+
         casals_frontend_id = descriptor.canisters.get("casals_frontend")
         if not casals_frontend_id:
             raise RuntimeError("missing canister ID for casals_frontend")
@@ -872,6 +1001,39 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
             f"  casals_frontend: reinstall assets done "
             f"({format_duration(time.monotonic() - start)})"
         )
+
+        marketplace_frontend_id = descriptor.canisters.get("marketplace_frontend")
+        if marketplace_frontend_id:
+            marketplace_backend_id = descriptor.canisters.get("marketplace_backend") or ""
+            file_registry_id = descriptor.canisters.get("file_registry") or ""
+            if not marketplace_backend_id:
+                raise RuntimeError(
+                    "marketplace_backend ID required to rebuild marketplace_frontend"
+                )
+            console.print(
+                f"  marketplace_frontend: build + reinstall assets to {marketplace_frontend_id}"
+            )
+            start = time.monotonic()
+            build_marketplace_frontend(
+                descriptor,
+                gos_repo_root=repo_root,
+                work_dir=work,
+                marketplace_backend_id=marketplace_backend_id,
+                file_registry_id=file_registry_id,
+            )
+            dfx.deploy_assets_canister(
+                "marketplace_frontend",
+                marketplace_frontend_id,
+                ctx.network,
+                repo_root=repo_root,
+                identity=ctx.identity,
+                mode="reinstall",
+                yes=True,
+            )
+            console.print(
+                f"  marketplace_frontend: reinstall assets done "
+                f"({format_duration(time.monotonic() - start)})"
+            )
     finally:
         if gaas_env_path and not ctx.keep_env_file:
             remove_gaas_env(repo_root)
@@ -1360,6 +1522,10 @@ def phase_controller_topology(descriptor: Descriptor, ctx: DeployContext) -> Non
     infra_names = list(_infra_canister_names())
     if descriptor.canisters.get("casals_file_registry"):
         infra_names.append("casals_file_registry")
+    if descriptor.canisters.get("marketplace_backend"):
+        infra_names.append("marketplace_backend")
+    if descriptor.canisters.get("marketplace_frontend"):
+        infra_names.append("marketplace_frontend")
     for name in infra_names:
         canister_id = descriptor.canisters.get(name)
         if not canister_id:

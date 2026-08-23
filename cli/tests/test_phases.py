@@ -214,13 +214,12 @@ def test_create_canisters_adopt_vs_create(
 
     mock_create.assert_called()
     assert desc.canisters["realm_registry_backend"] == VALID_CANISTER_ID
-    # 1 adopted + 5 platform created; adopt-only marketplace and realms-owned
-    # file_registry names are skipped.
-    assert len(desc.canisters) == 6
-    assert "marketplace_backend" not in desc.canisters
+    # 1 adopted + 8 platform created; DNS-mapped marketplace_frontend is skipped.
+    assert len(desc.canisters) == 9
+    assert "marketplace_backend" in desc.canisters
+    assert "file_registry" in desc.canisters
+    assert "file_registry_frontend" in desc.canisters
     assert "marketplace_frontend" not in desc.canisters
-    assert "file_registry" not in desc.canisters
-    assert "file_registry_frontend" not in desc.canisters
 
 
 @patch("gaas.phases.dfx.top_up_canister")
@@ -672,10 +671,8 @@ def test_infra_canister_names() -> None:
     assert "realm_registry_backend" in names
     assert "realm_registry_frontend" in names
     assert "realm_installer" in names
-    # Realms-owned package registry is external; gaas does not manage its
-    # controller topology.
-    assert "file_registry" not in names
-    assert "file_registry_frontend" not in names
+    assert "file_registry" in names
+    assert "file_registry_frontend" in names
     assert "casals_backend" not in names
 
 
@@ -710,13 +707,15 @@ def test_controller_topology_test_mode(
         "casals_backend": "eeeee-eeeee-eeeee-eeeee-eeeee-eee",
         "casals_frontend": "fffff-fffff-fffff-fffff-fffff-fff",
         "casals_file_registry": "ggggg-ggggg-ggggg-ggggg-ggggg-ggg",
+        "marketplace_backend": "hhhhh-hhhhh-hhhhh-hhhhh-hhhhh-hhh",
     }
     data["multisig"] = {"backend_id": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aac"}
     desc = Descriptor.model_validate(data)
     ctx = DeployContext(identity="deployer", network="ic")
     phase_controller_topology(desc, ctx)
-    # 6 gaas-managed canisters; realms-owned file_registry pair is untouched.
-    assert mock_update.call_count == 6
+    # casals pair + 5 infra (registry/installer/file_registry pair) +
+    # casals_file_registry + marketplace_backend
+    assert mock_update.call_count == 9
     first_call = mock_update.call_args_list[0]
     assert first_call[0][1] == ["aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aac", "deployer-principal"]
 
@@ -1094,9 +1093,10 @@ def test_phase_install_frontends_no_mid_run_confirm(
 
     phase_install_frontends(descriptor, ctx)
 
-    # npm install + realm_registry_frontend build only; file_registry_frontend
-    # is realms-owned and no longer built/deployed by gaas.
+    # npm install + realm_registry_frontend build; file_registry_frontend uses
+    # committed dist (no extra npm). marketplace_frontend is absent so skipped.
     assert run_log.run_step.call_count == 2
+    assert mock_deploy_assets.call_count == 3
     for call in mock_deploy_assets.call_args_list:
         assert call.kwargs.get("yes") is True
         assert call.kwargs.get("mode") == "reinstall"
@@ -1170,3 +1170,46 @@ def test_phase_install_backends_reinstall_backends_forces_wipe(
     assert mock_install.call_count == 3
     for call in mock_install.call_args_list:
         assert call.args[3] == "reinstall"
+
+
+@patch("gaas.phases.configure_marketplace_backend")
+@patch("gaas.phases.build_marketplace_backend_wasm")
+@patch("gaas.phases.dfx.install_wasm")
+@patch("gaas.phases.dfx.detect_install_mode", return_value="upgrade")
+@patch("gaas.phases.resolve_casals_wasm")
+@patch("gaas.phases.resolve_platform_backend_wasm")
+@patch("gaas.phases._find_repo_root")
+def test_phase_install_backends_installs_file_registry_and_marketplace(
+    mock_repo_root,
+    mock_platform_wasm,
+    mock_casals_wasm,
+    mock_detect,
+    mock_install,
+    mock_marketplace_wasm,
+    mock_configure_marketplace,
+    tmp_path: Path,
+) -> None:
+    mock_repo_root.return_value = tmp_path / "repo"
+    mock_platform_wasm.return_value = tmp_path / "platform.wasm.gz"
+    mock_casals_wasm.return_value = tmp_path / "casals.wasm.gz"
+    mock_marketplace_wasm.return_value = tmp_path / "marketplace.wasm.gz"
+
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        "realm_registry_backend": VALID_CANISTER_ID,
+        "realm_installer": VALID_CANISTER_ID,
+        "casals_backend": VALID_CANISTER_ID,
+        "file_registry": "aaaaa-aaaaa-aaaaa-aaaaa-aaa",
+        "marketplace_backend": "bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+    }
+    descriptor = Descriptor.model_validate(data)
+    ctx = DeployContext(identity="deployer", network="ic", work_dir=tmp_path / "work")
+
+    phase_install_backends(descriptor, ctx)
+
+    assert mock_install.call_count == 5
+    mock_marketplace_wasm.assert_called_once()
+    mock_configure_marketplace.assert_called_once()
+    installed_ids = [call.args[0] for call in mock_install.call_args_list]
+    assert "aaaaa-aaaaa-aaaaa-aaaaa-aaa" in installed_ids
+    assert "bbbbb-bbbbb-bbbbb-bbbbb-bbb" in installed_ids

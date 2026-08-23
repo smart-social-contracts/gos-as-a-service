@@ -36,6 +36,7 @@ ASSET_FRONTEND_CANISTERS = (
     "realm_registry_frontend",
     "file_registry_frontend",
     "casals_frontend",
+    "marketplace_frontend",
 )
 
 
@@ -343,13 +344,13 @@ def run_wizard(
 
     canisters: dict[str, str] = {}
     console.print(
-        "\nExisting canister IDs (leave blank to create new; adopt-only external "
-        "services like file_registry/marketplace are never created by gaas):"
+        "\nExisting canister IDs (leave blank to create new; marketplace_frontend "
+        "is DNS-mapped and adopted when an ID is present, never newly created):"
     )
     for canister_name in KNOWN_CANISTER_NAMES:
         hint = ""
         if canister_name in ADOPT_ONLY_CANISTER_NAMES:
-            hint = " [external, optional]"
+            hint = " [DNS-mapped, optional]"
         value = prompt.text(
             f"  {canister_name}{hint}:",
             validate=_validate_canister_id,

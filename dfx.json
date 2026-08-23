@@ -135,6 +135,12 @@
         }
       }
     },
+    "marketplace_frontend": {
+      "source": [
+        "marketplace_frontend_dist"
+      ],
+      "type": "assets"
+    },
     "internet_identity": {
       "candid": "https://github.com/dfinity/internet-identity/releases/download/release-2026-03-09/internet_identity.did",
       "frontend": {},

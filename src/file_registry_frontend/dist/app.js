@@ -34,7 +34,10 @@ const DEFAULT_REGISTRY = _FR_BACKEND_MAP[_hostCanister] || "feqzn-wyaaa-aaaae-ag
 const II_PROVIDER_URL = "https://identity.ic0.app";
 
 const params = new URLSearchParams(location.search);
-const REGISTRY_ID = params.get("canister") || DEFAULT_REGISTRY;
+const REGISTRY_ID =
+  params.get("canister") ||
+  (typeof window !== "undefined" && window.__FILE_REGISTRY_CANISTER_ID__) ||
+  DEFAULT_REGISTRY;
 const isLocal = location.hostname.includes("localhost") || location.hostname.includes("127.0.0.1");
 const HOST = isLocal ? `http://${REGISTRY_ID}.localhost:4943` : `https://${REGISTRY_ID}.icp0.io`;
 const ROOT_HTTP = HOST; // file_registry's own HTTP gateway
