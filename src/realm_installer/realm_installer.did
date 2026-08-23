@@ -161,6 +161,7 @@ service : (text) -> {
   "get_deployment_manifest" : (text) -> (ResultJobManifest) query;
   "list_deployment_jobs" : (opt nat32, opt nat32) -> (ResultJobsList) query;
   "cancel_deployment" : (text) -> (ResultJobCancel);
+  "finalize_deployment" : (text) -> (ResultJobCancel);
   "delete_deployment_job" : (text) -> (ResultJobCancel);
   "destroy_realm_job" : (text) -> (ResultJobCancel);
   "report_deployment_failure" : (text) -> (ResultReportFailure);

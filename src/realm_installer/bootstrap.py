@@ -127,6 +127,14 @@ def enter_setup_args(manifest: dict, backend_id: str) -> dict:
     }
 
 
+def build_enter_setup_candid(creator: str, registry_id: str, environment: str) -> str:
+    """Candid for Realms/Chora ``enter_setup(principal, text, text)``."""
+    def _text(value: str) -> str:
+        return '"' + str(value).replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+    return f'(principal "{creator}", {_text(registry_id)}, {_text(environment)})'
+
+
 def needs_enter_setup_step(manifest: dict, backend_id: str = "") -> bool:
     """True when the deploy includes a backend (or will deploy both canisters)."""
     backend = (backend_id or manifest.get("target_canister_id") or "").strip()

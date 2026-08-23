@@ -8,6 +8,7 @@ _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 sys.path.insert(0, os.path.join(_REPO_ROOT, "src/realm_installer"))
 
 from bootstrap import (  # noqa: E402
+    build_enter_setup_candid,
     configure_canister_ids_args,
     configure_canister_ids_payload,
     deploy_step_kinds,
@@ -282,6 +283,18 @@ def test_enter_setup_args_from_manifest():
         "environment": "staging",
     }
     assert needs_enter_setup_step(manifest, manifest["target_canister_id"])
+
+
+def test_enter_setup_candid_is_principal_plus_two_texts():
+    candid = build_enter_setup_candid(
+        "2eqns-rmzes-7npxw-dxpw2-qdy2s-mw6ix-svdo2-oya7o-a6ldc-sqgwh-bqe",
+        "fntsr-aqaaa-aaaae-ag22a-cai",
+        "staging",
+    )
+    assert candid == (
+        '(principal "2eqns-rmzes-7npxw-dxpw2-qdy2s-mw6ix-svdo2-oya7o-a6ldc-sqgwh-bqe", '
+        '"fntsr-aqaaa-aaaae-ag22a-cai", "staging")'
+    )
 
 
 def test_realms_gos_explicit_still_has_configure_and_grant():
