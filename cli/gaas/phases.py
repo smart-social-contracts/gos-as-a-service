@@ -110,6 +110,7 @@ class DeployContext:
     keep_env_file: bool = False
     reinstall_backends: bool = False
     destroy_except_frontend: bool = False
+    cycles_evacuated: int = 0
     work_dir: Path | None = None
     http: requests.Session | None = None
     seed_artifacts: list[SeedArtifactSummary] = field(default_factory=list)
@@ -301,9 +302,10 @@ def phase_destroy_except_frontend(descriptor: Descriptor, ctx: DeployContext) ->
         network=ctx.network,
         identity=ctx.identity,
     )
+    ctx.cycles_evacuated = int(result.get("cycles_evacuated") or 0)
     console.print(
         f"  Cycles reclaimed: {int(result['cycles_reclaimed']):,}; "
-        f"evacuated to wallet: {int(result['cycles_evacuated']):,}"
+        f"evacuated to wallet: {ctx.cycles_evacuated:,}"
     )
     console.print(f"  Preserved frontends: {', '.join(result['preserved_frontend_ids'])}")
     _save_descriptor(descriptor, ctx)
@@ -373,6 +375,18 @@ def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
         descriptor.set_canister_id(name, canister_id)
         _save_descriptor(descriptor, ctx)
         console.print(f"  {name}: created {canister_id}")
+
+    casals_id = (descriptor.canisters.get("casals_backend") or "").strip()
+    if ctx.cycles_evacuated > 0 and casals_id:
+        dfx.top_up_canister(
+            casals_id,
+            ctx.cycles_evacuated,
+            ctx.network,
+            identity=ctx.identity,
+        )
+        console.print(
+            f"  casals_backend: restored {ctx.cycles_evacuated:,} evacuated cycles"
+        )
 
 
 def _platform_release(descriptor: Descriptor) -> tuple[str | None, str]:

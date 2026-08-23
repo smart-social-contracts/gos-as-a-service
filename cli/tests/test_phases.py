@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from gaas.descriptor import Descriptor, MultisigConfig, PlatformConfig, ServicesConfig
+from gaas.known import KNOWN_CANISTER_NAMES
 from gaas.phases import (
     PHASES,
     DeployContext,
@@ -88,6 +89,7 @@ def test_phase_destroy_except_frontend_runs_and_saves(
     phase_destroy_except_frontend(desc, ctx)
     mock_destroy.assert_called_once()
     mock_save.assert_called_once()
+    assert ctx.cycles_evacuated == 200
 
 
 @patch("gaas.phases.seed_codex_catalog")
@@ -219,6 +221,110 @@ def test_create_canisters_adopt_vs_create(
     assert "marketplace_frontend" not in desc.canisters
     assert "file_registry" not in desc.canisters
     assert "file_registry_frontend" not in desc.canisters
+
+
+@patch("gaas.phases.dfx.top_up_canister")
+@patch("gaas.phases.dfx.create_canister_via_ledger")
+@patch("gaas.phases.dfx.create_canister")
+@patch("gaas.phases.dfx.canister_status")
+@patch("gaas.phases.dfx.get_principal")
+@patch("gaas.phases.dfx.use_identity")
+@patch("gaas.phases.run_preflight")
+def test_phase_create_canisters_restores_evacuated_cycles(
+    mock_preflight,
+    _use_identity,
+    mock_principal,
+    mock_status,
+    mock_create,
+    _mock_ledger_create,
+    mock_top_up,
+    tmp_path: Path,
+) -> None:
+    from gaas.preflight import PreflightCheck, PreflightReport
+
+    mock_preflight.return_value = PreflightReport(
+        identity="deployer",
+        network="ic",
+        checks=[PreflightCheck("identity_exists", True, "ok")],
+    )
+    mock_principal.return_value = "aaaaa-aa"
+    mock_status.return_value = MagicMock(
+        status="running",
+        controllers=("aaaaa-aa",),
+        raw="status: running",
+    )
+    casals_id = "qthgp-3yaaa-aaaae-agveq-cai"
+
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {name: VALID_CANISTER_ID for name in KNOWN_CANISTER_NAMES}
+    data["canisters"]["casals_backend"] = casals_id
+    desc = Descriptor.model_validate(data)
+    path = tmp_path / "env.gaas.json"
+    desc.save(path)
+
+    ctx = DeployContext(
+        identity="deployer",
+        network="ic",
+        descriptor_path=path,
+        cycles_evacuated=500_000_000_000,
+    )
+    phase_create_canisters(desc, ctx)
+
+    mock_top_up.assert_called_once_with(
+        casals_id,
+        500_000_000_000,
+        "ic",
+        identity="deployer",
+    )
+
+
+@patch("gaas.phases.dfx.top_up_canister")
+@patch("gaas.phases.dfx.create_canister_via_ledger")
+@patch("gaas.phases.dfx.create_canister")
+@patch("gaas.phases.dfx.canister_status")
+@patch("gaas.phases.dfx.get_principal")
+@patch("gaas.phases.dfx.use_identity")
+@patch("gaas.phases.run_preflight")
+def test_phase_create_canisters_skips_treasury_restore_when_zero(
+    mock_preflight,
+    _use_identity,
+    mock_principal,
+    mock_status,
+    mock_create,
+    _mock_ledger_create,
+    mock_top_up,
+    tmp_path: Path,
+) -> None:
+    from gaas.preflight import PreflightCheck, PreflightReport
+
+    mock_preflight.return_value = PreflightReport(
+        identity="deployer",
+        network="ic",
+        checks=[PreflightCheck("identity_exists", True, "ok")],
+    )
+    mock_principal.return_value = "aaaaa-aa"
+    mock_status.return_value = MagicMock(
+        status="running",
+        controllers=("aaaaa-aa",),
+        raw="status: running",
+    )
+
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {name: VALID_CANISTER_ID for name in KNOWN_CANISTER_NAMES}
+    data["canisters"]["casals_backend"] = "qthgp-3yaaa-aaaae-agveq-cai"
+    desc = Descriptor.model_validate(data)
+    path = tmp_path / "env.gaas.json"
+    desc.save(path)
+
+    ctx = DeployContext(
+        identity="deployer",
+        network="ic",
+        descriptor_path=path,
+        cycles_evacuated=0,
+    )
+    phase_create_canisters(desc, ctx)
+
+    mock_top_up.assert_not_called()
 
 
 def test_registry_init_json_can_test_mode() -> None:
