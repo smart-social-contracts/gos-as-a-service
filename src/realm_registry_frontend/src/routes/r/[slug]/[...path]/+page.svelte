@@ -302,7 +302,7 @@
         aria-live="polite"
         transition:fade={{ duration: 300 }}
       >
-        <RealmsSphereLoader size={128} />
+        <RealmsSphereLoader size={128} frontendCanisterId={realm?.frontendCanisterId || ''} />
         <p class="loading-label">{iframeLoaded ? 'Preparing realm…' : 'Loading realm'}</p>
       </div>
     {/if}
