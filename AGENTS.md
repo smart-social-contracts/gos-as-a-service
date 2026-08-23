@@ -22,11 +22,11 @@ scripts/infra_dev_deploy.sh     # Fast dfx deploy (registry | installer)
 
 | Canister | Test | Demo | Staging |
 |---|---|---|---|
-| realm_registry_backend | `yhw3g-fyaaa-aaaas-qgorq-cai` | `rhw4p-gqaaa-aaaac-qbw7q-cai` | `7wzxh-wyaaa-aaaau-aggyq-cai` |
+| realm_registry_backend | `yhw3g-fyaaa-aaaas-qgorq-cai` | `rhw4p-gqaaa-aaaac-qbw7q-cai` | `fntsr-aqaaa-aaaae-ag22a-cai` |
 | realm_registry_frontend | `qtank-3qaaa-aaaaa-qhb6q-cai` | `2zaor-5yaaa-aaaac-qbxaa-cai` | `77243-aqaaa-aaaau-aggza-cai` |
-| realm_installer | `fltjm-tyaaa-aaaap-qunhq-cai` | `2s4td-daaaa-aaaao-bazmq-cai` | `lusjm-wqaaa-aaaau-ago7q-cai` |
-| file_registry | `uq2mu-kaaaa-aaaah-avqcq-cai` | `vi64l-3aaaa-aaaae-qj4va-cai` | `iebdk-kqaaa-aaaau-agoxq-cai` |
-| marketplace_backend | `2wldc-niaaa-aaaad-qlxga-cai` | `ehyfg-wyaaa-aaaae-qg3qq-cai` | `jji3o-uyaaa-aaaah-qreja-cai` |
+| realm_installer | `fltjm-tyaaa-aaaap-qunhq-cai` | `2s4td-daaaa-aaaao-bazmq-cai` | `fksuf-niaaa-aaaae-ag22q-cai` |
+| file_registry | `uq2mu-kaaaa-aaaah-avqcq-cai` | `vi64l-3aaaa-aaaae-qj4va-cai` | `feqzn-wyaaa-aaaae-ag23q-cai` |
+| marketplace_backend | `2wldc-niaaa-aaaad-qlxga-cai` | `ehyfg-wyaaa-aaaae-qg3qq-cai` | `l5qpy-wqaaa-aaaah-qu2mq-cai` |
 
 Casals conductors (external platform provisioner; operated by realms fleet ops):
 
@@ -34,7 +34,7 @@ Casals conductors (external platform provisioner; operated by realms fleet ops):
 |---|---|
 | test | `qthgp-3yaaa-aaaae-agveq-cai` |
 | demo | `jo3cj-faaaa-aaaac-bffea-cai` |
-| staging | `jj2e5-iyaaa-aaaac-bffeq-cai` |
+| staging | `rbuam-sqaaa-aaaab-qhe5a-cai` |
 
 Portal hosts: `test.gos.earth`, `demo.gos.earth`, `staging.gos.earth` → **`realm_registry_frontend`**. Realms marketplace hosts (`*.realmsgos.org`) → **`marketplace_frontend`** when declared in the descriptor (see below).
 
@@ -159,7 +159,7 @@ export PATH="$PWD/.venv-basilisk/bin:$PATH"
 export CANISTER_CANDID_PATH=src/realm_registry_backend/realm_registry_backend.did
 export DFX_NETWORK=staging
 dfx build realm_registry_backend --network staging
-dfx canister install 7wzxh-wyaaa-aaaau-aggyq-cai --network staging --mode upgrade \
+dfx canister install fntsr-aqaaa-aaaae-ag22a-cai --network staging --mode upgrade \
   --wasm .basilisk/realm_registry_backend/realm_registry_backend.wasm.gz
 npm run build --workspace=realm_registry_frontend
 dfx deploy realm_registry_frontend --network staging --yes
@@ -273,7 +273,7 @@ Registry backend and installer are Basilisk canisters. Use agent endpoints for l
 export TERM=xterm DFX_WARNING=-mainnet_plaintext_identity
 dfx identity use deployer
 
-dfx canister call 7wzxh-wyaaa-aaaau-aggyq-cai __browse__ \
+dfx canister call fntsr-aqaaa-aaaae-ag22a-cai __browse__ \
   '("{\"action\": \"schema\"}")' --query --network staging
 ```
 
@@ -282,7 +282,7 @@ dfx canister call 7wzxh-wyaaa-aaaau-aggyq-cai __browse__ \
 Requires your dfx identity to be a **canister controller**:
 
 ```bash
-dfx canister call 7wzxh-wyaaa-aaaau-aggyq-cai __shell__ \
+dfx canister call fntsr-aqaaa-aaaae-ag22a-cai __shell__ \
   '("from realm_registry_backend.core.models import RealmRecord; print(len(list(RealmRecord.instances())))")' \
   --network staging --identity deployer
 ```
@@ -290,7 +290,7 @@ dfx canister call 7wzxh-wyaaa-aaaau-aggyq-cai __shell__ \
 List realms quickly:
 
 ```bash
-dfx canister call 7wzxh-wyaaa-aaaau-aggyq-cai list_realms '()' \
+dfx canister call fntsr-aqaaa-aaaae-ag22a-cai list_realms '()' \
   --query --network staging
 ```
 

@@ -15,25 +15,33 @@
     }
   ],
   "canisters": {
-    "realm_registry_backend": "gudtl-kyaaa-aaaae-ag2tq-cai",
+    "realm_registry_backend": "fntsr-aqaaa-aaaae-ag22a-cai",
     "realm_registry_frontend": "77243-aqaaa-aaaau-aggza-cai",
-    "realm_installer": "hznxf-fqaaa-aaaae-ag2ua-cai",
-    "file_registry": "hacwc-baaaa-aaaac-bfxmq-cai",
-    "file_registry_frontend": "hoa3k-2qaaa-aaaac-bfxnq-cai",
-    "casals_backend": "jj2e5-iyaaa-aaaac-bffeq-cai",
-    "casals_frontend": "h6mrr-iiaaa-aaaae-ag2uq-cai",
-    "marketplace_backend": "h3hkh-3yaaa-aaaac-bfxoa-cai",
+    "realm_installer": "fksuf-niaaa-aaaae-ag22q-cai",
+    "file_registry": "feqzn-wyaaa-aaaae-ag23q-cai",
+    "file_registry_frontend": "m4td3-eaaaa-aaaao-qqbva-cai",
+    "casals_backend": "rbuam-sqaaa-aaaab-qhe5a-cai",
+    "casals_frontend": "fdr7z-3aaaa-aaaae-ag23a-cai",
+    "casals_file_registry": "s7wqs-pqaaa-aaaan-q6nyq-cai",
+    "marketplace_backend": "l5qpy-wqaaa-aaaah-qu2mq-cai",
     "marketplace_frontend": "h4gmt-waaaa-aaaac-bfxoq-cai"
   },
   "casals": {
     "version": "main",
-    "release_repo": "smart-social-contracts/Casals"
+    "release_repo": "smart-social-contracts/Casals",
+    "commanders": [
+      "3itd6-2sx7g-vefdk-xhebm-fucot-llay5-lhqd6-pkjac-m7mkf-vhwqq-fqe"
+    ]
   },
   "marketplace": {
     "approver_principal": "ah6ac-cc73l-bb2zc-ni7bh-jov4q-roeyj-6k2ob-mkg5j-pequi-vuaa6-2ae"
   },
   "multisig": {
-    "backend_id": "v5ghj-nyaaa-aaaac-bfllq-cai"
+    "backend_id": "rgvgy-7iaaa-aaaab-qhe5q-cai",
+    "signers": [
+      "3itd6-2sx7g-vefdk-xhebm-fucot-llay5-lhqd6-pkjac-m7mkf-vhwqq-fqe"
+    ],
+    "threshold": 1
   },
   "services": {
     "billing_url": "https://billing.realmsgos.dev",

@@ -26,11 +26,11 @@ let HttpAgent, Actor, AuthClient;
 // and can always be overridden with ?canister=<id> in the URL.
 const _FR_BACKEND_MAP = {
   "2no7h-xqaaa-aaaad-qlxeq-cai": "uq2mu-kaaaa-aaaah-avqcq-cai",   // test
-  "rbex3-xyaaa-aaaah-qumma-cai": "iebdk-kqaaa-aaaau-agoxq-cai",   // staging
+  "m4td3-eaaaa-aaaao-qqbva-cai": "feqzn-wyaaa-aaaae-ag23q-cai",   // staging
   "7ja5c-dqaaa-aaaae-qj5oa-cai": "vi64l-3aaaa-aaaae-qj4va-cai",   // demo
 };
 const _hostCanister = location.hostname.replace(".icp0.io", "").replace(".ic0.app", "");
-const DEFAULT_REGISTRY = _FR_BACKEND_MAP[_hostCanister] || "iebdk-kqaaa-aaaau-agoxq-cai";
+const DEFAULT_REGISTRY = _FR_BACKEND_MAP[_hostCanister] || "feqzn-wyaaa-aaaae-ag23q-cai";
 const II_PROVIDER_URL = "https://identity.ic0.app";
 
 const params = new URLSearchParams(location.search);

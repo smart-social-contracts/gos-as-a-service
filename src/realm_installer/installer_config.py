@@ -5,16 +5,15 @@ import json
 from ic_python_db import Entity, Integer, String
 
 _FILE_REGISTRY_IDS = {
-    # Do not hardcode a wiped staging ID here. gaas configure() must set
-    # file_registry_id on the live installer.
     "demo": "vi64l-3aaaa-aaaae-qj4va-cai",
     "test": "uq2mu-kaaaa-aaaah-avqcq-cai",
+    "staging": "feqzn-wyaaa-aaaae-ag23q-cai",
 }
 
 _MARKETPLACE_IDS = {
     "test": "2wldc-niaaa-aaaad-qlxga-cai",
     "demo": "ehyfg-wyaaa-aaaae-qg3qq-cai",
-    "staging": "jji3o-uyaaa-aaaah-qreja-cai",
+    "staging": "l5qpy-wqaaa-aaaah-qu2mq-cai",
 }
 
 

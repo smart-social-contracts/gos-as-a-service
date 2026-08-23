@@ -12,7 +12,7 @@
   export let casalsUrl = '';
 
   const dispatch = createEventDispatcher();
-  const CASALS_FALLBACK_URL = 'https://mcqbx-hyaaa-aaaaj-qsarq-cai.icp0.io';
+  const CASALS_FALLBACK_URL = 'https://fdr7z-3aaaa-aaaae-ag23a-cai.icp0.io';
 
   $: architectureUrl = casalsUrl || CASALS_FALLBACK_URL;
 
