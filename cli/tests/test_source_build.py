@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -255,3 +256,41 @@ def test_wizard_validator_accepts_main_and_latest() -> None:
     assert _validate_version("latest") is True
     assert _validate_version("v0.3.1") is True
     assert isinstance(_validate_version("bad"), str)
+
+
+@patch("gaas.source_build.run_subprocess")
+def test_build_chora_gos_artifacts_installs_mops_before_icp_build(
+    mock_run: MagicMock, tmp_path: Path
+) -> None:
+    from gaas.source_build import build_chora_gos_artifacts
+
+    repo_root = tmp_path / "chora"
+    icp_artifacts = repo_root / ".icp" / "cache" / "artifacts"
+    icp_artifacts.mkdir(parents=True)
+    (icp_artifacts / "chora_backend").write_bytes(b"wasm")
+    dist = repo_root / "src" / "chora_frontend" / "dist"
+    dist.mkdir(parents=True)
+    (dist / "index.html").write_text("<html></html>", encoding="utf-8")
+    (dist / "index.js").write_text("export {};\n", encoding="utf-8")
+    (repo_root / "node_modules" / ".bin").mkdir(parents=True)
+
+    mock_run.return_value = MagicMock(returncode=0)
+
+    dest_dir = tmp_path / "out"
+    backend_out, frontend_out = build_chora_gos_artifacts(repo_root, dest_dir)
+
+    calls = mock_run.call_args_list
+    assert calls[0].args[0] == ["npm", "install", "ic-mops"]
+    assert calls[0].kwargs["cwd"] == repo_root
+    assert calls[1].args[0] == ["npx", "--yes", "ic-mops", "install"]
+    assert calls[1].kwargs["cwd"] == repo_root
+    assert calls[2].args[0] == ["icp", "build", "chora_backend"]
+    assert calls[2].kwargs["cwd"] == repo_root
+    mops_bin = str(repo_root / "node_modules" / ".bin")
+    assert mops_bin in calls[2].kwargs["env"]["PATH"].split(os.pathsep)
+    assert calls[3].args[0] == ["npm", "install"]
+    assert calls[4].args[0] == ["npm", "run", "build"]
+    assert backend_out == dest_dir / "chora_backend.wasm.gz"
+    assert frontend_out == dest_dir / "chora_frontend.tar.gz"
+    assert backend_out.is_file()
+    assert frontend_out.is_file()

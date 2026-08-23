@@ -143,7 +143,23 @@ def _find_chora_backend_wasm(repo_root: Path) -> Path:
 
 def build_chora_gos_artifacts(repo_root: Path, dest_dir: Path) -> tuple[Path, Path]:
     """Build Chora GOS release assets from an icp-cli checkout."""
-    run_subprocess(["icp", "build", "chora_backend"], cwd=repo_root, check=True)
+    run_subprocess(["npm", "install", "ic-mops"], cwd=repo_root, check=True)
+    run_subprocess(
+        ["npx", "--yes", "ic-mops", "install"],
+        cwd=repo_root,
+        check=True,
+    )
+    mops_bin = repo_root / "node_modules" / ".bin"
+    build_env = {
+        **os.environ,
+        "PATH": f"{mops_bin}{os.pathsep}{os.environ.get('PATH', '')}",
+    }
+    run_subprocess(
+        ["icp", "build", "chora_backend"],
+        cwd=repo_root,
+        env=build_env,
+        check=True,
+    )
 
     backend_src = _find_chora_backend_wasm(repo_root)
 
