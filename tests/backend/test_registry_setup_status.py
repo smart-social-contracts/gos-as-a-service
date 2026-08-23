@@ -51,12 +51,28 @@ def test_setup_completion_flips_to_live_when_caller_matches():
     assert realm["realm"]["listing_status"] == "live"
 
 
+def test_setup_completion_allows_controller():
+    _clear_realms()
+    backend_id = "backend-setup-controller"
+    _register(backend_id)
+
+    mock_ic.caller.return_value = "controller-principal"
+    mock_ic.is_controller.return_value = True
+    result = complete_realm_setup(backend_id)
+    assert result == {"success": True}
+
+    realm = get_registered_realm(backend_id)
+    assert realm["realm"]["listing_status"] == "live"
+    mock_ic.is_controller.return_value = False
+
+
 def test_setup_completion_rejects_wrong_caller():
     _clear_realms()
     backend_id = "backend-setup-3"
     _register(backend_id)
 
     mock_ic.caller.return_value = "wrong-backend-id"
+    mock_ic.is_controller.return_value = False
     result = complete_realm_setup(backend_id)
     assert result["success"] is False
     assert "does not match" in result["error"]
