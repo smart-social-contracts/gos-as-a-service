@@ -183,7 +183,8 @@ function truthCellResolutions(truthCells, h3) {
 
 /**
  * Pick per-realm display resolution: coarsest zoom-allowed res whose footprint
- * stays within HEX_AREA_INFLATION_MAX of the true res-6 union, or null → markers only.
+ * stays within HEX_AREA_INFLATION_MAX of the true zone union. Falls back to
+ * native / regional overview hexes rather than markers-only.
  * @param {object[]} zones
  * @param {object} h3
  * @param {number} zoom
@@ -214,14 +215,24 @@ export function chooseRealmHexResolution(zones, h3, zoom) {
     return { resolution, truthCells, influenceRings: 0 };
   }
 
-  // Coarse territory cells (res < 6) still draw as hexes when parenting to the
-  // zoom's coarse res would inflate past the cap. Fine cells stay markers-only.
+  // Parenting the whole realm to the zoom's coarse res can inflate a small
+  // city-scale cluster (Spain at res 7–8) past the cap. That used to return
+  // null — which also hid any coarse cells in the same realm. Always keep
+  // drawing: mixed realms use the coarsest native cell (fine cells parent
+  // up to it); city-only paint gets a regional overview hex when zoomed out.
   const native = truthCellResolutions(truthCells, h3);
-  if (native.length && native.every((res) => res < ZONE_DATA_RESOLUTION)) {
-    return { resolution: Math.min(...native), truthCells, influenceRings: 0 };
-  }
+  if (!native.length) return null;
 
-  return null;
+  const minNative = Math.min(...native);
+  const overview = h3ResolutionForZoom(zoom);
+  if (minNative > overview && zoom < 5) {
+    return {
+      resolution: Math.min(minNative, Math.max(overview, 4)),
+      truthCells,
+      influenceRings: 0,
+    };
+  }
+  return { resolution: minNative, truthCells, influenceRings: 0 };
 }
 
 /** @param {object[]} zones @param {object} h3 */

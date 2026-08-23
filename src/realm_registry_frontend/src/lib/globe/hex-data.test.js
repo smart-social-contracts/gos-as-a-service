@@ -75,6 +75,61 @@ test('chooseRealmHexResolution draws 300 res-3 zones at globe zoom', () => {
   assert.ok(polygons.every((p) => (p.minDistance ?? 99) === 0));
 });
 
+test('city-zoom Spain hexes still fill at globe zoom', () => {
+  const origin = h3.latLngToCell(37.6, -1.0, 8);
+  const spain = h3.gridDisk(origin, 2).slice(0, 16).map((h3_index, i) => ({
+    h3_index,
+    name: `spain${i}`,
+    user_count: 1,
+  }));
+  assert.equal(spain.length, 16);
+
+  const choice = chooseRealmHexResolution(spain, h3, 2.65);
+  assert.ok(choice, 'city-scale territory must render as hexes, not markers');
+  const polygons = buildHexPolygons([realm], { [realm.id]: { zones: spain } }, h3, {
+    zoom: 2.65,
+  });
+  assert.ok(polygons.length > 0, 'globe must fill Spain-drawn hexes');
+  const inSpain = polygons.filter((p) => {
+    const [lat, lng] = h3.cellToLatLng(p.hexIndex);
+    return lat >= 35 && lat <= 44 && lng >= -10 && lng <= 5;
+  });
+  assert.ok(inSpain.length > 0, 'fill must sit on Iberia, not only the capital pin');
+});
+
+test('mixed Africa res-3 and Spain res-8 both fill at globe zoom', () => {
+  const africaOrigin = h3.latLngToCell(12, -8, 3);
+  const africa = h3.gridDisk(africaOrigin, 10).slice(0, 300).map((h3_index, i) => ({
+    h3_index,
+    name: `a${i}`,
+    user_count: 1,
+  }));
+  const spainOrigin = h3.latLngToCell(37.6, -1.0, 8);
+  const spain = h3.gridDisk(spainOrigin, 2).slice(0, 16).map((h3_index, i) => ({
+    h3_index,
+    name: `s${i}`,
+    user_count: 1,
+  }));
+  const zones = [...africa, ...spain];
+
+  const choice = chooseRealmHexResolution(zones, h3, 2.65);
+  assert.ok(choice, 'mixed-resolution territory must not fall back to markers');
+  const polygons = buildHexPolygons([realm], { [realm.id]: { zones } }, h3, {
+    zoom: 2.65,
+  });
+  assert.ok(polygons.length > 0);
+  const inSpain = polygons.filter((p) => {
+    const [lat, lng] = h3.cellToLatLng(p.hexIndex);
+    return lat >= 35 && lat <= 44 && lng >= -10 && lng <= 5;
+  });
+  const inAfrica = polygons.filter((p) => {
+    const [lat, lng] = h3.cellToLatLng(p.hexIndex);
+    return lat >= 0 && lat <= 35 && lng >= -30 && lng <= 20;
+  });
+  assert.ok(inAfrica.length > 0, 'coarse West Africa hexes must remain');
+  assert.ok(inSpain.length > 0, 'Spain-drawn cells must not drop the whole fill');
+});
+
 test('buildHexPolygons never draws land-registry cells', () => {
   const zones = [
     { h3_index: RES6, name: 'Parcel A', land_id: 'land_1', user_count: 4 },
