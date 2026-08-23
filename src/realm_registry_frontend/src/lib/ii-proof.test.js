@@ -10,6 +10,7 @@ import {
 import {
 	billingIdentityHeaders,
 	buildBillingPayloadFromProof,
+	proofFromRootIdentity,
 	serializeDelegationIdentity,
 } from './ii-proof.js';
 
@@ -63,6 +64,23 @@ test('buildBillingPayloadFromProof rejects missing proof', () => {
 		() => buildBillingPayloadFromProof(null, 'canister-id'),
 		/Log in with Internet Identity to redeem/,
 	);
+});
+
+test('proofFromRootIdentity mints a chain from a raw test key without prompting II', async () => {
+	const root = Ed25519KeyIdentity.generate();
+	const proof = await proofFromRootIdentity(root);
+	assert.ok(proof);
+	assert.equal(typeof proof.publicKey, 'string');
+	assert.ok(Array.isArray(proof.delegations));
+	assert.ok(proof.delegations.length > 0);
+	assert.ok(DelegationChain.fromJSON(proof));
+
+	const der = Uint8Array.from(proof.publicKey.match(/.{2}/g).map((h) => parseInt(h, 16)));
+	assert.equal(Principal.selfAuthenticating(der).toText(), root.getPrincipal().toText());
+});
+
+test('proofFromRootIdentity returns null for a missing identity', async () => {
+	assert.equal(await proofFromRootIdentity(null), null);
 });
 
 test('billingIdentityHeaders serializes proof for billing X-IC-Identity header', () => {
