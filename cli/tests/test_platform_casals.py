@@ -147,3 +147,27 @@ def test_casals_policy_cache_is_usable(tmp_path: Path) -> None:
     cached.mkdir()
     (cached / ".ic-assets.json5").write_text(_CASALS_ASSETS, encoding="utf-8")
     assert _casals_frontend_cache_usable(cached) is True
+
+
+def test_local_backend_wasm_uses_basilisk_not_dfx_local(tmp_path: Path, monkeypatch) -> None:
+    from gaas.platform import _local_backend_wasm
+
+    canister = "realm_registry_backend"
+    src_dir = tmp_path / "src" / canister
+    src_dir.mkdir(parents=True)
+    (src_dir / "main.py").write_text("# stub\n", encoding="utf-8")
+    (src_dir / f"{canister}.did").write_text("service : {}\n", encoding="utf-8")
+    seen: dict[str, list[str]] = {}
+
+    def fake_run(cmd, **kwargs):
+        del kwargs
+        seen["cmd"] = list(cmd)
+        out = tmp_path / ".basilisk" / canister / f"{canister}.wasm"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(b"wasm")
+
+    monkeypatch.setattr("gaas.platform.run_subprocess", fake_run)
+    wasm = _local_backend_wasm(tmp_path, canister)
+    assert wasm.read_bytes() == b"wasm"
+    assert seen["cmd"][1:4] == ["-m", "basilisk", canister]
+    assert "dfx" not in seen["cmd"]

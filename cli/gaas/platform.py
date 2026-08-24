@@ -5,6 +5,7 @@ from __future__ import annotations
 import gzip
 import os
 import shutil
+import subprocess
 import sys
 import tarfile
 import urllib.parse
@@ -485,19 +486,45 @@ def find_local_assetstorage_wasm(repo_root: Path | None = None) -> Path:
 
 
 def _local_backend_wasm(repo_root: Path, canister: str) -> Path:
-    from gaas import dfx
-
     dfx_name = DFX_CANISTER_NAMES.get(canister)
     if not dfx_name:
         raise PlatformError(f"no local dfx build mapping for {canister}")
-    dfx.build_canister(dfx_name, "local", cwd=repo_root, env_extra=_basilisk_env(repo_root))
     gz = repo_root / ".dfx" / "local" / "canisters" / dfx_name / f"{dfx_name}.wasm.gz"
+    plain = repo_root / ".basilisk" / dfx_name / f"{dfx_name}.wasm"
     if gz.is_file():
         return _ensure_uncompressed_wasm(gz)
-    plain = repo_root / ".basilisk" / dfx_name / f"{dfx_name}.wasm"
     if plain.is_file():
         return plain
-    raise PlatformError(f"dfx build {dfx_name} did not produce WASM under {repo_root}")
+
+    # Basilisk compiles without a replica. `dfx build --network local` needs a
+    # local canister id mapping and fails on a fresh ic-only checkout.
+    src = repo_root / "src" / dfx_name / "main.py"
+    if not src.is_file():
+        raise PlatformError(f"cannot build {canister} locally: missing {src}")
+    env = os.environ.copy()
+    extra = _basilisk_env(repo_root)
+    if extra:
+        env.update(extra)
+    candid = repo_root / "src" / dfx_name / f"{dfx_name}.did"
+    if candid.is_file():
+        env["CANISTER_CANDID_PATH"] = str(candid)
+    py = repo_root / ".venv-basilisk" / "bin" / "python"
+    python = str(py) if py.is_file() else sys.executable
+    try:
+        run_subprocess(
+            [python, "-m", "basilisk", dfx_name, str(src)],
+            cwd=repo_root,
+            env=env,
+            check=True,
+            label=f"basilisk {dfx_name}",
+        )
+    except subprocess.CalledProcessError as exc:
+        raise PlatformError(f"basilisk build {dfx_name} failed") from exc
+    if gz.is_file():
+        return _ensure_uncompressed_wasm(gz)
+    if plain.is_file():
+        return plain
+    raise PlatformError(f"basilisk build {dfx_name} did not produce WASM under {repo_root}")
 
 
 def fetch_platform_backend(
