@@ -18,6 +18,7 @@ FINALIZE_BATCH = 8
 # Casals file_registry has no finalize_chunked_file_step. Remember that per
 # canister so a seed does not pay one rejected update per file.
 _oneshot_finalize_ids: set[str] = set()
+_no_publish_ids: set[str] = set()
 _MISSING_STEP_MARKERS = (
     "has no update method",
     "IC0536",
@@ -296,6 +297,13 @@ def _finalize_chunked_upload(
     )
 
 
+def _is_missing_method(exc: BaseException, method: str) -> bool:
+    text = str(exc)
+    if method not in text:
+        return False
+    return any(marker in text for marker in _MISSING_STEP_MARKERS)
+
+
 def publish_namespace(
     registry_id: str,
     namespace: str,
@@ -303,14 +311,23 @@ def publish_namespace(
     *,
     identity: str | None = None,
 ) -> None:
-    raw = dfx.canister_call(
-        registry_id,
-        "publish_namespace",
-        dfx.candid_text_arg(json.dumps({"namespace": namespace})),
-        network,
-        identity=identity,
-        timeout=120,
-    )
+    """GOS file_registry publishes namespaces; Casals FR has no publish_namespace (files are live on finalize)."""
+    if registry_id in _no_publish_ids:
+        return
+    try:
+        raw = dfx.canister_call(
+            registry_id,
+            "publish_namespace",
+            dfx.candid_text_arg(json.dumps({"namespace": namespace})),
+            network,
+            identity=identity,
+            timeout=120,
+        )
+    except dfx.DfxError as exc:
+        if not _is_missing_method(exc, "publish_namespace"):
+            raise
+        _no_publish_ids.add(registry_id)
+        return
     result = json.loads(raw)
     if not (isinstance(result, dict) and result.get("ok") is True):
         raise RuntimeError(f"publish_namespace({namespace}) failed: {result}")

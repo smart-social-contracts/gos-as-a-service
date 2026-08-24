@@ -143,3 +143,27 @@ def test_upload_directory_includes_failed_paths(tmp_path: Path, monkeypatch) -> 
     assert uploaded == 1
     assert failed == 1
     assert failed_paths == ["bad.js"]
+
+
+def test_publish_namespace_skips_casals_missing_method(monkeypatch) -> None:
+    from gaas import dfx
+    from gaas import file_registry_client as client
+
+    client._no_publish_ids.clear()
+    calls: list[str] = []
+
+    def fake_call(canister_id, method, *args, **kwargs):
+        del canister_id, args, kwargs
+        calls.append(method)
+        raise dfx.DfxError(
+            "Canister has no update method 'publish_namespace'.",
+            command=["dfx", "canister", "call"],
+            stderr="has no update method 'publish_namespace'",
+        )
+
+    monkeypatch.setattr(dfx, "canister_call", fake_call)
+    monkeypatch.setattr(dfx, "candid_text_arg", lambda payload: payload)
+    client.publish_namespace("reg", "wasm/realm-backend/main", "ic")
+    calls.clear()
+    client.publish_namespace("reg", "frontend/realm-assets/main", "ic")
+    assert calls == []
