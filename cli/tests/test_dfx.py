@@ -277,3 +277,121 @@ def test_parse_candid_string_plain_json_roundtrip():
     candid = payload.replace("\\", "\\\\").replace('"', '\\"')
     decoded = _parse_candid_string(f'(\n  "{candid}"\n)')
     assert json.loads(decoded) == json.loads(payload)
+
+
+def test_parse_created_canister_id_prefers_created_line():
+    import subprocess
+
+    from gaas.dfx import _parse_created_canister_id
+
+    subnet = "o3ow2-2ipam-6fcjo-3j5vt-fzbge-2g7my-5fz2m-p7o5s-daa"
+    created = "aaaaa-aa"
+    # Use a realistic canister id so the regex can match either line.
+    created = "qthgp-3yaaa-aaaae-agveq-cai"
+    result = subprocess.CompletedProcess(
+        args=["dfx", "canister", "create"],
+        returncode=0,
+        stdout=(
+            f"Creating canister on subnet {subnet}\n"
+            f"Created canister {created}\n"
+        ),
+        stderr="",
+    )
+    assert _parse_created_canister_id(result) == created
+
+
+def test_drop_local_canister_id_removes_network_mapping(tmp_path, monkeypatch):
+    import json
+
+    from gaas.dfx import drop_local_canister_id, local_canister_id
+
+    ids_path = tmp_path / "canister_ids.json"
+    ids_path.write_text(
+        json.dumps(
+            {
+                "realm_installer": {
+                    "ic": "hznxf-fqaaa-aaaae-ag2ua-cai",
+                    "staging": "fksuf-niaaa-aaaae-ag22q-cai",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    assert local_canister_id("realm_installer", "ic") == "hznxf-fqaaa-aaaae-ag2ua-cai"
+    drop_local_canister_id("realm_installer", "ic")
+    assert local_canister_id("realm_installer", "ic") is None
+    leftover = json.loads(ids_path.read_text(encoding="utf-8"))
+    assert leftover["realm_installer"]["staging"] == "fksuf-niaaa-aaaae-ag22q-cai"
+
+
+def test_create_canister_drops_stale_mapping_and_verifies(tmp_path, monkeypatch):
+    import json
+    import subprocess
+
+    from gaas import dfx
+
+    ids_path = tmp_path / "canister_ids.json"
+    stale = "gudtl-kyaaa-aaaae-ag2tq-cai"
+    fresh = "qthgp-3yaaa-aaaae-agveq-cai"
+    ids_path.write_text(
+        json.dumps({"realm_registry_backend": {"ic": stale}}),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    exists = {stale: False, fresh: True}
+
+    def fake_exists(canister_id, network, *, identity=None):
+        del network, identity
+        return exists[canister_id]
+
+    def fake_run(args, **kwargs):
+        del kwargs
+        return subprocess.CompletedProcess(
+            args=args,
+            returncode=0,
+            stdout=f"Created canister {fresh}\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(dfx, "canister_exists", fake_exists)
+    monkeypatch.setattr(dfx, "_run", fake_run)
+
+    got = dfx.create_canister("realm_registry_backend", "ic", identity="deployer")
+    assert got == fresh
+    assert "ic" not in json.loads(ids_path.read_text(encoding="utf-8")).get(
+        "realm_registry_backend", {}
+    )
+
+
+def test_create_canister_raises_if_parsed_id_missing(monkeypatch):
+    import subprocess
+
+    from gaas import dfx
+
+    fresh = "qthgp-3yaaa-aaaae-agveq-cai"
+
+    monkeypatch.setattr(dfx, "local_canister_id", lambda *a, **k: None)
+    monkeypatch.setattr(dfx, "canister_exists", lambda *a, **k: False)
+    monkeypatch.setattr(dfx, "drop_local_canister_id", lambda *a, **k: None)
+    monkeypatch.setattr(
+        dfx,
+        "_run",
+        lambda args, **kwargs: subprocess.CompletedProcess(
+            args=args,
+            returncode=0,
+            stdout=f"Created canister {fresh}\n",
+            stderr="",
+        ),
+    )
+
+    with pytest.raises(dfx.DfxError, match="does not exist on-chain"):
+        dfx.create_canister("realm_installer", "ic")
+
+
+def test_create_canister_via_ledger_retired_on_ic():
+    from gaas.dfx import DfxError, create_canister_via_ledger
+
+    with pytest.raises(DfxError, match="retired"):
+        create_canister_via_ledger("ic", identity="deployer")

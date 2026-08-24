@@ -16,9 +16,7 @@
   ],
   "canisters": {
     "realm_registry_frontend": "77243-aqaaa-aaaau-aggza-cai",
-    "marketplace_frontend": "h4gmt-waaaa-aaaac-bfxoq-cai",
-    "realm_registry_backend": "gudtl-kyaaa-aaaae-ag2tq-cai",
-    "realm_installer": "hznxf-fqaaa-aaaae-ag2ua-cai"
+    "marketplace_frontend": "h4gmt-waaaa-aaaac-bfxoq-cai"
   },
   "casals": {
     "version": "main",

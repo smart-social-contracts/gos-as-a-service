@@ -1,7 +1,6 @@
 {
   "casals_frontend": {
     "demo": "hvwpv-aiaaa-aaaam-ajddq-cai",
-    "ic": "h6mrr-iiaaa-aaaae-ag2uq-cai",
     "staging": "fdr7z-3aaaa-aaaae-ag23a-cai",
     "test": "qic2k-baaaa-aaaae-agvga-cai"
   },
@@ -27,13 +26,11 @@
   },
   "realm_installer": {
     "demo": "2s4td-daaaa-aaaao-bazmq-cai",
-    "ic": "hznxf-fqaaa-aaaae-ag2ua-cai",
     "staging": "fksuf-niaaa-aaaae-ag22q-cai",
     "test": "fltjm-tyaaa-aaaap-qunhq-cai"
   },
   "realm_registry_backend": {
     "demo": "rhw4p-gqaaa-aaaac-qbw7q-cai",
-    "ic": "gudtl-kyaaa-aaaae-ag2tq-cai",
     "staging": "fntsr-aqaaa-aaaae-ag22a-cai",
     "test": "yhw3g-fyaaa-aaaas-qgorq-cai"
   },

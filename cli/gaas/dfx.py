@@ -352,6 +352,14 @@ def ping_local() -> bool:
 
 def _parse_created_canister_id(result: subprocess.CompletedProcess[str]) -> str:
     combined = result.stdout + "\n" + result.stderr
+    created = re.search(
+        r"created canister[^\n]*?"
+        r"([a-z0-9]{5}(?:-[a-z0-9]{5}){3,10}-[a-z0-9]{3})",
+        combined,
+        re.I,
+    )
+    if created:
+        return created.group(1)
     match = _CANISTER_ID_OUTPUT_RE.search(combined)
     if not match:
         raise DfxError(
@@ -363,6 +371,66 @@ def _parse_created_canister_id(result: subprocess.CompletedProcess[str]) -> str:
     return match.group(1)
 
 
+def local_canister_id(
+    name: str,
+    network: str,
+    *,
+    ids_path: Path | None = None,
+) -> str | None:
+    path = ids_path or Path("canister_ids.json")
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    entry = data.get(name)
+    if not isinstance(entry, dict):
+        return None
+    value = entry.get(network)
+    return value if isinstance(value, str) and value.strip() else None
+
+
+def drop_local_canister_id(
+    name: str,
+    network: str,
+    *,
+    ids_path: Path | None = None,
+) -> None:
+    """Remove a dfx network mapping so the next create actually mints a canister."""
+    path = ids_path or Path("canister_ids.json")
+    if not path.is_file():
+        return
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    entry = data.get(name)
+    if not isinstance(entry, dict) or network not in entry:
+        return
+    del entry[network]
+    if entry:
+        data[name] = entry
+    else:
+        del data[name]
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
+def canister_exists(
+    canister_id: str,
+    network: str,
+    *,
+    identity: str | None = None,
+) -> bool:
+    try:
+        canister_status(canister_id, network, identity=identity)
+        return True
+    except DfxError as exc:
+        if is_canister_not_found_error(exc):
+            return False
+        raise
+
+
 def create_canister(
     name: str,
     network: str,
@@ -370,6 +438,9 @@ def create_canister(
     identity: str | None = None,
     with_cycles: int | None = None,
 ) -> str:
+    local_id = local_canister_id(name, network)
+    if local_id and not canister_exists(local_id, network, identity=identity):
+        drop_local_canister_id(name, network)
     args = [
         "dfx",
         "canister",
@@ -384,7 +455,16 @@ def create_canister(
     if with_cycles is not None:
         args.extend(["--with-cycles", str(with_cycles)])
     result = _run(args, check=True)
-    return _parse_created_canister_id(result)
+    canister_id = _parse_created_canister_id(result)
+    if not canister_exists(canister_id, network, identity=identity):
+        drop_local_canister_id(name, network)
+        raise DfxError(
+            f"dfx reported {canister_id} for {name} but that canister does not exist on-chain",
+            command=args,
+            stderr=result.stderr,
+            stdout=result.stdout,
+        )
+    return canister_id
 
 
 def create_canister_via_ledger(
@@ -395,20 +475,14 @@ def create_canister_via_ledger(
 ) -> str:
     if network != "ic":
         return create_canister_local(network, identity=identity, controller=controller)
-    principal = controller or get_principal(identity)
-    args = [
-        "dfx",
-        "ledger",
-        "create-canister",
-        principal,
-        "--network",
-        network,
-    ]
-    if identity:
-        args.extend(["--identity", identity])
-    args.extend(["--amount", "0.001"])
-    result = _run(args, check=True)
-    return _parse_created_canister_id(result)
+    del identity, controller
+    raise DfxError(
+        "create_canister_via_ledger is retired; add a dfx.json canister and use "
+        "create_canister (--with-cycles). ledger create-canister --amount 0.001 "
+        "cannot pay the CMC fee and can parse a subnet id as a canister id",
+        command=["dfx", "ledger", "create-canister"],
+        stderr="retired",
+    )
 
 
 def create_canister_local(
@@ -655,7 +729,12 @@ def detect_install_mode(canister_id: str, network: str, *, identity: str | None 
 
 def is_canister_not_found_error(exc: BaseException | str) -> bool:
     text = str(exc)
-    return "IC0301" in text or "not found" in text.lower()
+    lowered = text.lower()
+    return (
+        "IC0301" in text
+        or "not found" in lowered
+        or "does not exist" in lowered
+    )
 
 
 def delete_canister(*_args: object, **_kwargs: object) -> None:
@@ -710,3 +789,49 @@ def get_wallet(network: str, *, identity: str | None = None) -> str:
             stdout=result.stdout,
         )
     return wallet
+
+
+def wallet_cycles_balance(network: str, *, identity: str | None = None) -> int:
+    args = ["dfx", "wallet", "balance", "--network", network]
+    if identity:
+        args.extend(["--identity", identity])
+    result = _run(args, check=True)
+    parsed = parse_cycles_balance(result.stdout) or parse_cycles_balance(result.stderr)
+    if parsed is None:
+        raise DfxError(
+            "could not parse dfx wallet balance",
+            command=args,
+            stderr=result.stderr,
+            stdout=result.stdout,
+        )
+    return parsed
+
+
+WALLET_SEND_CHUNK_CYCLES = 10_000_000_000_000  # 10T
+
+
+def send_wallet_cycles(
+    canister_id: str,
+    amount: int,
+    network: str,
+    *,
+    identity: str | None = None,
+    chunk: int = WALLET_SEND_CHUNK_CYCLES,
+) -> None:
+    """Move cycles from the cycles wallet onto a canister."""
+    remaining = amount
+    while remaining > 0:
+        n = remaining if remaining <= chunk else chunk
+        args = [
+            "dfx",
+            "wallet",
+            "send",
+            canister_id,
+            str(n),
+            "--network",
+            network,
+        ]
+        if identity:
+            args.extend(["--identity", identity])
+        _run(args, check=True)
+        remaining -= n

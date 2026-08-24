@@ -53,7 +53,9 @@ from gaas.known import (
     DEFAULT_CYCLES_PER_CANISTER,
     DEFAULT_PLATFORM_RELEASE_REPO,
     DFX_CANISTER_NAMES,
+    DNS_LOCKED_CANISTER_NAMES,
     KNOWN_CANISTER_NAMES,
+    WALLET_RESERVE_CYCLES,
 )
 from gaas.marketplace import (
     build_marketplace_backend_wasm,
@@ -341,10 +343,76 @@ def phase_destroy_except_frontend(descriptor: Descriptor, ctx: DeployContext) ->
     _save_descriptor(descriptor, ctx)
 
 
+def _drop_missing_canister_ids(descriptor: Descriptor, ctx: DeployContext) -> None:
+    """Forget descriptor IDs that are not on-chain, except DNS-locked frontends."""
+    dropped = False
+    for name in list(descriptor.canisters):
+        canister_id = descriptor.canisters[name]
+        if dfx.canister_exists(canister_id, ctx.network, identity=ctx.identity):
+            continue
+        if name in DNS_LOCKED_CANISTER_NAMES:
+            raise RuntimeError(
+                f"DNS-mapped canister {name} ({canister_id}) does not exist on-chain; "
+                "refusing to mint a replacement ID"
+            )
+        console.print(f"  {name}: dropping missing ID {canister_id}")
+        descriptor.canisters.pop(name, None)
+        dfx_name = DFX_CANISTER_NAMES.get(name) or name
+        dfx.drop_local_canister_id(dfx_name, ctx.network)
+        dropped = True
+    if dropped:
+        _save_descriptor(descriptor, ctx)
+
+
+def _restore_casals_treasury(descriptor: Descriptor, ctx: DeployContext) -> None:
+    casals_id = (descriptor.canisters.get("casals_backend") or "").strip()
+    if not casals_id:
+        return
+    amount = ctx.cycles_evacuated
+    if amount <= 0:
+        try:
+            wallet_bal = dfx.wallet_cycles_balance(ctx.network, identity=ctx.identity)
+        except dfx.DfxError as exc:
+            console.print(
+                f"[yellow]  warning: wallet balance unavailable: {exc}[/yellow]"
+            )
+            return
+        amount = max(0, wallet_bal - WALLET_RESERVE_CYCLES)
+        if amount <= 0:
+            return
+        console.print(
+            f"  casals_backend: restoring wallet surplus {amount:,} cycles "
+            f"(keeping {WALLET_RESERVE_CYCLES:,} in wallet)"
+        )
+    dfx.send_wallet_cycles(
+        casals_id,
+        amount,
+        ctx.network,
+        identity=ctx.identity,
+    )
+    console.print(f"  casals_backend: restored {amount:,} cycles from wallet")
+    try:
+        dfx.canister_call(
+            casals_id,
+            "get_cycles",
+            "()",
+            ctx.network,
+            identity=ctx.identity,
+            query=False,
+        )
+        console.print("  casals_backend: primed cycles snapshot (get_cycles)")
+    except Exception as exc:
+        console.print(
+            f"[yellow]  warning: get_cycles after treasury restore failed: {exc}[/yellow]"
+        )
+
+
 def phase_validate(descriptor: Descriptor, ctx: DeployContext) -> None:
     errors = descriptor.validate_descriptor()
     if errors:
         raise RuntimeError("descriptor validation failed:\n  - " + "\n  - ".join(errors))
+
+    _drop_missing_canister_ids(descriptor, ctx)
 
     report = run_preflight(
         descriptor,
@@ -367,15 +435,32 @@ def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
     for name in KNOWN_CANISTER_NAMES:
         existing_id = descriptor.canisters.get(name)
         if existing_id:
-            status = dfx.canister_status(existing_id, ctx.network, identity=ctx.identity)
-            controllers = status.controllers
-            if controllers and principal not in controllers:
-                raise RuntimeError(
-                    f"identity {principal!r} is not a controller of adopted canister "
-                    f"{name} ({existing_id}); controllers: {', '.join(controllers)}"
+            if not dfx.canister_exists(
+                existing_id, ctx.network, identity=ctx.identity
+            ):
+                if name in DNS_LOCKED_CANISTER_NAMES:
+                    raise RuntimeError(
+                        f"DNS-mapped canister {name} ({existing_id}) does not exist "
+                        "on-chain; refusing to mint a replacement ID"
+                    )
+                console.print(f"  {name}: dropping missing ID {existing_id}")
+                descriptor.canisters.pop(name, None)
+                dfx_name = DFX_CANISTER_NAMES.get(name) or name
+                dfx.drop_local_canister_id(dfx_name, ctx.network)
+                _save_descriptor(descriptor, ctx)
+                existing_id = None
+            else:
+                status = dfx.canister_status(
+                    existing_id, ctx.network, identity=ctx.identity
                 )
-            console.print(f"  {name}: adopt {existing_id} ({status.status})")
-            continue
+                controllers = status.controllers
+                if controllers and principal not in controllers:
+                    raise RuntimeError(
+                        f"identity {principal!r} is not a controller of adopted canister "
+                        f"{name} ({existing_id}); controllers: {', '.join(controllers)}"
+                    )
+                console.print(f"  {name}: adopt {existing_id} ({status.status})")
+                continue
 
         if name in ADOPT_ONLY_CANISTER_NAMES:
             continue
@@ -406,31 +491,7 @@ def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
         _save_descriptor(descriptor, ctx)
         console.print(f"  {name}: created {canister_id}")
 
-    casals_id = (descriptor.canisters.get("casals_backend") or "").strip()
-    if ctx.cycles_evacuated > 0 and casals_id:
-        dfx.top_up_canister(
-            casals_id,
-            ctx.cycles_evacuated,
-            ctx.network,
-            identity=ctx.identity,
-        )
-        console.print(
-            f"  casals_backend: restored {ctx.cycles_evacuated:,} evacuated cycles"
-        )
-        try:
-            dfx.canister_call(
-                casals_id,
-                "get_cycles",
-                "()",
-                ctx.network,
-                identity=ctx.identity,
-                query=False,
-            )
-            console.print("  casals_backend: primed cycles snapshot (get_cycles)")
-        except Exception as exc:
-            console.print(
-                f"[yellow]  warning: get_cycles after treasury restore failed: {exc}[/yellow]"
-            )
+    _restore_casals_treasury(descriptor, ctx)
 
 
 def _platform_release(descriptor: Descriptor) -> tuple[str | None, str]:

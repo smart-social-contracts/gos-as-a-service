@@ -155,6 +155,10 @@ def test_run_phases_validate_failure(mock_preflight) -> None:
     assert ctx.completed_phases == ["destroy_except_frontend"]
 
 
+@patch("gaas.phases.dfx.send_wallet_cycles")
+@patch("gaas.phases.dfx.wallet_cycles_balance", return_value=0)
+@patch("gaas.phases.dfx.drop_local_canister_id")
+@patch("gaas.phases.dfx.canister_exists", return_value=True)
 @patch("gaas.phases.dfx.top_up_canister")
 @patch("gaas.phases.dfx.create_canister_via_ledger")
 @patch("gaas.phases.dfx.create_canister")
@@ -170,6 +174,10 @@ def test_create_canisters_adopt_vs_create(
     mock_create,
     mock_ledger_create,
     _mock_top_up,
+    _mock_exists,
+    _mock_drop,
+    _mock_wallet_bal,
+    _mock_send_wallet,
     tmp_path: Path,
 ) -> None:
     from gaas.preflight import PreflightCheck, PreflightReport
@@ -222,6 +230,10 @@ def test_create_canisters_adopt_vs_create(
 
 
 @patch("gaas.phases.dfx.canister_call")
+@patch("gaas.phases.dfx.send_wallet_cycles")
+@patch("gaas.phases.dfx.wallet_cycles_balance")
+@patch("gaas.phases.dfx.drop_local_canister_id")
+@patch("gaas.phases.dfx.canister_exists", return_value=True)
 @patch("gaas.phases.dfx.top_up_canister")
 @patch("gaas.phases.dfx.create_canister_via_ledger")
 @patch("gaas.phases.dfx.create_canister")
@@ -237,6 +249,10 @@ def test_phase_create_canisters_restores_evacuated_cycles(
     mock_create,
     _mock_ledger_create,
     mock_top_up,
+    _mock_exists,
+    _mock_drop,
+    mock_wallet_bal,
+    mock_send_wallet,
     mock_canister_call,
     tmp_path: Path,
 ) -> None:
@@ -270,7 +286,9 @@ def test_phase_create_canisters_restores_evacuated_cycles(
     )
     phase_create_canisters(desc, ctx)
 
-    mock_top_up.assert_called_once_with(
+    mock_top_up.assert_not_called()
+    mock_wallet_bal.assert_not_called()
+    mock_send_wallet.assert_called_once_with(
         casals_id,
         500_000_000_000,
         "ic",
@@ -286,6 +304,10 @@ def test_phase_create_canisters_restores_evacuated_cycles(
     )
 
 
+@patch("gaas.phases.dfx.send_wallet_cycles")
+@patch("gaas.phases.dfx.wallet_cycles_balance", return_value=0)
+@patch("gaas.phases.dfx.drop_local_canister_id")
+@patch("gaas.phases.dfx.canister_exists", return_value=True)
 @patch("gaas.phases.dfx.top_up_canister")
 @patch("gaas.phases.dfx.create_canister_via_ledger")
 @patch("gaas.phases.dfx.create_canister")
@@ -301,6 +323,10 @@ def test_phase_create_canisters_skips_treasury_restore_when_zero(
     mock_create,
     _mock_ledger_create,
     mock_top_up,
+    _mock_exists,
+    _mock_drop,
+    _mock_wallet_bal,
+    mock_send_wallet,
     tmp_path: Path,
 ) -> None:
     from gaas.preflight import PreflightCheck, PreflightReport
@@ -333,6 +359,83 @@ def test_phase_create_canisters_skips_treasury_restore_when_zero(
     phase_create_canisters(desc, ctx)
 
     mock_top_up.assert_not_called()
+    mock_send_wallet.assert_not_called()
+
+
+@patch("gaas.phases.dfx.drop_local_canister_id")
+@patch("gaas.phases.dfx.canister_exists")
+def test_drop_missing_canister_ids_forgets_phantoms(
+    mock_exists,
+    mock_drop,
+    tmp_path: Path,
+) -> None:
+    from gaas.phases import _drop_missing_canister_ids
+
+    mock_exists.side_effect = lambda canister_id, network, identity=None: (
+        canister_id == VALID_CANISTER_ID
+    )
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        "realm_registry_frontend": VALID_CANISTER_ID,
+        "realm_registry_backend": "gudtl-kyaaa-aaaae-ag2tq-cai",
+        "realm_installer": "hznxf-fqaaa-aaaae-ag2ua-cai",
+    }
+    desc = Descriptor.model_validate(data)
+    path = tmp_path / "env.gaas.json"
+    desc.save(path)
+    ctx = DeployContext(identity="deployer", network="ic", descriptor_path=path)
+
+    _drop_missing_canister_ids(desc, ctx)
+
+    assert desc.canisters == {"realm_registry_frontend": VALID_CANISTER_ID}
+    assert mock_drop.call_count == 2
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    assert saved["canisters"] == {"realm_registry_frontend": VALID_CANISTER_ID}
+
+
+@patch("gaas.phases.dfx.canister_exists", return_value=False)
+def test_drop_missing_canister_ids_refuses_dns_locked(
+    _mock_exists,
+    tmp_path: Path,
+) -> None:
+    from gaas.phases import _drop_missing_canister_ids
+
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {"realm_registry_frontend": VALID_CANISTER_ID}
+    desc = Descriptor.model_validate(data)
+    ctx = DeployContext(identity="deployer", network="ic")
+
+    with pytest.raises(RuntimeError, match="DNS-mapped canister"):
+        _drop_missing_canister_ids(desc, ctx)
+
+
+@patch("gaas.phases.dfx.canister_call")
+@patch("gaas.phases.dfx.send_wallet_cycles")
+@patch("gaas.phases.dfx.wallet_cycles_balance", return_value=10_000_000_000_000)
+def test_restore_casals_treasury_sends_wallet_surplus(
+    mock_wallet_bal,
+    mock_send_wallet,
+    mock_canister_call,
+) -> None:
+    from gaas.known import WALLET_RESERVE_CYCLES
+    from gaas.phases import _restore_casals_treasury
+
+    casals_id = "qthgp-3yaaa-aaaae-agveq-cai"
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {"casals_backend": casals_id}
+    desc = Descriptor.model_validate(data)
+    ctx = DeployContext(identity="deployer", network="ic", cycles_evacuated=0)
+
+    _restore_casals_treasury(desc, ctx)
+
+    mock_wallet_bal.assert_called_once_with("ic", identity="deployer")
+    mock_send_wallet.assert_called_once_with(
+        casals_id,
+        10_000_000_000_000 - WALLET_RESERVE_CYCLES,
+        "ic",
+        identity="deployer",
+    )
+    mock_canister_call.assert_called_once()
 
 
 def test_registry_init_json_can_test_mode() -> None:

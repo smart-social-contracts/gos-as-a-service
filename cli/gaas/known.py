@@ -23,6 +23,16 @@ ADOPT_ONLY_CANISTER_NAMES: Final[tuple[str, ...]] = (
     "marketplace_frontend",
 )
 
+# Frontends whose principal is in public DNS / IC domain tables. Never drop or
+# recreate these IDs — a replacement canister cannot reuse the old principal.
+DNS_LOCKED_CANISTER_NAMES: Final[tuple[str, ...]] = (
+    "realm_registry_frontend",
+    "marketplace_frontend",
+)
+
+# Keep this much in the cycles wallet after restoring Casals treasury.
+WALLET_RESERVE_CYCLES: Final[int] = 2_000_000_000_000  # 2T
+
 KNOWN_CANISTER_NAMES: Final[tuple[str, ...]] = (
     PLATFORM_CANISTER_NAMES + ADOPT_ONLY_CANISTER_NAMES
 )
