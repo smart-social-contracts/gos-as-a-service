@@ -15,6 +15,14 @@ from gaas import dfx
 CHUNK_SIZE = 64 * 1024
 FINALIZE_BATCH = 8
 
+# Casals file_registry has no finalize_chunked_file_step. Remember that per
+# canister so a seed does not pay one rejected update per file.
+_oneshot_finalize_ids: set[str] = set()
+_MISSING_STEP_MARKERS = (
+    "has no update method",
+    "IC0536",
+)
+
 
 # Keep in sync with CONTENT_TYPES in src/file_registry/main.py (gaas file_registry
 # canister). Wrong types here are copied into registry metadata and then into realm
@@ -149,8 +157,6 @@ def upload_file(
 ) -> str:
     """Return uploaded, skipped, or failed."""
     size = local_path.stat().st_size
-    if size == 0:
-        return "failed"
 
     if existing_hashes and registry_path in existing_hashes:
         if existing_hashes[registry_path] == sha256_file(local_path):
@@ -195,6 +201,45 @@ def upload_file(
     )
 
 
+def _is_missing_finalize_step(exc: BaseException) -> bool:
+    text = str(exc)
+    if "finalize_chunked_file_step" not in text:
+        return False
+    return any(marker in text for marker in _MISSING_STEP_MARKERS)
+
+
+def _finalize_oneshot(
+    registry_id: str,
+    namespace: str,
+    registry_path: str,
+    local_sha: str,
+    network: str,
+    *,
+    identity: str | None = None,
+) -> str:
+    oneshot_payload = json.dumps(
+        {
+            "namespace": namespace,
+            "path": registry_path,
+            "sha256": local_sha,
+        }
+    )
+    raw = dfx.canister_call(
+        registry_id,
+        "finalize_chunked_file",
+        dfx.candid_text_arg(oneshot_payload),
+        network,
+        identity=identity,
+        timeout=600,
+    )
+    result = json.loads(raw)
+    if isinstance(result, dict) and result.get("ok") is True:
+        return "uploaded"
+    if isinstance(result, dict) and "error" in result:
+        return "failed"
+    return "uploaded" if result else "failed"
+
+
 def _finalize_chunked_upload(
     registry_id: str,
     namespace: str,
@@ -205,6 +250,15 @@ def _finalize_chunked_upload(
     identity: str | None = None,
 ) -> str:
     """GOS file_registry uses batched finalize_chunked_file_step; Casals FR uses one-shot finalize_chunked_file."""
+    if registry_id in _oneshot_finalize_ids:
+        return _finalize_oneshot(
+            registry_id,
+            namespace,
+            registry_path,
+            local_sha,
+            network,
+            identity=identity,
+        )
     step_payload = json.dumps(
         {
             "namespace": namespace,
@@ -229,29 +283,17 @@ def _finalize_chunked_upload(
             if result.get("done") is True:
                 return "uploaded"
     except dfx.DfxError as exc:
-        if "finalize_chunked_file_step" not in str(exc) or "has no update method" not in str(exc):
+        if not _is_missing_finalize_step(exc):
             raise
-    oneshot_payload = json.dumps(
-        {
-            "namespace": namespace,
-            "path": registry_path,
-            "sha256": local_sha,
-        }
-    )
-    raw = dfx.canister_call(
+        _oneshot_finalize_ids.add(registry_id)
+    return _finalize_oneshot(
         registry_id,
-        "finalize_chunked_file",
-        dfx.candid_text_arg(oneshot_payload),
+        namespace,
+        registry_path,
+        local_sha,
         network,
         identity=identity,
-        timeout=600,
     )
-    result = json.loads(raw)
-    if isinstance(result, dict) and result.get("ok") is True:
-        return "uploaded"
-    if isinstance(result, dict) and "error" in result:
-        return "failed"
-    return "uploaded" if result else "failed"
 
 
 def publish_namespace(
@@ -289,9 +331,10 @@ def upload_directory(
     *,
     identity: str | None = None,
     existing_hashes: dict[str, str] | None = None,
-) -> tuple[int, int]:
+) -> tuple[int, int, list[str]]:
     uploaded = 0
     failed = 0
+    failed_paths: list[str] = []
     for root, _dirs, files in os.walk(dist_dir):
         for fname in sorted(files):
             local = Path(root) / fname
@@ -307,9 +350,10 @@ def upload_directory(
             )
             if result == "failed":
                 failed += 1
+                failed_paths.append(rel)
             elif result == "uploaded":
                 uploaded += 1
-    return uploaded, failed
+    return uploaded, failed, failed_paths
 
 
 def seed_gos_entry(
@@ -341,7 +385,7 @@ def seed_gos_entry(
             frontend_hashes = fetch_namespace_hashes(
                 registry_id, frontend_ns, network, identity=identity
             )
-            _uploaded, failed = upload_directory(
+            _uploaded, failed, failed_paths = upload_directory(
                 registry_id,
                 frontend_ns,
                 dist,
@@ -350,12 +394,14 @@ def seed_gos_entry(
                 existing_hashes=frontend_hashes,
             )
             if failed:
-                raise RuntimeError(f"frontend upload had {failed} failures for {frontend_ns}")
+                raise RuntimeError(
+                    f"frontend upload had {failed} failures for {frontend_ns}: {failed_paths}"
+                )
     else:
         frontend_hashes = fetch_namespace_hashes(
             registry_id, frontend_ns, network, identity=identity
         )
-        _uploaded, failed = upload_directory(
+        _uploaded, failed, failed_paths = upload_directory(
             registry_id,
             frontend_ns,
             frontend_source,
@@ -364,7 +410,9 @@ def seed_gos_entry(
             existing_hashes=frontend_hashes,
         )
         if failed:
-            raise RuntimeError(f"frontend upload had {failed} failures for {frontend_ns}")
+            raise RuntimeError(
+                f"frontend upload had {failed} failures for {frontend_ns}: {failed_paths}"
+            )
 
     publish_namespace(registry_id, backend_ns, network, identity=identity)
     publish_namespace(registry_id, frontend_ns, network, identity=identity)
