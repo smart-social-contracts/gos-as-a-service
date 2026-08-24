@@ -230,6 +230,12 @@ def _installer_config_json(descriptor: Descriptor) -> str:
     return json.dumps(payload)
 
 
+# IC create_canister currently charges a 500B fee from the initial balance.
+# A lowered preflight threshold (e.g. 0.4T for skinny canisters) must not
+# leak into Casals create_cycles or orchestra creates fail.
+_CASALS_CREATE_CYCLES_MIN = 2_000_000_000_000
+
+
 def _casals_settings_json(descriptor: Descriptor, deployer_principal: str) -> str:
     canisters = descriptor.canisters
     threshold = descriptor.threshold_cycles()
@@ -243,7 +249,7 @@ def _casals_settings_json(descriptor: Descriptor, deployer_principal: str) -> st
         "default_min_cycles": threshold,
         "default_topup_cycles": threshold,
         "treasury_reserve": threshold,
-        "create_cycles": threshold,
+        "create_cycles": max(threshold, _CASALS_CREATE_CYCLES_MIN),
         "monitor_enabled": False,
     }
     file_registry_frontend_id = canisters.get("file_registry_frontend")

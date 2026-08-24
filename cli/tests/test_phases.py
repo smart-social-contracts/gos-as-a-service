@@ -732,6 +732,16 @@ def test_casals_settings_json_defaults_and_test_mode() -> None:
     assert open_payload["extra_controller_principals"] == ["deployer-principal"]
 
 
+def test_casals_settings_json_floors_create_cycles_at_2t() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {"file_registry": VALID_CANISTER_ID}
+    data["cycles"] = {"threshold_tc": 0.4}
+    desc = Descriptor.model_validate(data)
+    payload = json.loads(_casals_settings_json(desc, "deployer-principal"))
+    assert payload["default_min_cycles"] == 400_000_000_000
+    assert payload["create_cycles"] == 2_000_000_000_000
+
+
 def test_casals_settings_json_monitor_url() -> None:
     data = dict(SAMPLE_DESCRIPTOR)
     data["canisters"] = {"file_registry": VALID_CANISTER_ID}
