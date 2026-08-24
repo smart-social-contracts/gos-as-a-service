@@ -303,7 +303,11 @@ def evacuate_treasury_to_wallet(
     while True:
         status = dfx.canister_status(casals_id, network, identity=identity)
         balance = dfx.parse_canister_cycles_balance(status.raw)
-        if balance is None or balance <= evac_min_reserve:
+        if (
+            balance is None
+            or balance <= evac_min_reserve
+            or balance <= CONDUCTOR_DELETE_MAX
+        ):
             break
 
         chunk = min(evac_chunk, balance - evac_min_reserve)
