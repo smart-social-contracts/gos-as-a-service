@@ -12,6 +12,7 @@ from gaas.dfx import (
     parse_cycles_balance,
     parse_module_hash,
     reject_canister_delete,
+    _run as _real_dfx_run,
 )
 
 
@@ -219,6 +220,37 @@ def test_get_wallet(monkeypatch) -> None:
         )(),
     )
     assert get_wallet("ic", identity="deployer") == "wallet-principal"
+
+
+def test_run_retries_without_run_deprecated_on_stock_dfx(monkeypatch) -> None:
+    from gaas import dfx
+
+    calls: list[list[str]] = []
+
+    def fake_run(command, **kwargs):
+        calls.append(list(command))
+        if "--run-deprecated" in command:
+            return type(
+                "R",
+                (),
+                {
+                    "returncode": 2,
+                    "stdout": "",
+                    "stderr": "error: unexpected argument '--run-deprecated' found\n",
+                },
+            )()
+        return type(
+            "R",
+            (),
+            {"returncode": 0, "stdout": "uayfg-bqaaa-aaaac-bfygq-cai\n", "stderr": ""},
+        )()
+
+    monkeypatch.setattr(dfx, "_run", _real_dfx_run)
+    monkeypatch.setattr(dfx.subprocess, "run", fake_run)
+    result = dfx._run(["dfx", "identity", "get-wallet", "--network", "ic"], check=True)
+    assert [c[1] if len(c) > 1 else "" for c in calls][0] == "--run-deprecated"
+    assert calls[1] == ["dfx", "identity", "get-wallet", "--network", "ic"]
+    assert result.stdout.strip() == "uayfg-bqaaa-aaaac-bfygq-cai"
 
 
 def test_parse_candid_string_preserves_json_escaped_backslash_before_n():

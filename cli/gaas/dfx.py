@@ -99,13 +99,17 @@ def _run(
     env.update(_DFX_ENV)
     if env_extra:
         env.update(env_extra)
-    # Some environments wrap `dfx` and require --run-deprecated to invoke the
-    # real binary (preferring icp for new work). Inject it so gaas keeps working.
+    # Some operator hosts wrap `dfx` and require --run-deprecated. Stock dfx
+    # (0.30+) rejects that flag. Try with it, then retry without.
+    original_args = list(args)
+    injected = False
     if args and args[0] == "dfx" and "--run-deprecated" not in args:
         args = ["dfx", "--run-deprecated", *args[1:]]
-    try:
-        result = subprocess.run(
-            args,
+        injected = True
+
+    def _invoke(command: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            command,
             capture_output=True,
             text=True,
             env=env,
@@ -113,12 +117,29 @@ def _run(
             check=False,
             timeout=timeout,
         )
+
+    try:
+        result = _invoke(args)
     except FileNotFoundError as exc:
         raise DfxError(
             "dfx executable not found; install DFINITY SDK",
             command=args,
             stderr=str(exc),
         ) from exc
+    if (
+        injected
+        and result.returncode != 0
+        and "unexpected argument '--run-deprecated'" in f"{result.stderr}\n{result.stdout}"
+    ):
+        args = original_args
+        try:
+            result = _invoke(args)
+        except FileNotFoundError as exc:
+            raise DfxError(
+                "dfx executable not found; install DFINITY SDK",
+                command=args,
+                stderr=str(exc),
+            ) from exc
 
     run_log = get_run_log()
     if run_log is not None:

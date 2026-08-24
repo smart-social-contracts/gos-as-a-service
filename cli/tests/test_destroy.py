@@ -507,7 +507,7 @@ def test_destroy_except_frontend_preserves_marketplace_when_present(
     orchestra_preserve = json.loads(
         _parse_candid_string(mock_call.call_args_list[0][0][2])
     )["preserve"]
-    assert orchestra_preserve == [FRONTEND_ID, MARKETPLACE_FRONTEND_ID]
+    assert orchestra_preserve == [FRONTEND_ID]
     assert desc.canisters == {
         FRONTEND_NAME: FRONTEND_ID,
         "marketplace_frontend": MARKETPLACE_FRONTEND_ID,

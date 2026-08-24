@@ -111,6 +111,19 @@ def _preserved_frontend_ids(descriptor: Descriptor) -> list[str]:
     return preserved
 
 
+def _orchestra_preserve_ids(descriptor: Descriptor) -> list[str]:
+    """IDs Casals ``destroy_orchestra`` will accept.
+
+    Casals rejects unknown ``preserve`` entries. The DNS marketplace frontend is
+    platform-owned and is usually not in the orchestra, so it is skipped here and
+    kept instead via extra-destroy filtering.
+    """
+    frontend_id = (descriptor.canisters.get(FRONTEND_NAME) or "").strip()
+    if not frontend_id:
+        raise RuntimeError(f"descriptor.canisters.{FRONTEND_NAME} is required")
+    return [frontend_id]
+
+
 def _also_destroy_targets(
     descriptor: Descriptor,
     *,
@@ -333,7 +346,7 @@ def destroy_except_frontend(
 
     orchestra_destroyed, orchestra_reclaimed = run_destroy_orchestra_loop(
         casals_id,
-        preserve=preserved_frontend_ids,
+        preserve=_orchestra_preserve_ids(descriptor),
         network=network,
         identity=identity,
     )
