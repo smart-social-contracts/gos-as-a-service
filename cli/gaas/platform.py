@@ -67,9 +67,18 @@ def resolve_casals_src(explicit: Path | None = None) -> Path | None:
         path = Path(env).resolve()
         if (path / "src" / "main.py").is_file():
             return path
-    sibling = Path("/srv/dev/Casals")
-    if (sibling / "src" / "main.py").is_file():
-        return sibling
+    repo_root = Path(__file__).resolve().parents[2]
+    for sibling in (
+        Path("/srv/dev/Casals"),
+        repo_root.parent / "Casals",
+        repo_root.parent / "casals",
+        Path.cwd().parent / "Casals",
+        Path.cwd().parent / "casals",
+    ):
+        if (sibling / "src" / "main.py").is_file() and (
+            sibling / "casals_backend.did"
+        ).is_file():
+            return sibling
     return None
 
 

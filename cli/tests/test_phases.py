@@ -13,6 +13,7 @@ from gaas.known import KNOWN_CANISTER_NAMES
 from gaas.phases import (
     PHASES,
     DeployContext,
+    _ensure_casals_backend_did,
     _installer_config_json,
     _casals_settings_json,
     _infra_canister_names,
@@ -1170,6 +1171,43 @@ def test_phase_grant_commanders_grant_error_continues(
 
     assert mock_ensure.call_count == 2
     assert mock_ensure.call_args_list[1][0][2] == [PRINCIPAL_B]
+
+
+def test_ensure_casals_backend_did_copies_from_casals_src(tmp_path: Path) -> None:
+    repo = tmp_path / "gaas"
+    repo.mkdir()
+    casals = tmp_path / "Casals"
+    (casals / "src").mkdir(parents=True)
+    (casals / "src" / "main.py").write_text("# stub\n", encoding="utf-8")
+    (casals / "casals_backend.did").write_text("service : {}\n", encoding="utf-8")
+
+    _ensure_casals_backend_did(repo, casals)
+
+    assert (repo / "casals_backend.did").read_text(encoding="utf-8") == "service : {}\n"
+
+
+def test_ensure_casals_backend_did_skips_when_present(tmp_path: Path) -> None:
+    repo = tmp_path / "gaas"
+    repo.mkdir()
+    (repo / "casals_backend.did").write_text("already\n", encoding="utf-8")
+    casals = tmp_path / "Casals"
+    (casals / "src").mkdir(parents=True)
+    (casals / "src" / "main.py").write_text("# stub\n", encoding="utf-8")
+    (casals / "casals_backend.did").write_text("new\n", encoding="utf-8")
+
+    _ensure_casals_backend_did(repo, casals)
+
+    assert (repo / "casals_backend.did").read_text(encoding="utf-8") == "already\n"
+
+
+@patch("gaas.phases.resolve_casals_src", return_value=None)
+def test_ensure_casals_backend_did_noop_without_src(
+    _mock_resolve, tmp_path: Path
+) -> None:
+    repo = tmp_path / "gaas"
+    repo.mkdir()
+    _ensure_casals_backend_did(repo, None)
+    assert not (repo / "casals_backend.did").exists()
 
 
 @patch("gaas.phases.dfx.get_principal", return_value="aaaaa-aa")

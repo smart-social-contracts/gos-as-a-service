@@ -70,6 +70,7 @@ from gaas.platform import (
     frontend_dist_dir,
     resolve_casals_file_registry_wasm,
     resolve_casals_frontend_dist,
+    resolve_casals_src,
     resolve_casals_wasm,
     resolve_platform_backend_wasm,
 )
@@ -944,6 +945,21 @@ def _is_interactive(ctx: DeployContext) -> bool:
     return not ctx.yes and sys.stdin.isatty()
 
 
+def _ensure_casals_backend_did(repo_root: Path, casals_src: Path | None) -> None:
+    """Copy gitignored ``casals_backend.did`` so ``dfx generate casals_backend`` works."""
+    dest = repo_root / "casals_backend.did"
+    if dest.is_file():
+        return
+    src_root = resolve_casals_src(casals_src)
+    if src_root is None:
+        return
+    src = src_root / "casals_backend.did"
+    if not src.is_file():
+        return
+    shutil.copy2(src, dest)
+    console.print(f"  copied {src} -> {dest}")
+
+
 def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
     platform_version, release_repo = _platform_release(descriptor)
     repo_root = _find_repo_root(ctx)
@@ -955,6 +971,7 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
             repo_root, descriptor, ctx.network, deployer_principal=dfx.get_principal(ctx.identity)
         )
         console.print(f"  wrote {gaas_env_path}")
+        _ensure_casals_backend_did(repo_root, ctx.casals_src)
 
         env = {**os.environ, "DFX_NETWORK": ctx.network}
         run_log = get_run_log()
