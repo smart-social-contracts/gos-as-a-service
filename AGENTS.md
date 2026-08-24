@@ -4,6 +4,12 @@ Agent guidance for the GOS-as-a-Service platform (registry + installer + wizard 
 
 > **WARNING:** `staging.gos.earth` is **LIVE**. Never reinstall staging canisters without explicit human instruction. Prefer read-only queries (`__browse__`, `--query`) when investigating production state.
 
+## Do not deploy without confirmation
+
+**Do not deploy automatically.** The human triggers all deployments.
+
+If a change needs a deployment to take effect or to be verified, state that clearly in your reply (what, where, and why) and wait for explicit confirmation before running any deploy, install, upgrade, reinstall, rollout, seed, or publish-to-canister command.
+
 ## Repository layout
 
 ```
