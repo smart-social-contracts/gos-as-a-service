@@ -170,6 +170,7 @@ service : (text) -> {
   "set_casals_config" : (text) -> (ResultCasalsConfig);
   "get_casals_config" : () -> (ResultCasalsConfig) query;
   "provision_via_casals" : (text) -> (ResultProvision);
+  "retry_deployment" : (text) -> (ResultProvision);
   "provision_quarter" : (text) -> (text);
   "report_canister_ready" : (text) -> (ResultReportReady);
   "report_frontend_verified" : (text) -> (ResultReportFrontend);

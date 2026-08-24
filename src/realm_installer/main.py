@@ -37,6 +37,7 @@ from provision_kick import (
 )
 from claim_args import build_claim_slug_args
 from stand_create_args import build_stand_create_args, casals_placement_from_cfg
+from manifest_access import can_view_deployment_manifest
 from bootstrap import (
     configure_canister_ids_args,
     configure_canister_ids_payload,
@@ -2180,15 +2181,19 @@ def get_deploy_task_status(job_id: text) -> ResultDeployTaskStatus:
 
 @query
 def get_deployment_manifest(job_id: text) -> ResultJobManifest:
-    """Return the deployment manifest JSON for a job (owner-only)."""
+    """Return the deployment manifest JSON for a job (owner or controller)."""
     try:
         caller = str(ic.caller())
         list(DeploymentJob.instances())
         job = DeploymentJob[job_id]
         if job is None:
             return ResultJobManifest(Err=ie(f"unknown job_id: {job_id}"))
-        if (job.caller_principal or "") != caller:
-            return ResultJobManifest(Err=ie("only the job owner may view the manifest"))
+        if not can_view_deployment_manifest(
+            caller=caller,
+            owner=job.caller_principal or "",
+            is_controller=ic.is_controller(ic.caller()),
+        ):
+            return ResultJobManifest(Err=ie("only the job owner or a controller may view the manifest"))
         return ResultJobManifest(Ok=job.manifest_json or "{}")
     except Exception as e:
         return ResultJobManifest(Err=ie(str(e)))
@@ -2977,6 +2982,43 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
         job_id=job_id, status=job.status or "", stand=stand,
         backend_canister_id=backend_id, frontend_canister_id=frontend_id,
     )
+
+
+def _provision_ok_for_job(job_id: str, job: DeploymentJob) -> ProvisionOk:
+    manifest = json.loads(job.manifest_json or "{}")
+    cas = manifest.get("casals", {}) or {}
+    realm_info = manifest.get("realm", {}) or {}
+    stand = (cas.get("stand") or _slugify(realm_info.get("name") or job.name)).strip()
+    return ProvisionOk(
+        job_id=job_id,
+        status=job.status or "",
+        stand=stand,
+        backend_canister_id=job.backend_canister_id or "",
+        frontend_canister_id=job.frontend_canister_id or "",
+    )
+
+
+@update
+def retry_deployment(job_id: text) -> ResultProvision:
+    """Re-kick a failed deployment job (owner or controller)."""
+    try:
+        caller = str(ic.caller())
+        list(DeploymentJob.instances())
+        job = DeploymentJob[job_id]
+        if job is None:
+            return ResultProvision(Err=ie(f"unknown job_id: {job_id}"))
+        is_owner = (job.caller_principal or "") == caller
+        if not (ic.is_controller(ic.caller()) or is_owner):
+            return ResultProvision(Err=ie("unauthorized: controller or job owner only"))
+        prev = (job.status or "pending").lower()
+        if prev != "failed":
+            return ResultProvision(Err=ie(f"cannot retry job with status '{prev}'"))
+        job.error = ""
+        job.status = "provisioning"
+        _schedule_provision_kick(job_id, 0)
+        return ResultProvision(Ok=_provision_ok_for_job(job_id, job))
+    except Exception as e:
+        return ResultProvision(Err=ie(str(e)))
 
 
 @update

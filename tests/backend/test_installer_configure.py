@@ -22,7 +22,6 @@ from installer_config import (
 mock_ic = basilisk.ic
 
 _FILE_REGISTRY_IDS = {
-    "staging": "feqzn-wyaaa-aaaae-ag23q-cai",
     "demo": "vi64l-3aaaa-aaaae-qj4va-cai",
     "test": "uq2mu-kaaaa-aaaah-avqcq-cai",
 }
@@ -30,7 +29,6 @@ _FILE_REGISTRY_IDS = {
 _MARKETPLACE_IDS = {
     "test": "2wldc-niaaa-aaaad-qlxga-cai",
     "demo": "ehyfg-wyaaa-aaaae-qg3qq-cai",
-    "staging": "l5qpy-wqaaa-aaaah-qu2mq-cai",
 }
 
 
@@ -45,14 +43,14 @@ def test_defaults_use_hardcoded_file_registry_per_network():
     _reset_installer_config()
     assert configured_file_registry_id("test") == _FILE_REGISTRY_IDS["test"]
     assert configured_file_registry_id("demo") == _FILE_REGISTRY_IDS["demo"]
-    assert configured_file_registry_id("staging") == _FILE_REGISTRY_IDS["staging"]
+    assert configured_file_registry_id("staging") == ""
 
 
 def test_defaults_use_hardcoded_marketplace_per_network():
     _reset_installer_config()
     assert configured_marketplace_id("test") == _MARKETPLACE_IDS["test"]
     assert configured_marketplace_id("demo") == _MARKETPLACE_IDS["demo"]
-    assert configured_marketplace_id("staging") == _MARKETPLACE_IDS["staging"]
+    assert configured_marketplace_id("staging") == ""
 
 
 def test_configure_overrides_file_registry_id():

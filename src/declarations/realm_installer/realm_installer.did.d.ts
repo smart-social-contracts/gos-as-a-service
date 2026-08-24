@@ -546,6 +546,7 @@ export interface _SERVICE {
   >,
   'provision_quarter' : ActorMethod<[string], string>,
   'provision_via_casals' : ActorMethod<[string], ResultProvision>,
+  'retry_deployment' : ActorMethod<[string], ResultProvision>,
   'report_canister_ready' : ActorMethod<[string], ResultReportReady>,
   'report_deployment_failure' : ActorMethod<[string], ResultReportFailure>,
   'report_frontend_verified' : ActorMethod<[string], ResultReportFrontend>,

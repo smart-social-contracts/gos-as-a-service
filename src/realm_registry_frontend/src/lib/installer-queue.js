@@ -233,6 +233,22 @@ export async function fetchDeploymentManifest(jobId) {
   return resultOk(raw);
 }
 
+/** Re-kick a failed deployment job (owner or controller). */
+export async function retryFailedDeployment(jobId) {
+  if (buildingOrTesting || !browser || !jobId) {
+    throw new Error('Cannot retry deployment job');
+  }
+  const actor = await createAuthenticatedInstallerActor();
+  const raw = await actor.retry_deployment(jobId);
+  if (raw == null) {
+    throw new Error('No response from installer');
+  }
+  if (typeof raw === 'object' && 'Err' in raw) {
+    throw new Error(raw.Err?.message || raw.Err || 'Retry failed');
+  }
+  return resultOk(raw);
+}
+
 /** Delete a terminal failed deployment job (owner only). */
 export async function deleteDeploymentJob(jobId) {
   if (buildingOrTesting || !browser || !jobId) {

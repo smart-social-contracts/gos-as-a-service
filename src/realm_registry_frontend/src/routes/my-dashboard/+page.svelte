@@ -75,7 +75,9 @@
   let loadingDeployments = true;
   let deploymentPollInterval = null;
   let deletingDeploymentId = null;
+  let retryingDeploymentId = null;
   let deploymentDeleteError = null;
+  let deploymentRetryError = null;
   let deleteConfirmDeployment = null;
   let destroyConfirmDeployment = null;
   /** @type {Record<string, { deployment: object, stageIndex: number, startedAt: number, error?: string, complete?: boolean }>} */
@@ -284,10 +286,21 @@
     return `${draftResumeUrl(draft, DEPLOY_WIZARD_STEP)}&edit=1`;
   }
 
-  function retryDeployUrlForDeployment(deployment) {
-    const draft = findDraftForDeployment(wizardDrafts, deployment);
-    if (!draft) return '/create-realm';
-    return draftResumeUrl(draft, DEPLOY_WIZARD_STEP);
+  async function retryFailedDeploymentJob(deployment) {
+    if (!deployment?.deployment_id || retryingDeploymentId) return;
+    const jobId = deployment.deployment_id;
+    retryingDeploymentId = jobId;
+    deploymentRetryError = null;
+    try {
+      const { retryFailedDeployment } = await import('$lib/installer-queue.js');
+      await retryFailedDeployment(jobId);
+      await loadDeployments();
+    } catch (err) {
+      console.error('Failed to retry deployment:', err);
+      deploymentRetryError = err?.message || 'Failed to retry deployment.';
+    } finally {
+      retryingDeploymentId = null;
+    }
   }
 
   function requestDeleteDeployment(deployment) {
@@ -951,6 +964,9 @@
                 {#if deploymentDeleteError}
                   <p class="deployment-delete-error">{deploymentDeleteError}</p>
                 {/if}
+                {#if deploymentRetryError}
+                  <p class="deployment-delete-error">{deploymentRetryError}</p>
+                {/if}
                 {#if deploymentDestroyError}
                   <p class="deployment-delete-error">{deploymentDestroyError}</p>
                 {/if}
@@ -1014,7 +1030,16 @@
                         {/if}
                         {#if deployment.cardKind === 'live' && isFailedDeployment(deployment)}
                           <a href={editDraftUrlForDeployment(deployment)} class="track-btn">Edit draft →</a>
-                          <a href={retryDeployUrlForDeployment(deployment)} class="track-btn">Retry deploy →</a>
+                          <button
+                            type="button"
+                            class="track-btn"
+                            disabled={retryingDeploymentId === deployment.deployment_id}
+                            on:click={() => retryFailedDeploymentJob(deployment)}
+                          >
+                            {retryingDeploymentId === deployment.deployment_id
+                              ? 'Retrying…'
+                              : 'Retry deploy →'}
+                          </button>
                           <button
                             type="button"
                             class="delete-deployment-btn"

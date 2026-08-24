@@ -211,6 +211,7 @@ export const idlFactory = ({ IDL }) => {
       ),
     'provision_quarter' : IDL.Func([IDL.Text], [IDL.Text], []),
     'provision_via_casals' : IDL.Func([IDL.Text], [ResultProvision], []),
+    'retry_deployment' : IDL.Func([IDL.Text], [ResultProvision], []),
     'report_canister_ready' : IDL.Func([IDL.Text], [ResultReportReady], []),
     'report_deployment_failure' : IDL.Func(
         [IDL.Text],

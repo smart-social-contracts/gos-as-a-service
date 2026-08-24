@@ -59,6 +59,8 @@ def configure_canister_ids_args(manifest: dict, backend_id: str, frontend_id: st
         "backend_canister_id": backend_id,
         "frontend_canister_id": frontend_id,
         "realm_registry_canister_id": _resolve_realm_registry_canister_id(manifest),
+        "file_registry_canister_id": _resolve_file_registry_canister_id(manifest),
+        "marketplace_canister_id": _resolve_marketplace_canister_id(manifest),
         "test_flags": manifest.get("test_flags") or {},
         "can_test_mode": bool(manifest.get("can_test_mode")),
         "requesting_principal": resolve_founder(manifest),
@@ -75,6 +77,14 @@ def configure_canister_ids_payload(args: dict) -> tuple[dict, list[str]]:
     realm_registry_id = (args.get("realm_registry_canister_id") or "").strip()
     if realm_registry_id:
         payload["realm_registry_canister_id"] = realm_registry_id
+
+    file_registry_id = (args.get("file_registry_canister_id") or "").strip()
+    if file_registry_id:
+        payload["file_registry_canister_id"] = file_registry_id
+
+    marketplace_id = (args.get("marketplace_canister_id") or "").strip()
+    if marketplace_id:
+        payload["marketplace_canister_id"] = marketplace_id
 
     test_flags = args.get("test_flags")
     if isinstance(test_flags, dict) and test_flags:

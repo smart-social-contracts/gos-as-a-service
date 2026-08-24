@@ -128,8 +128,8 @@ def test_configure_payload_includes_creator_and_portal_origin():
     assert payload["portal_origin"] == "https://portal.example"
     assert payload["frontend_canister_id"] == "frontend-principal"
     assert payload["realm_registry_canister_id"] == "realm-registry-id"
-    assert "file_registry_canister_id" not in payload
-    assert "marketplace_canister_id" not in payload
+    assert payload["file_registry_canister_id"] == "uq2mu-kaaaa-aaaah-avqcq-cai"
+    assert payload["marketplace_canister_id"] == "2wldc-niaaa-aaaad-qlxga-cai"
 
 
 def test_configure_payload_realm_registry_from_explicit_field():
@@ -144,7 +144,7 @@ def test_configure_payload_realm_registry_from_explicit_field():
     assert payload["realm_registry_canister_id"] == "explicit-realm-registry"
 
 
-def test_configure_payload_omits_realms_file_registry_and_marketplace():
+def test_configure_payload_includes_infra_file_registry_and_marketplace():
     manifest = _bootstrap_manifest(
         infra={
             "file_registry_canister_id": "infra-file-registry",
@@ -156,8 +156,8 @@ def test_configure_payload_omits_realms_file_registry_and_marketplace():
         manifest, manifest["target_canister_id"], manifest["frontend_canister_id"]
     )
     payload, _warnings = configure_canister_ids_payload(args)
-    assert "file_registry_canister_id" not in payload
-    assert "marketplace_canister_id" not in payload
+    assert payload["file_registry_canister_id"] == "infra-file-registry"
+    assert payload["marketplace_canister_id"] == "top-level-marketplace"
     assert "network" not in payload
 
 
@@ -170,7 +170,8 @@ def test_ext_manifest_configure_includes_realm_registry():
     )
     payload, _warnings = configure_canister_ids_payload(configure_args)
     assert payload["realm_registry_canister_id"] == "realm-registry-id"
-    assert "file_registry_canister_id" not in payload
+    assert payload["file_registry_canister_id"] == "uq2mu-kaaaa-aaaah-avqcq-cai"
+    assert payload["marketplace_canister_id"] == "2wldc-niaaa-aaaad-qlxga-cai"
 
 
 def test_configure_missing_requesting_principal_warns_and_proceeds():

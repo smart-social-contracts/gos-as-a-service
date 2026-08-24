@@ -35,6 +35,7 @@ export const idlFactory = ({ IDL }) => {
     'logo' : IDL.Text,
     'name' : IDL.Text,
     'created_at' : IDL.Float64,
+    'listing_status' : IDL.Text,
     'backend_url' : IDL.Text,
     'frontend_canister_id' : IDL.Text,
     'users_count' : IDL.Nat64,
