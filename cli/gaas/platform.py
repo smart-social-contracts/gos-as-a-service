@@ -477,6 +477,10 @@ def find_local_assetstorage_wasm(repo_root: Path | None = None) -> Path:
     except dfx.DfxError:
         pass
 
+    downloaded = dfx.find_assetstorage_wasm()
+    if downloaded.is_file():
+        return downloaded
+
     raise PlatformError(
         "certified-assets canister wasm (assetstorage.wasm.gz) not found; "
         "deploy a platform frontend with dfx first (creates "

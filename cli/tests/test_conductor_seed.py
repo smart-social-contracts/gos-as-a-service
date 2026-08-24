@@ -10,7 +10,7 @@ import pytest
 from gaas import conductor_seed
 from gaas.conductor_seed import orchestration_template_actions, platform_sheet
 from gaas.descriptor import Descriptor
-from gaas.platform import PlatformError, find_local_assetstorage_wasm
+from gaas.platform import find_local_assetstorage_wasm
 from tests.conftest import SAMPLE_DESCRIPTOR
 
 
@@ -186,16 +186,22 @@ def test_find_local_assetstorage_wasm_falls_back_to_dfx_cache(
     assert find_local_assetstorage_wasm(None) == cache_wasm
 
 
-def test_find_local_assetstorage_wasm_raises_when_missing(tmp_path: Path, monkeypatch) -> None:
+def test_find_local_assetstorage_wasm_downloads_when_cache_missing(
+    tmp_path: Path, monkeypatch
+) -> None:
     from gaas import dfx
 
+    downloaded = tmp_path / "gaas-assetstorage.wasm.gz"
+    downloaded.write_bytes(b"downloaded-wasm")
     monkeypatch.setattr(
         dfx,
         "_run",
-        lambda *args, **kwargs: (_ for _ in ()).throw(dfx.DfxError("no cache", command=[], stderr="")),
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            dfx.DfxError("no cache", command=[], stderr="")
+        ),
     )
-    with pytest.raises(PlatformError, match="assetstorage.wasm.gz"):
-        find_local_assetstorage_wasm(tmp_path)
+    monkeypatch.setattr(dfx, "find_assetstorage_wasm", lambda: downloaded)
+    assert find_local_assetstorage_wasm(tmp_path) == downloaded
 
 
 def test_ensure_assetstorage_wasm_uploads_and_returns_metadata(
