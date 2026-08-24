@@ -60,6 +60,7 @@ from gaas.marketplace import (
     build_marketplace_frontend,
     configure_marketplace_backend,
 )
+from gaas.namespace_approval_seed import seed_namespace_approvals
 from gaas.platform import (
     PlatformError,
     fetch_platform_frontend_archive,
@@ -416,6 +417,20 @@ def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
         console.print(
             f"  casals_backend: restored {ctx.cycles_evacuated:,} evacuated cycles"
         )
+        try:
+            dfx.canister_call(
+                casals_id,
+                "get_cycles",
+                "()",
+                ctx.network,
+                identity=ctx.identity,
+                query=False,
+            )
+            console.print("  casals_backend: primed cycles snapshot (get_cycles)")
+        except Exception as exc:
+            console.print(
+                f"[yellow]  warning: get_cycles after treasury restore failed: {exc}[/yellow]"
+            )
 
 
 def _platform_release(descriptor: Descriptor) -> tuple[str | None, str]:
@@ -833,6 +848,29 @@ def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None
                 f"  skip codex/extension catalog seed for {entry.implementation} "
                 f"(file_registry absent)"
             )
+
+
+def phase_seed_namespace_approvals(descriptor: Descriptor, ctx: DeployContext) -> None:
+    registry_id = (descriptor.canisters.get("file_registry") or "").strip()
+    marketplace_id = (descriptor.canisters.get("marketplace_backend") or "").strip()
+    if not registry_id or not marketplace_id:
+        console.print(
+            "[yellow]  skip namespace approvals: file_registry and/or "
+            "marketplace_backend not in descriptor[/yellow]"
+        )
+        return
+
+    result = seed_namespace_approvals(
+        registry_id,
+        marketplace_id,
+        ctx.network,
+        ctx.identity,
+    )
+    console.print(
+        f"  namespace approvals: granted={result['granted']}, "
+        f"approved={result['approved']}, skipped={result['skipped']}, "
+        f"failed={result['failed']}"
+    )
 
 
 def _is_interactive(ctx: DeployContext) -> bool:
@@ -1630,6 +1668,11 @@ def phase_seed_validate(descriptor: Descriptor, ctx: DeployContext) -> None:
 SEED_PHASES: list[tuple[str, str, PhaseFunc]] = [
     ("seed_validate", "Validating descriptor for seed", phase_seed_validate),
     ("seed_file_registry", "Seeding file registry", phase_seed_file_registry),
+    (
+        "seed_namespace_approvals",
+        "Seeding file-registry namespace approvals",
+        phase_seed_namespace_approvals,
+    ),
     ("seed_conductor", "Seeding conductor orchestra", phase_seed_conductor),
 ]
 
@@ -1656,6 +1699,11 @@ def run_seed_phases(
     phases: list[tuple[str, str, PhaseFunc]] = [
         ("seed_validate", "Validating descriptor for seed", phase_seed_validate),
         ("seed_file_registry", "Seeding file registry", phase_seed_file_registry),
+        (
+            "seed_namespace_approvals",
+            "Seeding file-registry namespace approvals",
+            phase_seed_namespace_approvals,
+        ),
         ("seed_conductor", "Seeding conductor orchestra", phase_seed_conductor),
     ]
     total = len(phases)
@@ -1681,6 +1729,11 @@ PHASES: list[tuple[str, str, PhaseFunc]] = [
     ("install_backends", "Installing backends", phase_install_backends),
     ("configure_backends", "Configuring backends", phase_configure_backends),
     ("seed_file_registry", "Seeding file registry", phase_seed_file_registry),
+    (
+        "seed_namespace_approvals",
+        "Seeding file-registry namespace approvals",
+        phase_seed_namespace_approvals,
+    ),
     ("seed_conductor", "Seeding conductor orchestra", phase_seed_conductor),
     (
         "prime_cycles_snapshot",

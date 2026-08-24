@@ -58,6 +58,7 @@ def test_seed_command_invokes_seed_pipeline(mock_run_seed: MagicMock, tmp_path: 
 
 
 @patch("gaas.phases.phase_seed_conductor")
+@patch("gaas.phases.phase_seed_namespace_approvals")
 @patch("gaas.phases.phase_seed_file_registry")
 @patch("gaas.phases.phase_create_canisters")
 @patch("gaas.phases.phase_validate")
@@ -67,6 +68,7 @@ def test_run_seed_phases_runs_only_seed_phases(
     mock_validate: MagicMock,
     mock_create: MagicMock,
     mock_seed_registry: MagicMock,
+    mock_seed_namespace_approvals: MagicMock,
     mock_seed_conductor: MagicMock,
     tmp_path: Path,
 ) -> None:
@@ -80,6 +82,7 @@ def test_run_seed_phases_runs_only_seed_phases(
     mock_create.assert_not_called()
     mock_seed_validate.assert_called_once_with(desc, ctx)
     mock_seed_registry.assert_called_once_with(desc, ctx)
+    mock_seed_namespace_approvals.assert_called_once_with(desc, ctx)
     mock_seed_conductor.assert_called_once_with(desc, ctx)
     assert ctx.completed_phases == [phase_id for phase_id, _, _ in SEED_PHASES]
 

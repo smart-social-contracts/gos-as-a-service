@@ -522,19 +522,20 @@ gaas new [DESCRIPTOR] [OPTIONS]
 3. Installing backends
 4. Configuring backends (registry, installer, casals `set_settings`)
 5. Seeding file registry (GOS WASM/frontend bundles, version catalog entries, and codex/extension packages from the Realms source tree)
-6. Seeding conductor orchestra (templates, authorized WASMs, sheet, multisig deploy)
+6. Seeding file-registry namespace approvals (`ext/` and `codex/` via marketplace `admin_approve_namespace`, after granting `_approvers`)
+7. Seeding conductor orchestra (templates, authorized WASMs, sheet, multisig deploy)
 
    For each GOS entry, the conductor authorizes the **backend realm WASM** from `wasm/<backend_wasm_key>/<version>/` and the **frontend certified-assets canister WASM** (`realms-assetstorage.wasm.gz` under `wasm/realm-assetstorage/<version>/`). The frontend dist bundle remains in `frontend/<frontend_wasm_key>/<version>/` for the realm installer to sync after canister install; it is not registered as an installable WASM module.
 
    After the sheet and governance multisig are in place, gaas registers the platform canisters (realm registry, realm installer, GaaS file registry, Casals file registry when present — backends and frontends) under **Infra/platform** in the conductor orchestra. Only canisters tracked in the orchestra tree are monitored by the conductor's cycles autopilot; this registration ensures those platform canisters receive automatic cycle monitoring and top-ups. Cycle thresholds come from `set_settings` using `descriptor.cycles.threshold_tc` (default 2 TC) — one floor for every canister.
 
    Immediately afterward, gaas **primes the conductor cycles snapshot**: it reads `get_tree`, calls `refresh_canisters` in batches of up to three names, then verifies via `get_cycles_cached` that every orchestra canister appears in the persisted snapshot. Missing rows fail the deploy loudly; per-canister refresh errors produce warnings. This prevents a fresh deploy from leaving the Casals Orchestra dashboard at "Canisters: 0".
-7. **Configuring multisig signers (mandatory)** — reconcile `multisig.backend_id` with the live Casals tree, then call Motoko `configure` with `multisig.signers` and `threshold` (default 1-of-N). Must complete before controller topology; without it the multisig shows 1-of-0 and UI users are not signers. Empty `signers` falls back to deployer-only 1-of-1 (legacy).
-8. Building + installing frontends
-9. Domain wiring (DNS verify + IC registration)
-10. Smoke checks
-11. Granting Casals commanders (interactive; skipped with `--yes` or non-TTY)
-12. Applying controller topology (final — gaas may lose control in production)
+8. **Configuring multisig signers (mandatory)** — reconcile `multisig.backend_id` with the live Casals tree, then call Motoko `configure` with `multisig.signers` and `threshold` (default 1-of-N). Must complete before controller topology; without it the multisig shows 1-of-0 and UI users are not signers. Empty `signers` falls back to deployer-only 1-of-1 (legacy).
+9. Building + installing frontends
+10. Domain wiring (DNS verify + IC registration)
+11. Smoke checks
+12. Granting Casals commanders (interactive; skipped with `--yes` or non-TTY)
+13. Applying controller topology (final — gaas may lose control in production)
 
 If a phase is not yet implemented, the pipeline pauses and prints a resume command.
 
@@ -559,8 +560,9 @@ gaas seed DESCRIPTOR --identity NAME [--network ic|local] [--yes] [--casals-src 
 **Seed phases** (artifact pipeline only):
 
 1. Validating descriptor and required canister IDs (`casals_backend`, platform canisters used by conductor seed, and at least one GOS binary registry — `casals_file_registry` preferred, `file_registry` as legacy fallback)
-2. Seeding file registry (GOS WASM/frontend bundles to `casals_file_registry`; version catalog, codex/extension packages, and marketplace namespace approvals to `file_registry`)
-3. Seeding conductor orchestra (templates, authorized WASMs, sheet, multisig, platform stand registration for present canisters, and per-canister cycle policies)
+2. Seeding file registry (GOS WASM/frontend bundles to `casals_file_registry`; version catalog and codex/extension packages to `file_registry`)
+3. Seeding file-registry namespace approvals (`ext/` and `codex/` only — grants marketplace approver ACL on `_approvers`, then calls `admin_approve_namespace` for each unapproved installable namespace; skipped when `file_registry` or `marketplace_backend` is absent from the descriptor)
+4. Seeding conductor orchestra (templates, authorized WASMs, sheet, multisig, platform stand registration for present canisters, and per-canister cycle policies)
 
 The command prints a summary of uploaded artifact keys/hashes and which WASM hashes were newly authorized vs already authorized on the conductor. Re-running with unchanged artifacts is idempotent.
 
