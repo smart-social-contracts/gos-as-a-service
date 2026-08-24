@@ -365,6 +365,63 @@ def test_ensure_casals_controller_adds_when_deployer_controls(
     )
 
 
+@patch("gaas.destroy.dfx.update_canister_settings")
+@patch("gaas.destroy.dfx.canister_status")
+def test_ensure_casals_controller_skips_missing_canister(
+    mock_status: MagicMock,
+    mock_update: MagicMock,
+) -> None:
+    mock_status.side_effect = DfxError("canister not found", command=[], stderr="IC0301")
+    ensure_casals_controller(
+        REGISTRY_ID,
+        casals_id=CASALS_ID,
+        deployer_principal=DEPLOYER_PRINCIPAL,
+        network="ic",
+        identity="deployer",
+    )
+    mock_update.assert_not_called()
+
+
+def test_run_destroy_orchestra_loop_retries_invalid_controller() -> None:
+    with patch("gaas.destroy._casals_call") as mock_casals, patch(
+        "gaas.destroy.ensure_casals_controller"
+    ) as mock_ensure:
+        mock_casals.side_effect = [
+            {
+                "ok": True,
+                "destroyed": [],
+                "errors": [
+                    {
+                        "name": "realmstest1-backend",
+                        "canister_id": "rtsxv-6aaaa-aaaab-qhe6a-cai",
+                        "error": "Only the controllers of the canister can control it",
+                    }
+                ],
+                "remaining": 3,
+                "done": False,
+                "cycles_reclaimed": 0,
+            },
+            {
+                "ok": True,
+                "destroyed": [{"canister_id": "rtsxv-6aaaa-aaaab-qhe6a-cai"}],
+                "remaining": 0,
+                "done": True,
+                "cycles_reclaimed": 4,
+            },
+        ]
+        destroyed, reclaimed = run_destroy_orchestra_loop(
+            CASALS_ID,
+            preserve=[FRONTEND_ID],
+            network="ic",
+            identity="deployer",
+            deployer_principal=DEPLOYER_PRINCIPAL,
+        )
+    assert len(destroyed) == 1
+    assert reclaimed == 4
+    mock_ensure.assert_called_once()
+    assert mock_casals.call_count == 2
+
+
 def test_run_destroy_orchestra_loop_until_done() -> None:
     with patch("gaas.destroy._casals_call") as mock_casals:
         mock_casals.side_effect = [

@@ -142,6 +142,11 @@ def _also_destroy_targets(
     return targets
 
 
+def _is_invalid_controller_error(message: str) -> bool:
+    text = (message or "").lower()
+    return "only the controllers" in text or "invalid-controller" in text
+
+
 def ensure_casals_controller(
     canister_id: str,
     *,
@@ -150,7 +155,12 @@ def ensure_casals_controller(
     network: str,
     identity: str,
 ) -> None:
-    status = dfx.canister_status(canister_id, network, identity=identity)
+    try:
+        status = dfx.canister_status(canister_id, network, identity=identity)
+    except dfx.DfxError as exc:
+        if dfx.is_canister_not_found_error(exc):
+            return
+        raise
     if casals_id in status.controllers:
         return
     if deployer_principal not in status.controllers:
@@ -171,6 +181,7 @@ def run_destroy_orchestra_loop(
     network: str,
     identity: str,
     batch: int = ORCHESTRA_BATCH,
+    deployer_principal: str = "",
 ) -> tuple[list[dict[str, Any]], int]:
     destroyed: list[dict[str, Any]] = []
     cycles_reclaimed = 0
@@ -189,6 +200,21 @@ def run_destroy_orchestra_loop(
             raise RuntimeError(parsed.get("error") or "destroy_orchestra failed")
         errors = parsed.get("errors") or []
         if errors:
+            fixed = 0
+            for err in errors:
+                cid = str(err.get("canister_id") or "").strip()
+                msg = str(err.get("error") or "")
+                if cid and deployer_principal and _is_invalid_controller_error(msg):
+                    ensure_casals_controller(
+                        cid,
+                        casals_id=casals_id,
+                        deployer_principal=deployer_principal,
+                        network=network,
+                        identity=identity,
+                    )
+                    fixed += 1
+            if fixed:
+                continue
             raise RuntimeError(f"destroy_orchestra errors: {errors}")
 
         destroyed.extend(parsed.get("destroyed") or [])
@@ -349,6 +375,7 @@ def destroy_except_frontend(
         preserve=_orchestra_preserve_ids(descriptor),
         network=network,
         identity=identity,
+        deployer_principal=deployer_principal,
     )
 
     extra_targets = _also_destroy_targets(
