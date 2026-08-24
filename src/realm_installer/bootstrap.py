@@ -37,6 +37,13 @@ def _resolve_realm_registry_canister_id(manifest: dict) -> str:
     )
 
 
+def resolve_founder(manifest: dict) -> str:
+    founder = (manifest.get("founder") or "").strip()
+    if founder:
+        return founder
+    return (manifest.get("requesting_principal") or "").strip()
+
+
 def manifest_has_codex_block(manifest: dict) -> bool:
     """True when the manifest carries a legacy realm.codex package block."""
     realm_info = manifest.get("realm") or {}
@@ -54,7 +61,7 @@ def configure_canister_ids_args(manifest: dict, backend_id: str, frontend_id: st
         "realm_registry_canister_id": _resolve_realm_registry_canister_id(manifest),
         "test_flags": manifest.get("test_flags") or {},
         "can_test_mode": bool(manifest.get("can_test_mode")),
-        "requesting_principal": (manifest.get("requesting_principal") or "").strip(),
+        "requesting_principal": resolve_founder(manifest),
         "portal_origin": configured_portal_base(manifest),
     }
 
@@ -121,7 +128,7 @@ def enter_setup_args(manifest: dict, backend_id: str) -> dict:
     """Build args for the enter_setup deploy step."""
     return {
         "backend_canister_id": backend_id,
-        "creator_principal": (manifest.get("requesting_principal") or "").strip(),
+        "creator_principal": resolve_founder(manifest),
         "realm_registry_canister_id": _resolve_realm_registry_canister_id(manifest),
         "environment": (manifest.get("network") or "").strip(),
     }

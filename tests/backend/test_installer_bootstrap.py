@@ -13,6 +13,7 @@ from bootstrap import (  # noqa: E402
     configure_canister_ids_payload,
     deploy_step_kinds,
     enter_setup_args,
+    resolve_founder,
     gos_implementation,
     manifest_has_codex_block,
     needs_enter_setup_step,
@@ -283,6 +284,28 @@ def test_enter_setup_args_from_manifest():
         "environment": "staging",
     }
     assert needs_enter_setup_step(manifest, manifest["target_canister_id"])
+
+
+def test_enter_setup_args_uses_founder_over_requesting_principal():
+    manifest = _bootstrap_manifest(
+        requesting_principal="billing-caller",
+        founder="portal-ii-principal",
+    )
+    args = enter_setup_args(manifest, manifest["target_canister_id"])
+    assert args["creator_principal"] == "portal-ii-principal"
+    configure_args = configure_canister_ids_args(
+        manifest, manifest["target_canister_id"], manifest["frontend_canister_id"]
+    )
+    payload, warnings = configure_canister_ids_payload(configure_args)
+    assert warnings == []
+    assert payload["creator_principal"] == "portal-ii-principal"
+
+
+def test_enter_setup_args_falls_back_to_requesting_principal_without_founder():
+    manifest = _bootstrap_manifest(requesting_principal="creator-principal-abc")
+    assert resolve_founder(manifest) == "creator-principal-abc"
+    args = enter_setup_args(manifest, manifest["target_canister_id"])
+    assert args["creator_principal"] == "creator-principal-abc"
 
 
 def test_enter_setup_candid_is_principal_plus_two_texts():

@@ -158,5 +158,10 @@ export function buildRealmDeploymentManifest(formData, network, config = {}, opt
     portal_url: portalUrlForSlug(federationSlug, network, config),
   };
 
+  const founder = ((formData.founder || options.founder || '')).trim();
+  if (founder) {
+    manifest.founder = founder;
+  }
+
   return manifest;
 }

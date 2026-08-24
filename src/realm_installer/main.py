@@ -43,6 +43,7 @@ from bootstrap import (
     deploy_step_kinds,
     build_enter_setup_candid,
     enter_setup_args,
+    resolve_founder,
     manifest_has_codex_block,
     needs_enter_setup_step,
     resync_extension_frontends_args,
@@ -759,7 +760,7 @@ def schedule_registration(job_id_val: str):
                 else:
                     jlog(job_id_val).info(f"realm config updated: name={realm_name}")
 
-            founder = (manifest.get("requesting_principal") or "").strip()
+            founder = resolve_founder(manifest)
             if founder and backend_id and founder != "2vxsx-fae":
                 try:
                     founder_arg = f'("{founder}")'

@@ -209,3 +209,27 @@ test('test network gets full test flag set when can_test_mode is true', () => {
   assert.equal(manifest.test_flags.ii_bypass, true);
   assert.equal(manifest.test_flags.skip_terms, true);
 });
+
+test('buildRealmDeploymentManifest includes founder from formData', () => {
+  const manifest = buildRealmDeploymentManifest(
+    {
+      name: 'Founder Realm',
+      gos_implementation: 'realms-gos',
+      founder: 'aaaaa-aa',
+    },
+    'staging',
+    TEST_CONFIG,
+    { useCasals: false },
+  );
+  assert.equal(manifest.founder, 'aaaaa-aa');
+});
+
+test('buildRealmDeploymentManifest omits founder when blank', () => {
+  const manifest = buildRealmDeploymentManifest(
+    { name: 'No Founder Realm', gos_implementation: 'realms-gos' },
+    'staging',
+    TEST_CONFIG,
+    { useCasals: false, founder: '' },
+  );
+  assert.equal(manifest.founder, undefined);
+});

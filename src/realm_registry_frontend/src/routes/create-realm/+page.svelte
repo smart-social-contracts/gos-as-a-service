@@ -358,6 +358,7 @@
         {
           deployVersion: formData.deploy_version,
           useCasals: true,
+          founder: userPrincipal?.toText?.() || '',
         },
       );
       const manifestJson = JSON.stringify(manifest);
@@ -551,6 +552,7 @@
     return buildRealmDeploymentManifest(formData, CONFIG.default_deploy_queue_network, {
       deployVersion: formData.deploy_version,
       useCasals: true,
+      founder: userPrincipal?.toText?.() || '',
     });
   }
 

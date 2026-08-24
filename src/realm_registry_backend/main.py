@@ -638,6 +638,11 @@ def request_deployment(manifest_json: text) -> Async[text]:
             })
 
         manifest["requesting_principal"] = caller
+        founder = (manifest.get("founder") or "").strip()
+        if founder:
+            manifest["founder"] = founder
+        else:
+            manifest.pop("founder", None)
         manifest["registry_canister_id"] = str(ic.id())
 
         from core.env_config import apply_env_inheritance

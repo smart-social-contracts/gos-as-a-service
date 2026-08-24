@@ -37,6 +37,7 @@ export function summarizeManifest(manifest) {
     slug: manifest.federation?.slug || '',
     portalUrl: manifest.federation?.portal_url || '',
     requestingPrincipal: manifest.requesting_principal || '',
+    founder: manifest.founder || '',
     gosImplementation: manifest.gos?.implementation || '',
     gosVersion: manifest.gos?.version || manifest.deploy_version || '',
   };
