@@ -185,28 +185,73 @@ def upload_file(
                 return "failed"
 
     local_sha = sha256_file(local_path)
-    while True:
-        finalize_payload = json.dumps(
-            {
-                "namespace": namespace,
-                "path": registry_path,
-                "expected_sha256": local_sha,
-                "batch_size": FINALIZE_BATCH,
-            }
-        )
-        raw = dfx.canister_call(
-            registry_id,
-            "finalize_chunked_file_step",
-            dfx.candid_text_arg(finalize_payload),
-            network,
-            identity=identity,
-            timeout=600,
-        )
-        result = json.loads(raw)
-        if not (isinstance(result, dict) and result.get("ok") is True):
-            return "failed"
-        if result.get("done") is True:
-            return "uploaded"
+    return _finalize_chunked_upload(
+        registry_id,
+        namespace,
+        registry_path,
+        local_sha,
+        network,
+        identity=identity,
+    )
+
+
+def _finalize_chunked_upload(
+    registry_id: str,
+    namespace: str,
+    registry_path: str,
+    local_sha: str,
+    network: str,
+    *,
+    identity: str | None = None,
+) -> str:
+    """GOS file_registry uses batched finalize_chunked_file_step; Casals FR uses one-shot finalize_chunked_file."""
+    step_payload = json.dumps(
+        {
+            "namespace": namespace,
+            "path": registry_path,
+            "expected_sha256": local_sha,
+            "batch_size": FINALIZE_BATCH,
+        }
+    )
+    try:
+        while True:
+            raw = dfx.canister_call(
+                registry_id,
+                "finalize_chunked_file_step",
+                dfx.candid_text_arg(step_payload),
+                network,
+                identity=identity,
+                timeout=600,
+            )
+            result = json.loads(raw)
+            if not (isinstance(result, dict) and result.get("ok") is True):
+                return "failed"
+            if result.get("done") is True:
+                return "uploaded"
+    except dfx.DfxError as exc:
+        if "finalize_chunked_file_step" not in str(exc) or "has no update method" not in str(exc):
+            raise
+    oneshot_payload = json.dumps(
+        {
+            "namespace": namespace,
+            "path": registry_path,
+            "sha256": local_sha,
+        }
+    )
+    raw = dfx.canister_call(
+        registry_id,
+        "finalize_chunked_file",
+        dfx.candid_text_arg(oneshot_payload),
+        network,
+        identity=identity,
+        timeout=600,
+    )
+    result = json.loads(raw)
+    if isinstance(result, dict) and result.get("ok") is True:
+        return "uploaded"
+    if isinstance(result, dict) and "error" in result:
+        return "failed"
+    return "uploaded" if result else "failed"
 
 
 def publish_namespace(
