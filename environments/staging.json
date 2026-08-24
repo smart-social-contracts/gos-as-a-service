@@ -16,7 +16,15 @@
   ],
   "canisters": {
     "realm_registry_frontend": "77243-aqaaa-aaaau-aggza-cai",
-    "marketplace_frontend": "h4gmt-waaaa-aaaac-bfxoq-cai"
+    "marketplace_frontend": "h4gmt-waaaa-aaaac-bfxoq-cai",
+    "realm_registry_backend": "snqhl-daaaa-aaaan-q6n3q-cai",
+    "realm_installer": "ta6df-miaaa-aaaan-q6n4a-cai",
+    "casals_backend": "th7fr-bqaaa-aaaan-q6n4q-cai",
+    "casals_frontend": "to4on-xyaaa-aaaan-q6n5a-cai",
+    "casals_file_registry": "tj5iz-2aaaa-aaaan-q6n5q-cai",
+    "file_registry": "t42zu-3iaaa-aaaan-q6n6a-cai",
+    "file_registry_frontend": "t337a-wqaaa-aaaan-q6n6q-cai",
+    "marketplace_backend": "tsyu4-ayaaa-aaaan-q6n7a-cai"
   },
   "casals": {
     "version": "main",
@@ -26,7 +34,6 @@
     ]
   },
   "multisig": {
-    "backend_id": null,
     "signers": [
       "3itd6-2sx7g-vefdk-xhebm-fucot-llay5-lhqd6-pkjac-m7mkf-vhwqq-fqe"
     ],
@@ -45,7 +52,7 @@
     "can_test_mode": true
   },
   "cycles": {
-    "threshold_tc": 2.0
+    "threshold_tc": 0.4
   },
   "dns": {
     "provider": "manual"
