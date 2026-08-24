@@ -13,6 +13,7 @@ from gaas.known import KNOWN_CANISTER_NAMES
 from gaas.phases import (
     PHASES,
     DeployContext,
+    _asset_install_mode,
     _ensure_casals_backend_did,
     _installer_config_json,
     _casals_settings_json,
@@ -1225,6 +1226,19 @@ def test_ensure_casals_backend_did_rewrites_empty_variant_payloads(
     )
 
 
+@patch("gaas.phases.dfx.detect_install_mode", return_value="install")
+def test_asset_install_mode_installs_empty_canister(_mock_detect) -> None:
+    ctx = DeployContext(identity="deployer", network="ic")
+    assert _asset_install_mode(VALID_CANISTER_ID, ctx) == "install"
+
+
+@patch("gaas.phases.dfx.detect_install_mode", return_value="upgrade")
+def test_asset_install_mode_reinstalls_existing_wasm(_mock_detect) -> None:
+    ctx = DeployContext(identity="deployer", network="ic")
+    assert _asset_install_mode(VALID_CANISTER_ID, ctx) == "reinstall"
+
+
+@patch("gaas.phases.dfx.detect_install_mode", return_value="upgrade")
 @patch("gaas.phases.dfx.get_principal", return_value="aaaaa-aa")
 @patch("gaas.phases.dfx.deploy_assets_canister")
 @patch("gaas.phases.resolve_casals_frontend_dist")
@@ -1240,6 +1254,7 @@ def test_phase_install_frontends_no_mid_run_confirm(
     mock_casals_dist,
     mock_deploy_assets,
     _mock_principal,
+    _mock_detect_mode,
     tmp_path: Path,
 ) -> None:
     repo_root = tmp_path / "repo"
@@ -1280,6 +1295,7 @@ def test_phase_install_frontends_no_mid_run_confirm(
     )
 
 
+@patch("gaas.phases.dfx.detect_install_mode", return_value="upgrade")
 @patch("gaas.phases.build_marketplace_frontend")
 @patch("gaas.phases.dfx.get_principal", return_value="aaaaa-aa")
 @patch("gaas.phases.dfx.deploy_assets_canister")
@@ -1297,6 +1313,7 @@ def test_phase_install_frontends_reinstalls_marketplace_onto_existing_id(
     mock_deploy_assets,
     _mock_principal,
     mock_build_marketplace,
+    _mock_detect_mode,
     tmp_path: Path,
 ) -> None:
     repo_root = tmp_path / "repo"

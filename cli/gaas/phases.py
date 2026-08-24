@@ -530,6 +530,13 @@ def _backend_install_mode(canister_id: str, ctx: DeployContext) -> str:
     return dfx.detect_install_mode(canister_id, ctx.network, identity=ctx.identity)
 
 
+def _asset_install_mode(canister_id: str, ctx: DeployContext) -> str:
+    """Empty asset canisters must use install; reinstall requires existing wasm."""
+    if dfx.detect_install_mode(canister_id, ctx.network, identity=ctx.identity) == "install":
+        return "install"
+    return "reinstall"
+
+
 def phase_install_backends(descriptor: Descriptor, ctx: DeployContext) -> None:
     platform_version, release_repo = _platform_release(descriptor)
     work = _work_dir(ctx)
@@ -1047,7 +1054,7 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
                 ctx.network,
                 repo_root=repo_root,
                 identity=ctx.identity,
-                mode="reinstall",
+                mode=_asset_install_mode(canister_id, ctx),
                 yes=True,
             )
             console.print(
@@ -1096,7 +1103,7 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
                     ctx.network,
                     repo_root=repo_root,
                     identity=ctx.identity,
-                    mode="reinstall",
+                    mode=_asset_install_mode(file_registry_frontend_id, ctx),
                     yes=True,
                 )
             console.print(
@@ -1129,7 +1136,7 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
             ctx.network,
             repo_root=repo_root,
             identity=ctx.identity,
-            mode="reinstall",
+            mode=_asset_install_mode(casals_frontend_id, ctx),
             yes=True,
         )
         console.print(
@@ -1162,7 +1169,7 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
                 ctx.network,
                 repo_root=repo_root,
                 identity=ctx.identity,
-                mode="reinstall",
+                mode=_asset_install_mode(marketplace_frontend_id, ctx),
                 yes=True,
             )
             console.print(
