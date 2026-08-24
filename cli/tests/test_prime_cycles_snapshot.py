@@ -203,6 +203,39 @@ def test_phase_prime_cycles_snapshot_raises_when_snapshot_missing_canister(
 
 @patch("gaas.phases.dfx.canister_call")
 @patch("gaas.phases.get_tree")
+def test_phase_prime_cycles_snapshot_warns_when_refresh_failed_and_row_missing(
+    mock_get_tree: MagicMock,
+    mock_call: MagicMock,
+) -> None:
+    names = ["canister-1", "canister-2"]
+    mock_get_tree.return_value = _tree_with_canisters(2)
+
+    def refresh_side_effect(canister_id, method, arg, network, *, identity=None, query=False):
+        del canister_id, network, identity
+        if query and method == "get_cycles_cached":
+            return json.dumps(_snapshot_for_names(["canister-1"]))
+        batch = _refresh_arg_canisters(arg)
+        if "canister-2" in batch:
+            return json.dumps(
+                {
+                    "ok": False,
+                    "error": "Caller is not allowed to read the canister status",
+                }
+            )
+        return json.dumps(_snapshot_for_names(batch))
+
+    mock_call.side_effect = refresh_side_effect
+
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {"casals_backend": CASALS_BACKEND_ID}
+    desc = Descriptor.model_validate(data)
+    ctx = DeployContext(identity="deployer", network="ic")
+
+    phase_prime_cycles_snapshot(desc, ctx)
+
+
+@patch("gaas.phases.dfx.canister_call")
+@patch("gaas.phases.get_tree")
 def test_phase_prime_cycles_snapshot_empty_tree_skips(
     mock_get_tree: MagicMock,
     mock_call: MagicMock,

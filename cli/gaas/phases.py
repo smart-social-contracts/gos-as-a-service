@@ -1543,7 +1543,21 @@ def phase_prime_cycles_snapshot(descriptor: Descriptor, ctx: DeployContext) -> N
         query=True,
     )
     snapshot = json.loads(cached_raw)
-    error_names = verify_cycles_snapshot_covers_tree(names, snapshot)
+    try:
+        error_names = verify_cycles_snapshot_covers_tree(names, snapshot)
+    except RuntimeError as exc:
+        missing = [
+            name
+            for name in names
+            if name not in _cycles_snapshot_by_name(snapshot)
+        ]
+        # Topology has not made Casals a controller yet, so refresh often
+        # cannot read status and those rows never land in the cache.
+        if missing and set(missing) <= set(failed):
+            console.print(f"[yellow]  warning: {exc}[/yellow]")
+            error_names = []
+        else:
+            raise
     for name in error_names:
         row = _cycles_snapshot_by_name(snapshot)[name]
         detail = row.get("error") or row.get("status") or "error"
