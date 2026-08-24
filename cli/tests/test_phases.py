@@ -45,6 +45,7 @@ def test_phases_order() -> None:
         "install_backends",
         "configure_backends",
         "seed_file_registry",
+        "seed_namespace_approvals",
         "seed_conductor",
         "prime_cycles_snapshot",
         "configure_multisig",
@@ -222,6 +223,7 @@ def test_create_canisters_adopt_vs_create(
     assert "marketplace_frontend" not in desc.canisters
 
 
+@patch("gaas.phases.dfx.canister_call")
 @patch("gaas.phases.dfx.top_up_canister")
 @patch("gaas.phases.dfx.create_canister_via_ledger")
 @patch("gaas.phases.dfx.create_canister")
@@ -237,6 +239,7 @@ def test_phase_create_canisters_restores_evacuated_cycles(
     mock_create,
     _mock_ledger_create,
     mock_top_up,
+    mock_canister_call,
     tmp_path: Path,
 ) -> None:
     from gaas.preflight import PreflightCheck, PreflightReport
@@ -274,6 +277,14 @@ def test_phase_create_canisters_restores_evacuated_cycles(
         500_000_000_000,
         "ic",
         identity="deployer",
+    )
+    mock_canister_call.assert_called_once_with(
+        casals_id,
+        "get_cycles",
+        "()",
+        "ic",
+        identity="deployer",
+        query=False,
     )
 
 
