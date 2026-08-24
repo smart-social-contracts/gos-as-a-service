@@ -33,17 +33,17 @@ DEFAULT_PLATFORM_VERSION: Final[str] = "v0.3.1"
 DEFAULT_PLATFORM_RELEASE_REPO: Final[str] = "smart-social-contracts/gos-as-a-service"
 DEFAULT_CASALS_SECTION: Final[str] = "Deployments"
 
-# Maps platform canister names to dfx.json canister names (None = create via ledger).
+# Maps platform canister names to dfx.json canister names.
 DFX_CANISTER_NAMES: Final[dict[str, str | None]] = {
     "realm_registry_backend": "realm_registry_backend",
     "realm_registry_frontend": "realm_registry_frontend",
     "realm_installer": "realm_installer",
-    "casals_backend": None,
+    "casals_backend": "casals_backend",
     "casals_frontend": "casals_frontend",
-    "casals_file_registry": None,
+    "casals_file_registry": "casals_file_registry",
     "file_registry": "file_registry",
     "file_registry_frontend": "file_registry_frontend",
-    "marketplace_backend": None,
+    "marketplace_backend": "marketplace_backend",
     "marketplace_frontend": "marketplace_frontend",
 }
 

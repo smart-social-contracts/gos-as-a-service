@@ -122,6 +122,16 @@
       "type": "custom",
       "wasm": "casals_backend.wasm"
     },
+    "casals_file_registry": {
+      "candid": "casals_backend.did",
+      "type": "custom",
+      "wasm": "casals_backend.wasm"
+    },
+    "marketplace_backend": {
+      "candid": "casals_backend.did",
+      "type": "custom",
+      "wasm": "casals_backend.wasm"
+    },
     "casals_frontend": {
       "source": [
         "casals_frontend_dist"

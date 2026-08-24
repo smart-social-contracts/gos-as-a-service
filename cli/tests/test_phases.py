@@ -190,15 +190,13 @@ def test_create_canisters_adopt_vs_create(
         "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
         "ccccc-ccccc-ccccc-ccccc-ccccc-ccc",
         "ddddd-ddddd-ddddd-ddddd-ddddd-ddd",
+        "eeeee-eeeee-eeeee-eeeee-eeeee-eee",
         "fffff-fffff-fffff-fffff-fffff-fff",
         "ggggg-ggggg-ggggg-ggggg-ggggg-ggg",
         "hhhhh-hhhhh-hhhhh-hhhhh-hhhhh-hhh",
-    ]
-    mock_ledger_create.side_effect = [
-        "eeeee-eeeee-eeeee-eeeee-eeeee-eee",
         "iiiii-iiiii-iiiii-iiiii-iiiii-iii",
-        "jjjjj-jjjjj-jjjjj-jjjjj-jjjjj-jjj",
     ]
+    mock_ledger_create.side_effect = []
 
     data = dict(SAMPLE_DESCRIPTOR)
     data["canisters"] = {"realm_registry_backend": VALID_CANISTER_ID}
