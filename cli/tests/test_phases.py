@@ -1210,6 +1210,21 @@ def test_ensure_casals_backend_did_noop_without_src(
     assert not (repo / "casals_backend.did").exists()
 
 
+def test_ensure_casals_backend_did_rewrites_empty_variant_payloads(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "gaas"
+    repo.mkdir()
+    (repo / "casals_backend.did").write_text(
+        "type AssetPermission = variant { Commit : ; Prepare : ; ManagePermissions :  };\n",
+        encoding="utf-8",
+    )
+    _ensure_casals_backend_did(repo, None)
+    assert (repo / "casals_backend.did").read_text(encoding="utf-8") == (
+        "type AssetPermission = variant { Commit; Prepare; ManagePermissions};\n"
+    )
+
+
 @patch("gaas.phases.dfx.get_principal", return_value="aaaaa-aa")
 @patch("gaas.phases.dfx.deploy_assets_canister")
 @patch("gaas.phases.resolve_casals_frontend_dist")

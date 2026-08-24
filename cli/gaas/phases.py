@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import sys
 import tarfile
@@ -945,19 +946,31 @@ def _is_interactive(ctx: DeployContext) -> bool:
     return not ctx.yes and sys.stdin.isatty()
 
 
+_EMPTY_VARIANT_PAYLOAD = re.compile(r"(\w+)\s*:\s*(?=;|\})")
+
+
+def _rewrite_empty_candid_variants(text: str) -> str:
+    """Basilisk emits unit variants as ``Tag : ;``, which candid rejects."""
+    return _EMPTY_VARIANT_PAYLOAD.sub(r"\1", text)
+
+
 def _ensure_casals_backend_did(repo_root: Path, casals_src: Path | None) -> None:
     """Copy gitignored ``casals_backend.did`` so ``dfx generate casals_backend`` works."""
     dest = repo_root / "casals_backend.did"
-    if dest.is_file():
-        return
-    src_root = resolve_casals_src(casals_src)
-    if src_root is None:
-        return
-    src = src_root / "casals_backend.did"
-    if not src.is_file():
-        return
-    shutil.copy2(src, dest)
-    console.print(f"  copied {src} -> {dest}")
+    if not dest.is_file():
+        src_root = resolve_casals_src(casals_src)
+        if src_root is None:
+            return
+        src = src_root / "casals_backend.did"
+        if not src.is_file():
+            return
+        shutil.copy2(src, dest)
+        console.print(f"  copied {src} -> {dest}")
+    text = dest.read_text(encoding="utf-8")
+    fixed = _rewrite_empty_candid_variants(text)
+    if fixed != text:
+        dest.write_text(fixed, encoding="utf-8")
+        console.print(f"  sanitized empty variant payloads in {dest}")
 
 
 def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
