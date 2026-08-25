@@ -1,7 +1,8 @@
 /**
  * Fetch runtime flags from a realm backend canister (anonymous query).
+ * Payload includes identity fields used by the portal splash (`logo_url`).
  * @param {string} backendCanisterId
- * @returns {Promise<{ test_mode_ii_bypass?: boolean } | null>}
+ * @returns {Promise<{ test_mode_ii_bypass?: boolean, logo_url?: string, realm_logo?: string } | null>}
  */
 export async function fetchRealmRuntimeFlags(backendCanisterId) {
   if (!backendCanisterId || typeof window === 'undefined') return null;

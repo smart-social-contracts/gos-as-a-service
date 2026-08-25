@@ -1,55 +1,68 @@
 <script>
-  import { brandingLogoUrls } from '$lib/realm-utils.js';
+  import { acceptSplashLogoUrl, splashLogoCandidates } from '$lib/realm-utils.js';
 
-  /** Realms GOS sphere mark — used only while a realm iframe is preparing. */
+  /** Pulse mark for the realm brand at `/custom/logo.png` — never clover or GOS planet. */
   export let size = 128;
-  /** When set, the realm's branding logo is used if it actually loads. */
+  /** Frontend asset canister; `/custom/logo.png` is the configured brand. */
   export let frontendCanisterId = '';
+  /** Realm `logo_url` from get_runtime_flags / status. */
+  export let configuredLogoUrl = '';
+  /**
+   * True when the URL already names a realm (`/r/{slug}`).
+   * Identified realms never paint the GOS planet or retired clover.
+   */
+  export let identified = false;
 
-  const DEFAULT_SRC = '/images/logo_sphere_only.svg';
-  const DEFAULT_ASPECT = 448 / 398;
-
-  let displaySrc = DEFAULT_SRC;
+  let displaySrc = '';
   let branded = false;
   let probeGen = 0;
 
-  $: probeBranding(frontendCanisterId);
+  $: probeBranding(frontendCanisterId, configuredLogoUrl, identified);
 
-  function probeBranding(canisterId) {
+  async function probeBranding(canisterId, configured, isIdentified) {
     const gen = ++probeGen;
     branded = false;
-    displaySrc = DEFAULT_SRC;
-    const urls = brandingLogoUrls(canisterId);
-    if (!urls.length || typeof Image === 'undefined') return;
+    displaySrc = '';
+    // Slug routes identify the realm from the first paint. Do not flash
+    // `/images/logo_sphere_only.svg` (or any other platform default) while
+    // waiting for the configured brand.
+    if (!isIdentified && !String(canisterId || '').trim()) return;
 
-    let i = 0;
-    const tryNext = () => {
-      if (gen !== probeGen || i >= urls.length) return;
-      const url = urls[i++];
-      const img = new Image();
-      img.onload = () => {
+    const urls = splashLogoCandidates({
+      frontendCanisterId: canisterId,
+      configuredLogoUrl: configured,
+    });
+    if (!urls.length) return;
+
+    for (const url of urls) {
+      if (gen !== probeGen) return;
+      try {
+        const ok = await acceptSplashLogoUrl(url);
         if (gen !== probeGen) return;
-        displaySrc = url;
-        branded = true;
-      };
-      img.onerror = tryNext;
-      img.src = url;
-    };
-    tryNext();
+        if (ok) {
+          displaySrc = url;
+          branded = true;
+          return;
+        }
+      } catch {
+        /* try the next candidate */
+      }
+    }
   }
 </script>
 
-<div class="sphere-stage" class:branded style="--sphere-size: {size}px" aria-hidden="true">
-  <span class="sphere-halo"></span>
-  <img
-    src={displaySrc}
-    alt=""
-    class="sphere-mark"
-    class:branded
-    width={size}
-    height={branded ? size : Math.round(size * DEFAULT_ASPECT)}
-  />
-</div>
+{#if branded && displaySrc}
+  <div class="sphere-stage branded" style="--sphere-size: {size}px" aria-hidden="true">
+    <span class="sphere-halo"></span>
+    <img
+      src={displaySrc}
+      alt=""
+      class="sphere-mark branded"
+      width={size}
+      height={size}
+    />
+  </div>
+{/if}
 
 <style>
   .sphere-stage {
@@ -73,36 +86,14 @@
     animation: sphere-glow 2.2s ease-in-out infinite;
   }
 
-  .sphere-mark {
+  .sphere-mark.branded {
     position: relative;
     display: block;
-    width: calc(var(--sphere-size, 128px) * 0.86);
-    height: auto;
-    /* Black SVG → mid-gray (#737373). */
-    filter: brightness(0) invert(0.45) drop-shadow(0 8px 18px rgba(115, 115, 115, 0.28));
-    animation: sphere-breathe 2.2s ease-in-out infinite;
-  }
-
-  .sphere-mark.branded {
     width: calc(var(--sphere-size, 128px) * 0.9);
     height: calc(var(--sphere-size, 128px) * 0.9);
     object-fit: contain;
     filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.16));
     animation: brand-breathe 2.2s ease-in-out infinite;
-  }
-
-  @keyframes sphere-breathe {
-    0%,
-    100% {
-      opacity: 0.78;
-      transform: scale(0.96);
-      filter: brightness(0) invert(0.45) drop-shadow(0 4px 10px rgba(115, 115, 115, 0.18));
-    }
-    50% {
-      opacity: 1;
-      transform: scale(1.04);
-      filter: brightness(0) invert(0.45) drop-shadow(0 12px 24px rgba(115, 115, 115, 0.32));
-    }
   }
 
   @keyframes brand-breathe {
@@ -133,12 +124,6 @@
     .sphere-mark,
     .sphere-halo {
       animation: none;
-    }
-
-    .sphere-mark {
-      opacity: 0.92;
-      transform: none;
-      filter: brightness(0) invert(0.45) drop-shadow(0 6px 14px rgba(115, 115, 115, 0.22));
     }
 
     .sphere-mark.branded {
