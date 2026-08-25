@@ -53,7 +53,7 @@
     "can_test_mode": true
   },
   "cycles": {
-    "threshold_tc": 0.4
+    "threshold_tc": 2
   },
   "dns": {
     "provider": "manual"

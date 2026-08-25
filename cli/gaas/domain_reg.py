@@ -11,6 +11,21 @@ import requests
 REG_API = "https://reg.icp0.io/domains"
 
 
+def custom_domain_already_live(domain: str, *, timeout: float = 20.0) -> bool:
+    """True when HTTPS already serves ``/.well-known/ic-domains`` for this host."""
+    host = domain.rstrip(".").lower()
+    if not host:
+        return False
+    url = f"https://{host}/.well-known/ic-domains"
+    try:
+        response = requests.get(url, timeout=timeout)
+    except requests.RequestException:
+        return False
+    if response.status_code != 200:
+        return False
+    return host in (response.text or "").lower()
+
+
 class DomainRegistrationError(RuntimeError):
     pass
 
@@ -63,6 +78,8 @@ def poll_domain_registration(
 
 def attempt_domain_registration(domain: str, *, timeout: float = 600.0) -> tuple[bool, str]:
     """Best-effort registration; returns (success, detail message)."""
+    if custom_domain_already_live(domain):
+        return True, "custom domain already serving; skipped IC registration API"
     try:
         created = register_domain(domain)
         domain_id = (
@@ -74,6 +91,10 @@ def attempt_domain_registration(domain: str, *, timeout: float = 600.0) -> tuple
         final = poll_domain_registration(str(domain_id), timeout=timeout)
         return True, json.dumps(final, indent=2)
     except DomainRegistrationError as exc:
+        if custom_domain_already_live(domain):
+            return True, f"custom domain already serving; registration API: {exc}"
         return False, str(exc)
     except requests.RequestException as exc:
+        if custom_domain_already_live(domain):
+            return True, f"custom domain already serving; registration API: {exc}"
         return False, f"registration API request failed: {exc}"

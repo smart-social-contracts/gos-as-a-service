@@ -26,6 +26,7 @@ from gaas.phases import (
     phase_create_canisters,
     phase_destroy_except_frontend,
     phase_domain_wiring,
+    phase_ensure_cycle_floors,
     phase_grant_commanders,
     phase_install_backends,
     phase_install_frontends,
@@ -55,6 +56,7 @@ def test_phases_order() -> None:
         "domain_wiring",
         "smoke_checks",
         "grant_commanders",
+        "ensure_cycle_floors",
         "controller_topology",
     ]
 
@@ -222,6 +224,11 @@ def test_create_canisters_adopt_vs_create(
     phase_create_canisters(desc, ctx)
 
     mock_create.assert_called()
+    from gaas.cycles_plan import create_with_cycles
+
+    expected_cycles = create_with_cycles(desc.threshold_cycles())
+    for call in mock_create.call_args_list:
+        assert call.kwargs.get("with_cycles") == expected_cycles
     assert desc.canisters["realm_registry_backend"] == VALID_CANISTER_ID
     # 1 adopted + 8 platform created; DNS-mapped marketplace_frontend is skipped.
     assert len(desc.canisters) == 9
@@ -304,6 +311,88 @@ def test_phase_create_canisters_restores_evacuated_cycles(
         identity="deployer",
         query=False,
     )
+
+
+@patch("gaas.phases.dfx.canister_call")
+@patch("gaas.phases.dfx.send_wallet_cycles")
+@patch("gaas.phases.dfx.wallet_cycles_balance")
+@patch("gaas.phases.dfx.drop_local_canister_id")
+@patch("gaas.phases.dfx.canister_exists", return_value=True)
+@patch("gaas.phases.dfx.top_up_canister")
+@patch("gaas.phases.dfx.create_canister_via_ledger")
+@patch("gaas.phases.dfx.create_canister")
+@patch("gaas.phases.dfx.canister_cycles_balance")
+@patch("gaas.phases.dfx.canister_status")
+@patch("gaas.phases.dfx.get_principal")
+@patch("gaas.phases.dfx.use_identity")
+@patch("gaas.phases.run_preflight")
+def test_phase_create_canisters_holds_wallet_for_cycle_floors(
+    mock_preflight,
+    _use_identity,
+    mock_principal,
+    mock_status,
+    mock_balance,
+    mock_create,
+    _mock_ledger_create,
+    mock_top_up,
+    _mock_exists,
+    _mock_drop,
+    mock_wallet_bal,
+    mock_send_wallet,
+    mock_canister_call,
+    tmp_path: Path,
+) -> None:
+    from gaas.preflight import PreflightCheck, PreflightReport
+
+    mock_preflight.return_value = PreflightReport(
+        identity="deployer",
+        network="ic",
+        checks=[PreflightCheck("identity_exists", True, "ok")],
+    )
+    mock_principal.return_value = "aaaaa-aa"
+    mock_status.return_value = MagicMock(
+        status="running",
+        controllers=("aaaaa-aa",),
+        raw="status: running",
+    )
+    casals_id = "qthgp-3yaaa-aaaae-agveq-cai"
+    frontend_id = "to4on-xyaaa-aaaan-q6n5a-cai"
+    mock_balance.side_effect = (
+        lambda canister_id, *args, **kwargs: (
+            400_000_000_000 if canister_id == frontend_id else 2_000_000_000_000
+        )
+    )
+
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {name: VALID_CANISTER_ID for name in KNOWN_CANISTER_NAMES}
+    data["canisters"]["casals_backend"] = casals_id
+    data["canisters"]["casals_frontend"] = frontend_id
+    desc = Descriptor.model_validate(data)
+    path = tmp_path / "env.gaas.json"
+    desc.save(path)
+
+    ctx = DeployContext(
+        identity="deployer",
+        network="ic",
+        descriptor_path=path,
+        cycles_evacuated=5_000_000_000_000,
+    )
+    phase_create_canisters(desc, ctx)
+
+    keep = desc.threshold_cycles() - 400_000_000_000
+    mock_send_wallet.assert_called_once_with(
+        casals_id,
+        5_000_000_000_000 - keep,
+        "ic",
+        identity="deployer",
+    )
+    mock_top_up.assert_called_once_with(
+        frontend_id,
+        keep,
+        "ic",
+        identity="deployer",
+    )
+    mock_wallet_bal.assert_not_called()
 
 
 @patch("gaas.phases.dfx.send_wallet_cycles")
@@ -726,7 +815,7 @@ def test_casals_settings_json_defaults_and_test_mode() -> None:
     assert closed["default_min_cycles"] == 2_000_000_000_000
     assert closed["default_topup_cycles"] == 2_000_000_000_000
     assert closed["treasury_reserve"] == 2_000_000_000_000
-    assert closed["create_cycles"] == 2_000_000_000_000
+    assert closed["create_cycles"] == 2_500_000_000_000
     assert "extra_controller_principals" not in closed
 
     open_desc = desc.model_copy(update={"flags": {"can_test_mode": True}})
@@ -741,7 +830,7 @@ def test_casals_settings_json_floors_create_cycles_at_2t() -> None:
     desc = Descriptor.model_validate(data)
     payload = json.loads(_casals_settings_json(desc, "deployer-principal"))
     assert payload["default_min_cycles"] == 400_000_000_000
-    assert payload["create_cycles"] == 2_000_000_000_000
+    assert payload["create_cycles"] == 2_500_000_000_000
 
 
 def test_casals_settings_json_monitor_url() -> None:
@@ -872,9 +961,10 @@ def test_build_gaas_env_includes_ii_origin() -> None:
     assert env["canisters"]["realm_registry_frontend"]["ic"] == VALID_CANISTER_ID
 
 
+@patch("gaas.phases.custom_domain_already_live", return_value=False)
 @patch("gaas.phases.wait_for_dns", return_value=False)
 @patch("gaas.phases.render_dns_records")
-def test_domain_wiring_dns_timeout(mock_render, _wait, tmp_path: Path) -> None:
+def test_domain_wiring_dns_timeout(mock_render, _wait, _already_live, tmp_path: Path) -> None:
     mock_render.return_value = []
     data = dict(SAMPLE_DESCRIPTOR)
     data["canisters"] = {"realm_registry_frontend": VALID_CANISTER_ID}
@@ -890,6 +980,30 @@ def test_domain_wiring_dns_timeout(mock_render, _wait, tmp_path: Path) -> None:
     with pytest.raises(RuntimeError, match="DNS propagation"):
         phase_domain_wiring(desc, ctx)
     assert ctx.stopped is True
+
+
+@patch("gaas.phases.attempt_domain_registration")
+@patch("gaas.phases.wait_for_dns")
+@patch("gaas.phases.custom_domain_already_live", return_value=True)
+@patch("gaas.phases.render_dns_records")
+def test_domain_wiring_skips_when_already_live(
+    mock_render, _already_live, mock_wait, mock_register, tmp_path: Path
+) -> None:
+    mock_render.return_value = []
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {"realm_registry_frontend": VALID_CANISTER_ID}
+    desc = Descriptor.model_validate(data)
+    path = tmp_path / "env.gaas.json"
+    desc.save(path)
+    ctx = DeployContext(
+        identity="default",
+        network="ic",
+        descriptor_path=path,
+    )
+    phase_domain_wiring(desc, ctx)
+    mock_wait.assert_not_called()
+    mock_register.assert_not_called()
+    assert ctx.stopped is False
 
 
 def test_parse_registry_configure_variant_ok() -> None:
@@ -1101,6 +1215,67 @@ def test_phase_grant_commanders_non_interactive_yes_flag(
     phase_grant_commanders(desc, ctx)
 
     mock_ensure.assert_not_called()
+
+
+@patch("gaas.phases.ensure_section_commanders")
+@patch("gaas.phases.get_tree", return_value=MOCK_TREE)
+@patch("gaas.phases.sys.stdin")
+def test_phase_grant_commanders_yes_applies_descriptor_commanders(
+    mock_stdin,
+    _get_tree,
+    mock_ensure,
+) -> None:
+    mock_stdin.isatty.return_value = True
+    desc, ctx = _grant_commanders_descriptor()
+    desc.casals.commanders.append(PRINCIPAL_A)
+    ctx.yes = True
+
+    phase_grant_commanders(desc, ctx)
+
+    mock_ensure.assert_called_once()
+    assert mock_ensure.call_args[0][2] == [PRINCIPAL_A]
+
+
+@patch("gaas.phases.dfx.canister_cycles_balance")
+@patch("gaas.phases.dfx.canister_call")
+@patch("gaas.phases.dfx.update_canister_settings")
+@patch("gaas.phases.dfx.canister_status")
+def test_phase_ensure_cycle_floors_tops_via_casals(
+    mock_status,
+    mock_settings,
+    mock_call,
+    mock_balance,
+) -> None:
+    mock_status.return_value = MagicMock(controllers=("deployer-principal",))
+    mock_balance.side_effect = [400_000_000_000, 2_000_000_000_000]
+    mock_call.return_value = json.dumps({"ok": True, "topped_up": []})
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        "casals_backend": CASALS_BACKEND_ID,
+        "casals_frontend": CASALS_FRONTEND_ID,
+    }
+    desc = Descriptor.model_validate(data)
+    ctx = DeployContext(identity="deployer", network="ic")
+
+    phase_ensure_cycle_floors(desc, ctx)
+
+    mock_call.assert_called_once()
+    assert mock_call.call_args[0][1] == "top_up"
+    mock_settings.assert_called_once()
+
+
+@patch("gaas.phases.dfx.top_up_canister")
+@patch("gaas.phases.dfx.canister_cycles_balance", return_value=2_000_000_000_000)
+def test_phase_ensure_cycle_floors_noop_when_funded(_mock_balance, mock_top) -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        "casals_backend": CASALS_BACKEND_ID,
+        "casals_frontend": CASALS_FRONTEND_ID,
+    }
+    desc = Descriptor.model_validate(data)
+    ctx = DeployContext(identity="deployer", network="ic")
+    phase_ensure_cycle_floors(desc, ctx)
+    mock_top.assert_not_called()
 
 
 @patch("gaas.phases._save_descriptor")

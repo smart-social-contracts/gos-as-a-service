@@ -22,10 +22,11 @@ from rich.table import Table
 
 from gaas import dfx
 from gaas.artifacts import fetch_release_assets
+from gaas.cycles_plan import create_with_cycles
 from gaas.descriptor import CANISTER_ID_RE, Descriptor
 from gaas.destroy import destroy_except_frontend
 from gaas.dns import render_dns_records, wait_for_dns
-from gaas.domain_reg import attempt_domain_registration
+from gaas.domain_reg import attempt_domain_registration, custom_domain_already_live
 from gaas.codex_seed import seed_codex_catalog
 from gaas.conductor_seed import (
     authorize_gos_entry,
@@ -232,9 +233,9 @@ def _installer_config_json(descriptor: Descriptor) -> str:
     return json.dumps(payload)
 
 
-# IC create_canister currently charges a 500B fee from the initial balance.
-# A lowered preflight threshold (e.g. 0.4T for skinny canisters) must not
-# leak into Casals create_cycles or orchestra creates fail.
+# IC create_canister charges a 500B fee from the initial balance. Casals
+# create_cycles is threshold (floored at 2T) plus that fee so leftover meets
+# default_min_cycles.
 _CASALS_CREATE_CYCLES_MIN = 2_000_000_000_000
 
 
@@ -251,7 +252,7 @@ def _casals_settings_json(descriptor: Descriptor, deployer_principal: str) -> st
         "default_min_cycles": threshold,
         "default_topup_cycles": threshold,
         "treasury_reserve": threshold,
-        "create_cycles": max(threshold, _CASALS_CREATE_CYCLES_MIN),
+        "create_cycles": create_with_cycles(max(threshold, _CASALS_CREATE_CYCLES_MIN)),
         "monitor_enabled": False,
     }
     file_registry_frontend_id = canisters.get("file_registry_frontend")
@@ -372,10 +373,86 @@ def _drop_missing_canister_ids(descriptor: Descriptor, ctx: DeployContext) -> No
         _save_descriptor(descriptor, ctx)
 
 
+def _fmt_tc(amount: int) -> str:
+    return f"{amount / 1_000_000_000_000:.2f}T"
+
+
+def _canister_cycle_shortfalls(
+    descriptor: Descriptor, ctx: DeployContext
+) -> list[tuple[str, str, int]]:
+    if ctx.network != "ic":
+        return []
+    threshold = descriptor.threshold_cycles()
+    out: list[tuple[str, str, int]] = []
+    for name in KNOWN_CANISTER_NAMES:
+        if name == "casals_backend":
+            continue
+        canister_id = (descriptor.canisters.get(name) or "").strip()
+        if not canister_id:
+            continue
+        try:
+            balance = dfx.canister_cycles_balance(
+                canister_id, ctx.network, identity=ctx.identity
+            )
+        except dfx.DfxError:
+            continue
+        if balance is None or balance >= threshold:
+            continue
+        out.append((name, canister_id, threshold - balance))
+    return out
+
+
+def _add_controller_if_missing(
+    canister_id: str, principal: str, ctx: DeployContext
+) -> None:
+    status = dfx.canister_status(canister_id, ctx.network, identity=ctx.identity)
+    if principal in status.controllers:
+        return
+    dfx.update_canister_settings(
+        canister_id,
+        list(status.controllers) + [principal],
+        ctx.network,
+        identity=ctx.identity,
+    )
+
+
+def _casals_top_up(
+    casals_id: str, canister_id: str, amount: int, ctx: DeployContext
+) -> None:
+    raw = dfx.canister_call(
+        casals_id,
+        "top_up",
+        dfx.candid_text_arg(
+            json.dumps({"canister_id": canister_id, "amount": amount})
+        ),
+        ctx.network,
+        identity=ctx.identity,
+        query=False,
+    )
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Casals top_up returned non-JSON: {raw!r}") from exc
+    if isinstance(payload, dict) and payload.get("ok") is False:
+        raise RuntimeError(payload.get("error") or payload.get("message") or raw)
+
+
+def _wallet_top_up_shortfalls(
+    shortfalls: list[tuple[str, str, int]], ctx: DeployContext
+) -> None:
+    for name, canister_id, amount in shortfalls:
+        console.print(f"  {name}: wallet top-up +{_fmt_tc(amount)}")
+        dfx.top_up_canister(
+            canister_id, amount, ctx.network, identity=ctx.identity
+        )
+
+
 def _restore_casals_treasury(descriptor: Descriptor, ctx: DeployContext) -> None:
     casals_id = (descriptor.canisters.get("casals_backend") or "").strip()
     if not casals_id:
         return
+    shortfalls = _canister_cycle_shortfalls(descriptor, ctx)
+    keep_for_floors = sum(amount for _name, _cid, amount in shortfalls)
     amount = ctx.cycles_evacuated
     if amount <= 0:
         try:
@@ -384,35 +461,49 @@ def _restore_casals_treasury(descriptor: Descriptor, ctx: DeployContext) -> None
             console.print(
                 f"[yellow]  warning: wallet balance unavailable: {exc}[/yellow]"
             )
-            return
-        amount = max(0, wallet_bal - WALLET_RESERVE_CYCLES)
-        if amount <= 0:
-            return
-        console.print(
-            f"  casals_backend: restoring wallet surplus {amount:,} cycles "
-            f"(keeping {WALLET_RESERVE_CYCLES:,} in wallet)"
-        )
-    dfx.send_wallet_cycles(
-        casals_id,
-        amount,
-        ctx.network,
-        identity=ctx.identity,
-    )
-    console.print(f"  casals_backend: restored {amount:,} cycles from wallet")
-    try:
-        dfx.canister_call(
+            wallet_bal = 0
+        amount = max(0, wallet_bal - WALLET_RESERVE_CYCLES - keep_for_floors)
+        if amount > 0:
+            console.print(
+                f"  casals_backend: restoring wallet surplus {amount:,} cycles "
+                f"(keeping {WALLET_RESERVE_CYCLES:,} in wallet"
+                + (
+                    f" + {_fmt_tc(keep_for_floors)} for cycle floors"
+                    if keep_for_floors
+                    else ""
+                )
+                + ")"
+            )
+    else:
+        amount = max(0, amount - keep_for_floors)
+        if keep_for_floors:
+            console.print(
+                f"  holding {_fmt_tc(keep_for_floors)} in wallet to top skinny canisters"
+            )
+    if amount > 0:
+        dfx.send_wallet_cycles(
             casals_id,
-            "get_cycles",
-            "()",
+            amount,
             ctx.network,
             identity=ctx.identity,
-            query=False,
         )
-        console.print("  casals_backend: primed cycles snapshot (get_cycles)")
-    except Exception as exc:
-        console.print(
-            f"[yellow]  warning: get_cycles after treasury restore failed: {exc}[/yellow]"
-        )
+        console.print(f"  casals_backend: restored {amount:,} cycles from wallet")
+        try:
+            dfx.canister_call(
+                casals_id,
+                "get_cycles",
+                "()",
+                ctx.network,
+                identity=ctx.identity,
+                query=False,
+            )
+            console.print("  casals_backend: primed cycles snapshot (get_cycles)")
+        except Exception as exc:
+            console.print(
+                f"[yellow]  warning: get_cycles after treasury restore failed: {exc}[/yellow]"
+            )
+    if shortfalls:
+        _wallet_top_up_shortfalls(shortfalls, ctx)
 
 
 def phase_validate(descriptor: Descriptor, ctx: DeployContext) -> None:
@@ -438,7 +529,11 @@ def phase_validate(descriptor: Descriptor, ctx: DeployContext) -> None:
 def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
     dfx.use_identity(ctx.identity)
     principal = dfx.get_principal(ctx.identity)
-    cycles = DEFAULT_CYCLES_PER_CANISTER if ctx.network == "ic" else None
+    cycles = (
+        create_with_cycles(descriptor.threshold_cycles())
+        if ctx.network == "ic"
+        else None
+    )
 
     for name in KNOWN_CANISTER_NAMES:
         existing_id = descriptor.canisters.get(name)
@@ -1201,6 +1296,13 @@ def phase_domain_wiring(descriptor: Descriptor, ctx: DeployContext) -> None:
         table.add_row(record.record_type, record.host, record.value)
     console.print(table)
 
+    if custom_domain_already_live(descriptor.domain):
+        console.print(
+            f"  {descriptor.domain} already serving; "
+            "skipping DNS wait and IC registration"
+        )
+        return
+
     if ctx.skip_dns_wait:
         console.print("  --skip-dns-wait: continuing without DNS poll")
     else:
@@ -1371,11 +1473,21 @@ def phase_seed_conductor(descriptor: Descriptor, ctx: DeployContext) -> None:
         ("file-registry", "file_registry", "backend"),
         ("file-registry-frontend", "file_registry_frontend", "frontend"),
         ("casals-file-registry", "casals_file_registry", "backend"),
+        ("casals-frontend", "casals_frontend", "frontend"),
+        ("marketplace-backend", "marketplace_backend", "backend"),
+        ("marketplace-frontend", "marketplace_frontend", "frontend"),
     ):
         canister_id = descriptor.canisters.get(key)
         if not canister_id:
             # Adopt-only / optional canisters are registered only when present.
-            if key in ("casals_file_registry", "file_registry", "file_registry_frontend"):
+            if key in (
+                "casals_file_registry",
+                "file_registry",
+                "file_registry_frontend",
+                "casals_frontend",
+                "marketplace_backend",
+                "marketplace_frontend",
+            ):
                 continue
             raise RuntimeError(f"{key} ID required for platform stand registration")
         platform_canisters.append((name, canister_id, kind))
@@ -1715,10 +1827,23 @@ def phase_grant_commanders(descriptor: Descriptor, ctx: DeployContext) -> None:
         console.print("  skip: no orchestra sections found")
         return
 
+    listed = [p for p in descriptor.casals.commanders if p]
+    if listed:
+        console.print(
+            f"  applying {len(listed)} commander(s) from descriptor"
+        )
+        ensure_section_commanders(
+            casals_id,
+            sections,
+            listed,
+            ctx.network,
+            identity=ctx.identity,
+        )
+
     if not _is_interactive(ctx):
         console.print(
-            "  skip: grant Casals commanders interactively "
-            "(re-run without --yes on a TTY)"
+            "  skip extra interactive commander grants "
+            "(descriptor commanders already applied)"
         )
         return
 
@@ -1758,6 +1883,45 @@ def phase_grant_commanders(descriptor: Descriptor, ctx: DeployContext) -> None:
         if principal not in descriptor.casals.commanders:
             descriptor.casals.commanders.append(principal)
             _save_descriptor(descriptor, ctx)
+
+
+def phase_ensure_cycle_floors(descriptor: Descriptor, ctx: DeployContext) -> None:
+    """Top every platform canister to ``cycles.threshold_tc`` before topology.
+
+    Prefers the Casals treasury (where destroy-except evacuates cycles). Wallet
+    top-up is the fallback. Runs while the deployer still controls canisters.
+    """
+    if ctx.network != "ic":
+        console.print("  skipping cycle floors on local network")
+        return
+    threshold = descriptor.threshold_cycles()
+    shortfalls = _canister_cycle_shortfalls(descriptor, ctx)
+    if not shortfalls:
+        console.print(f"  all adopted canisters already at {_fmt_tc(threshold)}")
+        return
+    casals_id = (descriptor.canisters.get("casals_backend") or "").strip()
+    remaining: list[tuple[str, str, int]] = []
+    for name, canister_id, amount in shortfalls:
+        if not casals_id:
+            remaining.append((name, canister_id, amount))
+            continue
+        try:
+            _add_controller_if_missing(canister_id, casals_id, ctx)
+            console.print(f"  {name}: Casals treasury top-up +{_fmt_tc(amount)}")
+            _casals_top_up(casals_id, canister_id, amount, ctx)
+        except Exception as exc:
+            console.print(
+                f"[yellow]  {name}: Casals top-up failed ({exc}); trying wallet[/yellow]"
+            )
+            remaining.append((name, canister_id, amount))
+    if remaining:
+        _wallet_top_up_shortfalls(remaining, ctx)
+    still_short = _canister_cycle_shortfalls(descriptor, ctx)
+    if still_short:
+        detail = ", ".join(
+            f"{name} needs +{_fmt_tc(amount)}" for name, _cid, amount in still_short
+        )
+        raise RuntimeError(f"cycle floor not met after auto-top: {detail}")
 
 
 def validate_seed_prerequisites(descriptor: Descriptor) -> None:
@@ -1863,6 +2027,7 @@ PHASES: list[tuple[str, str, PhaseFunc]] = [
     ("domain_wiring", "Domain wiring", phase_domain_wiring),
     ("smoke_checks", "Smoke checks", phase_smoke_checks),
     ("grant_commanders", "Granting Casals commanders", phase_grant_commanders),
+    ("ensure_cycle_floors", "Ensuring cycle floors", phase_ensure_cycle_floors),
     ("controller_topology", "Applying controller topology", phase_controller_topology),
 ]
 

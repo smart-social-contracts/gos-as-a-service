@@ -256,7 +256,7 @@ Unified cycle threshold for all platform canisters. When omitted, defaults to **
 
 | Field | Required | Default | Description |
 |---|---|---|---|
-| `threshold_tc` | no | `2` | Minimum/top-up threshold in teracycles (TC) for every platform canister. GaaS writes this into Casals via `set_settings` (`default_min_cycles`, `default_topup_cycles`, `treasury_reserve`, `create_cycles`) and into the realm installer via `configure` (`cycle_threshold_cycles`). |
+| `threshold_tc` | no | `2` | Minimum/top-up threshold in teracycles (TC) for every platform canister. GaaS writes this into Casals via `set_settings` (`default_min_cycles`, `default_topup_cycles`, `treasury_reserve`; `create_cycles` is this floor plus the 0.5 TC CMC create fee) and into the realm installer via `configure` (`cycle_threshold_cycles`). |
 
 Example:
 
@@ -279,7 +279,7 @@ The Casals UI principal is Internet-Identity-derived and depends on the frontend
 
 Each valid principal is granted commander rights via the conductor and appended to `casals.commanders` in the descriptor file (deduplicated). Invalid input is rejected with a warning; grant failures print an error and the prompt continues without aborting deploy.
 
-Non-interactive runs (`--yes` or no TTY stdin) skip this step with a one-line note. Re-run `gaas new` interactively to grant commanders later (while the deployer still controls the Casals backend).
+Non-interactive runs (`--yes` or no TTY stdin) still apply `casals.commanders` from the descriptor; only the extra interactive prompt is skipped.
 
 ### `multisig`
 
@@ -368,7 +368,7 @@ Pinned versions download `monad_backend.wasm.gz` and `monad_frontend.tar.gz` fro
 
 ### Cycles estimate (`known.py` / preflight)
 
-Preflight on `--network ic` builds a **cycles plan** before deploy: wallet requirements for canisters not yet in the descriptor (creation fee + initial funding), plus minimum in-canister headroom for canisters already listed. It queries `dfx cycles balance` and `dfx canister status` for each adopted canister, prints a table, and fails with remediation commands when anything is short.
+Preflight on `--network ic` builds a **cycles plan** before deploy: wallet requirements for canisters not yet in the descriptor (descriptor `threshold_tc` plus the 0.5T CMC create fee so leftover after create is the threshold), plus minimum in-canister headroom for canisters already listed. It queries `dfx cycles balance` and `dfx canister status` for each adopted canister and prints a table. **Wallet shortfalls fail the deploy** (convert ICP first). **Adopted-canister shortfalls do not** — `gaas new` auto-tops them from the cycles wallet (before restoring Casals treasury) and again from the Casals treasury before controller topology.
 
 Example output (fresh deploy, all canisters missing):
 
@@ -383,7 +383,7 @@ Suggested remediation:
   dfx cycles convert --amount=1.5 --network ic
 ```
 
-Default wallet estimate per missing canister: **0.6 TC** (0.1T creation + 0.5T initial funding). Nine platform canisters are budgeted by default (`realm_registry_*`, `realm_installer`, `casals_backend`, `casals_frontend`, `casals_file_registry`, `file_registry`, `file_registry_frontend`, `marketplace_backend`). DNS-mapped `marketplace_frontend` is never cycle-budgeted for creation. Canister headrooms use the descriptor `cycles.threshold_tc` (default **2 TC**) for every platform canister. `casals_backend` additionally includes realm-provisioning budget and, when `multisig.backend_id` is unset, one extra threshold for multisig creation.
+Default wallet estimate per missing canister: **`threshold_tc` + 0.5 TC** (CMC create fee taken from the new canister's initial balance). With the default 2 TC threshold that is **2.5 TC** each. Nine platform canisters are budgeted by default (`realm_registry_*`, `realm_installer`, `casals_backend`, `casals_frontend`, `casals_file_registry`, `file_registry`, `file_registry_frontend`, `marketplace_backend`). DNS-mapped `marketplace_frontend` is never cycle-budgeted for creation. Canister headrooms use the descriptor `cycles.threshold_tc` (default **2 TC**) for every platform canister. `casals_backend` additionally includes realm-provisioning budget and, when `multisig.backend_id` is unset, one extra threshold for multisig creation. Casals `create_cycles` is the same floor plus the 0.5 TC create fee so realm canisters Casals mints also land at the threshold.
 
 ## Prerequisites
 
@@ -488,7 +488,7 @@ gaas descriptors are designed for **any domain** — nothing hardcodes `gos.eart
 | Realm deploy pulls wrong GOS version | Pin drift across repos | Single `gos[].version` pin in the descriptor; file registry seeded from that release |
 | Empty `file_registry` canister ID | ID is assigned at first `dfx canister create` | Omit `file_registry` from `canisters` on fresh deploy; gaas writes the generated ID back to state |
 | DNS verify loop times out | Registrar propagation delay or wrong host labels | Run `gaas dns-records <file>` and compare; re-run deploy after fixing records |
-| Preflight: insufficient cycles | Wallet or canister below deploy estimate | Preflight prints a cycles plan table with `dfx cycles convert` / `dfx cycles top-up` remediation |
+| Preflight: insufficient cycles | Wallet below create budget | Preflight prints a cycles plan table with `dfx cycles convert`. Adopted canisters below threshold are auto-topped during deploy. |
 | Preflight: identity not found | Wrong `--identity` | `dfx identity list`; create or select the correct identity |
 | Casals artifact fetch fails | Release missing or network error | Ensure `casals.version` tag exists on GitHub; keep a local Casals checkout as fallback |
 
@@ -513,7 +513,7 @@ gaas new [DESCRIPTOR] [OPTIONS]
 | `DESCRIPTOR` | Optional path to descriptor JSON. Omit to run the interactive wizard. |
 | `--identity TEXT` | dfx identity name. Default: `default` (descriptor mode) or wizard prompt. |
 | `--network [ic\|local]` | Target network. Default: `ic`. |
-| `--yes` | Skip interactive confirmations (upfront deploy confirmation and Casals commander grant). gaas passes `--yes` to `dfx` for install/reinstall so no mid-run prompts appear. |
+| `--yes` | Skip interactive confirmations (upfront deploy confirmation and extra commander prompts). Descriptor `casals.commanders` are still applied. gaas passes `--yes` to `dfx` for install/reinstall so no mid-run prompts appear. |
 
 **Deploy phases** (when pipeline runs):
 
@@ -532,10 +532,11 @@ gaas new [DESCRIPTOR] [OPTIONS]
    Immediately afterward, gaas **primes the conductor cycles snapshot**: it reads `get_tree`, calls `refresh_canisters` in batches of up to three names, then verifies via `get_cycles_cached` that every orchestra canister appears in the persisted snapshot. Missing rows fail the deploy loudly; per-canister refresh errors produce warnings. This prevents a fresh deploy from leaving the Casals Orchestra dashboard at "Canisters: 0".
 8. **Configuring multisig signers (mandatory)** — reconcile `multisig.backend_id` with the live Casals tree, then call Motoko `configure` with `multisig.signers` and `threshold` (default 1-of-N). Must complete before controller topology; without it the multisig shows 1-of-0 and UI users are not signers. Empty `signers` falls back to deployer-only 1-of-1 (legacy).
 9. Building + installing frontends
-10. Domain wiring (DNS verify + IC registration)
+10. Domain wiring (DNS verify + IC registration; skipped when the custom domain already serves `/.well-known/ic-domains`)
 11. Smoke checks
-12. Granting Casals commanders (interactive; skipped with `--yes` or non-TTY)
-13. Applying controller topology (final — gaas may lose control in production)
+12. Granting Casals commanders (descriptor `casals.commanders` always applied; extra interactive principals skipped with `--yes` or non-TTY)
+13. Ensuring cycle floors (auto-top every platform canister to `cycles.threshold_tc` from Casals treasury, wallet fallback)
+14. Applying controller topology (final — gaas may lose control in production)
 
 If a phase is not yet implemented, the pipeline pauses and prints a resume command.
 

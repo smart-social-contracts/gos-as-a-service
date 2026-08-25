@@ -190,7 +190,10 @@ def new_command(
     skip_dns_wait: bool = typer.Option(
         False,
         "--skip-dns-wait",
-        help="Print DNS records and skip propagation polling",
+        help=(
+            "Skip DNS polling when the custom domain is not already live. "
+            "Already-serving domains skip wait and IC registration automatically."
+        ),
     ),
     keep_env_file: bool = typer.Option(
         False,

@@ -11,11 +11,10 @@ from rich.console import Console
 from gaas.cycles_plan import (
     REALM_OPS_MARGIN_CYCLES,
     REALMS_PER_DEPLOY_ASSUMPTION,
-    WALLET_CREATE_CYCLES,
-    WALLET_INITIAL_FUNDING,
     _casals_backend_required,
     _realm_provisioning_budget,
     build_cycles_plan,
+    create_with_cycles,
     print_cycles_plan,
     remediation_canister_top_up,
     remediation_wallet_convert,
@@ -43,7 +42,7 @@ def test_wallet_required_all_canisters_missing() -> None:
         canister_balances={},
     )
     wallet = next(item for item in plan.items if item.label == "wallet")
-    per = WALLET_CREATE_CYCLES + WALLET_INITIAL_FUNDING
+    per = create_with_cycles(DEFAULT_THRESHOLD)
     assert wallet.required == per * len(PLATFORM_CANISTER_NAMES)
     assert len(plan.items) == 1
 
@@ -71,7 +70,7 @@ def test_wallet_required_partial_create_mix() -> None:
     # file_registry is already in the descriptor, so it is not missing. Other
     # platform canisters still count toward wallet creation budget.
     missing = len([n for n in PLATFORM_CANISTER_NAMES if n not in canisters])
-    assert wallet.required == missing * (WALLET_CREATE_CYCLES + WALLET_INITIAL_FUNDING)
+    assert wallet.required == missing * create_with_cycles(DEFAULT_THRESHOLD)
     assert len(plan.items) == 1 + len(canisters)
 
 
@@ -205,7 +204,7 @@ def test_print_cycles_plan_includes_remediation() -> None:
     output = buffer.getvalue()
     assert "Suggested remediation" in output
     assert "dfx cycles convert" in output
-    assert f"dfx cycles top-up {VALID_CANISTER_ID}" in output
+    assert "auto-top casals_backend" in output
 
 
 @patch("gaas.preflight.dfx.identity_exists", return_value=True)
@@ -251,3 +250,40 @@ def test_run_preflight_passes_when_plan_ok(mock_build, _principal, _identity) ->
     )
     assert report.ok
     assert any(c.name == "cycles_plan" and c.passed for c in report.checks)
+
+
+@patch("gaas.preflight.dfx.identity_exists", return_value=True)
+@patch("gaas.preflight.dfx.get_principal", return_value="aaaaa-aa")
+@patch("gaas.preflight.build_cycles_plan")
+def test_run_preflight_passes_canister_shortfall_for_auto_top(
+    mock_build, _principal, _identity
+) -> None:
+    from gaas.cycles_plan import CyclesLineItem, CyclesPlan
+
+    mock_build.return_value = CyclesPlan(
+        network="ic",
+        items=[
+            CyclesLineItem("wallet", None, 0, 1_000_000_000_000),
+            CyclesLineItem(
+                "casals_frontend",
+                VALID_CANISTER_ID,
+                2_000_000_000_000,
+                400_000_000_000,
+            ),
+        ],
+        remediations=["auto-top casals_frontend during deploy"],
+    )
+    report = run_preflight(
+        _descriptor(),
+        "deployer",
+        "ic",
+        console=Console(file=StringIO(), force_terminal=True),
+    )
+    assert report.ok
+    check = next(c for c in report.checks if c.name == "cycles_plan")
+    assert "auto-topped" in check.detail
+
+
+def test_create_with_cycles_covers_cmc_fee() -> None:
+    assert create_with_cycles(2_000_000_000_000) == 2_500_000_000_000
+    assert create_with_cycles(400_000_000_000) == 900_000_000_000

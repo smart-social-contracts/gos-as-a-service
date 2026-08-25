@@ -717,7 +717,7 @@ def top_up_canister(
     ]
     if identity:
         args.extend(["--identity", identity])
-    _run(args, check=False)
+    _run(args, check=True)
 
 
 def detect_install_mode(canister_id: str, network: str, *, identity: str | None = None) -> InstallMode:

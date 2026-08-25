@@ -109,19 +109,31 @@ def run_preflight(
             report.available_cycles = wallet_item.available
             print_cycles_plan(plan, out)
 
-            if plan.ok:
+            if plan.wallet_ok:
+                canister_short = [
+                    item.label
+                    for item in plan.items
+                    if item.label != "wallet" and item.shortfall > 0
+                ]
+                if canister_short:
+                    detail = (
+                        "wallet cycles sufficient; canister shortfalls will be "
+                        f"auto-topped during deploy: {', '.join(canister_short)}"
+                    )
+                else:
+                    detail = "wallet and canister cycles sufficient for deploy estimate"
                 report.checks.append(
                     PreflightCheck(
                         name="cycles_plan",
                         passed=True,
-                        detail="wallet and canister cycles sufficient for deploy estimate",
+                        detail=detail,
                     )
                 )
             else:
                 short_items = [
                     item.label
                     for item in plan.items
-                    if item.shortfall > 0
+                    if item.label == "wallet" and item.shortfall > 0
                 ]
                 detail = (
                     f"insufficient cycles for: {', '.join(short_items)}; "

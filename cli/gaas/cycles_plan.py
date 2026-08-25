@@ -19,11 +19,15 @@ from rich.table import Table
 
 from gaas import dfx
 from gaas.descriptor import Descriptor
-from gaas.known import KNOWN_CANISTER_NAMES, PLATFORM_CANISTER_NAMES
+from gaas.known import (
+    IC_CREATE_FEE_CYCLES,
+    KNOWN_CANISTER_NAMES,
+    PLATFORM_CANISTER_NAMES,
+)
 
-# Wallet pays dfx canister create (ledger fee) plus initial --with-cycles funding.
-WALLET_CREATE_CYCLES: int = 100_000_000_000  # 0.1T — IC canister creation fee
-WALLET_INITIAL_FUNDING: int = 500_000_000_000  # 0.5T — headroom for first install per canister
+# Wallet pays dfx canister create --with-cycles (threshold + CMC create fee).
+WALLET_CREATE_CYCLES: int = 100_000_000_000  # leftover buffer; not used for budget
+WALLET_INITIAL_FUNDING: int = IC_CREATE_FEE_CYCLES  # 0.5T CMC create fee
 
 # Conductor realm-provisioning budget (observed on test.gos.earth: ~2T/create_canister).
 REALM_OPS_MARGIN_CYCLES: int = 1_000_000_000_000  # 1T — wasm pulls, bundle upload, inter-canister calls
@@ -56,6 +60,10 @@ class CyclesPlan:
     @property
     def ok(self) -> bool:
         return all(item.shortfall == 0 for item in self.items)
+
+    @property
+    def wallet_ok(self) -> bool:
+        return all(item.shortfall == 0 for item in self.items if item.label == "wallet")
 
     @property
     def wallet_required(self) -> int:
@@ -91,8 +99,13 @@ def _canister_headroom(name: str, descriptor: Descriptor) -> int:
     return _threshold_cycles(descriptor)
 
 
-def _wallet_required_per_canister() -> int:
-    return WALLET_CREATE_CYCLES + WALLET_INITIAL_FUNDING
+def create_with_cycles(threshold_cycles: int) -> int:
+    """Initial ``--with-cycles`` so leftover after the CMC create fee is ``threshold``."""
+    return max(int(threshold_cycles), 0) + IC_CREATE_FEE_CYCLES
+
+
+def _wallet_required_per_canister(descriptor: Descriptor) -> int:
+    return create_with_cycles(_threshold_cycles(descriptor))
 
 
 def _format_cycles(amount: int) -> str:
@@ -140,9 +153,10 @@ def build_cycles_plan(
     balances = canister_balances or {}
 
     wallet_required = 0
+    per_create = _wallet_required_per_canister(descriptor)
     for name in PLATFORM_CANISTER_NAMES:
         if name not in descriptor.canisters:
-            wallet_required += _wallet_required_per_canister()
+            wallet_required += per_create
 
     if wallet_balance is None and network == "ic":
         try:
@@ -190,9 +204,8 @@ def build_cycles_plan(
             )
         elif item.canister_id:
             plan.remediations.append(
-                remediation_canister_top_up(
-                    item.canister_id, item.shortfall, network
-                )
+                f"auto-top {item.label} ({item.canister_id}) by "
+                f"{_format_cycles(item.shortfall)} during deploy"
             )
 
     return plan
@@ -229,6 +242,11 @@ def print_cycles_plan(plan: CyclesPlan, console: Console | None = None) -> None:
     console = console or Console()
     console.print(render_cycles_plan_table(plan))
     if plan.remediations:
-        console.print("[yellow]Suggested remediation:[/yellow]")
+        if plan.wallet_ok:
+            console.print(
+                "[yellow]Canister shortfalls will be auto-topped during deploy:[/yellow]"
+            )
+        else:
+            console.print("[yellow]Suggested remediation:[/yellow]")
         for line in plan.remediations:
             console.print(f"  {line}")

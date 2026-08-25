@@ -76,7 +76,9 @@ CASALS_FILE_REGISTRY_WASM_ASSETS: Final[tuple[str, ...]] = (
 )
 CASALS_FRONTEND_ARCHIVE: Final[str] = "casals_frontend.tar.gz"
 
-DEFAULT_CYCLES_PER_CANISTER: Final[int] = 1_000_000_000_000  # 1T
+DEFAULT_CYCLES_PER_CANISTER: Final[int] = 1_000_000_000_000  # 1T (legacy estimate)
+# CMC create_canister fee, taken from the new canister's initial balance.
+IC_CREATE_FEE_CYCLES: Final[int] = 500_000_000_000  # 0.5T
 DEFAULT_CANISTER_COUNT: Final[int] = len(PLATFORM_CANISTER_NAMES)
 DEFAULT_INSTALL_BUFFER_CYCLES: Final[int] = 2_000_000_000_000  # 2T
 DEFAULT_REQUIRED_CYCLES: Final[int] = (
