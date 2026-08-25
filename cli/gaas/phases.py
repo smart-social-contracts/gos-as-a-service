@@ -377,6 +377,11 @@ def _fmt_tc(amount: int) -> str:
     return f"{amount / 1_000_000_000_000:.2f}T"
 
 
+# Idle burn between deposit and the follow-up status read is a few million
+# cycles. Treat that as funded and overshoot the top-up by this slack.
+CYCLE_FLOOR_SLACK_CYCLES = 1_000_000_000  # 1B
+
+
 def _canister_cycle_shortfalls(
     descriptor: Descriptor, ctx: DeployContext
 ) -> list[tuple[str, str, int]]:
@@ -396,9 +401,11 @@ def _canister_cycle_shortfalls(
             )
         except dfx.DfxError:
             continue
-        if balance is None or balance >= threshold:
+        if balance is None or balance + CYCLE_FLOOR_SLACK_CYCLES >= threshold:
             continue
-        out.append((name, canister_id, threshold - balance))
+        out.append(
+            (name, canister_id, threshold + CYCLE_FLOOR_SLACK_CYCLES - balance)
+        )
     return out
 
 

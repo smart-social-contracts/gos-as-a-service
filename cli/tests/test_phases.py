@@ -379,7 +379,7 @@ def test_phase_create_canisters_holds_wallet_for_cycle_floors(
     )
     phase_create_canisters(desc, ctx)
 
-    keep = desc.threshold_cycles() - 400_000_000_000
+    keep = desc.threshold_cycles() + 1_000_000_000 - 400_000_000_000
     mock_send_wallet.assert_called_once_with(
         casals_id,
         5_000_000_000_000 - keep,
