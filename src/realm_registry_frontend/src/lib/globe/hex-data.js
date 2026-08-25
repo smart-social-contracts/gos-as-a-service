@@ -59,7 +59,41 @@ function isUsableH3Index(h3, h3Index) {
  */
 
 /**
- * Res-6 H3 cells that represent a realm's true zone footprint.
+ * Territory zones only. Land-registry parcels (`land` / `land_id`) stay off the globe.
+ * @param {object | null | undefined} zone
+ */
+export function isTerritoryZone(zone) {
+  if (!zone || typeof zone !== 'object') return false;
+  const land = zone.land ?? zone.land_id;
+  return land == null || land === '' || land === false;
+}
+
+/**
+ * Map a territory zone onto a truth cell:
+ * res 6 keep; finer parent to 6; coarser keep the native cell (do not explode children).
+ * Live test.gos.earth RealmTest6 paints ~300 res-3 cells — dropping those
+ * used to leave the footer counting locations while the globe stayed empty.
+ * @param {object} zone
+ * @param {object} h3
+ * @returns {string | null}
+ */
+export function normalizeZoneToTruthCell(zone, h3) {
+  if (!isTerritoryZone(zone) || !isUsableH3Index(h3, zone.h3_index)) return null;
+  try {
+    const res = h3.getResolution?.(zone.h3_index);
+    if (typeof res !== 'number' || !Number.isInteger(res) || res < 0) return null;
+    if (res > ZONE_DATA_RESOLUTION && h3.cellToParent) {
+      return h3.cellToParent(zone.h3_index, ZONE_DATA_RESOLUTION);
+    }
+    return zone.h3_index;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * H3 cells that represent a realm's true territory-zone footprint.
+ * Coarse cells (res < 6) are kept as-is so painted regions still fill.
  * @param {object[]} zones
  * @param {object} h3
  * @returns {Set<string>}
@@ -69,18 +103,7 @@ export function realmTruthCells(zones, h3) {
   if (!zones?.length || !h3) return cells;
 
   for (const zone of zones) {
-    if (!isUsableH3Index(h3, zone.h3_index)) continue;
-    let idx = null;
-    try {
-      const res = h3.getResolution?.(zone.h3_index);
-      if (res === ZONE_DATA_RESOLUTION) {
-        idx = zone.h3_index;
-      } else if (typeof res === 'number' && res > ZONE_DATA_RESOLUTION && h3.cellToParent) {
-        idx = h3.cellToParent(zone.h3_index, ZONE_DATA_RESOLUTION);
-      }
-    } catch {
-      /* skip invalid cell */
-    }
+    const idx = normalizeZoneToTruthCell(zone, h3);
     if (idx) cells.add(idx);
   }
 
@@ -109,7 +132,8 @@ function parentCellsAtResolution(truthCells, h3, resolution) {
   const out = new Set();
   for (const cell of truthCells) {
     try {
-      if (resolution >= ZONE_DATA_RESOLUTION) {
+      const cellRes = h3.getResolution?.(cell);
+      if (typeof cellRes === 'number' && cellRes <= resolution) {
         out.add(cell);
       } else {
         out.add(h3.cellToParent(cell, resolution));
@@ -137,22 +161,33 @@ function expandWithInfluenceRings(cells, h3, rings) {
   return out;
 }
 
-/** @param {Set<string>} displayCells @param {Set<string>} truthCells @param {object} h3 @param {number} displayRes */
-function areaInflationRatio(displayCells, truthCells, h3, displayRes) {
-  try {
-    const truthArea =
-      h3.getHexagonAreaAvg(ZONE_DATA_RESOLUTION, 'km2') * Math.max(1, truthCells.size);
-    const displayArea =
-      h3.getHexagonAreaAvg(displayRes, 'km2') * Math.max(1, displayCells.size);
-    return displayArea / truthArea;
-  } catch {
-    return totalCellsArea(displayCells, h3) / totalCellsArea(truthCells, h3);
+/** @param {Set<string>} displayCells @param {Set<string>} truthCells @param {object} h3 @param {number} [_displayRes] */
+function areaInflationRatio(displayCells, truthCells, h3, _displayRes) {
+  const truthArea = totalCellsArea(truthCells, h3);
+  const displayArea = totalCellsArea(displayCells, h3);
+  if (!(truthArea > 0) || !(displayArea > 0)) return Infinity;
+  return displayArea / truthArea;
+}
+
+/** @param {Set<string>} truthCells @param {object} h3 */
+function truthCellResolutions(truthCells, h3) {
+  const resolutions = [];
+  for (const cell of truthCells) {
+    try {
+      const res = h3.getResolution?.(cell);
+      if (typeof res === 'number' && Number.isInteger(res)) resolutions.push(res);
+    } catch {
+      /* skip */
+    }
   }
+  return resolutions;
 }
 
 /**
  * Pick per-realm display resolution: coarsest zoom-allowed res whose footprint
- * stays within HEX_AREA_INFLATION_MAX of the true res-6 union, or null → markers only.
+ * stays within HEX_AREA_INFLATION_MAX of the true zone union. Falls back to
+ * native / regional overview hexes rather than markers-only — res-3 territory
+ * (RealmTest6) and city-scale res-7/8 paint must still fill at globe zoom.
  * @param {object[]} zones
  * @param {object} h3
  * @param {number} zoom
@@ -183,7 +218,24 @@ export function chooseRealmHexResolution(zones, h3, zoom) {
     return { resolution, truthCells, influenceRings: 0 };
   }
 
-  return null;
+  // Parenting the whole realm to the zoom's coarse res can inflate a small
+  // city-scale cluster (Spain at res 7–8) past the cap. That used to return
+  // null — which also hid any coarse cells in the same realm. Always keep
+  // drawing: mixed realms use the coarsest native cell (fine cells parent
+  // up to it); city-only paint gets a regional overview hex when zoomed out.
+  const native = truthCellResolutions(truthCells, h3);
+  if (!native.length) return null;
+
+  const minNative = Math.min(...native);
+  const overview = h3ResolutionForZoom(zoom);
+  if (minNative > overview && zoom < 5) {
+    return {
+      resolution: Math.min(minNative, Math.max(overview, 4)),
+      truthCells,
+      influenceRings: 0,
+    };
+  }
+  return { resolution: minNative, truthCells, influenceRings: 0 };
 }
 
 /** @param {object[]} zones @param {object} h3 */
@@ -194,18 +246,7 @@ function zoneStatsByTruthCell(zones, h3) {
   const locations = new Map();
 
   for (const zone of zones) {
-    if (!isUsableH3Index(h3, zone.h3_index)) continue;
-    let truthCell = null;
-    try {
-      const res = h3.getResolution?.(zone.h3_index);
-      if (res === ZONE_DATA_RESOLUTION) {
-        truthCell = zone.h3_index;
-      } else if (typeof res === 'number' && res > ZONE_DATA_RESOLUTION && h3.cellToParent) {
-        truthCell = h3.cellToParent(zone.h3_index, ZONE_DATA_RESOLUTION);
-      }
-    } catch {
-      /* skip invalid cell */
-    }
+    const truthCell = normalizeZoneToTruthCell(zone, h3);
     if (!truthCell) continue;
     users.set(truthCell, (users.get(truthCell) || 0) + (zone.user_count || 0));
     if (!locations.has(truthCell)) locations.set(truthCell, []);
@@ -240,10 +281,12 @@ function truthToDisplayParents(truthCells, h3, resolution) {
   const out = new Map();
   for (const truthCell of truthCells) {
     try {
-      out.set(
-        truthCell,
-        resolution >= ZONE_DATA_RESOLUTION ? truthCell : h3.cellToParent(truthCell, resolution)
-      );
+      const cellRes = h3.getResolution?.(truthCell);
+      if (typeof cellRes === 'number' && cellRes <= resolution) {
+        out.set(truthCell, truthCell);
+      } else {
+        out.set(truthCell, h3.cellToParent(truthCell, resolution));
+      }
     } catch {
       out.set(truthCell, truthCell);
     }
@@ -410,7 +453,7 @@ export function buildHexPolygons(
 }
 
 /**
- * Geographic bounds of a realm's true res-6 zone footprint (for map fit).
+ * Geographic bounds of a realm's true territory-zone footprint (for map fit).
  * @param {object[]} zones
  * @param {object | null} h3
  * @returns {[[number, number], [number, number]] | null} [[west, south], [east, north]]
@@ -565,7 +608,7 @@ export function separateCoincidentMarkers(
     // of their zones whose display hex differs.
     for (let i = 1; i < group.length; i++) {
       const marker = group[i];
-      const zones = realmZoneData[marker.realmId]?.zones || [];
+      const zones = (realmZoneData[marker.realmId]?.zones || []).filter(isTerritoryZone);
       const occupied = new Set(
         markers.filter((m) => m !== marker).map((m) => keyOf(m))
       );
@@ -631,8 +674,8 @@ export function buildPointMarkers(
   const markers = [];
 
   filteredRealms.forEach((realm) => {
-    const zones = realmZoneData[realm.id]?.zones;
-    if (!zones?.length) return;
+    const zones = (realmZoneData[realm.id]?.zones || []).filter(isTerritoryZone);
+    if (!zones.length) return;
 
     const ranked = [...zones].sort((a, b) => {
       const byUsers = (b.user_count || 0) - (a.user_count || 0);
@@ -692,6 +735,7 @@ export function computeKpis(realms, realmZoneData) {
   const locationClusters = new Set();
   Object.values(realmZoneData).forEach((data) => {
     data.zones?.forEach((zone) => {
+      if (!isTerritoryZone(zone)) return;
       if (zone.h3_index) {
         locationClusters.add(zone.h3_index);
       }

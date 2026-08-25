@@ -127,18 +127,12 @@
       }
 
       filteredRealms = realms;
+      // Paint the globe as soon as the registry directory is back. Details and
+      // zone hexes fill in afterwards — do not hold the wireframe overlay.
       loading = false;
-
-      const details = await fetchRealmDetails(realms);
-      details.forEach(({ id, users_count, manifesto, realm_name, realm_stage }) => {
-        realms = realms.map((r) =>
-          r.id === id ? { ...r, users_count, manifesto, realm_name, realm_stage } : r
-        );
-      });
-
-      globeLoading = true;
-      realmZoneData = await fetchZoneData(realms);
       globeLoading = false;
+
+      void hydrateRealmDetailsAndZones(realms);
     } catch (err) {
       error = err.message || 'Failed to load realms';
       loading = false;
@@ -151,6 +145,23 @@
         realmZoneData = { ...DUMMY_ZONE_DATA };
         error = null;
       }
+    }
+  }
+
+  async function hydrateRealmDetailsAndZones(currentRealms) {
+    try {
+      const [details, zones] = await Promise.all([
+        fetchRealmDetails(currentRealms),
+        fetchZoneData(currentRealms),
+      ]);
+      details.forEach(({ id, users_count, manifesto, realm_name, realm_stage }) => {
+        realms = realms.map((r) =>
+          r.id === id ? { ...r, users_count, manifesto, realm_name, realm_stage } : r
+        );
+      });
+      realmZoneData = zones;
+    } catch (err) {
+      console.warn('Background realm hydrate failed:', err?.message || err);
     }
   }
 

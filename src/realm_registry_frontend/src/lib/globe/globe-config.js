@@ -77,9 +77,10 @@ export function hexStyle(distance, { totalUsers = 0, hasMultipleRealms = false, 
   if (distance === 0) {
     return {
       fill: hasMultipleRealms ? '#5B8A8A' : '#6BA3A3',
-      // Slightly stronger when fine so capital hexes stay obvious at city zoom.
-      opacity: Math.min((fine ? 0.52 : 0.34) + userBoost, 0.72),
-      weight: fine ? 2 : 1.2,
+      stroke: '#2F5F5F',
+      // Coarse painted regions (res < 6) need stronger fill or they vanish on the globe.
+      opacity: Math.min((fine ? 0.52 : 0.5) + userBoost, 0.78),
+      weight: fine ? 2 : 1.6,
     };
   }
   if (distance === 1) {
