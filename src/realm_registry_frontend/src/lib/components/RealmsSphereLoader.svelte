@@ -1,5 +1,5 @@
 <script>
-  import { acceptSplashLogoUrl, splashLogoCandidates } from '$lib/realm-utils.js';
+  import { acceptSplashLogoUrl, firstSplashLogoUrl, splashLogoCandidates } from '$lib/realm-utils.js';
 
   /** Pulse mark for the realm brand at `/custom/logo.png` — never clover or GOS planet. */
   export let size = 128;
@@ -13,26 +13,47 @@
    */
   export let identified = false;
 
-  let displaySrc = '';
-  let branded = false;
+  // First render must already include the realm mark when the canister is known.
+  // Do not start as text-only and wait for the leftover-hash probe.
+  let displaySrc = firstSplashLogoUrl({
+    frontendCanisterId,
+    configuredLogoUrl,
+  });
+  let branded = Boolean(displaySrc);
   let probeGen = 0;
 
   $: probeBranding(frontendCanisterId, configuredLogoUrl, identified);
 
   async function probeBranding(canisterId, configured, isIdentified) {
     const gen = ++probeGen;
-    branded = false;
-    displaySrc = '';
     // Slug routes identify the realm from the first paint. Do not flash
     // `/images/logo_sphere_only.svg` (or any other platform default) while
     // waiting for the configured brand.
-    if (!isIdentified && !String(canisterId || '').trim()) return;
+    if (!isIdentified && !String(canisterId || '').trim()) {
+      branded = false;
+      displaySrc = '';
+      return;
+    }
 
     const urls = splashLogoCandidates({
       frontendCanisterId: canisterId,
       configuredLogoUrl: configured,
     });
-    if (!urls.length) return;
+    if (!urls.length) {
+      branded = false;
+      displaySrc = '';
+      return;
+    }
+
+    // Paint `/custom/logo.png` (or the configured brand) on this frame.
+    // Leftover clover / GOS planet rejection is async and must not blank
+    // the first splash paint.
+    const immediate = firstSplashLogoUrl({
+      frontendCanisterId: canisterId,
+      configuredLogoUrl: configured,
+    });
+    displaySrc = immediate || urls[0];
+    branded = Boolean(displaySrc);
 
     for (const url of urls) {
       if (gen !== probeGen) return;
@@ -48,6 +69,9 @@
         /* try the next candidate */
       }
     }
+    if (gen !== probeGen) return;
+    branded = false;
+    displaySrc = '';
   }
 </script>
 
