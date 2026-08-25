@@ -14,7 +14,15 @@
   import { fetchRealmRuntimeFlags } from '$lib/realm-runtime-flags.js';
   import { fetchDeploymentJobsFromInstaller } from '$lib/installer-queue.js';
   import { isUnknownSlugError, findJobForSlug, unknownSlugView } from '$lib/unknown-slug.js';
+  import {
+    clearSplashBrandHint,
+    firstSplashLogoUrl,
+    readSplashBrandHint,
+    writeSplashBrandHint,
+  } from '$lib/realm-utils.js';
   import RealmsSphereLoader from '$lib/components/RealmsSphereLoader.svelte';
+
+  export let data = {};
 
   let iframeEl;
   let loading = true;
@@ -39,6 +47,15 @@
 
   $: slug = $page.params.slug;
   $: subPath = $page.url.pathname.replace(new RegExp(`^/r/${slug}`), '') || '/';
+  $: splashHint = realm
+    ? null
+    : data?.splashHint || (browser ? readSplashBrandHint(slug) : null);
+  $: splashCanisterId = realm?.frontendCanisterId || splashHint?.frontendCanisterId || '';
+  $: splashConfiguredLogo = realm?.logoUrl || splashHint?.configuredLogoUrl || '';
+  $: splashMarkUrl = firstSplashLogoUrl({
+    frontendCanisterId: splashCanisterId,
+    configuredLogoUrl: splashConfiguredLogo,
+  });
 
   let unsubAuth = () => {};
 
@@ -120,6 +137,7 @@
         slugView = unknownSlugView(slug, findJobForSlug(jobs, slug));
         error = slugView.title;
         if (slugView.kind !== 'creating') {
+          clearSplashBrandHint(slug);
           stopCreatingPoll();
         }
       } else {
@@ -163,6 +181,10 @@
     realmIIBypass = !!flags?.test_mode_ii_bypass;
     const logoUrl = String(flags?.logo_url || flags?.realm_logo || '').trim();
     realm = { ...realm, logoUrl };
+    writeSplashBrandHint(data.slug || slug, {
+      frontendCanisterId: data.frontend_canister_id,
+      configuredLogoUrl: logoUrl,
+    });
     if (realmIIBypass) {
       needsLogin = false;
     }
@@ -191,6 +213,7 @@
         }
         slugView = unknownSlugView(slug, findJobForSlug(jobs, slug));
         error = slugView.title;
+        clearSplashBrandHint(slug);
       } else {
         slugView = null;
         error = e instanceof Error ? e.message : String(e);
@@ -242,6 +265,9 @@
 
 <svelte:head>
   <title>{slug} — Realms</title>
+  {#if splashMarkUrl}
+    <link rel="preload" as="image" href={splashMarkUrl} />
+  {/if}
 </svelte:head>
 
 <div class="portal-shell">
@@ -298,7 +324,7 @@
         {/if}
       </div>
     {/if}
-    {#if loading || (realm && !iframeReady)}
+    {#if (loading || (realm && !iframeReady)) && splashMarkUrl}
       <div
         class="loading-overlay"
         role="status"
@@ -308,8 +334,8 @@
         <RealmsSphereLoader
           size={128}
           identified={!!slug}
-          frontendCanisterId={realm?.frontendCanisterId || ''}
-          configuredLogoUrl={realm?.logoUrl || ''}
+          frontendCanisterId={splashCanisterId}
+          configuredLogoUrl={splashConfiguredLogo}
         />
         <p class="loading-label">{iframeLoaded ? 'Preparing realm…' : 'Loading realm'}</p>
       </div>

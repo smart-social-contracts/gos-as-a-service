@@ -202,6 +202,86 @@ export function splashLogoCandidates({ frontendCanisterId = '', configuredLogoUr
 }
 
 /**
+ * URL the identified-realm splash must paint on its first frame.
+ * Empty only when the frontend canister is still unknown.
+ */
+export function firstSplashLogoUrl({ frontendCanisterId = '', configuredLogoUrl = '' } = {}) {
+  return splashLogoCandidates({ frontendCanisterId, configuredLogoUrl })[0] || '';
+}
+
+/** Persisted slug → frontend canister so a hard reload can paint `/custom/logo.png` immediately. */
+export const SPLASH_BRAND_HINT_STORAGE_KEY = 'gaas.portal.splashBrand.v1';
+
+function defaultSplashHintStorage() {
+  if (typeof localStorage === 'undefined') return null;
+  return localStorage;
+}
+
+function normalizeSplashHint(entry) {
+  const frontendCanisterId = String(entry?.frontendCanisterId || '').trim();
+  if (!frontendCanisterId) return null;
+  return {
+    frontendCanisterId,
+    configuredLogoUrl: String(entry?.configuredLogoUrl || '').trim(),
+  };
+}
+
+/**
+ * @param {string} slug
+ * @param {Pick<Storage, 'getItem'> | null} [storage]
+ * @returns {{ frontendCanisterId: string, configuredLogoUrl: string } | null}
+ */
+export function readSplashBrandHint(slug, storage = defaultSplashHintStorage()) {
+  const key = String(slug || '').trim().toLowerCase();
+  if (!key || !storage) return null;
+  try {
+    const store = JSON.parse(storage.getItem(SPLASH_BRAND_HINT_STORAGE_KEY) || '{}');
+    return normalizeSplashHint(store?.[key]);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * @param {string} slug
+ * @param {{ frontendCanisterId?: string, configuredLogoUrl?: string }} hint
+ * @param {Pick<Storage, 'getItem' | 'setItem'> | null} [storage]
+ */
+export function writeSplashBrandHint(slug, hint, storage = defaultSplashHintStorage()) {
+  const key = String(slug || '').trim().toLowerCase();
+  const normalized = normalizeSplashHint(hint);
+  if (!key || !normalized || !storage) return;
+  try {
+    const store = JSON.parse(storage.getItem(SPLASH_BRAND_HINT_STORAGE_KEY) || '{}');
+    store[key] = normalized;
+    storage.setItem(SPLASH_BRAND_HINT_STORAGE_KEY, JSON.stringify(store));
+  } catch {
+    /* quota / private mode */
+  }
+}
+
+/**
+ * @param {string} slug
+ * @param {Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null} [storage]
+ */
+export function clearSplashBrandHint(slug, storage = defaultSplashHintStorage()) {
+  const key = String(slug || '').trim().toLowerCase();
+  if (!key || !storage) return;
+  try {
+    const store = JSON.parse(storage.getItem(SPLASH_BRAND_HINT_STORAGE_KEY) || '{}');
+    if (!store || !Object.prototype.hasOwnProperty.call(store, key)) return;
+    delete store[key];
+    if (Object.keys(store).length) {
+      storage.setItem(SPLASH_BRAND_HINT_STORAGE_KEY, JSON.stringify(store));
+    } else {
+      storage.removeItem(SPLASH_BRAND_HINT_STORAGE_KEY);
+    }
+  } catch {
+    /* quota / private mode */
+  }
+}
+
+/**
  * Accept a splash logo only if it loads and is not a leftover demo/platform mark.
  * @param {string} url
  * @param {typeof fetch} [fetchImpl]

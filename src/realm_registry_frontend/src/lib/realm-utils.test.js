@@ -7,14 +7,32 @@ import {
   acceptSplashLogoUrl,
   brandingLogoUrls,
   BRANDING_LOGO_PATHS,
+  clearSplashBrandHint,
+  firstSplashLogoUrl,
   isLeftoverBrandingBytes,
   isLeftoverPlatformLogoPath,
   isRealmBrandLogoPath,
   LEFTOVER_BRANDING_SHA256,
   pathnameFromAssetUrl,
+  readSplashBrandHint,
   sha256Hex,
   splashLogoCandidates,
+  SPLASH_BRAND_HINT_STORAGE_KEY,
+  writeSplashBrandHint,
 } from './realm-utils.js';
+
+function memoryStorage(initial = {}) {
+  const data = { ...initial };
+  return {
+    getItem: (key) => (Object.prototype.hasOwnProperty.call(data, key) ? data[key] : null),
+    setItem: (key, value) => {
+      data[key] = String(value);
+    },
+    removeItem: (key) => {
+      delete data[key];
+    },
+  };
+}
 
 const testdata = join(dirname(fileURLToPath(import.meta.url)), 'testdata');
 
@@ -75,6 +93,38 @@ test('splashLogoCandidates prefers configured logo_url and skips leftover paths'
     ]
   );
   assert.deepEqual(splashLogoCandidates({ frontendCanisterId: '', configuredLogoUrl: '' }), []);
+});
+
+test('firstSplashLogoUrl is /custom/logo.png as soon as the frontend canister is known', () => {
+  const id = 'wumyk-tiaaa-aaaae-agz6q-cai';
+  assert.equal(firstSplashLogoUrl({ frontendCanisterId: id }), `https://${id}.icp0.io/custom/logo.png`);
+  assert.equal(
+    firstSplashLogoUrl({ frontendCanisterId: id, configuredLogoUrl: '/custom/logo.png' }),
+    `https://${id}.icp0.io/custom/logo.png`
+  );
+  assert.equal(firstSplashLogoUrl({ frontendCanisterId: '', configuredLogoUrl: '/custom/logo.png' }), '');
+});
+
+test('splash brand hint persists slug → frontend canister for the first splash frame', () => {
+  const storage = memoryStorage();
+  const id = 'wumyk-tiaaa-aaaae-agz6q-cai';
+  assert.equal(readSplashBrandHint('RealmTest6', storage), null);
+  writeSplashBrandHint(
+    'RealmTest6',
+    { frontendCanisterId: id, configuredLogoUrl: '/custom/logo.png' },
+    storage
+  );
+  assert.deepEqual(readSplashBrandHint('realmtest6', storage), {
+    frontendCanisterId: id,
+    configuredLogoUrl: '/custom/logo.png',
+  });
+  assert.equal(
+    firstSplashLogoUrl(readSplashBrandHint('realmtest6', storage)),
+    `https://${id}.icp0.io/custom/logo.png`
+  );
+  assert.match(storage.getItem(SPLASH_BRAND_HINT_STORAGE_KEY), /wumyk-tiaaa-aaaae-agz6q-cai/);
+  clearSplashBrandHint('realmtest6', storage);
+  assert.equal(readSplashBrandHint('realmtest6', storage), null);
 });
 
 test('Syntropia /custom/logo.png is accepted; clover leftover is rejected', async () => {
