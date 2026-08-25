@@ -1343,8 +1343,9 @@
 
   /* Credits Section */
   .balance-card {
-    background: linear-gradient(135deg, #171717 0%, #404040 100%);
-    color: #FFFFFF;
+    background: #FFFFFF;
+    color: #171717;
+    border: 1px solid #E5E5E5;
     padding: 2rem;
     border-radius: 1rem;
     text-align: center;
@@ -1353,7 +1354,7 @@
 
   .balance-label {
     font-size: 0.875rem;
-    opacity: 0.8;
+    color: #737373;
     margin-bottom: 0.5rem;
   }
 
@@ -1362,11 +1363,12 @@
     font-weight: 700;
     line-height: 1;
     margin-bottom: 0.25rem;
+    color: #171717;
   }
 
   .balance-unit {
     font-size: 0.875rem;
-    opacity: 0.8;
+    color: #737373;
   }
 
   .usage-summary {
@@ -1403,7 +1405,7 @@
   .balance-loading {
     width: 60px;
     height: 48px;
-    background: rgba(255, 255, 255, 0.2);
+    background: #E5E5E5;
     border-radius: 0.5rem;
     margin: 0 auto;
     animation: pulse 1.5s ease-in-out infinite;

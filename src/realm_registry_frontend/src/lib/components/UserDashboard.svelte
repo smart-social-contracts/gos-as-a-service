@@ -359,8 +359,9 @@
   }
   
   .balance-card {
-    background: linear-gradient(135deg, #171717 0%, #404040 100%);
-    color: #FFFFFF;
+    background: #FFFFFF;
+    color: #171717;
+    border: 1px solid #E5E5E5;
     border-radius: 1rem;
     padding: 1.5rem;
     text-align: center;
@@ -369,7 +370,7 @@
   
   .balance-label {
     font-size: 0.85rem;
-    color: rgba(255, 255, 255, 0.7);
+    color: #737373;
     margin-bottom: 0.5rem;
   }
   
@@ -377,11 +378,12 @@
     font-size: 2.5rem;
     font-weight: 700;
     line-height: 1;
+    color: #171717;
   }
   
   .balance-unit {
     font-size: 0.85rem;
-    color: rgba(255, 255, 255, 0.7);
+    color: #737373;
     margin-top: 0.25rem;
   }
   
