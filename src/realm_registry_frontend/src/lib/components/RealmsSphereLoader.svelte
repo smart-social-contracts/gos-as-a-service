@@ -1,15 +1,15 @@
 <script>
   import { acceptSplashLogoUrl, splashLogoCandidates } from '$lib/realm-utils.js';
 
-  /** Pulse mark shown only for a realm's configured brand — never platform leftovers. */
+  /** Pulse mark for the realm brand at `/custom/logo.png` — never clover or GOS planet. */
   export let size = 128;
-  /** Frontend asset canister for `/custom/logo.png` (hash-checked; leftovers skipped). */
+  /** Frontend asset canister; `/custom/logo.png` is the configured brand. */
   export let frontendCanisterId = '';
-  /** Realm `logo_url` from get_runtime_flags / status — the configured brand. */
+  /** Realm `logo_url` from get_runtime_flags / status. */
   export let configuredLogoUrl = '';
   /**
    * True when the URL already names a realm (`/r/{slug}`).
-   * Identified realms never paint the GOS planet / clover / Syntropia leftovers.
+   * Identified realms never paint the GOS planet or retired clover.
    */
   export let identified = false;
 

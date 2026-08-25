@@ -9,6 +9,7 @@ import {
   BRANDING_LOGO_PATHS,
   isLeftoverBrandingBytes,
   isLeftoverPlatformLogoPath,
+  isRealmBrandLogoPath,
   LEFTOVER_BRANDING_SHA256,
   pathnameFromAssetUrl,
   sha256Hex,
@@ -40,11 +41,16 @@ test('leftover platform paths include clover and GOS planet, not /custom/logo.pn
     true
   );
   assert.equal(isLeftoverPlatformLogoPath('/custom/logo.png'), false);
+  assert.equal(isRealmBrandLogoPath('/custom/logo.png'), true);
+  assert.equal(isRealmBrandLogoPath('https://example.icp0.io/custom/logo.png'), true);
   assert.equal(pathnameFromAssetUrl('https://example.icp0.io/custom/logo.png'), '/custom/logo.png');
 });
 
-test('known leftover file hashes stay pinned (Syntropia demo + clover)', () => {
-  assert.ok(LEFTOVER_BRANDING_SHA256.has('ad61a953728bad3317cec825379f8b00022cda8f48572be34df74f4f65cc70a2'));
+test('leftover hashes include the retired clover only — not Syntropia', () => {
+  assert.equal(
+    LEFTOVER_BRANDING_SHA256.has('ad61a953728bad3317cec825379f8b00022cda8f48572be34df74f4f65cc70a2'),
+    false
+  );
   assert.ok(LEFTOVER_BRANDING_SHA256.has('85bf3e1f45bce760e07987764c7435c2c0744db49092d5721cb7a33c25c40898'));
 });
 
@@ -71,15 +77,27 @@ test('splashLogoCandidates prefers configured logo_url and skips leftover paths'
   assert.deepEqual(splashLogoCandidates({ frontendCanisterId: '', configuredLogoUrl: '' }), []);
 });
 
-test('leftover Syntropia and clover PNGs are rejected as splash brands', async () => {
-  const syntropia = readFileSync(join(testdata, 'leftover-syntropia-logo.png'));
+test('Syntropia /custom/logo.png is accepted; clover leftover is rejected', async () => {
+  const syntropia = readFileSync(join(testdata, 'syntropia-realm-logo.png'));
   const clover = readFileSync(join(testdata, 'leftover-clover-logo.png'));
-  assert.equal(await isLeftoverBrandingBytes(syntropia), true);
+  const syntropiaBuf = syntropia.buffer.slice(syntropia.byteOffset, syntropia.byteOffset + syntropia.byteLength);
+  const cloverBuf = clover.buffer.slice(clover.byteOffset, clover.byteOffset + clover.byteLength);
+
+  assert.equal(await isLeftoverBrandingBytes(syntropia), false);
   assert.equal(await isLeftoverBrandingBytes(clover), true);
   assert.equal(
     await acceptSplashLogoUrl('https://realm.example/custom/logo.png', async () => ({
       ok: true,
-      arrayBuffer: async () => syntropia.buffer.slice(syntropia.byteOffset, syntropia.byteOffset + syntropia.byteLength),
+      headers: { get: () => 'image/png' },
+      arrayBuffer: async () => syntropiaBuf,
+    })),
+    true
+  );
+  assert.equal(
+    await acceptSplashLogoUrl('https://realm.example/images/logo.png', async () => ({
+      ok: true,
+      headers: { get: () => 'image/png' },
+      arrayBuffer: async () => cloverBuf,
     })),
     false
   );

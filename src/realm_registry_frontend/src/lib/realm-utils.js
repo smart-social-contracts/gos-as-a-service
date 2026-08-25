@@ -92,14 +92,17 @@ export const LEFTOVER_PLATFORM_LOGO_PATHS = [
 ];
 
 /**
- * SHA-256 of leftover files Realms still ships as static assets:
- * - Syntropia demo DNA/globe copied to `/custom/logo.png`
- * - retired clover / figure-eight at `/images/logo.png`
+ * SHA-256 of platform leftovers that must never be painted as a realm brand.
+ * The Syntropia DNA/globe at `/custom/logo.png` is a real realm mark — do not
+ * list it here.
  */
 export const LEFTOVER_BRANDING_SHA256 = new Set([
-  'ad61a953728bad3317cec825379f8b00022cda8f48572be34df74f4f65cc70a2',
+  // Retired clover / figure-eight shipped at `/images/logo.png`.
   '85bf3e1f45bce760e07987764c7435c2c0744db49092d5721cb7a33c25c40898',
 ]);
+
+/** Realm frontend path that holds the configured brand. Never skip this file. */
+export const REALM_BRAND_LOGO_PATH = '/custom/logo.png';
 
 /**
  * Candidate branding-logo URLs for a realm frontend canister.
@@ -130,6 +133,10 @@ export function pathnameFromAssetUrl(urlOrPath) {
 export function isLeftoverPlatformLogoPath(urlOrPath) {
   const path = pathnameFromAssetUrl(urlOrPath).toLowerCase();
   return LEFTOVER_PLATFORM_LOGO_PATHS.includes(path);
+}
+
+export function isRealmBrandLogoPath(urlOrPath) {
+  return pathnameFromAssetUrl(urlOrPath).toLowerCase() === REALM_BRAND_LOGO_PATH;
 }
 
 export async function sha256Hex(bytes) {
@@ -213,19 +220,22 @@ function looksLikeImageBytes(bytes, contentType) {
 }
 
 /**
- * Accept a splash logo only if it loads as an image and is not a leftover demo/platform mark.
+ * Accept a splash logo if it loads as an image.
+ * `/custom/logo.png` is always eligible (including the Syntropia DNA/globe).
+ * Clover / GOS planet paths and leftover clover bytes are rejected.
  * @param {string} url
  * @param {typeof fetch} [fetchImpl]
  */
 export async function acceptSplashLogoUrl(url, fetchImpl = globalThis.fetch) {
   const candidate = String(url || '').trim();
   if (!candidate || isLeftoverPlatformLogoPath(candidate)) return false;
+  const realmBrandPath = isRealmBrandLogoPath(candidate);
 
   if (candidate.startsWith('data:')) {
     if (!candidate.startsWith('data:image/')) return false;
     const bytes = decodeDataUrlBytes(candidate);
     if (!bytes) return false;
-    return !(await isLeftoverBrandingBytes(bytes));
+    return realmBrandPath || !(await isLeftoverBrandingBytes(bytes));
   }
 
   if (typeof fetchImpl !== 'function') return false;
@@ -234,6 +244,7 @@ export async function acceptSplashLogoUrl(url, fetchImpl = globalThis.fetch) {
   const bytes = new Uint8Array(await res.arrayBuffer());
   if (!bytes.byteLength) return false;
   if (!looksLikeImageBytes(bytes, res.headers?.get?.('content-type'))) return false;
+  if (realmBrandPath) return true;
   return !(await isLeftoverBrandingBytes(bytes));
 }
 
