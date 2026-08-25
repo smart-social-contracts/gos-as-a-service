@@ -239,15 +239,25 @@
     }
 
     if (!map.getLayer(HEX_FILL)) {
-      map.addLayer({
-        id: HEX_FILL,
-        type: 'fill',
-        source: HEX_SOURCE,
-        paint: {
-          'fill-color': ['get', 'fill'],
-          'fill-opacity': ['get', 'opacity'],
-        },
-      });
+      const fillPaint = {
+        'fill-color': ['get', 'fill'],
+        'fill-opacity': ['to-number', ['get', 'opacity']],
+      };
+      try {
+        map.addLayer({
+          id: HEX_FILL,
+          type: 'fill',
+          source: HEX_SOURCE,
+          paint: { ...fillPaint, 'fill-emissive-strength': 0.35 },
+        });
+      } catch {
+        map.addLayer({
+          id: HEX_FILL,
+          type: 'fill',
+          source: HEX_SOURCE,
+          paint: fillPaint,
+        });
+      }
     }
 
     if (!map.getLayer(HEX_LINE)) {
