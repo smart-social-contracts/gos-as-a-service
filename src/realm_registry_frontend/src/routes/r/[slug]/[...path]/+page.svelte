@@ -156,10 +156,13 @@
       frontendCanisterId: data.frontend_canister_id,
       portalUrl: data.portal_url,
       loaderProfile: data.loader_profile || 'realms-iframe-v1',
+      logoUrl: '',
       env: CONFIG.deploy_queue_network
     };
     const flags = await fetchRealmRuntimeFlags(data.backend_canister_id);
     realmIIBypass = !!flags?.test_mode_ii_bypass;
+    const logoUrl = String(flags?.logo_url || flags?.realm_logo || '').trim();
+    realm = { ...realm, logoUrl };
     if (realmIIBypass) {
       needsLogin = false;
     }
@@ -302,7 +305,12 @@
         aria-live="polite"
         transition:fade={{ duration: 300 }}
       >
-        <RealmsSphereLoader size={128} frontendCanisterId={realm?.frontendCanisterId || ''} />
+        <RealmsSphereLoader
+          size={128}
+          identified={!!slug}
+          frontendCanisterId={realm?.frontendCanisterId || ''}
+          configuredLogoUrl={realm?.logoUrl || ''}
+        />
         <p class="loading-label">{iframeLoaded ? 'Preparing realm…' : 'Loading realm'}</p>
       </div>
     {/if}

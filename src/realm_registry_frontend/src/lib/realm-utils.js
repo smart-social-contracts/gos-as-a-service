@@ -81,6 +81,27 @@ export function resolvedRealmLogoUrl(realm) {
 export const BRANDING_LOGO_PATHS = ['/custom/logo.png', '/logo.png'];
 
 /**
+ * Platform leftovers still shipped by Realms GOS frontends / the portal.
+ * Presence of these paths must not be treated as a realm's configured brand.
+ */
+export const LEFTOVER_PLATFORM_LOGO_PATHS = [
+  '/images/logo.png',
+  '/images/logo.svg',
+  '/images/logo_sphere_only.svg',
+  '/images/logo_mark.svg',
+];
+
+/**
+ * SHA-256 of leftover files Realms still ships as static assets:
+ * - Syntropia demo DNA/globe copied to `/custom/logo.png`
+ * - retired clover / figure-eight at `/images/logo.png`
+ */
+export const LEFTOVER_BRANDING_SHA256 = new Set([
+  'ad61a953728bad3317cec825379f8b00022cda8f48572be34df74f4f65cc70a2',
+  '85bf3e1f45bce760e07987764c7435c2c0744db49092d5721cb7a33c25c40898',
+]);
+
+/**
  * Candidate branding-logo URLs for a realm frontend canister.
  * Empty when `frontendCanisterId` is missing.
  */
@@ -89,6 +110,131 @@ export function brandingLogoUrls(frontendCanisterId) {
   if (!id) return [];
   const realm = { frontend_canister_id: id };
   return BRANDING_LOGO_PATHS.map((path) => resolveRealmAssetUrl(realm, path)).filter(Boolean);
+}
+
+export function pathnameFromAssetUrl(urlOrPath) {
+  const raw = String(urlOrPath || '').trim();
+  if (!raw) return '';
+  if (raw.startsWith('data:')) return '';
+  try {
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      return new URL(raw).pathname || '';
+    }
+  } catch {
+    return '';
+  }
+  return raw.startsWith('/') ? raw : `/${raw}`;
+}
+
+/** True when the URL/path is a known GOS leftover mark, not a realm brand. */
+export function isLeftoverPlatformLogoPath(urlOrPath) {
+  const path = pathnameFromAssetUrl(urlOrPath).toLowerCase();
+  return LEFTOVER_PLATFORM_LOGO_PATHS.includes(path);
+}
+
+export async function sha256Hex(bytes) {
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle) throw new Error('crypto.subtle is required to hash branding bytes');
+  const source =
+    bytes instanceof ArrayBuffer
+      ? bytes
+      : bytes instanceof Uint8Array
+        ? bytes
+        : new Uint8Array(bytes);
+  const digest = await subtle.digest('SHA-256', source);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+export async function isLeftoverBrandingBytes(bytes) {
+  if (!bytes || (bytes.byteLength !== undefined && bytes.byteLength === 0)) return false;
+  const hex = await sha256Hex(bytes);
+  return LEFTOVER_BRANDING_SHA256.has(hex);
+}
+
+function decodeDataUrlBytes(dataUrl) {
+  const raw = String(dataUrl || '');
+  const comma = raw.indexOf(',');
+  if (!raw.startsWith('data:') || comma < 0) return null;
+  const header = raw.slice(0, comma);
+  const payload = raw.slice(comma + 1);
+  if (!header.includes(';base64')) return null;
+  try {
+    const binary = atob(payload);
+    const out = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) out[i] = binary.charCodeAt(i);
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Splash candidates: configured `logo_url` first, then frontend branding paths.
+ * Leftover GOS/clover/planet paths are never candidates.
+ */
+export function splashLogoCandidates({ frontendCanisterId = '', configuredLogoUrl = '' } = {}) {
+  const out = [];
+  const seen = new Set();
+  const push = (url) => {
+    if (!url || seen.has(url) || isLeftoverPlatformLogoPath(url)) return;
+    seen.add(url);
+    out.push(url);
+  };
+
+  const configured = String(configuredLogoUrl || '').trim();
+  if (configured) {
+    if (configured.startsWith('data:') || configured.startsWith('http://') || configured.startsWith('https://')) {
+      push(configured);
+    } else {
+      push(resolveRealmAssetUrl({ frontend_canister_id: frontendCanisterId }, configured));
+    }
+  }
+
+  for (const url of brandingLogoUrls(frontendCanisterId)) push(url);
+  return out;
+}
+
+/**
+ * Accept a splash logo only if it loads and is not a leftover demo/platform mark.
+ * @param {string} url
+ * @param {typeof fetch} [fetchImpl]
+ */
+function looksLikeImageBytes(bytes, contentType) {
+  const type = String(contentType || '').toLowerCase();
+  if (type.startsWith('image/')) return true;
+  if (bytes.byteLength >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+    return true;
+  }
+  if (bytes.byteLength >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return true;
+  }
+  const head = new TextDecoder().decode(bytes.slice(0, 80)).trimStart().toLowerCase();
+  return head.startsWith('<svg') || head.startsWith('<?xml');
+}
+
+/**
+ * Accept a splash logo only if it loads as an image and is not a leftover demo/platform mark.
+ * @param {string} url
+ * @param {typeof fetch} [fetchImpl]
+ */
+export async function acceptSplashLogoUrl(url, fetchImpl = globalThis.fetch) {
+  const candidate = String(url || '').trim();
+  if (!candidate || isLeftoverPlatformLogoPath(candidate)) return false;
+
+  if (candidate.startsWith('data:')) {
+    if (!candidate.startsWith('data:image/')) return false;
+    const bytes = decodeDataUrlBytes(candidate);
+    if (!bytes) return false;
+    return !(await isLeftoverBrandingBytes(bytes));
+  }
+
+  if (typeof fetchImpl !== 'function') return false;
+  const res = await fetchImpl(candidate, { method: 'GET', mode: 'cors' });
+  if (!res || !res.ok) return false;
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (!bytes.byteLength) return false;
+  if (!looksLikeImageBytes(bytes, res.headers?.get?.('content-type'))) return false;
+  return !(await isLeftoverBrandingBytes(bytes));
 }
 
 export function formatFullDate(timestamp) {
