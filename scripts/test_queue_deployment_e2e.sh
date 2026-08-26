@@ -55,7 +55,7 @@ export DFX_WARNING="-mainnet_plaintext_identity"
 
 # ── Canister IDs ──────────────────────────────────────────────────────
 declare -A REGISTRY_IDS=(
-  [staging]="fntsr-aqaaa-aaaae-ag22a-cai"
+  [staging]="snqhl-daaaa-aaaan-q6n3q-cai"
   [demo]="rhw4p-gqaaa-aaaac-qbw7q-cai"
 )
 declare -A INSTALLER_IDS=(
