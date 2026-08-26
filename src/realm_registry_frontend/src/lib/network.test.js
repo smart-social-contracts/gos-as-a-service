@@ -5,7 +5,7 @@ import { detectNetwork, getCanisterId } from './network.js';
 const CANISTER_MAP = {
 	realm_registry_backend: {
 		demo: 'rhw4p-gqaaa-aaaac-qbw7q-cai',
-		staging: 'fntsr-aqaaa-aaaae-ag22a-cai',
+		staging: 'snqhl-daaaa-aaaan-q6n3q-cai',
 		test: 'yhw3g-fyaaa-aaaas-qgorq-cai'
 	},
 	file_registry: {
@@ -41,7 +41,7 @@ test('getCanisterId resolves from injected map by network', () => {
 			hostname: 'staging.gos.earth',
 			canisterIdsMap: CANISTER_MAP
 		}),
-		'fntsr-aqaaa-aaaae-ag22a-cai'
+		'snqhl-daaaa-aaaan-q6n3q-cai'
 	);
 	assert.equal(
 		getCanisterId('realm_registry_backend', {
