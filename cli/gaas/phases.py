@@ -894,12 +894,18 @@ def phase_seed_namespace_approvals(descriptor: Descriptor, ctx: DeployContext) -
         )
         return
 
-    result = seed_namespace_approvals(
-        registry_id,
-        marketplace_id,
-        ctx.network,
-        ctx.identity,
-    )
+    try:
+        result = seed_namespace_approvals(
+            registry_id,
+            marketplace_id,
+            ctx.network,
+            ctx.identity,
+        )
+    except RuntimeError as exc:
+        if ctx.network in ("local", "localhost"):
+            console.print(f"[yellow]  warning: {exc}[/yellow]")
+            return
+        raise
     console.print(
         f"  namespace approvals: granted={result['granted']}, "
         f"approved={result['approved']}, skipped={result['skipped']}, "
