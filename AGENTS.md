@@ -24,9 +24,9 @@ scripts/infra_dev_deploy.sh     # Fast dfx deploy (registry | installer)
 |---|---|---|---|
 | realm_registry_backend | `yhw3g-fyaaa-aaaas-qgorq-cai` | `rhw4p-gqaaa-aaaac-qbw7q-cai` | `snqhl-daaaa-aaaan-q6n3q-cai` |
 | realm_registry_frontend | `qtank-3qaaa-aaaaa-qhb6q-cai` | `2zaor-5yaaa-aaaac-qbxaa-cai` | `77243-aqaaa-aaaau-aggza-cai` |
-| realm_installer | `fltjm-tyaaa-aaaap-qunhq-cai` | `2s4td-daaaa-aaaao-bazmq-cai` | `fksuf-niaaa-aaaae-ag22q-cai` |
-| file_registry | `uq2mu-kaaaa-aaaah-avqcq-cai` | `vi64l-3aaaa-aaaae-qj4va-cai` | `feqzn-wyaaa-aaaae-ag23q-cai` |
-| marketplace_backend | `2wldc-niaaa-aaaad-qlxga-cai` | `ehyfg-wyaaa-aaaae-qg3qq-cai` | `l5qpy-wqaaa-aaaah-qu2mq-cai` |
+| realm_installer | `fltjm-tyaaa-aaaap-qunhq-cai` | `2s4td-daaaa-aaaao-bazmq-cai` | `ta6df-miaaa-aaaan-q6n4a-cai` |
+| file_registry | `uq2mu-kaaaa-aaaah-avqcq-cai` | `vi64l-3aaaa-aaaae-qj4va-cai` | `t42zu-3iaaa-aaaan-q6n6a-cai` |
+| marketplace_backend | `2wldc-niaaa-aaaad-qlxga-cai` | `ehyfg-wyaaa-aaaae-qg3qq-cai` | `tsyu4-ayaaa-aaaan-q6n7a-cai` |
 
 Casals conductors (external platform provisioner; operated by realms fleet ops):
 
@@ -34,7 +34,7 @@ Casals conductors (external platform provisioner; operated by realms fleet ops):
 |---|---|
 | test | `qthgp-3yaaa-aaaae-agveq-cai` |
 | demo | `jo3cj-faaaa-aaaac-bffea-cai` |
-| staging | `rbuam-sqaaa-aaaab-qhe5a-cai` |
+| staging | `th7fr-bqaaa-aaaan-q6n4q-cai` |
 
 Portal hosts: `test.gos.earth`, `demo.gos.earth`, `staging.gos.earth` → **`realm_registry_frontend`**. Realms marketplace hosts (`*.realmsgos.org`) → **`marketplace_frontend`** when declared in the descriptor (see below).
 

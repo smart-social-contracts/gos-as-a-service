@@ -21,7 +21,7 @@ Casals is an **external platform component**, not built from this repo. The real
 |---|---|
 | test | `qthgp-3yaaa-aaaae-agveq-cai` |
 | demo | `jo3cj-faaaa-aaaac-bffea-cai` |
-| staging | `rbuam-sqaaa-aaaab-qhe5a-cai` |
+| staging | `th7fr-bqaaa-aaaan-q6n4q-cai` |
 
 Test and demo keep the realms-era canister IDs. Staging was rebuilt; live IDs are in [`environments/staging.json`](environments/staging.json). DNS-mapped frontends (`realm_registry_frontend`, `marketplace_frontend`) were kept.
 

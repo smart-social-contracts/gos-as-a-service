@@ -59,7 +59,7 @@ declare -A REGISTRY_IDS=(
   [demo]="rhw4p-gqaaa-aaaac-qbw7q-cai"
 )
 declare -A INSTALLER_IDS=(
-  [staging]="fksuf-niaaa-aaaae-ag22q-cai"
+  [staging]="ta6df-miaaa-aaaan-q6n4a-cai"
   [demo]="2s4td-daaaa-aaaao-bazmq-cai"
 )
 

@@ -11,6 +11,7 @@ import {
   getGaasEnvViteDefine,
   loadGaasEnv,
 } from './scripts/gaas-env.js';
+import { assertInstallerLiveForBake } from './scripts/assert-canister-live.js';
 
 dotenv.config({ path: '../../.env' });
 
@@ -80,7 +81,12 @@ function getCanisterIdDefines() {
     }
   } catch (e) {
     console.warn('Failed to read canister_ids.json:', e.message);
+    return defines;
   }
+
+  assertInstallerLiveForBake(defines['import.meta.env.CANISTER_ID_REALM_INSTALLER']
+    ? JSON.parse(defines['import.meta.env.CANISTER_ID_REALM_INSTALLER'])
+    : '', network, { repoRoot });
 
   return defines;
 }
@@ -92,8 +98,18 @@ function getCanisterIdsDefine() {
 
   try {
     const allIds = JSON.parse(readFileSync(idsPath, 'utf-8'));
+    // Runtime wizard polls __CANISTER_IDS__.realm_installer.staging on
+    // staging.gos.earth even when DFX_NETWORK is ic (gaas new --network ic).
+    if (process.env.DFX_NETWORK === 'staging' || process.env.npm_lifecycle_event === 'build') {
+      assertInstallerLiveForBake(allIds.realm_installer?.staging || '', 'staging', {
+        repoRoot,
+      });
+    }
     return { '__CANISTER_IDS__': JSON.stringify(allIds) };
   } catch (e) {
+    if (String(e.message || '').includes('CANISTER_ID_REALM_INSTALLER')) {
+      throw e;
+    }
     console.warn('Failed to read canister_ids.json for __CANISTER_IDS__:', e.message);
     return {};
   }
