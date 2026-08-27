@@ -375,10 +375,11 @@ def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
 
     installer_id = descriptor.canisters.get("realm_installer", "")
     if installer_id and (
-        descriptor.name == "staging" or ctx.network == "staging"
+        descriptor.name == "staging"
+        or ctx.network in ("staging", "local", "localhost")
     ):
         try:
-            assert_installer_live_for_network(installer_id, "staging")
+            assert_installer_live_for_network(installer_id, ctx.network)
         except CanisterNotFoundError as exc:
             raise RuntimeError(str(exc)) from exc
 

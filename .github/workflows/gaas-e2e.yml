@@ -24,7 +24,7 @@ env:
 jobs:
   gaas-local-e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 70
     steps:
       - uses: actions/checkout@v4
 
@@ -111,6 +111,85 @@ jobs:
           FRONTEND_ID=$(python3 -c "import json; print(json.load(open('environments/local.json'))['canisters']['realm_registry_frontend'])")
           code=$(curl -s -o /dev/null -w "%{http_code}" "http://${FRONTEND_ID}.localhost:4943/")
           test "$code" = "200"
+
+      - name: Snapshot created canister IDs
+        run: |
+          python3 - <<'PY'
+          import json
+          cans = json.load(open("environments/local.json"))["canisters"]
+          for key in (
+              "realm_installer",
+              "realm_registry_backend",
+              "realm_registry_frontend",
+          ):
+              assert cans.get(key), f"missing {key} after create"
+          json.dump(cans, open("/tmp/gaas-created-ids.json", "w"))
+          print(json.dumps(cans, indent=2, sort_keys=True))
+          PY
+
+      - name: gaas new (adopt existing IDs)
+        run: |
+          export TERM=xterm
+          export PATH="$PWD/.venv-basilisk/bin:$PATH"
+          cd cli
+          .venv/bin/gaas new ../environments/local.json --network local --yes | tee /tmp/gaas-adopt.out
+          grep -E "realm_installer: adopt " /tmp/gaas-adopt.out
+          grep -E "realm_registry_backend: adopt " /tmp/gaas-adopt.out
+          ! grep -E "realm_installer: created " /tmp/gaas-adopt.out
+          ! grep -E "realm_registry_backend: created " /tmp/gaas-adopt.out
+
+      - name: Assert adopt reused installer and registry IDs
+        run: |
+          python3 - <<'PY'
+          import json
+          created = json.load(open("/tmp/gaas-created-ids.json"))
+          current = json.load(open("environments/local.json"))["canisters"]
+          for key in (
+              "realm_installer",
+              "realm_registry_backend",
+              "realm_registry_frontend",
+          ):
+              assert current.get(key) == created[key], (
+                  f"{key} changed on adopt: {created[key]} -> {current.get(key)}"
+              )
+          print("adopt reused installer and registry principals")
+          PY
+
+      - name: gaas new (ghost installer must fail closed)
+        run: |
+          python3 - <<'PY'
+          import json
+          ghost = "fksuf-niaaa-aaaae-ag22q-cai"
+          src = json.load(open("environments/local.json"))
+          json.dump(src["canisters"], open("/tmp/gaas-pre-ghost-ids.json", "w"))
+          src["canisters"]["realm_installer"] = ghost
+          with open("/tmp/local-ghost.json", "w") as fh:
+              json.dump(src, fh, indent=2)
+              fh.write("\n")
+          print(f"ghost descriptor installer={ghost}")
+          PY
+          export TERM=xterm
+          export PATH="$PWD/.venv-basilisk/bin:$PATH"
+          set +e
+          cli/.venv/bin/gaas new /tmp/local-ghost.json --network local --yes \
+            > /tmp/gaas-ghost.out 2>&1
+          code=$?
+          set -e
+          cat /tmp/gaas-ghost.out
+          test "$code" -ne 0
+          grep -E "refusing to use realm_installer .*IC0301" /tmp/gaas-ghost.out
+          python3 - <<'PY'
+          import json
+          ghost = "fksuf-niaaa-aaaae-ag22q-cai"
+          original = json.load(open("/tmp/gaas-pre-ghost-ids.json"))
+          live = json.load(open("environments/local.json"))["canisters"]
+          ghost_desc = json.load(open("/tmp/local-ghost.json"))["canisters"]
+          assert live["realm_installer"] == original["realm_installer"]
+          assert live["realm_installer"] != ghost
+          assert ghost not in live.values()
+          assert ghost_desc["realm_installer"] == ghost
+          print("ghost installer refused; live descriptor not baked")
+          PY
 
       - name: Stop local replica
         if: always()

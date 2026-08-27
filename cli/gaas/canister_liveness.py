@@ -196,17 +196,49 @@ def assert_frontend_http_live(
         )
 
 
+def fetch_local_canister_record(canister_id: str) -> tuple[int, object]:
+    """Ask the local replica whether *canister_id* exists.
+
+    Uses ``dfx canister status --network local``. Never calls
+    ``ic-api.internetcomputer.org`` — local principals are not on mainnet.
+    """
+    from gaas.dfx import DfxError, canister_status, is_canister_not_found_error
+
+    try:
+        status = canister_status(canister_id, "local")
+    except DfxError as exc:
+        if is_canister_not_found_error(exc):
+            return 404, {"error": "IC0301 canister not found"}
+        return 500, {"error": str(exc)}
+    return 200, {"canister_id": canister_id, "status": status.status}
+
+
 def assert_installer_live_for_network(
     canister_id: str,
     network: str,
     *,
     fetch=None,
 ) -> None:
-    """Fail closed for persistent networks before adopt or a staging bake."""
+    """Fail closed before adopt or a frontend bake that would inject the installer ID.
+
+    Empty ``canister_id`` is the create path (nothing to check). Persistent
+    networks use the IC API. ``local`` / ``localhost`` ping the local replica
+    so a ghost principal still fails closed without talking to mainnet.
+    """
     net = (network or "").strip().lower()
-    if net in LOCAL_NETWORKS:
+    principal = (canister_id or "").strip()
+    if not principal:
         return
-    assert_canister_exists(canister_id, role="realm_installer", fetch=fetch)
+    if net in ("local", "localhost"):
+        assert_canister_exists(
+            principal,
+            role="realm_installer",
+            fetch=fetch or fetch_local_canister_record,
+        )
+        return
+    if net == "":
+        return
+    assert_canister_exists(principal, role="realm_installer", fetch=fetch)
 
 
 def assert_casals_frontend_live(
