@@ -71,6 +71,7 @@ from gaas.platform import (
     resolve_casals_wasm,
     resolve_platform_backend_wasm,
 )
+from gaas.canister_liveness import CanisterNotFoundError, assert_installer_live_for_network
 from gaas.preflight import PreflightReport, run_preflight
 from gaas.runlog import format_duration, get_run_log, print_log_path
 from gaas.source_build import resolve_gos_artifacts
@@ -363,6 +364,15 @@ def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
     dfx.use_identity(ctx.identity)
     principal = dfx.get_principal(ctx.identity)
     cycles = DEFAULT_CYCLES_PER_CANISTER if ctx.network == "ic" else None
+
+    installer_id = descriptor.canisters.get("realm_installer", "")
+    if installer_id and (
+        descriptor.name == "staging" or ctx.network == "staging"
+    ):
+        try:
+            assert_installer_live_for_network(installer_id, "staging")
+        except CanisterNotFoundError as exc:
+            raise RuntimeError(str(exc)) from exc
 
     for name in KNOWN_CANISTER_NAMES:
         existing_id = descriptor.canisters.get(name)
