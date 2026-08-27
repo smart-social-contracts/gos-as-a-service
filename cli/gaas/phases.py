@@ -536,13 +536,26 @@ def phase_install_backends(descriptor: Descriptor, ctx: DeployContext) -> None:
 
     casals_fr_id = descriptor.canisters.get("casals_file_registry")
     if casals_fr_id:
-        wasm = resolve_casals_file_registry_wasm(
-            descriptor.casals.version,
-            descriptor.casals.release_repo,
-            work / "casals",
-            casals_src=ctx.casals_src,
-            session=ctx.http,
-        )
+        # Casals v0.3.0 file_registry lacks finalize_chunked_file_step. On a
+        # local replica, install this repo's file_registry wasm so seed can
+        # finish without talking to a newer Casals release / mainnet.
+        if ctx.network in ("local", "localhost") and repo_root is not None:
+            wasm = resolve_platform_backend_wasm(
+                "file_registry",
+                platform_version=platform_version,
+                release_repo=release_repo,
+                work_dir=work,
+                repo_root=repo_root,
+                session=ctx.http,
+            )
+        else:
+            wasm = resolve_casals_file_registry_wasm(
+                descriptor.casals.version,
+                descriptor.casals.release_repo,
+                work / "casals",
+                casals_src=ctx.casals_src,
+                session=ctx.http,
+            )
         mode = _backend_install_mode(casals_fr_id, ctx)
         console.print(f"  casals_file_registry: {mode} ({wasm.name})")
         dfx.install_wasm(
