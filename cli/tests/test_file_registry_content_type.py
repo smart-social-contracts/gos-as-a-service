@@ -13,7 +13,7 @@ def test_ic_assets_json5_content_type() -> None:
     assert _content_type("frontend/dist/.ic-assets.json5") == "application/json"
 
 
-def test_upload_file_rejects_zero_byte_file(tmp_path: Path) -> None:
+def test_upload_file_skips_zero_byte_file(tmp_path: Path) -> None:
     empty = tmp_path / "empty.wasm"
     empty.write_bytes(b"")
     assert (
@@ -24,7 +24,7 @@ def test_upload_file_rejects_zero_byte_file(tmp_path: Path) -> None:
             empty,
             "ic",
         )
-        == "failed"
+        == "skipped"
     )
 
 
