@@ -25,6 +25,10 @@ jobs:
   gaas-local-e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 70
+    env:
+      # v0.3.0 GitHub release has no casals_backend.wasm.gz; use the checkout
+      # this job already builds so create/adopt stay on the local replica.
+      CASALS_SRC: ${{ github.workspace }}/Casals
     steps:
       - uses: actions/checkout@v4
 
@@ -34,6 +38,7 @@ jobs:
           repository: smart-social-contracts/Casals
           ref: ${{ env.CASALS_VERSION }}
           path: Casals
+          submodules: recursive
 
       - uses: actions/setup-python@v5
         with:
@@ -95,7 +100,8 @@ jobs:
           export TERM=xterm
           export PATH="$PWD/.venv-basilisk/bin:$PATH"
           cd cli
-          .venv/bin/gaas new ../environments/local.json --network local --yes
+          .venv/bin/gaas new ../environments/local.json --network local --yes \
+            --casals-src "$CASALS_SRC"
 
       - name: Assert canisters running
         run: |
@@ -132,7 +138,8 @@ jobs:
           export TERM=xterm
           export PATH="$PWD/.venv-basilisk/bin:$PATH"
           cd cli
-          .venv/bin/gaas new ../environments/local.json --network local --yes | tee /tmp/gaas-adopt.out
+          .venv/bin/gaas new ../environments/local.json --network local --yes \
+            --casals-src "$CASALS_SRC" | tee /tmp/gaas-adopt.out
           grep -E "realm_installer: adopt " /tmp/gaas-adopt.out
           grep -E "realm_registry_backend: adopt " /tmp/gaas-adopt.out
           ! grep -E "realm_installer: created " /tmp/gaas-adopt.out
@@ -172,7 +179,7 @@ jobs:
           export PATH="$PWD/.venv-basilisk/bin:$PATH"
           set +e
           cli/.venv/bin/gaas new /tmp/local-ghost.json --network local --yes \
-            > /tmp/gaas-ghost.out 2>&1
+            --casals-src "$CASALS_SRC" > /tmp/gaas-ghost.out 2>&1
           code=$?
           set -e
           cat /tmp/gaas-ghost.out
