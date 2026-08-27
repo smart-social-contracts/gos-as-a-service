@@ -109,7 +109,7 @@ jobs:
           cd cli
           .venv/bin/gaas status ../environments/local.json --network local | tee /tmp/gaas-status.txt
           running_count=$(grep -c running /tmp/gaas-status.txt || true)
-          test "$running_count" -eq 6
+          test "$running_count" -eq 9
           ! grep -i error /tmp/gaas-status.txt
 
       - name: Assert registry frontend HTTP 200
