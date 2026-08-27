@@ -1294,13 +1294,23 @@ def phase_seed_conductor(descriptor: Descriptor, ctx: DeployContext) -> None:
     except PlatformError:
         pass
 
-    seed_orchestration_templates(
-        casals_id,
-        gos_registry_id,
-        ctx.network,
-        identity=ctx.identity,
-        casals_src=ctx.casals_src,
-    )
+    try:
+        seed_orchestration_templates(
+            casals_id,
+            gos_registry_id,
+            ctx.network,
+            identity=ctx.identity,
+            casals_src=ctx.casals_src,
+        )
+    except RuntimeError as exc:
+        if ctx.network in ("local", "localhost") and "missing orchestration template" in str(
+            exc
+        ):
+            console.print(
+                f"[yellow]  warning: {exc}; skipping remaining conductor seed[/yellow]"
+            )
+            return
+        raise
     for entry in descriptor.gos:
         auth_result = authorize_gos_entry(
             casals_id,
@@ -1552,6 +1562,12 @@ def phase_configure_multisig(descriptor: Descriptor, ctx: DeployContext) -> None
     tree = get_tree(casals_id, ctx.network, identity=ctx.identity)
     tree_id = _find_canister_id(tree, "multisig")
     if not tree_id:
+        if ctx.network in ("local", "localhost"):
+            console.print(
+                "[yellow]  skip: no multisig in conductor tree "
+                "(orchestration templates unavailable)[/yellow]"
+            )
+            return
         raise RuntimeError(
             "multisig not found in conductor tree; run seed_conductor first"
         )
@@ -1600,6 +1616,12 @@ def phase_controller_topology(descriptor: Descriptor, ctx: DeployContext) -> Non
             tree = get_tree(casals_id, ctx.network, identity=ctx.identity)
             multisig_id = _find_canister_id(tree, "multisig")
     if not multisig_id:
+        if ctx.network in ("local", "localhost"):
+            console.print(
+                "[yellow]  skip: no multisig backend_id "
+                "(orchestration templates unavailable)[/yellow]"
+            )
+            return
         raise RuntimeError("multisig backend_id required for controller topology")
 
     deployer = dfx.get_principal(ctx.identity)
