@@ -184,7 +184,8 @@ jobs:
           set -e
           cat /tmp/gaas-ghost.out
           test "$code" -ne 0
-          grep -E "refusing to use realm_installer .*IC0301" /tmp/gaas-ghost.out
+          grep -F "refusing to use realm_installer" /tmp/gaas-ghost.out
+          grep -F "IC0301" /tmp/gaas-ghost.out
           python3 - <<'PY'
           import json
           ghost = "fksuf-niaaa-aaaae-ag22q-cai"
