@@ -104,6 +104,18 @@ def test_fetch_local_canister_record_maps_missing_to_ic0301():
     assert "IC0301" in json.dumps(payload)
 
 
+def test_fetch_local_canister_record_maps_generic_dfx_error_to_ic0301():
+    from gaas.dfx import DfxError
+
+    def _missing(*_args, **_kwargs):
+        raise DfxError("Http Error: status 400 Bad Request", command=[], stderr="")
+
+    with patch("gaas.dfx.canister_status", side_effect=_missing):
+        status, payload = fetch_local_canister_record(GHOST_INSTALLER)
+    assert status == 404
+    assert "IC0301" in json.dumps(payload)
+
+
 def test_fetch_local_canister_record_maps_running_status():
     from unittest.mock import MagicMock
 

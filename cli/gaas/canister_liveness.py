@@ -202,14 +202,15 @@ def fetch_local_canister_record(canister_id: str) -> tuple[int, object]:
     Uses ``dfx canister status --network local``. Never calls
     ``ic-api.internetcomputer.org`` — local principals are not on mainnet.
     """
-    from gaas.dfx import DfxError, canister_status, is_canister_not_found_error
+    from gaas.dfx import DfxError, canister_status
 
     try:
         status = canister_status(canister_id, "local")
     except DfxError as exc:
-        if is_canister_not_found_error(exc):
-            return 404, {"error": "IC0301 canister not found"}
-        return 500, {"error": str(exc)}
+        # Local replica often reports a missing principal as a generic
+        # status failure rather than IC0301. Any status error means we
+        # cannot confirm the canister exists — fail closed.
+        return 404, {"error": f"IC0301 canister not found ({exc})"}
     return 200, {"canister_id": canister_id, "status": status.status}
 
 
