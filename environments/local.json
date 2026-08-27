@@ -12,16 +12,6 @@
         "frontend_wasm_key": "realm-assets"
       },
       "loader_profile": "realms-iframe-v1"
-    },
-    {
-      "implementation": "monad-gos",
-      "version": "main",
-      "release_repo": "smart-social-contracts/monad-gos",
-      "artifacts": {
-        "backend_wasm_key": "monad-backend",
-        "frontend_wasm_key": "monad-assets"
-      },
-      "loader_profile": "monad-iframe-v1"
     }
   ],
   "canisters": {},
