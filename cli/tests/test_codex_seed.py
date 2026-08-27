@@ -494,3 +494,34 @@ def test_phase_seed_file_registry_honors_catalog_override(
     catalog = mock_seed_catalog.call_args.kwargs["catalog"]
     assert catalog.codices_repo_suffix == "custom-codices"
     assert catalog.extensions_repo_suffix == "custom-extensions"
+
+
+@patch("gaas.codex_seed.clone_repo_at_ref")
+def test_ensure_codices_root_falls_back_to_main_when_tag_missing(
+    mock_clone: MagicMock,
+    tmp_path: Path,
+) -> None:
+    from gaas.codex_seed import _ensure_codices_root
+    from gaas.runlog import CommandError
+
+    realms = tmp_path / "realms"
+    realms.mkdir()
+
+    def _clone(_repo: str, dest: Path, ref: str) -> Path:
+        if ref == "v0.4.0":
+            raise CommandError("missing ref", cmd=["git", "clone"], tail="")
+        dest.mkdir(parents=True)
+        _write_unified_codex(dest / "codices", "syntropia", "1.0.0")
+        return dest
+
+    mock_clone.side_effect = _clone
+    root = _ensure_codices_root(
+        realms,
+        "smart-social-contracts/realms",
+        tmp_path / "work",
+        "v0.4.0",
+        catalog=REALMS_CATALOG,
+    )
+    assert root.name == "codices"
+    assert mock_clone.call_count == 2
+    assert mock_clone.call_args_list[1].args[2] == "main"

@@ -512,7 +512,16 @@ def _ensure_codices_root(
     console.print(
         f"  codices submodule empty in Realms checkout; cloning {codices_repo}@{ref}"
     )
-    checkout = clone_repo_at_ref(codices_repo, dest, ref)
+    try:
+        checkout = clone_repo_at_ref(codices_repo, dest, ref)
+    except CommandError:
+        if ref in ("main", "master"):
+            raise
+        fallback_dest = work_dir / "codices-clone" / slug / "main"
+        console.print(
+            f"  [yellow]warning:[/yellow] {codices_repo}@{ref} missing; cloning main"
+        )
+        checkout = clone_repo_at_ref(codices_repo, fallback_dest, "main")
     cloned_root = checkout / "codices"
     if not _has_codex_packages(cloned_root):
         raise CodexSeedError(
