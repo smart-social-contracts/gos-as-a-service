@@ -79,7 +79,8 @@
       <span
         class="progress-label"
         class:failed={displayProgress.isFailed}
-        class:blocked={displayProgress.isBlocked && !displayProgress.isFailed}
+        class:blocked={(displayProgress.isBlocked || displayProgress.isStalled) &&
+          !displayProgress.isFailed}
         class:retrying={displayProgress.isAutoRetrying}
       >{displayProgress.currentLabel}</span>
       <span class="progress-percent" aria-hidden="true">{displayProgress.percent}%</span>

@@ -31,6 +31,7 @@ from provision_kick import (
     claim_provision_lock,
     clear_provision_lock,
     provision_kick_runner,
+    provision_lock_is_fresh,
     provisioning_job_ids_for_heartbeat,
     schedule_provision_kick as _schedule_provision_kick_impl,
     should_kick_provision_on_enqueue,
@@ -42,13 +43,18 @@ from asset_permissions import (
     principal_in_candid_vec,
 )
 from deploy_resume import (
+    best_owned_task,
     bootstrap_already_started,
+    completed_step_signatures,
     deploy_task_id,
     describe_resume,
     enter_setup_already_satisfied,
+    extensions_stall_reason,
     failed_bootstrap_step_kinds,
     plan_resume,
+    steps_satisfied_by_prior_task,
     task_belongs_to_job,
+    task_owner_job,
 )
 from claim_args import build_claim_slug_args
 from stand_create_args import build_stand_create_args, casals_placement_from_cfg
@@ -1414,29 +1420,38 @@ def _check_job_after_extensions(task):
     try:
         list(DeploymentJob.instances())
         broken_bootstrap = failed_bootstrap_step_kinds(list(task.steps))
-        for job in DeploymentJob.instances():
-            if (job.ext_deploy_task_id or "") == task.name:
-                if task.status in ("completed", "partial") and not broken_bootstrap:
-                    if task.status == "partial":
-                        failed_steps = [s for s in task.steps if s.status == "failed"]
-                        warnings = "; ".join(
-                            f"{s.label}: {s.error}" for s in failed_steps[:10]
-                        )
-                        job.error = f"partial extension install ({len(failed_steps)} failed): {warnings}"[:1990]
-                        jlog(job.name).warning(job.error)
-                    job.status = "registering"
-                    schedule_registration(job.name)
-                else:
-                    job.status = "failed"
-                    failed_steps = [s for s in task.steps if s.status == "failed"]
-                    errors = "; ".join(
-                        f"{s.label}: {s.error}" for s in failed_steps[:10]
-                    )
-                    phase = "realm bootstrap" if broken_bootstrap else "extension install"
-                    job.error = f"{phase} failed ({len(failed_steps)} failed): {errors}"[:1990]
-                    job.completed_at = now_s()
-                    schedule_registry_settlement(job.name, success=False, reason=job.error)
-                return
+        # By owner, not by the first job that happens to record this task id:
+        # two jobs that shared a task name had one realm's failure applied to
+        # the other realm's job (and its credits settled).
+        job = task_owner_job(
+            DeploymentJob.instances(), task.name, task.target_canister_id,
+        )
+        if job is None:
+            jlog(task.name).error(
+                f"task finished as '{task.status}' but no job owns it "
+                f"(target {task.target_canister_id or '–'}); leaving every job untouched"
+            )
+            return
+        if task.status in ("completed", "partial") and not broken_bootstrap:
+            if task.status == "partial":
+                failed_steps = [s for s in task.steps if s.status == "failed"]
+                warnings = "; ".join(
+                    f"{s.label}: {s.error}" for s in failed_steps[:10]
+                )
+                job.error = f"partial extension install ({len(failed_steps)} failed): {warnings}"[:1990]
+                jlog(job.name).warning(job.error)
+            job.status = "registering"
+            schedule_registration(job.name)
+        else:
+            job.status = "failed"
+            failed_steps = [s for s in task.steps if s.status == "failed"]
+            errors = "; ".join(
+                f"{s.label}: {s.error}" for s in failed_steps[:10]
+            )
+            phase = "realm bootstrap" if broken_bootstrap else "extension install"
+            job.error = f"{phase} failed ({len(failed_steps)} failed): {errors}"[:1990]
+            job.completed_at = now_s()
+            schedule_registry_settlement(job.name, success=False, reason=job.error)
     except Exception as e:
         jlog(task.name).error(f"_check_job_after_extensions: {e}")
 
@@ -1715,6 +1730,45 @@ def _discard_stale_deploy_task(task_id: str, job_id_val: str) -> None:
         jlog(job_id_val).warning(f"could not discard deploy task {task_id}: {e}")
 
 
+def _carry_over_completed_steps(job, task) -> None:
+    """Mark freshly built steps that a previous task of this realm completed.
+
+    Reached when the recorded task was lost or shadowed by a task-id collision.
+    The realm keeps whatever already ran, so replaying it fails: this looks up
+    the realm's own prior task rows (still enumerable even when the name alias
+    points elsewhere) and carries their completed steps across.
+    """
+    try:
+        prior = best_owned_task(
+            [t for t in DeployTask.instances() if (t.name or "") != (task.name or "")],
+            job.backend_canister_id,
+        )
+        if prior is None:
+            return
+        signatures = completed_step_signatures(list(prior.steps))
+        if not signatures:
+            return
+        satisfied = set(steps_satisfied_by_prior_task(list(task.steps), signatures))
+        if not satisfied:
+            return
+        carried = []
+        for step in task.steps:
+            if int(step.idx or 0) not in satisfied:
+                continue
+            step.status = "completed"
+            step.result_json = json.dumps(
+                {"already_completed_by_task": prior.name, "kind": step.kind}
+            )[:1990]
+            step.completed_at = now_s()
+            carried.append(step.kind)
+        jlog(job.name).info(
+            f"carried {len(carried)} completed step(s) over from task {prior.name}: "
+            f"{', '.join(carried)}"
+        )
+    except Exception as e:
+        jlog(job.name).warning(f"could not carry completed steps over: {e}")
+
+
 def _resume_deploy_task(job) -> bool:
     """Re-drive this job's existing deploy task from its first unfinished step.
 
@@ -1734,7 +1788,9 @@ def _resume_deploy_task(job) -> bool:
         return False
     if not task_belongs_to_job(task.target_canister_id, job.backend_canister_id):
         # Left by the old wall-clock task ids: another job in the same round
-        # minted this name. Its steps target another realm — never re-drive them.
+        # minted this name, and the alias resolves to whichever wrote last, so
+        # this job's own row became unreachable by name. Never re-drive the
+        # other realm's steps; rebuild and carry over what this realm did.
         jlog(job.name).warning(
             f"deploy task {task_id} targets {task.target_canister_id or '–'}, not this job's "
             f"backend {job.backend_canister_id or '–'} (task id collision); rebuilding"
@@ -1859,6 +1915,7 @@ def _start_extensions_for_job(job, manifest: dict) -> Async[None]:
             registry_canister_id=registry_id, manifest_json=json.dumps(ext_manifest)[:8190], error="",
         )
         _build_steps(task, ext_manifest)
+        _carry_over_completed_steps(job, task)
         steps = list(task.steps)
         jlog(job.name).info(f"built {len(steps)} steps for task {task_id}")
         job.ext_deploy_task_id = task_id
@@ -2301,12 +2358,24 @@ def get_deployment_job_status(job_id: text) -> ResultJobIdStatus:
 
 @query
 def get_deploy_task_status(job_id: text) -> ResultDeployTaskStatus:
-    """Return extension/codex install steps for a deployment job (if started)."""
+    """Return the bootstrap/extension steps of a deployment job (if started).
+
+    Takes a **job id**. A deploy task id is accepted too, since operators reach
+    for the id they see on the card; it is resolved back to its owning job.
+    """
     try:
         list(DeploymentJob.instances())
+        list(DeployTask.instances())
+        list(DeployStep.instances())
         job = DeploymentJob[job_id]
         if job is None:
-            return ResultDeployTaskStatus(Err=ie(f"unknown job_id: {job_id}"))
+            direct = DeployTask[job_id]
+            if direct is not None:
+                job = task_owner_job(
+                    DeploymentJob.instances(), direct.name, direct.target_canister_id,
+                )
+            if job is None:
+                return ResultDeployTaskStatus(Err=ie(f"unknown job_id: {job_id}"))
         task_id = (job.ext_deploy_task_id or "").strip()
         expected = int(job.expected_step_count or 0)
         if not task_id:
@@ -2317,13 +2386,21 @@ def get_deploy_task_status(job_id: text) -> ResultDeployTaskStatus:
                 completed_count=nat32(0),
                 total_count=nat32(expected),
             ))
-        list(DeployTask.instances())
-        list(DeployStep.instances())
         task = DeployTask[task_id]
         if task is None:
             return ResultDeployTaskStatus(Ok=DeployTaskView(
                 task_id=task_id,
                 status="missing",
+                steps=[],
+                completed_count=nat32(0),
+                total_count=nat32(expected),
+            ))
+        if not task_belongs_to_job(task.target_canister_id, job.backend_canister_id):
+            # Two jobs once shared a task name and this card showed the other
+            # realm's failed steps. Report the mismatch instead of the lie.
+            return ResultDeployTaskStatus(Ok=DeployTaskView(
+                task_id=task_id,
+                status="foreign",
                 steps=[],
                 completed_count=nat32(0),
                 total_count=nat32(expected),
@@ -2899,8 +2976,46 @@ def _schedule_provision_kick(job_id: str, delay_s: int = 0):
     )
 
 
+def _job_last_activity_s(job) -> int:
+    return max(int(job.completed_at or 0), int(job.created_at or 0))
+
+
+def _reconcile_stranded_extension_jobs() -> None:
+    """Fail jobs stuck in ``extensions`` that nothing can advance any more.
+
+    Not a retry — the opposite. A job whose deploy task is gone, belongs to
+    another realm (a task-id collision), or finished without ever settling this
+    job cannot progress, yet its card animates as if it were working. Marking
+    it failed with the reason releases the credit hold, tells the user the
+    truth, and makes an explicit ``retry_deployment`` possible, which resumes.
+    """
+    try:
+        list(DeployStep.instances())
+        list(DeployTask.instances())
+        list(DeploymentJob.instances())
+        for job in DeploymentJob.instances():
+            if (job.status or "") != "extensions":
+                continue
+            if provision_lock_is_fresh(job, now_s=now_s()):
+                continue
+            recorded = (job.ext_deploy_task_id or "").strip()
+            reason = extensions_stall_reason(
+                task=DeployTask[recorded] if recorded else None,
+                backend_canister_id=job.backend_canister_id or "",
+                recorded_task_id=recorded,
+                now_s=now_s(),
+                last_activity_s=_job_last_activity_s(job),
+            )
+            if not reason:
+                continue
+            jlog(job.name).error(f"stranded in extensions: {reason}")
+            _mark_provision_failed(job.name, reason)
+    except Exception as e:
+        _log.error(f"extensions reconcile: {e}")
+
+
 def _arm_provision_heartbeat(delay_s: int = 0):
-    """Periodic fallback: re-kick any job still in ``provisioning``."""
+    """Periodic fallback: re-kick any job still in ``pending``/``provisioning``."""
     interval = int(delay_s) if delay_s else PROVISION_HEARTBEAT_INTERVAL_S
 
     def _tick():
@@ -2914,6 +3029,7 @@ def _arm_provision_heartbeat(delay_s: int = 0):
                     now_s=now_s(),
                 ):
                     _schedule_provision_kick(job_id, 0)
+            _reconcile_stranded_extension_jobs()
         except Exception as e:
             _log.error(f"provision heartbeat: {e}")
         _arm_provision_heartbeat()

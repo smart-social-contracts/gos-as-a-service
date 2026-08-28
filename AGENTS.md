@@ -254,16 +254,29 @@ stand, so a replay fails every bootstrap step and leaves the realm half-built.
 
 - Deploy task ids come from `deploy_resume.deploy_task_id(job_id)`. Never mint
   one from `ic.time()`: IC time is identical for every message in a round, so
-  two stands provisioned together shared a task and one adopted the other's
-  steps.
+  two jobs provisioned together wrote **two task rows under one name**. The
+  name alias resolves to whichever wrote last, so one realm's card served the
+  other realm's failed steps, that realm's own row stayed `queued` and
+  unreachable, and its job sat in `extensions` forever.
 - A second pass resumes the recorded task (completed steps keep their status;
   only failed and provably abandoned `running` steps run again) and skips the
   Casals provisioning calls entirely when the canisters and the task exist.
+- **Ownership decides, never the recorded id alone.** A task is applied to the
+  job whose `backend_canister_id` equals `task.target_canister_id`
+  (`task_owner_job`); `get_deploy_task_status` reports a foreign task as
+  `foreign` with no steps rather than showing it; a rebuild carries over the
+  completed steps of the realm's own prior task row (`best_owned_task`).
 - The **provision heartbeat never re-drives a failed job** (`pending` /
-  `provisioning` only). Recovery is an explicit `retry_deployment`.
+  `provisioning` only). Recovery is an explicit `retry_deployment`. What the
+  heartbeat *does* do is reconcile: a job stranded in `extensions` (task gone,
+  foreign, or finished without settling it) is failed with the reason, which
+  releases the credit hold and stops the card animating.
 - A failed bootstrap step (`enter_setup`, `configure_canister_ids`,
   `grant_frontend_access`) fails the job. It is not a partial success: the
   realm never entered setup or cannot write its own frontend.
+- `realm_stage` is **not** proof that `enter_setup` ran — a freshly installed
+  realm reports `setup` with `realm_name: "Default Realm"`. Use the task
+  records (or the realm's own name/network fields) to tell them apart.
 
 #### Frontend asset permissions are Casals's to grant
 

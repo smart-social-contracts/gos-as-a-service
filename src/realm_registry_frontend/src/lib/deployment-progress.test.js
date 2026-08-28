@@ -10,6 +10,7 @@ import {
   getDeploymentProgress,
   isAutoRetryingJob,
   isPermissionBlockedError,
+  isStalledJob,
   withLiveProgressTiming,
 } from './deployment-progress.js';
 
@@ -425,4 +426,55 @@ test('a transient failure is still retryable and not blocked', () => {
 test('a clean run is not blocked', () => {
   const progress = getDeploymentProgress({ status: 'extensions', raw_status: 'extensions' });
   assert.equal(progress.isBlocked, false);
+});
+
+// Live zombie shape: job_20260828152332_870e sat in `extensions` with a
+// leftover completed_at because its deploy task had been hijacked by another
+// realm's task of the same name. Nothing was re-driving it, yet the card read
+// "Retrying automatically 42%".
+const STRANDED_JOB = {
+  status: 'extensions',
+  raw_status: 'extensions',
+  created_at: 1_787_930_619,
+  completed_at: 1_787_931_998,
+  backend_canister_id: 'pxip5-cyaaa-aaaae-ag3dq-cai',
+  frontend_canister_id: 'o2glt-nqaaa-aaaae-ag3ea-cai',
+  assets_verified: 1,
+  wasm_verified: 1,
+  expected_step_count: 3,
+  error: '',
+};
+
+test('a job stranded past provisioning reads as stalled, not retrying', () => {
+  assert.equal(isStalledJob(STRANDED_JOB), true);
+  assert.equal(isAutoRetryingJob(STRANDED_JOB), false);
+
+  const progress = getDeploymentProgress(STRANDED_JOB);
+  assert.equal(progress.isStalled, true);
+  assert.equal(progress.isAutoRetrying, false);
+  assert.equal(progress.currentLabel, 'Stalled');
+  assert.match(progress.currentDescription, /not retrying/);
+});
+
+test('session memory cannot resurrect "Retrying automatically" for a stalled job', () => {
+  const progress = getDeploymentProgress(STRANDED_JOB, {
+    attemptMemory: { autoRetrying: true, lastError: RATE_LIMIT },
+  });
+  assert.equal(progress.isAutoRetrying, false);
+  assert.equal(progress.currentLabel, 'Stalled');
+});
+
+test('a job still in a re-drivable phase keeps the retry label', () => {
+  const job = { ...STRANDED_JOB, status: 'provisioning', raw_status: 'provisioning' };
+  assert.equal(isStalledJob(job), false);
+  assert.equal(isAutoRetryingJob(job), true);
+  assert.equal(getDeploymentProgress(job).currentLabel, 'Retrying automatically');
+});
+
+test('a first-attempt job in extensions is neither stalled nor retrying', () => {
+  const job = { ...STRANDED_JOB, completed_at: 0 };
+  assert.equal(isStalledJob(job), false);
+  const progress = getDeploymentProgress(job);
+  assert.equal(progress.isStalled, false);
+  assert.equal(progress.currentLabel, 'Installing extensions');
 });

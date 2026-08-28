@@ -17,28 +17,58 @@ sys.path.insert(0, os.path.join(_REPO_ROOT, "src/realm_installer"))
 
 from deploy_resume import (  # noqa: E402
     BOOTSTRAP_STEP_KINDS,
+    EXTENSIONS_STALL_S,
     STALE_RUNNING_S,
+    best_owned_task,
     bootstrap_already_started,
     completed_step_kinds,
+    completed_step_signatures,
     deploy_task_id,
     describe_resume,
     enter_setup_already_satisfied,
+    extensions_stall_reason,
     failed_bootstrap_step_kinds,
     plan_resume,
+    steps_satisfied_by_prior_task,
     steps_to_reset,
     task_belongs_to_job,
     task_has_progress,
+    task_owner_job,
 )
 
 NOW = 1_787_932_000
 
 
+TEST8_BACKEND = "pxip5-cyaaa-aaaae-ag3dq-cai"
+REALMTEST2_BACKEND = "xzc4e-4aaaa-aaaae-agzza-cai"
+COLLIDED_TASK = "deploy_1787932135117151676"
+
+
 class _FakeStep:
-    def __init__(self, idx, kind, status, started_at=0):
+    def __init__(self, idx, kind, status, started_at=0, label=None):
         self.idx = idx
         self.kind = kind
         self.status = status
         self.started_at = started_at
+        self.label = label if label is not None else kind
+
+
+class _FakeTask:
+    def __init__(self, name, target, status="queued", steps=None, started_at=0):
+        self.name = name
+        self.target_canister_id = target
+        self.status = status
+        self.steps = steps or []
+        self.started_at = started_at
+
+
+class _FakeJob:
+    def __init__(self, name, backend, task_id="", created_at=0, status="extensions"):
+        self.name = name
+        self.backend_canister_id = backend
+        self.ext_deploy_task_id = task_id
+        self.created_at = created_at
+        self.status = status
 
 
 def _live_failure_steps():
@@ -191,6 +221,168 @@ def test_other_enter_setup_rejections_stay_failures():
     assert enter_setup_already_satisfied("Couldn't send message") is False
 
 
+# ── One task name, two realms (the live collision) ────────────────────
+#
+# The installer DB on test.gos.earth holds two DeployTask rows both named
+# deploy_1787932135117151676: one targeting pxip5 (RealmsTest8, left `queued`
+# and unreachable because the name alias resolves to the later writer) and one
+# targeting xzc4e (RealmTest2, `failed`). RealmTest2's 0/3 was served on
+# RealmsTest8's card, and RealmsTest8's job sat in `extensions` for hours.
+
+def _collided_rows():
+    test8_own = _FakeTask(
+        COLLIDED_TASK, TEST8_BACKEND, status="queued", started_at=100,
+        steps=[
+            _FakeStep(0, "enter_setup", "pending"),
+            _FakeStep(1, "configure_canister_ids", "pending"),
+            _FakeStep(2, "grant_frontend_access", "pending"),
+        ],
+    )
+    test8_first_pass = _FakeTask(
+        "deploy_1787931723064146992", TEST8_BACKEND, status="partial", started_at=50,
+        steps=[
+            _FakeStep(0, "enter_setup", "completed"),
+            _FakeStep(1, "configure_canister_ids", "completed"),
+            _FakeStep(2, "grant_frontend_access", "failed"),
+        ],
+    )
+    realmtest2 = _FakeTask(
+        COLLIDED_TASK, REALMTEST2_BACKEND, status="failed", started_at=110,
+        steps=[
+            _FakeStep(0, "enter_setup", "failed"),
+            _FakeStep(1, "configure_canister_ids", "failed"),
+            _FakeStep(2, "grant_frontend_access", "failed"),
+        ],
+    )
+    return test8_own, test8_first_pass, realmtest2
+
+
+def test_a_finished_task_settles_the_job_that_owns_it():
+    _own, _first, realmtest2 = _collided_rows()
+    test8_job = _FakeJob("job_20260828152332_870e", TEST8_BACKEND, COLLIDED_TASK, 200)
+    realmtest2_job = _FakeJob("job_20260810100322_57c3", REALMTEST2_BACKEND, COLLIDED_TASK, 100)
+
+    owner = task_owner_job(
+        [test8_job, realmtest2_job], realmtest2.name, realmtest2.target_canister_id,
+    )
+    assert owner is realmtest2_job, "RealmTest2's failure must not land on the Test8 job"
+
+
+def test_a_task_no_job_owns_touches_nothing():
+    _own, _first, realmtest2 = _collided_rows()
+    test8_job = _FakeJob("job_20260828152332_870e", TEST8_BACKEND, COLLIDED_TASK, 200)
+    assert task_owner_job([test8_job], realmtest2.name, realmtest2.target_canister_id) is None
+
+
+def test_a_realm_finds_its_own_task_among_the_collided_rows():
+    own, first, realmtest2 = _collided_rows()
+    picked = best_owned_task([own, first, realmtest2], TEST8_BACKEND)
+    assert picked is first, "the row that got furthest for this realm wins"
+    assert best_owned_task([own, first, realmtest2], REALMTEST2_BACKEND) is realmtest2
+    assert best_owned_task([own, first, realmtest2], "") is None
+
+
+def test_a_rebuild_carries_over_what_this_realm_already_completed():
+    _own, first, _realmtest2 = _collided_rows()
+    signatures = completed_step_signatures(first.steps)
+    assert signatures == [
+        ("enter_setup", "enter_setup"),
+        ("configure_canister_ids", "configure_canister_ids"),
+    ]
+
+    rebuilt = [
+        _FakeStep(0, "enter_setup", "pending"),
+        _FakeStep(1, "configure_canister_ids", "pending"),
+        _FakeStep(2, "grant_frontend_access", "pending"),
+    ]
+    assert steps_satisfied_by_prior_task(rebuilt, signatures) == [0, 1]
+
+
+def test_carry_over_matches_extensions_by_label_not_just_kind():
+    prior = [
+        _FakeStep(0, "extension", "completed", label="ext-a"),
+        _FakeStep(1, "extension", "failed", label="ext-b"),
+    ]
+    rebuilt = [
+        _FakeStep(0, "extension", "pending", label="ext-a"),
+        _FakeStep(1, "extension", "pending", label="ext-b"),
+    ]
+    assert steps_satisfied_by_prior_task(rebuilt, completed_step_signatures(prior)) == [0]
+
+
+# ── Jobs stranded in `extensions` are reported, never re-driven ────────
+
+def test_a_foreign_task_strands_the_job_and_says_so():
+    _own, _first, realmtest2 = _collided_rows()
+    reason = extensions_stall_reason(
+        task=realmtest2,
+        backend_canister_id=TEST8_BACKEND,
+        recorded_task_id=COLLIDED_TASK,
+        now_s=NOW + EXTENSIONS_STALL_S + 1,
+        last_activity_s=NOW,
+    )
+    assert "belongs to another realm" in reason
+    assert REALMTEST2_BACKEND in reason and TEST8_BACKEND in reason
+
+
+def test_a_missing_task_strands_the_job():
+    reason = extensions_stall_reason(
+        task=None,
+        backend_canister_id=TEST8_BACKEND,
+        recorded_task_id=COLLIDED_TASK,
+        now_s=NOW + EXTENSIONS_STALL_S + 1,
+        last_activity_s=NOW,
+    )
+    assert "no longer exists" in reason
+
+
+def test_a_task_that_finished_without_settling_the_job_strands_it():
+    _own, first, _realmtest2 = _collided_rows()
+    reason = extensions_stall_reason(
+        task=first,
+        backend_canister_id=TEST8_BACKEND,
+        recorded_task_id=first.name,
+        now_s=NOW + EXTENSIONS_STALL_S + 1,
+        last_activity_s=NOW,
+    )
+    assert "finished as 'partial'" in reason
+
+
+def test_a_job_whose_task_never_started_is_stranded():
+    own, _first, _realmtest2 = _collided_rows()
+    reason = extensions_stall_reason(
+        task=own,
+        backend_canister_id=TEST8_BACKEND,
+        recorded_task_id=own.name,
+        now_s=NOW + EXTENSIONS_STALL_S + 1,
+        last_activity_s=NOW,
+    )
+    assert "never started" in reason
+
+
+def test_a_recent_or_running_extensions_job_is_left_alone():
+    own, _first, _realmtest2 = _collided_rows()
+    assert extensions_stall_reason(
+        task=own,
+        backend_canister_id=TEST8_BACKEND,
+        recorded_task_id=own.name,
+        now_s=NOW + 60,
+        last_activity_s=NOW,
+    ) == ""
+
+    running = _FakeTask(
+        "deploy_job_x", TEST8_BACKEND, status="running",
+        steps=[_FakeStep(0, "enter_setup", "running", started_at=NOW)],
+    )
+    assert extensions_stall_reason(
+        task=running,
+        backend_canister_id=TEST8_BACKEND,
+        recorded_task_id=running.name,
+        now_s=NOW + EXTENSIONS_STALL_S + 1,
+        last_activity_s=NOW,
+    ) == ""
+
+
 # ── Wiring in the canister module (not importable without basilisk) ────
 
 def _installer_source() -> str:
@@ -215,6 +407,42 @@ def test_a_broken_bootstrap_fails_the_job_instead_of_registering_it():
     )[0]
     assert "failed_bootstrap_step_kinds" in check
     assert "and not broken_bootstrap" in check
+    # By owner, not by "first job that records this task id".
+    assert "task_owner_job(" in check
+    assert "for job in DeploymentJob.instances():" not in check
+
+
+def test_the_status_query_never_serves_another_realms_steps():
+    src = _installer_source()
+    query = src.split("def get_deploy_task_status", 1)[1].split(
+        "def get_deployment_manifest", 1
+    )[0]
+    assert "task_belongs_to_job" in query
+    assert '"foreign"' in query
+    # Operators paste the task id they see on the card; resolve it, don't
+    # answer "unknown job_id" as if the record were gone.
+    assert "DeployTask[job_id]" in query
+
+
+def test_stranded_extension_jobs_are_reported_not_re_driven():
+    src = _installer_source()
+    reconcile = src.split("def _reconcile_stranded_extension_jobs", 1)[1].split(
+        "def _arm_provision_heartbeat", 1
+    )[0]
+    assert "extensions_stall_reason" in reconcile
+    assert "_mark_provision_failed" in reconcile
+    assert "_schedule_provision_kick" not in reconcile
+    assert "_resume_deploy_task" not in reconcile
+
+    heartbeat = src.split("def _arm_provision_heartbeat", 1)[1].split(
+        "def _provision_via_casals_gen", 1
+    )[0]
+    assert "_reconcile_stranded_extension_jobs()" in heartbeat
+
+
+def test_a_rebuild_carries_prior_completed_steps_over():
+    start = _installer_source().split("def _start_extensions_for_job", 1)[1]
+    assert "_carry_over_completed_steps(job, task)" in start
 
 
 def test_grant_step_verifies_before_it_grants():

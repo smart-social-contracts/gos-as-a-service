@@ -21,6 +21,10 @@ ONE_SHOT_STEP_KINDS = ("enter_setup", "configure_canister_ids")
 # Steps the realm cannot live without, whatever happens to extensions.
 BOOTSTRAP_STEP_KINDS = ("enter_setup", "configure_canister_ids", "grant_frontend_access")
 
+# Task statuses the step runner will not pick up again (mirrors
+# main._TERMINAL_TASK_STATUSES).
+TERMINAL_TASK_STATUSES = ("completed", "partial", "failed", "cancelled")
+
 # Statuses a step may be reset from on a resume pass.
 _RESETTABLE_STATUSES = ("failed", "running")
 
@@ -41,6 +45,11 @@ _ALREADY_IN_SETUP_MARKERS = (
 )
 
 _MAX_TASK_ID_LEN = 64
+
+# A job sitting in ``extensions`` with nothing driving it for this long is
+# stranded, not working. Four live jobs on test.gos.earth sat like that for
+# hours while their cards animated at 42%.
+EXTENSIONS_STALL_S = 30 * 60
 
 
 def deploy_task_id(job_id: str) -> str:
@@ -174,6 +183,122 @@ def task_belongs_to_job(task_target_canister_id: str, job_backend_canister_id: s
     realm's steps against another realm's canisters.
     """
     return (task_target_canister_id or "").strip() == (job_backend_canister_id or "").strip()
+
+
+def _completed_count(task) -> int:
+    return sum(1 for s in (getattr(task, "steps", None) or []) if _status_of(s) == "completed")
+
+
+def best_owned_task(tasks, backend_canister_id: str):
+    """The job's own task among rows a name collision orphaned.
+
+    Two jobs that minted the same task name left two task rows: the alias
+    resolves to whichever was written last, so a job can end up pointing at
+    another realm's steps while its own row sits unreachable. Rows are still
+    enumerable, so a job can find its own by target canister. Prefers the row
+    that got furthest, then the most recent.
+    """
+    backend = (backend_canister_id or "").strip()
+    if not backend:
+        return None
+    owned = [
+        t for t in (tasks or [])
+        if task_belongs_to_job(getattr(t, "target_canister_id", ""), backend)
+    ]
+    if not owned:
+        return None
+    return sorted(
+        owned,
+        key=lambda t: (_completed_count(t), int(getattr(t, "started_at", 0) or 0)),
+    )[-1]
+
+
+def completed_step_signatures(steps) -> list:
+    """``(kind, label)`` of every completed step — a step's identity across tasks."""
+    out = []
+    for step in sorted(steps or [], key=_idx_of):
+        if _status_of(step) != "completed":
+            continue
+        out.append((_kind_of(step), (getattr(step, "label", None) or "").strip()))
+    return out
+
+
+def steps_satisfied_by_prior_task(new_steps, prior_signatures) -> list:
+    """Indices of freshly built steps a previous task of this realm completed.
+
+    A rebuild happens when the recorded task is gone or was shadowed by a name
+    collision. The realm still carries the effects of whatever ran, so the
+    rebuild must not replay them: `enter_setup` on a realm already in setup and
+    `configure_canister_ids` on a configured one both fail.
+    """
+    remaining = list(prior_signatures or [])
+    out = []
+    for step in sorted(new_steps or [], key=_idx_of):
+        sig = (_kind_of(step), (getattr(step, "label", None) or "").strip())
+        if sig in remaining:
+            remaining.remove(sig)
+            out.append(_idx_of(step))
+    return out
+
+
+def task_owner_job(jobs, task_name: str, task_target_canister_id: str):
+    """The job a finished task actually belongs to.
+
+    Matching on ``ext_deploy_task_id`` alone painted one realm's failed steps
+    onto another realm's card (and settled the wrong job) whenever two jobs
+    shared a task name. The task's target canister decides.
+    """
+    name = (task_name or "").strip()
+    candidates = [
+        j for j in (jobs or []) if (getattr(j, "ext_deploy_task_id", "") or "").strip() == name
+    ]
+    owners = [
+        j for j in candidates
+        if task_belongs_to_job(task_target_canister_id, getattr(j, "backend_canister_id", ""))
+    ]
+    if not owners:
+        return None
+    if len(owners) == 1:
+        return owners[0]
+    return sorted(owners, key=lambda j: int(getattr(j, "created_at", 0) or 0))[-1]
+
+
+def extensions_stall_reason(
+    *,
+    task,
+    backend_canister_id: str,
+    recorded_task_id: str,
+    now_s: int,
+    last_activity_s: int,
+    stall_s: int = EXTENSIONS_STALL_S,
+) -> str:
+    """Why a job stuck in ``extensions`` can no longer make progress, or "".
+
+    Reporting this is not a retry: it replaces an animated progress card with
+    the truth, releases the credit hold, and makes the job eligible for an
+    explicit resume. Nothing here re-drives a bootstrap.
+    """
+    if int(now_s) - int(last_activity_s or 0) < int(stall_s):
+        return ""
+    recorded = (recorded_task_id or "").strip()
+    if not recorded:
+        return "stuck in the extensions phase with no deploy task recorded"
+    if task is None:
+        return f"deploy task {recorded} no longer exists"
+    target = (getattr(task, "target_canister_id", "") or "").strip()
+    if not task_belongs_to_job(target, backend_canister_id):
+        return (
+            f"deploy task {recorded} belongs to another realm "
+            f"(it targets {target or 'nothing'}, this realm is "
+            f"{(backend_canister_id or '').strip() or 'unknown'}) — a task id collision, "
+            "so this realm's bootstrap never ran"
+        )
+    status = (getattr(task, "status", None) or "").strip().lower()
+    if status in TERMINAL_TASK_STATUSES:
+        return f"deploy task {recorded} finished as '{status}' but the job was never settled"
+    if status in ("queued", "waiting") and not _completed_count(task):
+        return f"deploy task {recorded} never started"
+    return ""
 
 
 def enter_setup_already_satisfied(error_text: str) -> bool:
