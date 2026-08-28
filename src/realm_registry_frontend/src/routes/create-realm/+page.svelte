@@ -75,9 +75,11 @@
       subnetOptions = await listSubnets();
       subnetsFetched = true;
     } catch (e) {
-      subnetLoadError = e?.message || 'Could not load subnets';
-      formData.subnet_choice = 'automatic';
-      formData.subnet_id = '';
+      const raw = e?.message || '';
+      subnetLoadError =
+        /process is not defined/i.test(raw) || /canister ID is not set/i.test(raw)
+          ? 'Could not load available subnets'
+          : raw || 'Could not load subnets';
     } finally {
       loadingSubnets = false;
     }
@@ -87,6 +89,7 @@
     formData.subnet_choice = choice;
     if (choice !== 'other') {
       formData.subnet_id = '';
+      subnetLoadError = null;
       return;
     }
     if (!subnetsFetched && !loadingSubnets) {
@@ -905,7 +908,7 @@
               <p class="field-hint">No subnets available. Leave on Automatic or try again later.</p>
             {/if}
           {/if}
-          {#if subnetLoadError}
+          {#if formData.subnet_choice === 'other' && subnetLoadError}
             <span class="error-message">{subnetLoadError}</span>
           {/if}
           {#if errors.subnet_id}

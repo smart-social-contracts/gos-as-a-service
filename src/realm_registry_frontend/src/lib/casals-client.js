@@ -3,7 +3,8 @@ import { CONFIG } from './config.js';
 import { getCanisterId } from './network.js';
 
 function isBuildingOrTesting() {
-  return building || process.env.NODE_ENV === 'test';
+  const mode = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.MODE : '';
+  return building || mode === 'test';
 }
 
 function isLocalDevelopment() {
@@ -21,18 +22,14 @@ async function createCasalsActor() {
     return { list_subnets: async () => '[]' };
   }
 
-  const { createActor, canisterId: declaredCanisterId } = await import(
-    'declarations/casals_backend'
-  );
-  const { HttpAgent } = await import('@dfinity/agent');
-
   const resolvedCanisterId =
-    CONFIG.casals_backend_canister_id ||
-    getCanisterId('casals_backend') ||
-    declaredCanisterId;
+    CONFIG.casals_backend_canister_id || getCanisterId('casals_backend');
   if (!resolvedCanisterId) {
-    throw new Error('casals_backend canister ID is not set');
+    throw new Error('Could not load available subnets');
   }
+
+  const { createActor } = await import('declarations/casals_backend');
+  const { HttpAgent } = await import('@dfinity/agent');
 
   const agent = new HttpAgent();
   if (isLocalDevelopment()) {
@@ -47,7 +44,12 @@ async function createCasalsActor() {
 }
 
 function getActorPromise() {
-  if (!actorPromise) actorPromise = createCasalsActor();
+  if (!actorPromise) {
+    actorPromise = createCasalsActor().catch((err) => {
+      actorPromise = null;
+      throw err;
+    });
+  }
   return actorPromise;
 }
 
