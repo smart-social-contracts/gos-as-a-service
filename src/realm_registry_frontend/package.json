@@ -9,7 +9,7 @@
     "prebuild": "cd ../.. && dfx generate realm_registry_backend && dfx generate realm_installer && dfx generate casals_backend",
     "build": "vite build",
     "test": "npm run test:unit",
-    "test:unit": "node --test src/lib/deployment-progress.test.js src/lib/deployment-manifest.test.js src/lib/deployment-manifest-view.test.js src/lib/gos-implementations.test.js src/lib/user-created-realms.test.js src/lib/network.test.js src/lib/gaas-env.test.js src/lib/config.test.js src/lib/card-billing-flag.test.js src/lib/installer-queue.test.js src/lib/ii-proof.test.js src/lib/unknown-slug.test.js src/lib/realm-utils.test.js src/lib/globe/hex-data.test.js src/lib/assert-canister-live.test.js",
+    "test:unit": "node --test src/lib/deployment-progress.test.js src/lib/deployment-manifest.test.js src/lib/deployment-manifest-view.test.js src/lib/gos-implementations.test.js src/lib/user-created-realms.test.js src/lib/network.test.js src/lib/gaas-env.test.js src/lib/config.test.js src/lib/card-billing-flag.test.js src/lib/installer-queue.test.js src/lib/ii-proof.test.js src/lib/unknown-slug.test.js src/lib/realm-utils.test.js src/lib/globe/hex-data.test.js src/lib/assert-canister-live.test.js src/lib/architecture-link.test.js",
     "format": "prettier --write \"src/**/*.{json,js,jsx,ts,tsx,css,scss}\""
   },
   "dependencies": {

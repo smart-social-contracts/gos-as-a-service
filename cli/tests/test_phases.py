@@ -162,7 +162,9 @@ def test_run_phases_validate_failure(mock_preflight) -> None:
 @patch("gaas.phases.dfx.get_principal")
 @patch("gaas.phases.dfx.use_identity")
 @patch("gaas.phases.run_preflight")
+@patch("gaas.phases._persist_and_guard_portal_frontends")
 def test_create_canisters_adopt_vs_create(
+    _persist,
     mock_preflight,
     _use_identity,
     mock_principal,
@@ -229,7 +231,9 @@ def test_create_canisters_adopt_vs_create(
 @patch("gaas.phases.dfx.get_principal")
 @patch("gaas.phases.dfx.use_identity")
 @patch("gaas.phases.run_preflight")
+@patch("gaas.phases._persist_and_guard_portal_frontends")
 def test_phase_create_canisters_restores_evacuated_cycles(
+    _persist,
     mock_preflight,
     _use_identity,
     mock_principal,
@@ -293,7 +297,9 @@ def test_phase_create_canisters_restores_evacuated_cycles(
 @patch("gaas.phases.dfx.get_principal")
 @patch("gaas.phases.dfx.use_identity")
 @patch("gaas.phases.run_preflight")
+@patch("gaas.phases._persist_and_guard_portal_frontends")
 def test_phase_create_canisters_skips_treasury_restore_when_zero(
+    _persist,
     mock_preflight,
     _use_identity,
     mock_principal,
@@ -1074,7 +1080,9 @@ def test_phase_grant_commanders_grant_error_continues(
 @patch("gaas.phases.write_gaas_env", return_value=Path("/tmp/gaas-env.json"))
 @patch("gaas.phases._find_repo_root")
 @patch("gaas.phases.get_run_log")
+@patch("gaas.phases._persist_and_guard_portal_frontends")
 def test_phase_install_frontends_no_mid_run_confirm(
+    _persist,
     mock_get_run_log,
     mock_repo_root,
     _write_env,
@@ -1114,6 +1122,9 @@ def test_phase_install_frontends_no_mid_run_confirm(
     # committed dist (no extra npm). marketplace_frontend is absent so skipped.
     assert run_log.run_step.call_count == 2
     assert mock_deploy_assets.call_count == 3
+    assert _persist.call_count == 2
+    assert _persist.call_args_list[0].kwargs["require_http"] is False
+    assert _persist.call_args_list[1].kwargs["require_http"] is True
     for call in mock_deploy_assets.call_args_list:
         assert call.kwargs.get("yes") is True
         assert call.kwargs.get("mode") == "reinstall"
@@ -1130,7 +1141,9 @@ def test_phase_install_frontends_no_mid_run_confirm(
 @patch("gaas.phases.write_gaas_env", return_value=Path("/tmp/gaas-env.json"))
 @patch("gaas.phases._find_repo_root")
 @patch("gaas.phases.get_run_log")
+@patch("gaas.phases._persist_and_guard_portal_frontends")
 def test_phase_install_frontends_reinstalls_marketplace_onto_existing_id(
+    _persist,
     mock_get_run_log,
     mock_repo_root,
     _write_env,

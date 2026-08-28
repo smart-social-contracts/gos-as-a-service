@@ -3,6 +3,7 @@
   import { _, locale } from 'svelte-i18n';
   import { supportedLocales, setLocale } from '$lib/i18n';
   import { requestRegistryTour } from '$lib/registry-tour.js';
+  import { architectureHref } from '$lib/architecture-link.js';
   import { authSession } from '$lib/stores/authSession.js';
 
   export let isLoggedIn = false;
@@ -12,9 +13,8 @@
   export let casalsUrl = '';
 
   const dispatch = createEventDispatcher();
-  const CASALS_FALLBACK_URL = 'https://fdr7z-3aaaa-aaaae-ag23a-cai.icp0.io';
 
-  $: architectureUrl = casalsUrl || CASALS_FALLBACK_URL;
+  $: architectureUrl = architectureHref(casalsUrl);
 
   let showHub = false;
   let showLanguagePicker = false;
@@ -146,29 +146,51 @@
             </a>
           {/if}
 
-          <a
-            href={architectureUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="hub-item"
-            on:click={() => closePopovers()}
-          >
-            <span class="hub-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="6" y1="18" x2="6" y2="11"></line>
-                <line x1="10" y1="18" x2="10" y2="11"></line>
-                <line x1="14" y1="18" x2="14" y2="11"></line>
-                <line x1="18" y1="18" x2="18" y2="11"></line>
-                <line x1="2" y1="21" x2="22" y2="21"></line>
-                <line x1="4" y1="18" x2="20" y2="18"></line>
-                <path d="M12 3v5"></path>
-                <path d="M8 8h8"></path>
-              </svg>
-            </span>
-            <span class="hub-copy">
-              <span class="hub-label">{$_('controls.architecture')}</span>
-            </span>
-          </a>
+          {#if architectureUrl}
+            <a
+              href={architectureUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="hub-item"
+              data-architecture-link
+              on:click={() => closePopovers()}
+            >
+              <span class="hub-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="6" y1="18" x2="6" y2="11"></line>
+                  <line x1="10" y1="18" x2="10" y2="11"></line>
+                  <line x1="14" y1="18" x2="14" y2="11"></line>
+                  <line x1="18" y1="18" x2="18" y2="11"></line>
+                  <line x1="2" y1="21" x2="22" y2="21"></line>
+                  <line x1="4" y1="18" x2="20" y2="18"></line>
+                  <path d="M12 3v5"></path>
+                  <path d="M8 8h8"></path>
+                </svg>
+              </span>
+              <span class="hub-copy">
+                <span class="hub-label">{$_('controls.architecture')}</span>
+              </span>
+            </a>
+          {:else}
+            <div class="hub-item hub-item-disabled" role="note" data-architecture-unavailable>
+              <span class="hub-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="6" y1="18" x2="6" y2="11"></line>
+                  <line x1="10" y1="18" x2="10" y2="11"></line>
+                  <line x1="14" y1="18" x2="14" y2="11"></line>
+                  <line x1="18" y1="18" x2="18" y2="11"></line>
+                  <line x1="2" y1="21" x2="22" y2="21"></line>
+                  <line x1="4" y1="18" x2="20" y2="18"></line>
+                  <path d="M12 3v5"></path>
+                  <path d="M8 8h8"></path>
+                </svg>
+              </span>
+              <span class="hub-copy">
+                <span class="hub-label">{$_('controls.architecture')}</span>
+                <span class="hub-unavailable">{$_('controls.architecture_unavailable')}</span>
+              </span>
+            </div>
+          {/if}
 
           <button
             type="button"
@@ -462,6 +484,23 @@
     color: #141414;
     line-height: 1.25;
     letter-spacing: -0.01em;
+  }
+
+  .hub-item-disabled {
+    cursor: default;
+    opacity: 0.72;
+  }
+
+  .hub-item-disabled:hover {
+    background: transparent;
+    transform: none;
+  }
+
+  .hub-unavailable {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: rgba(38, 38, 38, 0.7);
+    line-height: 1.3;
   }
 
   .hub-locales {

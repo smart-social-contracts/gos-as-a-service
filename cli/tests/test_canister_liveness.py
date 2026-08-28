@@ -11,8 +11,13 @@ import pytest
 from gaas.canister_liveness import (
     CanisterNotFoundError,
     assert_canister_exists,
+    assert_casals_frontend_live,
+    assert_frontend_http_live,
     assert_installer_live_for_network,
+    collect_baked_portal_frontends,
+    is_known_dead_canister,
     main,
+    probe_baked_portal_frontends,
 )
 from gaas.descriptor import Descriptor
 from gaas.phases import DeployContext, phase_create_canisters
@@ -20,6 +25,9 @@ from tests.conftest import SAMPLE_DESCRIPTOR, VALID_CANISTER_ID
 
 LIVE_INSTALLER = "ta6df-miaaa-aaaan-q6n4a-cai"
 GHOST_INSTALLER = "fksuf-niaaa-aaaae-ag22q-cai"
+LIVE_CASALS_FRONTEND = "to4on-xyaaa-aaaan-q6n5a-cai"
+LIVE_TEST_CASALS_FRONTEND = "qic2k-baaaa-aaaae-agvga-cai"
+DEAD_CASALS_FRONTEND = "fdr7z-3aaaa-aaaae-ag23a-cai"
 
 
 def _live_fetch(canister_id: str):
@@ -73,6 +81,14 @@ def test_canister_ids_and_dfx_point_staging_installer_at_ta6df():
     assert (
         dfx["canisters"]["realm_installer"]["remote"]["id"]["staging"] == LIVE_INSTALLER
     )
+    assert ids["casals_frontend"]["staging"] == LIVE_CASALS_FRONTEND
+    assert ids["casals_frontend"]["test"] == LIVE_TEST_CASALS_FRONTEND
+    assert DEAD_CASALS_FRONTEND not in json.dumps(ids)
+    assert DEAD_CASALS_FRONTEND not in json.dumps(dfx)
+    assert "fdr7z" not in json.dumps(ids)
+    assert dfx["canisters"]["casals_frontend"]["remote"]["id"]["staging"] == (
+        LIVE_CASALS_FRONTEND
+    )
 
 
 def test_staging_json_adopts_live_stand():
@@ -85,8 +101,10 @@ def test_staging_json_adopts_live_stand():
     assert desc.canisters["marketplace_backend"] == "tsyu4-ayaaa-aaaan-q6n7a-cai"
     assert desc.canisters["realm_registry_frontend"] == "77243-aqaaa-aaaau-aggza-cai"
     assert desc.canisters["marketplace_frontend"] == "h4gmt-waaaa-aaaac-bfxoq-cai"
+    assert desc.canisters["casals_frontend"] == LIVE_CASALS_FRONTEND
     assert GHOST_INSTALLER not in desc.canisters.values()
     assert "hznxf-fqaaa-aaaae-ag2ua-cai" not in desc.canisters.values()
+    assert DEAD_CASALS_FRONTEND not in desc.canisters.values()
 
 
 @patch("gaas.phases.dfx.create_canister_via_ledger")
@@ -94,7 +112,9 @@ def test_staging_json_adopts_live_stand():
 @patch("gaas.phases.dfx.canister_status")
 @patch("gaas.phases.dfx.get_principal", return_value="aaaaa-aa")
 @patch("gaas.phases.dfx.use_identity")
+@patch("gaas.phases._persist_and_guard_portal_frontends")
 def test_adopt_rejects_ghost_staging_installer(
+    _persist,
     _use_identity,
     _principal,
     mock_status,
@@ -127,7 +147,9 @@ def test_adopt_rejects_ghost_staging_installer(
 @patch("gaas.phases.dfx.canister_status")
 @patch("gaas.phases.dfx.get_principal", return_value="aaaaa-aa")
 @patch("gaas.phases.dfx.use_identity")
+@patch("gaas.phases._persist_and_guard_portal_frontends")
 def test_adopt_allows_live_staging_installer(
+    _persist,
     _use_identity,
     _principal,
     mock_status,
@@ -168,3 +190,125 @@ def test_adopt_allows_live_staging_installer(
 
     mock_live.assert_called_once_with(LIVE_INSTALLER, "staging")
     assert desc.canisters["realm_installer"] == LIVE_INSTALLER
+
+
+def test_known_dead_prefixes_include_fdr7z():
+    assert is_known_dead_canister(DEAD_CASALS_FRONTEND)
+    assert is_known_dead_canister("h6mrr-iiaaa-aaaae-ag2uq-cai")
+    assert not is_known_dead_canister(LIVE_CASALS_FRONTEND)
+
+
+def test_assert_frontend_http_live_rejects_404():
+    def http_get(_canister_id: str):
+        return 404, '{"error_type":"canister_not_found"}'
+
+    with pytest.raises(CanisterNotFoundError, match="IC0301"):
+        assert_frontend_http_live(LIVE_CASALS_FRONTEND, http_get=http_get)
+
+
+def test_assert_frontend_http_live_rejects_known_dead_without_network():
+    with pytest.raises(CanisterNotFoundError, match="known-dead"):
+        assert_frontend_http_live(
+            DEAD_CASALS_FRONTEND,
+            http_get=lambda _id: (_ for _ in ()).throw(AssertionError("must not fetch")),
+        )
+
+
+def test_assert_frontend_http_live_accepts_200():
+    def http_get(_canister_id: str):
+        return 200, "<!doctype html><html><title>Casals</title></html>"
+
+    assert_frontend_http_live(LIVE_CASALS_FRONTEND, http_get=http_get)
+
+
+def test_assert_casals_frontend_live_allows_empty_id():
+    assert_casals_frontend_live(
+        "",
+        "staging",
+        http_get=lambda _id: (_ for _ in ()).throw(AssertionError("must not fetch")),
+    )
+
+
+def test_assert_casals_frontend_live_skips_local():
+    assert_casals_frontend_live(
+        DEAD_CASALS_FRONTEND,
+        "local",
+        http_get=lambda _id: (_ for _ in ()).throw(AssertionError("must not fetch")),
+    )
+
+
+def test_assert_casals_frontend_live_http_required_rejects_404():
+    with pytest.raises(CanisterNotFoundError, match="IC0301"):
+        assert_casals_frontend_live(
+            LIVE_CASALS_FRONTEND,
+            "staging",
+            http_get=lambda _id: (404, "canister not found"),
+            require_http=True,
+        )
+
+
+def test_probe_baked_rejects_dead_casals_frontend(tmp_path: Path):
+    (tmp_path / "canister_ids.json").write_text(
+        json.dumps(
+            {
+                "casals_frontend": {
+                    "staging": DEAD_CASALS_FRONTEND,
+                    "test": LIVE_TEST_CASALS_FRONTEND,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    env_dir = tmp_path / "environments"
+    env_dir.mkdir()
+    (env_dir / "test.json").write_text(
+        json.dumps({"name": "test", "canisters": {"casals_frontend": LIVE_TEST_CASALS_FRONTEND}}),
+        encoding="utf-8",
+    )
+
+    def http_get(canister_id: str):
+        if canister_id == DEAD_CASALS_FRONTEND:
+            return 404, '{"error_type":"canister_not_found"}'
+        return 200, "<html>ok</html>"
+
+    with pytest.raises(CanisterNotFoundError, match="known-dead"):
+        probe_baked_portal_frontends(tmp_path, http_get=http_get)
+
+
+def test_probe_baked_accepts_live_frontends(tmp_path: Path):
+    (tmp_path / "canister_ids.json").write_text(
+        json.dumps({"casals_frontend": {"test": LIVE_TEST_CASALS_FRONTEND}}),
+        encoding="utf-8",
+    )
+    probe_baked_portal_frontends(
+        tmp_path,
+        http_get=lambda _id: (200, "<html>ok</html>"),
+    )
+    collected = collect_baked_portal_frontends(tmp_path)
+    assert collected[0][3] == LIVE_TEST_CASALS_FRONTEND
+
+
+def test_main_probe_baked_exits_nonzero_for_ghost(tmp_path: Path, monkeypatch):
+    (tmp_path / "canister_ids.json").write_text(
+        json.dumps({"casals_frontend": {"staging": DEAD_CASALS_FRONTEND}}),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    assert main(["--probe-baked", str(tmp_path)]) == 1
+
+
+@patch("gaas.phases.persist_descriptor_canister_ids")
+@patch("gaas.phases.assert_casals_frontend_live", side_effect=CanisterNotFoundError("canister not found (IC0301)"))
+def test_persist_guard_fails_gaas_new_on_dead_casals_frontend(mock_live, _persist):
+    from gaas.phases import DeployContext, _persist_and_guard_portal_frontends
+
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["name"] = "staging"
+    data["domain"] = "staging.gos.earth"
+    data["canisters"] = {"casals_frontend": DEAD_CASALS_FRONTEND}
+    desc = Descriptor.model_validate(data)
+    ctx = DeployContext(identity="deployer", network="ic")
+    with pytest.raises(RuntimeError, match="IC0301"):
+        _persist_and_guard_portal_frontends(desc, ctx, require_http=True)
+    mock_live.assert_called_once()
+    _persist.assert_not_called()

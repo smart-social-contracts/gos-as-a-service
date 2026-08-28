@@ -11,7 +11,8 @@
     "map_view": "地图视图",
     "create_realm": "创建领域",
     "marketplace": "市场",
-    "architecture": "架构"
+    "architecture": "架构",
+    "architecture_unavailable": "基础设施不可用"
   },
   "hub": {
     "open": "打开 Realms 菜单",

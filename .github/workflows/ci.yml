@@ -41,6 +41,22 @@ jobs:
       - name: Backend unit tests
         run: python3 -m pytest tests/backend/ -q
 
+  gaas-cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install GaaS CLI
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -e "cli/[dev]"
+      - name: GaaS CLI unit tests
+        run: python3 -m pytest cli/tests/ -q
+      - name: Probe baked Casals frontends
+        run: python3 -m gaas.canister_liveness --probe-baked
+
   frontend:
     runs-on: ubuntu-latest
     steps:

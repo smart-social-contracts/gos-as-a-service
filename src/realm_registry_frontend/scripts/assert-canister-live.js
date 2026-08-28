@@ -57,3 +57,55 @@ export function assertInstallerLiveForBake(canisterId, network, options = {}) {
 		);
 	}
 }
+
+const KNOWN_DEAD_PREFIXES = new Set(['fdr7z', 'jj2e5', 'rbuam', 'fksuf', 'hznxf', 'h6mrr']);
+
+/**
+ * Fail closed before a persistent-network bake injects CANISTER_ID_CASALS_FRONTEND.
+ * Unset is allowed (the portal hides the Architecture link). A dead ID is not.
+ *
+ * @param {string} canisterId
+ * @param {string | undefined} network
+ * @param {{ repoRoot?: string, run?: (cmd: string, args: string[]) => void }} [options]
+ */
+export function assertCasalsFrontendLiveForBake(canisterId, network, options = {}) {
+	const net = (network || '').trim();
+	if (!net || net === 'local' || net === 'localhost') {
+		return;
+	}
+
+	const id = (canisterId || '').trim();
+	if (!id) {
+		return;
+	}
+
+	const prefix = id.split('-')[0];
+	if (KNOWN_DEAD_PREFIXES.has(prefix)) {
+		throw new Error(
+			`refusing to bake CANISTER_ID_CASALS_FRONTEND=${id}: known-dead canister`
+		);
+	}
+
+	const repoRoot = options.repoRoot || defaultRepoRoot();
+	const script = livenessScript(repoRoot);
+	if (!existsSync(script)) {
+		throw new Error(
+			`refusing to bake CANISTER_ID_CASALS_FRONTEND=${id}: missing ${script}`
+		);
+	}
+
+	const run =
+		options.run ||
+		((cmd, args) => {
+			execFileSync(cmd, args, { stdio: 'pipe', encoding: 'utf-8' });
+		});
+
+	try {
+		run('python3', [script, id, 'casals_frontend']);
+	} catch (err) {
+		const detail = [err.stderr, err.stdout, err.message].filter(Boolean).join('\n');
+		throw new Error(
+			`refusing to bake CANISTER_ID_CASALS_FRONTEND=${id}: canister not found (IC0301). ${detail}`.trim()
+		);
+	}
+}
