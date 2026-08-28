@@ -367,6 +367,13 @@ dfx deploy realm_installer realm_registry_backend
 python3 tests/integration/test_realm_installer_api.py
 ```
 
+`realm_registry_backend` and `realm_installer` declare `service : (text) -> {…}`
+(their `@init` takes a config JSON string), so a plain `dfx deploy <name>` needs
+an argument or it fails with **"Expected arguments but found none"**. `dfx.json`
+carries `"init_arg": "(\"\")"` for both — an empty config, which both `@init`
+bodies skip. A new Basilisk canister with init parameters needs the same entry;
+`tests/backend/test_dfx_init_args.py` fails if one is missing.
+
 ## Relationship to Realms GOS
 
 The **realms** repo consumes GaaS release artifacts. Its `dfx.json` may reference remote WASM URLs from this repo's GitHub Releases for registry/installer when running local mundus stacks. Live test/demo/staging canister IDs remain in **this** repo's `canister_ids.json`.
