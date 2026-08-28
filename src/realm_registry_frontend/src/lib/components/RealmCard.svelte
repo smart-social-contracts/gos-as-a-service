@@ -2,9 +2,11 @@
   import { createEventDispatcher } from 'svelte';
   import { _, locale } from 'svelte-i18n';
   import {
+    acceptBrandingAssetUrl,
     ensureProtocol,
     formatFullDate,
     formatTimeAgo,
+    realmFrontendAssetBase,
     resolvedRealmLogoUrl,
     resolveRealmAssetUrl,
   } from '$lib/realm-utils.js';
@@ -16,10 +18,46 @@
   const dispatch = createEventDispatcher();
 
   let logoFailed = false;
+  let logoSrc = null;
+  let welcomeBg = '';
+  let probeGen = 0;
+  let lastProbeKey = '';
 
-  $: welcomeBg = resolveRealmAssetUrl(realm, '/custom/background.png');
-  $: logoSrc = resolvedRealmLogoUrl(realm);
-  $: realm?.id, (logoFailed = false);
+  $: probeCardBranding(realm);
+
+  async function probeCardBranding(r) {
+    const key = `${r?.id || ''}|${r?.frontend_canister_id || ''}|${realmFrontendAssetBase(r || {})}`;
+    if (key === lastProbeKey) return;
+    lastProbeKey = key;
+    const gen = ++probeGen;
+    logoFailed = false;
+    // Start unbranded: letter fallback, no city background until bytes are accepted.
+    logoSrc = null;
+    welcomeBg = '';
+
+    const logoUrl = resolvedRealmLogoUrl(r || {});
+    const bgUrl = resolveRealmAssetUrl(r || {}, '/custom/background.png');
+    if (logoUrl) {
+      try {
+        if (await acceptBrandingAssetUrl(logoUrl)) {
+          if (gen !== probeGen) return;
+          logoSrc = logoUrl;
+        }
+      } catch {
+        /* letter fallback */
+      }
+    }
+    if (bgUrl) {
+      try {
+        if (await acceptBrandingAssetUrl(bgUrl)) {
+          if (gen !== probeGen) return;
+          welcomeBg = bgUrl;
+        }
+      } catch {
+        /* no city background */
+      }
+    }
+  }
 </script>
 
 <button

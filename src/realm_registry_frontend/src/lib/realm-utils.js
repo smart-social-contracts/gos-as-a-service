@@ -93,15 +93,22 @@ export const LEFTOVER_PLATFORM_LOGO_PATHS = [
 
 /**
  * SHA-256 of platform leftovers that must never be painted as a realm brand.
- * The Syntropia DNA/globe at `/custom/logo.png` is a real realm mark — do not
- * list it here.
+ * Fresh Realms GOS frontends ship the Syntropia DNA/globe and city photo at
+ * `/custom/logo.png` and `/custom/background.png` — those bytes are template
+ * defaults, not a founder-set brand.
  */
 export const LEFTOVER_BRANDING_SHA256 = new Set([
   // Retired clover / figure-eight shipped at `/images/logo.png`.
   '85bf3e1f45bce760e07987764c7435c2c0744db49092d5721cb7a33c25c40898',
+  // Shipped Syntropia DNA/globe at `/custom/logo.png`
+  // (realms `static/custom/logo.png` and live unbranded frontends).
+  'ad61a953728bad3317cec825379f8b00022cda8f48572be34df74f4f65cc70a2',
+  // Shipped city photo at `/custom/background.png`
+  // (realms `static/custom/background.png` and live unbranded frontends).
+  'a2852f05b5ae66b26f169d8efc128326fcdb64dee2915d251e66df477881fed4',
 ]);
 
-/** Realm frontend path that holds the configured brand. Never skip this file. */
+/** Realm frontend path that holds the configured brand when the bytes differ from the template. */
 export const REALM_BRAND_LOGO_PATH = '/custom/logo.png';
 
 /**
@@ -202,8 +209,8 @@ export function splashLogoCandidates({ frontendCanisterId = '', configuredLogoUr
 }
 
 /**
- * URL the identified-realm splash must paint on its first frame.
- * Empty only when the frontend canister is still unknown.
+ * First splash candidate once a frontend canister is known.
+ * Still hashed before paint — shipped Syntropia DNA is not a realm brand.
  */
 export function firstSplashLogoUrl({ frontendCanisterId = '', configuredLogoUrl = '' } = {}) {
   return splashLogoCandidates({ frontendCanisterId, configuredLogoUrl })[0] || '';
@@ -281,11 +288,6 @@ export function clearSplashBrandHint(slug, storage = defaultSplashHintStorage())
   }
 }
 
-/**
- * Accept a splash logo only if it loads and is not a leftover demo/platform mark.
- * @param {string} url
- * @param {typeof fetch} [fetchImpl]
- */
 function looksLikeImageBytes(bytes, contentType) {
   const type = String(contentType || '').toLowerCase();
   if (type.startsWith('image/')) return true;
@@ -300,22 +302,21 @@ function looksLikeImageBytes(bytes, contentType) {
 }
 
 /**
- * Accept a splash logo if it loads as an image.
- * `/custom/logo.png` is always eligible (including the Syntropia DNA/globe).
- * Clover / GOS planet paths and leftover clover bytes are rejected.
+ * Accept a branding image (logo or background) if it loads and is not a
+ * shipped template leftover. `/custom/*` is eligible only when the bytes
+ * differ from the Syntropia DNA / city defaults.
  * @param {string} url
  * @param {typeof fetch} [fetchImpl]
  */
-export async function acceptSplashLogoUrl(url, fetchImpl = globalThis.fetch) {
+export async function acceptBrandingAssetUrl(url, fetchImpl = globalThis.fetch) {
   const candidate = String(url || '').trim();
-  if (!candidate || isLeftoverPlatformLogoPath(candidate)) return false;
-  const realmBrandPath = isRealmBrandLogoPath(candidate);
+  if (!candidate) return false;
 
   if (candidate.startsWith('data:')) {
     if (!candidate.startsWith('data:image/')) return false;
     const bytes = decodeDataUrlBytes(candidate);
     if (!bytes) return false;
-    return realmBrandPath || !(await isLeftoverBrandingBytes(bytes));
+    return !(await isLeftoverBrandingBytes(bytes));
   }
 
   if (typeof fetchImpl !== 'function') return false;
@@ -324,8 +325,20 @@ export async function acceptSplashLogoUrl(url, fetchImpl = globalThis.fetch) {
   const bytes = new Uint8Array(await res.arrayBuffer());
   if (!bytes.byteLength) return false;
   if (!looksLikeImageBytes(bytes, res.headers?.get?.('content-type'))) return false;
-  if (realmBrandPath) return true;
   return !(await isLeftoverBrandingBytes(bytes));
+}
+
+/**
+ * Accept a splash logo if it loads as an image and is not leftover branding.
+ * Shipped Syntropia DNA at `/custom/logo.png` is rejected; a founder-uploaded
+ * file with different bytes is accepted. Clover / GOS planet paths are rejected.
+ * @param {string} url
+ * @param {typeof fetch} [fetchImpl]
+ */
+export async function acceptSplashLogoUrl(url, fetchImpl = globalThis.fetch) {
+  const candidate = String(url || '').trim();
+  if (!candidate || isLeftoverPlatformLogoPath(candidate)) return false;
+  return acceptBrandingAssetUrl(candidate, fetchImpl);
 }
 
 export function formatFullDate(timestamp) {

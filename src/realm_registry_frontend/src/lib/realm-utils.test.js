@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import {
+  acceptBrandingAssetUrl,
   acceptSplashLogoUrl,
   brandingLogoUrls,
   BRANDING_LOGO_PATHS,
@@ -64,12 +65,10 @@ test('leftover platform paths include clover and GOS planet, not /custom/logo.pn
   assert.equal(pathnameFromAssetUrl('https://example.icp0.io/custom/logo.png'), '/custom/logo.png');
 });
 
-test('leftover hashes include the retired clover only — not Syntropia', () => {
-  assert.equal(
-    LEFTOVER_BRANDING_SHA256.has('ad61a953728bad3317cec825379f8b00022cda8f48572be34df74f4f65cc70a2'),
-    false
-  );
+test('leftover hashes include clover, shipped Syntropia DNA, and shipped city background', () => {
   assert.ok(LEFTOVER_BRANDING_SHA256.has('85bf3e1f45bce760e07987764c7435c2c0744db49092d5721cb7a33c25c40898'));
+  assert.ok(LEFTOVER_BRANDING_SHA256.has('ad61a953728bad3317cec825379f8b00022cda8f48572be34df74f4f65cc70a2'));
+  assert.ok(LEFTOVER_BRANDING_SHA256.has('a2852f05b5ae66b26f169d8efc128326fcdb64dee2915d251e66df477881fed4'));
 });
 
 test('splashLogoCandidates prefers configured logo_url and skips leftover paths', () => {
@@ -127,29 +126,56 @@ test('splash brand hint persists slug → frontend canister for the first splash
   assert.equal(readSplashBrandHint('realmtest6', storage), null);
 });
 
-test('Syntropia /custom/logo.png is accepted; clover leftover is rejected', async () => {
-  const syntropia = readFileSync(join(testdata, 'syntropia-realm-logo.png'));
-  const clover = readFileSync(join(testdata, 'leftover-clover-logo.png'));
-  const syntropiaBuf = syntropia.buffer.slice(syntropia.byteOffset, syntropia.byteOffset + syntropia.byteLength);
-  const cloverBuf = clover.buffer.slice(clover.byteOffset, clover.byteOffset + clover.byteLength);
+function bufferOf(fileBytes) {
+  return fileBytes.buffer.slice(fileBytes.byteOffset, fileBytes.byteOffset + fileBytes.byteLength);
+}
 
-  assert.equal(await isLeftoverBrandingBytes(syntropia), false);
+function okPngFetch(fileBytes) {
+  const buf = bufferOf(fileBytes);
+  return async () => ({
+    ok: true,
+    headers: { get: () => 'image/png' },
+    arrayBuffer: async () => buf,
+  });
+}
+
+test('shipped Syntropia DNA and city bytes are leftover; clover leftover is still rejected', async () => {
+  const syntropia = readFileSync(join(testdata, 'syntropia-realm-logo.png'));
+  const city = readFileSync(join(testdata, 'leftover-city-background.png'));
+  const clover = readFileSync(join(testdata, 'leftover-clover-logo.png'));
+
+  assert.equal(await sha256Hex(syntropia), 'ad61a953728bad3317cec825379f8b00022cda8f48572be34df74f4f65cc70a2');
+  assert.equal(await sha256Hex(city), 'a2852f05b5ae66b26f169d8efc128326fcdb64dee2915d251e66df477881fed4');
+  assert.equal(await isLeftoverBrandingBytes(syntropia), true);
+  assert.equal(await isLeftoverBrandingBytes(city), true);
   assert.equal(await isLeftoverBrandingBytes(clover), true);
   assert.equal(
-    await acceptSplashLogoUrl('https://realm.example/custom/logo.png', async () => ({
-      ok: true,
-      headers: { get: () => 'image/png' },
-      arrayBuffer: async () => syntropiaBuf,
-    })),
+    await acceptSplashLogoUrl('https://realm.example/custom/logo.png', okPngFetch(syntropia)),
+    false
+  );
+  assert.equal(
+    await acceptBrandingAssetUrl('https://realm.example/custom/background.png', okPngFetch(city)),
+    false
+  );
+  assert.equal(
+    await acceptSplashLogoUrl('https://realm.example/images/logo.png', okPngFetch(clover)),
+    false
+  );
+});
+
+test('a founder-uploaded mark at /custom/logo.png is still accepted', async () => {
+  const uploaded = readFileSync(join(testdata, 'leftover-clover-logo.png'));
+  const uploadedCopy = Buffer.from(uploaded);
+  uploadedCopy[uploadedCopy.length - 1] ^= 0xff;
+
+  assert.equal(await isLeftoverBrandingBytes(uploadedCopy), false);
+  assert.equal(
+    await acceptSplashLogoUrl('https://realm.example/custom/logo.png', okPngFetch(uploadedCopy)),
     true
   );
   assert.equal(
-    await acceptSplashLogoUrl('https://realm.example/images/logo.png', async () => ({
-      ok: true,
-      headers: { get: () => 'image/png' },
-      arrayBuffer: async () => cloverBuf,
-    })),
-    false
+    await acceptBrandingAssetUrl('https://realm.example/custom/background.png', okPngFetch(uploadedCopy)),
+    true
   );
 });
 

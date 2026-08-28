@@ -1,37 +1,34 @@
 <script>
-  import { acceptSplashLogoUrl, firstSplashLogoUrl, splashLogoCandidates } from '$lib/realm-utils.js';
+  import { acceptSplashLogoUrl, splashLogoCandidates } from '$lib/realm-utils.js';
 
-  /** Pulse mark for the realm brand at `/custom/logo.png` — never clover or GOS planet. */
+  /** Pulse mark for a founder-set realm brand — never clover, GOS planet, or shipped Syntropia DNA. */
   export let size = 128;
-  /** Frontend asset canister; `/custom/logo.png` is the configured brand. */
+  /** Frontend asset canister; `/custom/logo.png` is probed and hashed before paint. */
   export let frontendCanisterId = '';
   /** Realm `logo_url` from get_runtime_flags / status. */
   export let configuredLogoUrl = '';
   /**
    * True when the URL already names a realm (`/r/{slug}`).
-   * Identified realms never paint the GOS planet or retired clover.
+   * Identified realms never paint the GOS planet, retired clover, or template DNA.
    */
   export let identified = false;
 
-  // First render must already include the realm mark when the canister is known.
-  // Do not start as text-only and wait for the leftover-hash probe.
-  let displaySrc = firstSplashLogoUrl({
-    frontendCanisterId,
-    configuredLogoUrl,
-  });
-  let branded = Boolean(displaySrc);
+  // Do not paint `/custom/logo.png` until leftover hashes are checked.
+  // Fresh frontends ship the Syntropia DNA there; that is not a realm brand.
+  let displaySrc = '';
+  let branded = false;
   let probeGen = 0;
 
   $: probeBranding(frontendCanisterId, configuredLogoUrl, identified);
 
   async function probeBranding(canisterId, configured, isIdentified) {
     const gen = ++probeGen;
+    branded = false;
+    displaySrc = '';
     // Slug routes identify the realm from the first paint. Do not flash
     // `/images/logo_sphere_only.svg` (or any other platform default) while
     // waiting for the configured brand.
     if (!isIdentified && !String(canisterId || '').trim()) {
-      branded = false;
-      displaySrc = '';
       return;
     }
 
@@ -40,20 +37,8 @@
       configuredLogoUrl: configured,
     });
     if (!urls.length) {
-      branded = false;
-      displaySrc = '';
       return;
     }
-
-    // Paint `/custom/logo.png` (or the configured brand) on this frame.
-    // Leftover clover / GOS planet rejection is async and must not blank
-    // the first splash paint.
-    const immediate = firstSplashLogoUrl({
-      frontendCanisterId: canisterId,
-      configuredLogoUrl: configured,
-    });
-    displaySrc = immediate || urls[0];
-    branded = Boolean(displaySrc);
 
     for (const url of urls) {
       if (gen !== probeGen) return;
@@ -69,9 +54,6 @@
         /* try the next candidate */
       }
     }
-    if (gen !== probeGen) return;
-    branded = false;
-    displaySrc = '';
   }
 </script>
 
