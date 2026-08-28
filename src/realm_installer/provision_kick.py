@@ -8,8 +8,13 @@ PROVISION_HEARTBEAT_INTERVAL_S = 600
 # Fresh in-progress lock — concurrent kicks within this window are benign skips.
 PROVISION_ACTIVE_STALE_S = 30 * 60
 
-# Heartbeat retries these even when ``failed`` remains in global terminal statuses.
-HEARTBEAT_RETRY_STATUSES = ("pending", "provisioning", "failed")
+# Statuses the heartbeat may re-drive. ``failed`` is deliberately absent: a
+# failed job is terminal until someone acts on it. Re-kicking one re-ran the
+# whole bootstrap from zero against a stand that was already created, so
+# `enter_setup` and `configure_canister_ids` failed on replay and the real
+# failure (e.g. a missing asset-canister permission) hid behind
+# "Retrying automatically" forever.
+HEARTBEAT_RETRY_STATUSES = ("pending", "provisioning")
 
 
 class ProvisionAlreadyInProgress(Exception):
@@ -54,16 +59,18 @@ def provisioning_job_ids_for_heartbeat(
     now_s: int,
     stale_s: int = PROVISION_ACTIVE_STALE_S,
 ) -> list[str]:
-    """Return job IDs the heartbeat should retry (pending/provisioning/failed).
+    """Return job IDs the heartbeat should re-drive (pending/provisioning only).
 
     Skips jobs with a fresh ``provision_active_at`` lock; includes jobs whose
-    lock is stale so a crashed pass can be retried. ``failed`` is always
-    retryable here even when present in ``terminal_statuses``.
+    lock is stale so a crashed pass can be picked up again. Terminal jobs —
+    ``failed`` included — are never re-driven here: recovery is an explicit
+    ``retry_deployment``, which resumes from the failed step instead of
+    replaying the whole bootstrap.
     """
     out: list[str] = []
     for job in jobs:
         status = (getattr(job, "status", None) or "pending")
-        if status in terminal_statuses and status != "failed":
+        if status in terminal_statuses:
             continue
         if status not in HEARTBEAT_RETRY_STATUSES:
             continue

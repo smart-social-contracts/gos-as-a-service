@@ -7,6 +7,7 @@ _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 sys.path.insert(0, os.path.join(_REPO_ROOT, "src/realm_installer"))
 
 from provision_kick import (
+    HEARTBEAT_RETRY_STATUSES,
     PROVISION_ACTIVE_STALE_S,
     PROVISION_HEARTBEAT_INTERVAL_S,
     ProvisionAlreadyInProgress,
@@ -69,7 +70,6 @@ def test_provisioning_job_ids_for_heartbeat_skips_fresh_lock():
     jobs = [
         _FakeJob("job_a", "provisioning", provision_active_at=now - 60),
         _FakeJob("job_b", "pending"),
-        _FakeJob("job_c", "failed"),
         _FakeJob("job_d", "provisioning", provision_active_at=0),
         _FakeJob("job_e", "provisioning", provision_active_at=now - PROVISION_ACTIVE_STALE_S - 1),
     ]
@@ -78,29 +78,35 @@ def test_provisioning_job_ids_for_heartbeat_skips_fresh_lock():
         terminal_statuses=("failed", "completed"),
         now_s=now,
     )
-    assert ids == ["job_b", "job_c", "job_d", "job_e"]
+    assert ids == ["job_b", "job_d", "job_e"]
 
 
-def test_provisioning_job_ids_for_heartbeat_retries_failed_without_lock():
+def test_heartbeat_never_reopens_a_failed_job():
+    """A failed deploy is terminal.
+
+    Re-kicking one replayed the whole bootstrap against a stand that already
+    existed: `enter_setup` and `configure_canister_ids` failed on replay, and
+    the failure that actually mattered (no ManagePermissions on the asset
+    canister) sat behind "Retrying automatically". Recovery is an explicit
+    retry_deployment, which resumes from the failed step.
+    """
     now = 1_700_000_000
-    jobs = [_FakeJob("job_failed", "failed", provision_active_at=0)]
+    jobs = [
+        _FakeJob("job_failed", "failed", provision_active_at=0),
+        _FakeJob("job_failed_verification", "failed_verification"),
+        _FakeJob("job_cancelled", "cancelled"),
+    ]
     ids = provisioning_job_ids_for_heartbeat(
         jobs,
-        terminal_statuses=("failed", "completed", "cancelled"),
-        now_s=now,
-    )
-    assert ids == ["job_failed"]
-
-
-def test_provisioning_job_ids_for_heartbeat_skips_failed_with_fresh_lock():
-    now = 1_700_000_000
-    jobs = [_FakeJob("job_failed", "failed", provision_active_at=now - 60)]
-    ids = provisioning_job_ids_for_heartbeat(
-        jobs,
-        terminal_statuses=("failed", "completed"),
+        terminal_statuses=("failed", "failed_verification", "completed", "cancelled"),
         now_s=now,
     )
     assert ids == []
+
+
+def test_heartbeat_retry_statuses_exclude_failed():
+    assert "failed" not in HEARTBEAT_RETRY_STATUSES
+    assert set(HEARTBEAT_RETRY_STATUSES) == {"pending", "provisioning"}
 
 
 def test_claim_provision_lock_rejects_concurrent_pass():
@@ -250,13 +256,40 @@ def test_lock_cleared_after_success_and_failure_paths():
     assert job.provision_active_at == 0
 
 
-def test_reopen_failed_job_keeps_error_in_source():
-    """Heartbeat / retry must not wipe job.error — the portal shows it on auto-retry."""
+def _installer_source() -> str:
     src_path = os.path.join(_REPO_ROOT, "src/realm_installer/main.py")
     with open(src_path, encoding="utf-8") as fh:
-        src = fh.read()
-    reopen = src.split('if status == "failed":', 1)[1].split("claim_provision_lock", 1)[0]
-    assert "job.error" not in reopen
+        return fh.read()
+
+
+def test_provisioning_pass_does_not_reopen_a_failed_job():
+    """Only pending/provisioning jobs are driven; a failed job needs an explicit retry."""
+    src = _installer_source()
+    gen = src.split("def _provision_via_casals_gen", 1)[1].split(
+        "def _provision_via_casals_body", 1
+    )[0]
+    assert 'if status not in ("pending", "provisioning"):' in gen
+    assert 'if status == "failed":' not in gen
+
+
+def test_retry_keeps_error_and_resumes_instead_of_reprovisioning():
+    """Retry must not wipe job.error — the portal shows it — and must resume."""
+    src = _installer_source()
     retry = src.split("def retry_deployment", 1)[1].split("def provision_via_casals", 1)[0]
     assert 'job.error = ""' not in retry
     assert 'job.status = "provisioning"' in retry
+
+    gen = src.split("def _provision_via_casals_gen", 1)[1].split(
+        "def _provision_via_casals_body", 1
+    )[0]
+    assert "bootstrap_already_started" in gen
+    assert "_resume_deploy_task" in gen
+
+
+def test_deploy_task_id_is_not_minted_from_the_clock():
+    """Wall-clock task ids collided across stands provisioned in the same round."""
+    src = _installer_source()
+    assert '"deploy_%d" % ic.time()' not in src
+    start = src.split("def _start_extensions_for_job", 1)[1]
+    assert "task_id = deploy_task_id(job.name)" in start
+    assert "if _resume_deploy_task(job):" in start
