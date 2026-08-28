@@ -31,9 +31,30 @@ from provision_kick import (
     claim_provision_lock,
     clear_provision_lock,
     provision_kick_runner,
+    provision_lock_is_fresh,
     provisioning_job_ids_for_heartbeat,
     schedule_provision_kick as _schedule_provision_kick_impl,
     should_kick_provision_on_enqueue,
+)
+from asset_permissions import (
+    grant_frontend_access_outcome,
+    grant_permission_candid,
+    list_permitted_candid,
+    principal_in_candid_vec,
+)
+from deploy_resume import (
+    best_owned_task,
+    bootstrap_already_started,
+    completed_step_signatures,
+    deploy_task_id,
+    describe_resume,
+    enter_setup_already_satisfied,
+    extensions_stall_reason,
+    failed_bootstrap_step_kinds,
+    plan_resume,
+    steps_satisfied_by_prior_task,
+    task_belongs_to_job,
+    task_owner_job,
 )
 from claim_args import build_claim_slug_args
 from stand_create_args import build_stand_create_args, casals_placement_from_cfg
@@ -562,16 +583,41 @@ def _build_canister_ids_js(
 
 
 def _grant_frontend_commit(frontend_id: str, to_principal: str):
-    """Grant Commit on a certified-assets frontend canister (idempotent)."""
-    candid_arg = (
-        f'(record {{ to_principal = principal "{to_principal}"; '
-        f'permission = variant {{ Commit }} }})'
-    )
+    """Grant Commit on a certified-assets frontend canister (idempotent).
+
+    Requires ManagePermissions (or control) on that canister. On the Casals
+    path the installer has neither — see ``_frontend_commit_permitted``.
+    """
     grant_result: CallResult = yield ic.call_raw(
         Principal.from_str(frontend_id), "grant_permission",
-        ic.candid_encode(candid_arg), 0,
+        ic.candid_encode(grant_permission_candid(to_principal)), 0,
     )
     return grant_result
+
+
+def _frontend_commit_permitted(frontend_id: str, principal_id: str, job_id_val: str):
+    """Generator: True when ``principal_id`` already holds Commit on the frontend.
+
+    Reads the asset canister's own permission list, so the installer can tell
+    "Casals already granted this" from "nobody did" without holding
+    ManagePermissions itself. An unreadable list is reported as "not granted"
+    — callers then try the grant and report what actually happened.
+    """
+    try:
+        res: CallResult = yield ic.call_raw(
+            Principal.from_str(frontend_id), "list_permitted",
+            ic.candid_encode(list_permitted_candid()), 0,
+        )
+        if isinstance(res, dict) and res.get("Err") is not None:
+            jlog(job_id_val).info(f"list_permitted unavailable: {res['Err']}")
+            return False
+        raw = unwrap_call_result(res)
+        if isinstance(raw, (bytes, bytearray)):
+            raw = ic.candid_decode(bytes(raw))
+        return principal_in_candid_vec(raw if isinstance(raw, str) else str(raw), principal_id)
+    except Exception as e:
+        jlog(job_id_val).info(f"list_permitted probe failed: {e}")
+        return False
 
 
 def _store_canister_ids_js(frontend_id: str, js: str):
@@ -1231,6 +1277,28 @@ def _execute_configure_canister_ids(task, step, args):
     step.completed_at = now_s()
 
 
+def _record_enter_setup_failure(task, step, message: str):
+    """Fail an enter_setup step — unless the realm is already in setup.
+
+    A realm that is already in setup is in the state this step wanted, so the
+    step is satisfied; the result records that this pass was not the one that
+    did it. Every other rejection stays a failure.
+    """
+    if enter_setup_already_satisfied(message):
+        step.status = "completed"
+        step.result_json = json.dumps(
+            {"already_in_setup": True, "detail": (message or "")[:300]}
+        )[:1990]
+        jlog(task.name).info(
+            f"step {step.idx} enter_setup already satisfied by an earlier pass: {(message or '')[:200]}"
+        )
+    else:
+        step.error = f"enter_setup failed: {message}"[:1990]
+        step.status = "failed"
+        jlog(task.name).error(f"step {step.idx} enter_setup failed: {step.error[:300]}")
+    step.completed_at = now_s()
+
+
 def _execute_enter_setup(task, step, args):
     """Put a new Monad GOS realm into in-realm setup (founding citizen + registry link)."""
     backend_id = (args.get("backend_canister_id") or "").strip()
@@ -1258,10 +1326,7 @@ def _execute_enter_setup(task, step, args):
         ic.candid_encode(setup_arg), 0,
     )
     if isinstance(setup_result, dict) and "Err" in setup_result:
-        step.error = f"enter_setup failed: {setup_result['Err']}"[:1990]
-        step.status = "failed"
-        jlog(task.name).error(f"step {step.idx} enter_setup failed: {step.error}")
-        step.completed_at = now_s()
+        _record_enter_setup_failure(task, step, str(setup_result["Err"]))
         return
 
     try:
@@ -1273,16 +1338,10 @@ def _execute_enter_setup(task, step, args):
             if err is None and raw.get("Err") is not None:
                 err = raw["Err"]
             if err is not None:
-                step.error = f"enter_setup failed: {err}"[:1990]
-                step.status = "failed"
-                jlog(task.name).error(f"step {step.idx} enter_setup failed: {step.error}")
-                step.completed_at = now_s()
+                _record_enter_setup_failure(task, step, str(err))
                 return
     except Exception as exc:
-        step.error = f"enter_setup failed: {exc}"[:1990]
-        step.status = "failed"
-        jlog(task.name).error(f"step {step.idx} enter_setup exception: {step.error[:300]}")
-        step.completed_at = now_s()
+        _record_enter_setup_failure(task, step, str(exc))
         return
 
     step.status = "completed"
@@ -1294,7 +1353,15 @@ def _execute_enter_setup(task, step, args):
 
 
 def _execute_grant_frontend_access(task, step, args):
-    """Grant the realm backend Commit permission on the frontend asset canister."""
+    """Ensure the realm backend holds Commit on the frontend asset canister.
+
+    Verify first: on the Casals path the platform provisioner grants Commit to
+    the paired stand backend when it provisions the frontend bundle, and the
+    installer holds no ManagePermissions there, so its own grant would be both
+    redundant and impossible. Only when the permission is genuinely absent and
+    the installer cannot add it does this step fail — with the real reason,
+    rather than a rejection that reads like a transient error.
+    """
     backend_id = args.get("backend_canister_id", "")
     frontend_id = args.get("frontend_canister_id", "")
     if not backend_id or not frontend_id:
@@ -1303,22 +1370,38 @@ def _execute_grant_frontend_access(task, step, args):
         step.completed_at = now_s()
         return
 
-    jlog(task.name).info(f"granting Commit on frontend {frontend_id} to backend {backend_id}")
-    candid_arg = f'(record {{ to_principal = principal "{backend_id}"; permission = variant {{ Commit }} }})'
-    grant_result: CallResult = yield ic.call_raw(
-        Principal.from_str(frontend_id), "grant_permission",
-        ic.candid_encode(candid_arg), 0,
-    )
-    if isinstance(grant_result, dict) and "Err" in grant_result:
-        step.error = f"grant_permission failed: {grant_result['Err']}"[:1990]
-        step.status = "failed"
-        jlog(task.name).error(f"step {step.idx} grant_permission failed: {step.error}")
-        step.completed_at = now_s()
-        return
+    permitted_before = yield from _frontend_commit_permitted(frontend_id, backend_id, task.name)
+    grant_error = ""
+    permitted_after = False
+    if permitted_before:
+        jlog(task.name).info(
+            f"backend {backend_id} already holds Commit on frontend {frontend_id}"
+        )
+    else:
+        jlog(task.name).info(f"granting Commit on frontend {frontend_id} to backend {backend_id}")
+        grant_result = yield from _grant_frontend_commit(frontend_id, backend_id)
+        if isinstance(grant_result, dict) and "Err" in grant_result:
+            grant_error = str(grant_result["Err"])
+            permitted_after = yield from _frontend_commit_permitted(
+                frontend_id, backend_id, task.name
+            )
 
-    step.status = "completed"
-    step.result_json = json.dumps({"granted": True, "backend": backend_id, "frontend": frontend_id})
-    jlog(task.name).info(f"step {step.idx} Commit permission granted to backend on frontend asset canister")
+    status, note, error = grant_frontend_access_outcome(
+        permitted_before=permitted_before,
+        grant_error=grant_error,
+        permitted_after=permitted_after,
+        backend_id=backend_id,
+        frontend_id=frontend_id,
+    )
+    step.status = status
+    if status == "completed":
+        step.result_json = json.dumps({
+            "granted_by": note, "backend": backend_id, "frontend": frontend_id,
+        })[:1990]
+        jlog(task.name).info(f"step {step.idx} frontend Commit permission in place ({note})")
+    else:
+        step.error = error[:1990]
+        jlog(task.name).error(f"step {step.idx} grant_frontend_access failed: {step.error[:400]}")
     step.completed_at = now_s()
 
 
@@ -1336,28 +1419,39 @@ def _finalize_task(task):
 def _check_job_after_extensions(task):
     try:
         list(DeploymentJob.instances())
-        for job in DeploymentJob.instances():
-            if (job.ext_deploy_task_id or "") == task.name:
-                if task.status in ("completed", "partial"):
-                    if task.status == "partial":
-                        failed_steps = [s for s in task.steps if s.status == "failed"]
-                        warnings = "; ".join(
-                            f"{s.label}: {s.error}" for s in failed_steps[:10]
-                        )
-                        job.error = f"partial extension install ({len(failed_steps)} failed): {warnings}"[:1990]
-                        jlog(job.name).warning(job.error)
-                    job.status = "registering"
-                    schedule_registration(job.name)
-                else:
-                    job.status = "failed"
-                    failed_steps = [s for s in task.steps if s.status == "failed"]
-                    errors = "; ".join(
-                        f"{s.label}: {s.error}" for s in failed_steps[:10]
-                    )
-                    job.error = f"extension install failed ({len(failed_steps)} failed): {errors}"[:1990]
-                    job.completed_at = now_s()
-                    schedule_registry_settlement(job.name, success=False, reason=job.error)
-                return
+        broken_bootstrap = failed_bootstrap_step_kinds(list(task.steps))
+        # By owner, not by the first job that happens to record this task id:
+        # two jobs that shared a task name had one realm's failure applied to
+        # the other realm's job (and its credits settled).
+        job = task_owner_job(
+            DeploymentJob.instances(), task.name, task.target_canister_id,
+        )
+        if job is None:
+            jlog(task.name).error(
+                f"task finished as '{task.status}' but no job owns it "
+                f"(target {task.target_canister_id or '–'}); leaving every job untouched"
+            )
+            return
+        if task.status in ("completed", "partial") and not broken_bootstrap:
+            if task.status == "partial":
+                failed_steps = [s for s in task.steps if s.status == "failed"]
+                warnings = "; ".join(
+                    f"{s.label}: {s.error}" for s in failed_steps[:10]
+                )
+                job.error = f"partial extension install ({len(failed_steps)} failed): {warnings}"[:1990]
+                jlog(job.name).warning(job.error)
+            job.status = "registering"
+            schedule_registration(job.name)
+        else:
+            job.status = "failed"
+            failed_steps = [s for s in task.steps if s.status == "failed"]
+            errors = "; ".join(
+                f"{s.label}: {s.error}" for s in failed_steps[:10]
+            )
+            phase = "realm bootstrap" if broken_bootstrap else "extension install"
+            job.error = f"{phase} failed ({len(failed_steps)} failed): {errors}"[:1990]
+            job.completed_at = now_s()
+            schedule_registry_settlement(job.name, success=False, reason=job.error)
     except Exception as e:
         jlog(task.name).error(f"_check_job_after_extensions: {e}")
 
@@ -1616,7 +1710,118 @@ def _fetch_codex_dependency_ids(registry_id: str, codex_id: str, version=None) -
         _log.warning(f"codex dependency lookup failed for {cid}: {e}")
         return []
 
+def _discard_stale_deploy_task(task_id: str, job_id_val: str) -> None:
+    """Drop a task record an aborted build left behind, so a rebuild starts clean.
+
+    Task ids are derived from the job id, so a rebuild reuses the name; without
+    this the new task would inherit the half-built steps of the aborted one.
+    """
+    try:
+        list(DeployStep.instances())
+        list(DeployTask.instances())
+        stale = DeployTask[task_id]
+        if stale is None:
+            return
+        for step in list(stale.steps):
+            step.delete()
+        stale.delete()
+        jlog(job_id_val).warning(f"discarded incomplete deploy task {task_id} before rebuilding")
+    except Exception as e:
+        jlog(job_id_val).warning(f"could not discard deploy task {task_id}: {e}")
+
+
+def _carry_over_completed_steps(job, task) -> None:
+    """Mark freshly built steps that a previous task of this realm completed.
+
+    Reached when the recorded task was lost or shadowed by a task-id collision.
+    The realm keeps whatever already ran, so replaying it fails: this looks up
+    the realm's own prior task rows (still enumerable even when the name alias
+    points elsewhere) and carries their completed steps across.
+    """
+    try:
+        prior = best_owned_task(
+            [t for t in DeployTask.instances() if (t.name or "") != (task.name or "")],
+            job.backend_canister_id,
+        )
+        if prior is None:
+            return
+        signatures = completed_step_signatures(list(prior.steps))
+        if not signatures:
+            return
+        satisfied = set(steps_satisfied_by_prior_task(list(task.steps), signatures))
+        if not satisfied:
+            return
+        carried = []
+        for step in task.steps:
+            if int(step.idx or 0) not in satisfied:
+                continue
+            step.status = "completed"
+            step.result_json = json.dumps(
+                {"already_completed_by_task": prior.name, "kind": step.kind}
+            )[:1990]
+            step.completed_at = now_s()
+            carried.append(step.kind)
+        jlog(job.name).info(
+            f"carried {len(carried)} completed step(s) over from task {prior.name}: "
+            f"{', '.join(carried)}"
+        )
+    except Exception as e:
+        jlog(job.name).warning(f"could not carry completed steps over: {e}")
+
+
+def _resume_deploy_task(job) -> bool:
+    """Re-drive this job's existing deploy task from its first unfinished step.
+
+    Returns True when a prior task was resumed, in which case no new task is
+    built. Completed steps keep their status: ``enter_setup`` and
+    ``configure_canister_ids`` are one-shot on a live stand, so replaying them
+    would fail on a realm the first pass already configured.
+    """
+    task_id = (job.ext_deploy_task_id or "").strip()
+    if not task_id:
+        return False
+    list(DeployStep.instances())
+    list(DeployTask.instances())
+    task = DeployTask[task_id]
+    if task is None:
+        jlog(job.name).warning(f"deploy task {task_id} recorded on the job is missing; rebuilding")
+        return False
+    if not task_belongs_to_job(task.target_canister_id, job.backend_canister_id):
+        # Left by the old wall-clock task ids: another job in the same round
+        # minted this name, and the alias resolves to whichever wrote last, so
+        # this job's own row became unreachable by name. Never re-drive the
+        # other realm's steps; rebuild and carry over what this realm did.
+        jlog(job.name).warning(
+            f"deploy task {task_id} targets {task.target_canister_id or '–'}, not this job's "
+            f"backend {job.backend_canister_id or '–'} (task id collision); rebuilding"
+        )
+        return False
+
+    steps = list(task.steps)
+    plan = plan_resume(steps, now_s=now_s())
+    if not plan["resume"]:
+        return False
+
+    reset = set(plan["reset_idx"])
+    for step in steps:
+        if int(step.idx or 0) in reset:
+            step.status = "pending"
+            step.error = ""
+            step.started_at = 0
+            step.completed_at = 0
+    task.status = "queued"
+    task.error = ""
+    task.completed_at = 0
+    job.expected_step_count = len(steps)
+    jlog(job.name).info(f"resuming deploy task {task_id}: {describe_resume(plan)}")
+    _schedule_step_runner(task_id, 0)
+    return True
+
+
 def _start_extensions_for_job(job, manifest: dict) -> Async[None]:
+    if _resume_deploy_task(job):
+        return
+
     realm_info = manifest.get("realm", {})
     network = (manifest.get("network") or "").strip()
     registry_id = manifest.get("file_registry_canister_id", "") or configured_file_registry_id(network)
@@ -1699,13 +1904,18 @@ def _start_extensions_for_job(job, manifest: dict) -> Async[None]:
     jlog(job.name).info(f"resolved {len(codex_list)} codices, {len(ext_list)} extension steps")
 
     try:
-        task_id = "deploy_%d" % ic.time()
+        # Derived from the job id: stable across passes and unique per job.
+        # A wall-clock id collided (IC time is identical for every message in a
+        # round), so two stands provisioned together shared one task.
+        task_id = deploy_task_id(job.name)
+        _discard_stale_deploy_task(task_id, job.name)
         jlog(job.name).info(f"creating deploy task {task_id} with {len(ext_list)} ext + {len(codex_list)} codex")
         task = DeployTask(
             name=task_id, status="queued", target_canister_id=job.backend_canister_id,
             registry_canister_id=registry_id, manifest_json=json.dumps(ext_manifest)[:8190], error="",
         )
         _build_steps(task, ext_manifest)
+        _carry_over_completed_steps(job, task)
         steps = list(task.steps)
         jlog(job.name).info(f"built {len(steps)} steps for task {task_id}")
         job.ext_deploy_task_id = task_id
@@ -2148,12 +2358,24 @@ def get_deployment_job_status(job_id: text) -> ResultJobIdStatus:
 
 @query
 def get_deploy_task_status(job_id: text) -> ResultDeployTaskStatus:
-    """Return extension/codex install steps for a deployment job (if started)."""
+    """Return the bootstrap/extension steps of a deployment job (if started).
+
+    Takes a **job id**. A deploy task id is accepted too, since operators reach
+    for the id they see on the card; it is resolved back to its owning job.
+    """
     try:
         list(DeploymentJob.instances())
+        list(DeployTask.instances())
+        list(DeployStep.instances())
         job = DeploymentJob[job_id]
         if job is None:
-            return ResultDeployTaskStatus(Err=ie(f"unknown job_id: {job_id}"))
+            direct = DeployTask[job_id]
+            if direct is not None:
+                job = task_owner_job(
+                    DeploymentJob.instances(), direct.name, direct.target_canister_id,
+                )
+            if job is None:
+                return ResultDeployTaskStatus(Err=ie(f"unknown job_id: {job_id}"))
         task_id = (job.ext_deploy_task_id or "").strip()
         expected = int(job.expected_step_count or 0)
         if not task_id:
@@ -2164,13 +2386,21 @@ def get_deploy_task_status(job_id: text) -> ResultDeployTaskStatus:
                 completed_count=nat32(0),
                 total_count=nat32(expected),
             ))
-        list(DeployTask.instances())
-        list(DeployStep.instances())
         task = DeployTask[task_id]
         if task is None:
             return ResultDeployTaskStatus(Ok=DeployTaskView(
                 task_id=task_id,
                 status="missing",
+                steps=[],
+                completed_count=nat32(0),
+                total_count=nat32(expected),
+            ))
+        if not task_belongs_to_job(task.target_canister_id, job.backend_canister_id):
+            # Two jobs once shared a task name and this card showed the other
+            # realm's failed steps. Report the mismatch instead of the lie.
+            return ResultDeployTaskStatus(Ok=DeployTaskView(
+                task_id=task_id,
+                status="foreign",
                 steps=[],
                 completed_count=nat32(0),
                 total_count=nat32(expected),
@@ -2746,8 +2976,46 @@ def _schedule_provision_kick(job_id: str, delay_s: int = 0):
     )
 
 
+def _job_last_activity_s(job) -> int:
+    return max(int(job.completed_at or 0), int(job.created_at or 0))
+
+
+def _reconcile_stranded_extension_jobs() -> None:
+    """Fail jobs stuck in ``extensions`` that nothing can advance any more.
+
+    Not a retry — the opposite. A job whose deploy task is gone, belongs to
+    another realm (a task-id collision), or finished without ever settling this
+    job cannot progress, yet its card animates as if it were working. Marking
+    it failed with the reason releases the credit hold, tells the user the
+    truth, and makes an explicit ``retry_deployment`` possible, which resumes.
+    """
+    try:
+        list(DeployStep.instances())
+        list(DeployTask.instances())
+        list(DeploymentJob.instances())
+        for job in DeploymentJob.instances():
+            if (job.status or "") != "extensions":
+                continue
+            if provision_lock_is_fresh(job, now_s=now_s()):
+                continue
+            recorded = (job.ext_deploy_task_id or "").strip()
+            reason = extensions_stall_reason(
+                task=DeployTask[recorded] if recorded else None,
+                backend_canister_id=job.backend_canister_id or "",
+                recorded_task_id=recorded,
+                now_s=now_s(),
+                last_activity_s=_job_last_activity_s(job),
+            )
+            if not reason:
+                continue
+            jlog(job.name).error(f"stranded in extensions: {reason}")
+            _mark_provision_failed(job.name, reason)
+    except Exception as e:
+        _log.error(f"extensions reconcile: {e}")
+
+
 def _arm_provision_heartbeat(delay_s: int = 0):
-    """Periodic fallback: re-kick any job still in ``provisioning``."""
+    """Periodic fallback: re-kick any job still in ``pending``/``provisioning``."""
     interval = int(delay_s) if delay_s else PROVISION_HEARTBEAT_INTERVAL_S
 
     def _tick():
@@ -2761,6 +3029,7 @@ def _arm_provision_heartbeat(delay_s: int = 0):
                     now_s=now_s(),
                 ):
                     _schedule_provision_kick(job_id, 0)
+            _reconcile_stranded_extension_jobs()
         except Exception as e:
             _log.error(f"provision heartbeat: {e}")
         _arm_provision_heartbeat()
@@ -2782,18 +3051,28 @@ def _provision_via_casals_gen(job_id: str):
     if job is None:
         raise RuntimeError(f"unknown job_id: {job_id}")
     status = job.status or "pending"
-    if status not in ("pending", "provisioning", "failed"):
-        raise RuntimeError(
-            f"job in '{job.status}', expected 'pending', 'provisioning', or 'failed'"
-        )
-    if status == "failed":
-        # Keep last error + completed_at so the portal can say
-        # "Retrying automatically" on the same job_id. Do not mint a new job.
-        job.status = "provisioning"
+    if status not in ("pending", "provisioning"):
+        # A failed job stays failed. Reopening it here is what let the
+        # heartbeat replay a whole bootstrap against an already-created stand.
+        # ``retry_deployment`` is the one door in, and it resumes.
+        raise RuntimeError(f"job in '{job.status}', expected 'pending' or 'provisioning'")
 
     claim_provision_lock(job, now_s=now_s())
     try:
-        yield from _provision_via_casals_body(job_id, job, cfg, casals_id)
+        # Everything Casals does (stand, canisters, commander, autoscale config)
+        # happens before the deploy task exists, so an existing task id means
+        # the provisioning half already succeeded: resume the bootstrap instead
+        # of driving Casals again.
+        if bootstrap_already_started(job.backend_canister_id, job.ext_deploy_task_id):
+            if _resume_deploy_task(job):
+                job.status = "extensions"
+                jlog(job_id).info(
+                    "canisters already provisioned; resumed the deploy task without "
+                    "re-running Casals provisioning"
+                )
+                return _provision_ok_for_job(job_id, job)
+        result = yield from _provision_via_casals_body(job_id, job, cfg, casals_id)
+        return result
     finally:
         clear_provision_lock(job)
 
@@ -3001,7 +3280,14 @@ def _provision_ok_for_job(job_id: str, job: DeploymentJob) -> ProvisionOk:
 
 @update
 def retry_deployment(job_id: text) -> ResultProvision:
-    """Re-kick a failed deployment job (owner or controller)."""
+    """Resume a failed deployment job (owner or controller).
+
+    The pass picks up where the job stopped: canisters that exist are reused,
+    completed bootstrap steps are kept, and only the steps that failed run
+    again. It cannot fix a failure that needs someone else to act first (a
+    missing asset-canister permission grant, say) — it will fail the same way,
+    which is the honest outcome.
+    """
     try:
         caller = str(ic.caller())
         list(DeploymentJob.instances())

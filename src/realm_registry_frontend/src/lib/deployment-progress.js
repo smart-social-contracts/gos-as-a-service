@@ -56,11 +56,61 @@ const TERMINAL_STATUSES = new Set([
 
 const FAILED_STATUSES = new Set(['failed', 'failed_verification', 'cancelled']);
 
+/**
+ * Failures nobody can retry their way out of: the installer was refused a
+ * permission it cannot grant itself, so the deployment is waiting on a fix to
+ * the platform's canister topology, not on another attempt.
+ */
+const PERMISSION_BLOCK_PATTERNS = [
+  'managepermissions',
+  'does not hold commit',
+  'grant_permission failed',
+  'is not a controller',
+];
+
+/**
+ * True when an error means the deployment is blocked on a permission the
+ * installer cannot obtain. Such a job must never be dressed up as
+ * "Retrying automatically" — that hid a real permission hole for hours.
+ *
+ * @param {string} [error]
+ * @returns {boolean}
+ */
+export function isPermissionBlockedError(error) {
+  const text = (error || '').toLowerCase();
+  if (!text) return false;
+  return PERMISSION_BLOCK_PATTERNS.some((pattern) => text.includes(pattern));
+}
+
+/**
+ * Statuses a deployment can actually be re-driven from. Past these the
+ * installer has handed the job to its bootstrap task, and a leftover
+ * `completed_at` says a previous attempt ended — not that anything is running.
+ */
+const REDRIVABLE_STATUSES = new Set(['pending', 'provisioning', 'deploying']);
+
 /** True when the same job_id was reopened after a failure (heartbeat / retry). */
 export function isAutoRetryingJob(job, memory = null) {
   const status = (job?.raw_status || job?.status || '').toLowerCase();
   if (!status || FAILED_STATUSES.has(status) || status === 'completed') return false;
+  if (!REDRIVABLE_STATUSES.has(status)) return false;
   if (memory?.autoRetrying || memory?.lastError) return true;
+  return Boolean(toTimestampMs(job?.completed_at));
+}
+
+/**
+ * True when a job carries the marks of a finished attempt but sits in a phase
+ * nothing re-drives — e.g. `extensions` after its deploy task was lost or
+ * hijacked by another realm's task of the same name. Four such jobs animated
+ * at "Retrying automatically 42%" for hours while nothing was running.
+ *
+ * @param {object} job
+ * @returns {boolean}
+ */
+export function isStalledJob(job) {
+  const status = (job?.raw_status || job?.status || '').toLowerCase();
+  if (!status || FAILED_STATUSES.has(status) || status === 'completed') return false;
+  if (REDRIVABLE_STATUSES.has(status)) return false;
   return Boolean(toTimestampMs(job?.completed_at));
 }
 
@@ -570,7 +620,10 @@ export function getDeploymentProgress(job, options = {}) {
   const lastError = uniqueErrorText(
     job.last_error || job.previous_error || job.error || memory?.lastError || '',
   );
-  const isAutoRetrying = !isFailed && !isComplete && isAutoRetryingJob(job, memory);
+  const isBlocked = !isComplete && isPermissionBlockedError(lastError);
+  const isAutoRetrying =
+    !isFailed && !isComplete && !isBlocked && isAutoRetryingJob(job, memory);
+  const isStalled = !isFailed && !isComplete && !isBlocked && isStalledJob(job);
 
   // A run that finished with errors stalled where the work actually failed —
   // the extension/codex phase — not at the registration it went on to do.
@@ -635,14 +688,20 @@ export function getDeploymentProgress(job, options = {}) {
       ? 'Complete'
       : isFailed
         ? 'Failed'
-        : isAutoRetrying
-          ? 'Retrying automatically'
-          : currentStage.label,
-    currentDescription: isFailed
+        : isBlocked
+          ? 'Blocked'
+          : isStalled
+            ? 'Stalled'
+            : isAutoRetrying
+              ? 'Retrying automatically'
+              : currentStage.label,
+    currentDescription: isFailed || isBlocked
       ? lastError || 'Deployment failed.'
-      : isAutoRetrying
-        ? lastError || currentStage.description
-        : stageDescription(status, job, currentStage, deployTask),
+      : isStalled
+        ? lastError || 'This deployment stopped making progress and is not retrying.'
+        : isAutoRetrying
+          ? lastError || currentStage.description
+          : stageDescription(status, job, currentStage, deployTask),
     percent,
     stages: stagesWithTiming,
     subSteps,
@@ -654,6 +713,8 @@ export function getDeploymentProgress(job, options = {}) {
     isFailed,
     isComplete,
     isAutoRetrying,
+    isBlocked,
+    isStalled,
     isActive: !isFailed && !isComplete,
     error: lastError || null,
     backendCanisterId: (job.backend_canister_id || '').trim() || null,

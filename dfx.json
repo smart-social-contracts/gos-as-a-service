@@ -3,6 +3,7 @@
     "realm_installer": {
       "build": "python -m basilisk realm_installer src/realm_installer/main.py",
       "candid": "src/realm_installer/realm_installer.did",
+      "init_arg": "(\"\")",
       "declarations": {
         "node_compatibility": true
       },
@@ -76,6 +77,7 @@
     "realm_registry_backend": {
       "build": "python -m basilisk realm_registry_backend src/realm_registry_backend/main.py",
       "candid": "src/realm_registry_backend/realm_registry_backend.did",
+      "init_arg": "(\"\")",
       "declarations": {
         "node_compatibility": true
       },
