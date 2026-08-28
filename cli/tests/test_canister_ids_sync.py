@@ -76,3 +76,41 @@ def test_persist_creates_canister_ids_when_missing(tmp_path: Path) -> None:
     ids = json.loads((tmp_path / "canister_ids.json").read_text(encoding="utf-8"))
     assert ids["casals_frontend"]["staging"] == LIVE_CASALS
     assert ids["casals_backend"]["staging"] == "th7fr-bqaaa-aaaan-q6n4q-cai"
+
+
+def test_persist_local_does_not_write_dfx_remote_id(tmp_path: Path) -> None:
+    """A local replica ID in remote.id.local makes dfx skip the WASM build."""
+    (tmp_path / "dfx.json").write_text(
+        json.dumps(
+            {
+                "canisters": {
+                    "realm_registry_backend": {
+                        "type": "custom",
+                        "wasm": ".basilisk/realm_registry_backend/realm_registry_backend.wasm",
+                        "remote": {
+                            "id": {
+                                "staging": "snqhl-daaaa-aaaan-q6n3q-cai",
+                                "test": "yhw3g-fyaaa-aaaas-qgorq-cai",
+                            }
+                        },
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["name"] = "local"
+    data["domain"] = "local.localhost"
+    data["canisters"] = {
+        "realm_registry_backend": "uqqxf-5h777-77774-qaaaa-cai",
+        "casals_frontend": "umunu-kh777-77774-qaaca-cai",
+    }
+    persist_descriptor_canister_ids(tmp_path, Descriptor.model_validate(data))
+
+    ids = json.loads((tmp_path / "canister_ids.json").read_text(encoding="utf-8"))
+    assert ids["realm_registry_backend"]["local"] == "uqqxf-5h777-77774-qaaaa-cai"
+    dfx = json.loads((tmp_path / "dfx.json").read_text(encoding="utf-8"))
+    remote_ids = dfx["canisters"]["realm_registry_backend"]["remote"]["id"]
+    assert "local" not in remote_ids
+    assert remote_ids["staging"] == "snqhl-daaaa-aaaan-q6n3q-cai"

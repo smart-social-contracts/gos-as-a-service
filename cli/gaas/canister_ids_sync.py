@@ -18,6 +18,11 @@ from gaas.known import DFX_CANISTER_NAMES
 
 _JSON_INDENT = 2
 
+# ``dfx.json`` ``remote.id.<network>`` makes ``dfx build --network <network>``
+# skip that canister. Never write a replica network here or local ``gaas new``
+# produces no WASM.
+_DFX_REMOTE_ENVS = frozenset({"test", "demo", "staging", "ic"})
+
 
 def _read_json(path: Path) -> dict[str, Any]:
     if not path.is_file():
@@ -55,29 +60,30 @@ def persist_descriptor_canister_ids(repo_root: Path, descriptor: Any) -> Path:
         entry[env_key] = cid
     _write_json(ids_path, ids_data)
 
-    dfx_path = root / "dfx.json"
-    dfx_data = _read_json(dfx_path)
-    dfx_canisters = dfx_data.get("canisters")
-    if isinstance(dfx_canisters, dict):
-        changed = False
-        for name, canister_id in canisters.items():
-            cid = (canister_id or "").strip()
-            if not cid:
-                continue
-            dfx_name = DFX_CANISTER_NAMES.get(name) or name
-            spec = dfx_canisters.get(dfx_name)
-            if not isinstance(spec, dict):
-                continue
-            remote = spec.get("remote")
-            if not isinstance(remote, dict):
-                continue
-            remote_ids = remote.get("id")
-            if not isinstance(remote_ids, dict):
-                continue
-            if remote_ids.get(env_key) != cid:
-                remote_ids[env_key] = cid
-                changed = True
-        if changed:
-            _write_json(dfx_path, dfx_data)
+    if env_key in _DFX_REMOTE_ENVS:
+        dfx_path = root / "dfx.json"
+        dfx_data = _read_json(dfx_path)
+        dfx_canisters = dfx_data.get("canisters")
+        if isinstance(dfx_canisters, dict):
+            changed = False
+            for name, canister_id in canisters.items():
+                cid = (canister_id or "").strip()
+                if not cid:
+                    continue
+                dfx_name = DFX_CANISTER_NAMES.get(name) or name
+                spec = dfx_canisters.get(dfx_name)
+                if not isinstance(spec, dict):
+                    continue
+                remote = spec.get("remote")
+                if not isinstance(remote, dict):
+                    continue
+                remote_ids = remote.get("id")
+                if not isinstance(remote_ids, dict):
+                    continue
+                if remote_ids.get(env_key) != cid:
+                    remote_ids[env_key] = cid
+                    changed = True
+            if changed:
+                _write_json(dfx_path, dfx_data)
 
     return ids_path
