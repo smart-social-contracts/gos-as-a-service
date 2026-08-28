@@ -1,6 +1,9 @@
 import { building } from '$app/environment';
 import { CONFIG } from './config.js';
 import { getCanisterId } from './network.js';
+import { parseSubnetList, requireCasalsBackendCanisterId } from './subnet-list-parse.js';
+
+export { parseSubnetList, requireCasalsBackendCanisterId };
 
 function isBuildingOrTesting() {
   const mode = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.MODE : '';
@@ -22,11 +25,9 @@ async function createCasalsActor() {
     return { list_subnets: async () => '[]' };
   }
 
-  const resolvedCanisterId =
-    CONFIG.casals_backend_canister_id || getCanisterId('casals_backend');
-  if (!resolvedCanisterId) {
-    throw new Error('Could not load available subnets');
-  }
+  const resolvedCanisterId = requireCasalsBackendCanisterId(
+    CONFIG.casals_backend_canister_id || getCanisterId('casals_backend')
+  );
 
   const { createActor } = await import('declarations/casals_backend');
   const { HttpAgent } = await import('@dfinity/agent');
@@ -51,29 +52,6 @@ function getActorPromise() {
     });
   }
   return actorPromise;
-}
-
-function parseSubnetId(entry) {
-  if (typeof entry === 'string') return entry.trim();
-  if (entry && typeof entry === 'object') {
-    const id =
-      entry.id ?? entry.subnet_id ?? entry.subnetId ?? entry.principal ?? entry.subnet;
-    if (typeof id === 'string') return id.trim();
-  }
-  return '';
-}
-
-export function parseSubnetList(raw) {
-  let data = raw;
-  if (typeof raw === 'string') {
-    try {
-      data = JSON.parse(raw);
-    } catch {
-      return [];
-    }
-  }
-  if (!Array.isArray(data)) return [];
-  return [...new Set(data.map(parseSubnetId).filter(Boolean))];
 }
 
 export async function listSubnets() {

@@ -271,7 +271,7 @@
         {/if}
         <a href="/">Back to registry</a>
         {#if slugView.kind === 'missing'}
-          <a href="/create-realm">Create a realm</a>
+          <a href="/deploy-gos">Deploy GOS</a>
         {/if}
         {#if slugView.kind === 'creating'}
           <p class="error-checking">Checking again…</p>

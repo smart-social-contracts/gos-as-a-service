@@ -73,18 +73,8 @@
     }, 420);
   }
 
-  const marketplaceCanisterId =
-    getCanisterId('marketplace_frontend') ||
-    import.meta.env.CANISTER_ID_MARKETPLACE_FRONTEND ||
-    '';
   const casalsCanisterId =
     getCanisterId('casals_frontend') || import.meta.env.CANISTER_ID_CASALS_FRONTEND || '';
-
-  $: marketplaceUrl = isLocalDevelopment()
-    ? `http://localhost:${(typeof window !== 'undefined' && window.location.port) || '4943'}/?canisterId=marketplace_frontend`
-    : marketplaceCanisterId
-      ? `https://${marketplaceCanisterId}.icp0.io`
-      : '';
 
   $: casalsUrl = casalsCanisterId ? `https://${casalsCanisterId}.icp0.io` : '';
 
@@ -297,7 +287,6 @@
     {isLoggedIn}
     {userPrincipal}
     {authLoading}
-    {marketplaceUrl}
     {casalsUrl}
     on:login={handleLogin}
     on:logout={handleLogout}
@@ -396,7 +385,7 @@
     background: var(--bg);
     color: var(--text-primary);
     /* Do not set overflow:hidden on body — it leaks across SPA navigations
-       and blocks scrolling on /create-realm and /my-dashboard. */
+       and blocks scrolling on /deploy-gos and /my-dashboard. */
   }
 
   .registry-page {

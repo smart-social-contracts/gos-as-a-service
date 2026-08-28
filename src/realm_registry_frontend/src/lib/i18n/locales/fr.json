@@ -9,7 +9,7 @@
   "controls": {
     "list_view": "Vue liste",
     "map_view": "Vue carte",
-    "create_realm": "Créer un Royaume",
+    "create_realm": "Deploy GOS",
     "marketplace": "Marché",
     "architecture": "Architecture",
     "architecture_unavailable": "L'infrastructure n'est pas disponible"
@@ -97,7 +97,7 @@
     "globe_title": "Explorer le globe",
     "globe_body": "Les royaumes apparaissent sur cette carte 3D. Cliquez sur une épingle lumineuse pour vous y rendre et voir les détails.",
     "rail_title": "Actions rapides",
-    "rail_body": "Ouvrez le logo Realms (en haut à gauche) pour la visite, le marché, créer un royaume, l'architecture et la langue. Connectez-vous avec Internet Identity en haut à droite.",
+    "rail_body": "Ouvrez le logo Realms (en haut à gauche) pour la visite, Deploy GOS, Infrastructure et la langue. Connectez-vous avec Internet Identity en haut à droite.",
     "browse_title": "Parcourir les royaumes",
     "browse_body": "Ouvrez le navigateur pour rechercher, filtrer par phase et parcourir la liste.",
     "panel_title": "Navigateur de royaumes",

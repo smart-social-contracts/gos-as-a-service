@@ -28,9 +28,9 @@ function loadedCreateRealmChunkHashes() {
  * Returns true when the browser is running an outdated create-realm bundle
  * (usually the IC service worker serving cached HTML/JS after a deploy).
  *
- * @param {string} [routePath='/create-realm']
+ * @param {string} [routePath='/deploy-gos']
  */
-export async function isCreateRealmBundleStale(routePath = '/create-realm') {
+export async function isCreateRealmBundleStale(routePath = '/deploy-gos') {
   if (!browser) return false;
 
   try {
@@ -53,7 +53,7 @@ export async function isCreateRealmBundleStale(routePath = '/create-realm') {
 }
 
 /** Reload once per tab session when a stale bundle is detected. */
-export async function reloadIfCreateRealmBundleStale(routePath = '/create-realm') {
+export async function reloadIfCreateRealmBundleStale(routePath = '/deploy-gos') {
   if (!(await isCreateRealmBundleStale(routePath))) return false;
 
   const reloadKey = 'realms:create-realm:stale-reload';

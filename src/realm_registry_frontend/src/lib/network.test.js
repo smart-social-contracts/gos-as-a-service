@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { detectNetwork, getCanisterId } from './network.js';
 
@@ -12,6 +15,18 @@ const CANISTER_MAP = {
 		test: 'uq2mu-kaaaa-aaaah-avqcq-cai'
 	}
 };
+
+const REPO_CANISTER_IDS = JSON.parse(
+	readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../../../../canister_ids.json'), 'utf-8')
+);
+
+const CASALS_BACKEND_IDS = {
+	test: 'qthgp-3yaaa-aaaae-agveq-cai',
+	staging: 'th7fr-bqaaa-aaaan-q6n4q-cai',
+	demo: 'jo3cj-faaaa-aaaac-bffea-cai'
+};
+
+const DEAD_CANISTER_PREFIXES = ['fdr7z', 'jj2e5', 'rbuam', 'fksuf', 'hznxf', 'h6mrr', 'mcqbx'];
 
 test('detectNetwork maps known hostnames', () => {
 	assert.equal(detectNetwork('test.gos.earth'), 'test');
@@ -85,6 +100,49 @@ test('detectNetwork resolves gaas-env domain to configured network', () => {
 	assert.equal(detectNetwork('partner.example', gaasEnv), 'custom-net');
 	assert.equal(detectNetwork('localhost', gaasEnv), 'local');
 	assert.equal(detectNetwork('test.gos.earth', gaasEnv), 'test');
+});
+
+test('getCanisterId resolves casals_backend from canister_ids.json on portal hostnames', () => {
+	assert.equal(
+		getCanisterId('casals_backend', {
+			hostname: 'test.gos.earth',
+			canisterIdsMap: REPO_CANISTER_IDS
+		}),
+		CASALS_BACKEND_IDS.test
+	);
+	assert.equal(
+		getCanisterId('casals_backend', {
+			hostname: 'staging.gos.earth',
+			canisterIdsMap: REPO_CANISTER_IDS
+		}),
+		CASALS_BACKEND_IDS.staging
+	);
+	assert.equal(
+		getCanisterId('casals_backend', {
+			hostname: 'demo.gos.earth',
+			canisterIdsMap: REPO_CANISTER_IDS
+		}),
+		CASALS_BACKEND_IDS.demo
+	);
+});
+
+test('canister_ids.json bakes live casals_backend IDs and no known-dead prefixes', () => {
+	assert.deepEqual(REPO_CANISTER_IDS.casals_backend, CASALS_BACKEND_IDS);
+	const dumped = JSON.stringify(REPO_CANISTER_IDS.casals_backend);
+	for (const prefix of DEAD_CANISTER_PREFIXES) {
+		assert.equal(dumped.includes(prefix), false, `dead prefix ${prefix}`);
+	}
+});
+
+test('portal bake injects every canister_ids.json entry including casals_backend', () => {
+	const viteSource = readFileSync(
+		join(dirname(fileURLToPath(import.meta.url)), '../../vite.config.js'),
+		'utf-8'
+	);
+	assert.match(viteSource, /for \(const \[canister, networks\] of Object\.entries\(allIds\)\)/);
+	assert.match(viteSource, /CANISTER_ID_\$\{canister\.toUpperCase\(\)\}/);
+	assert.match(viteSource, /'__CANISTER_IDS__'/);
+	assert.ok(REPO_CANISTER_IDS.casals_backend);
 });
 
 test('getCanisterId prefers gaas-env canisters map when present', () => {

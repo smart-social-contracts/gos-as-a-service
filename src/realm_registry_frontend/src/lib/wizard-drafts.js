@@ -8,6 +8,7 @@ import {
 
 export { WIZARD_META_KEY } from './wizard-draft-utils.js';
 export {
+  DEPLOY_GOS_PATH,
   filterVisibleDrafts,
   findDraftForDeployment,
   draftResumeUrl,
