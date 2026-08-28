@@ -1,5 +1,6 @@
 import { browser, building } from '$app/environment';
 import { CONFIG } from '$lib/config.js';
+import { rememberJobAttempt } from '$lib/deployment-attempt-memory.js';
 import { getDeploymentProgress } from '$lib/deployment-progress.js';
 import { getObservedStageStarts, toTimestampMs } from '$lib/deployment-stage-timing.js';
 import { pollRecentDeploymentJob } from './deployment-request-recovery.js';
@@ -411,14 +412,17 @@ export function installerJobToDeploymentRow(job, deployTask = null, options = {}
     earlier_deploy_count: 0,
     earlier_jobs: [],
   };
+  const attemptMemory = rememberJobAttempt(job.job_id, { ...job, raw_status: st });
   row.progress = getDeploymentProgress(
     { ...job, raw_status: st },
     {
       deployTask,
       codexDependencies: options?.codexDependencies ?? [],
+      attemptMemory,
+      attemptStartedAtMs: attemptMemory?.attemptStartedAtMs,
       observedStageStarts: getObservedStageStarts(
         job.job_id,
-        toTimestampMs(job.created_at),
+        attemptMemory?.attemptStartedAtMs || toTimestampMs(job.created_at),
       ),
     },
   );

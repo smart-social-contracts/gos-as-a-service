@@ -248,3 +248,15 @@ def test_lock_cleared_after_success_and_failure_paths():
     except RuntimeError:
         pass
     assert job.provision_active_at == 0
+
+
+def test_reopen_failed_job_keeps_error_in_source():
+    """Heartbeat / retry must not wipe job.error — the portal shows it on auto-retry."""
+    src_path = os.path.join(_REPO_ROOT, "src/realm_installer/main.py")
+    with open(src_path, encoding="utf-8") as fh:
+        src = fh.read()
+    reopen = src.split('if status == "failed":', 1)[1].split("claim_provision_lock", 1)[0]
+    assert "job.error" not in reopen
+    retry = src.split("def retry_deployment", 1)[1].split("def provision_via_casals", 1)[0]
+    assert 'job.error = ""' not in retry
+    assert 'job.status = "provisioning"' in retry

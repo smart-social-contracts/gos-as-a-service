@@ -8,6 +8,7 @@ import {
   computeDeploymentUnits,
   deploymentFinishedWithErrors,
   getDeploymentProgress,
+  isAutoRetryingJob,
   withLiveProgressTiming,
 } from './deployment-progress.js';
 
@@ -256,4 +257,108 @@ test('buildExtensionSubSteps expands codex dependencies when no extension steps 
   assert.equal(extensions[0].label, 'access_manager');
   assert.equal(extensions[0].statusLabel, 'Installed');
   assert.equal(extensions[2].statusLabel, 'Installed');
+});
+
+const RATE_LIMIT =
+  'Casals create_canister rate-limited: too many requests in the last window, retry later.';
+
+test('failed job headline is Failed and is not mid-progress healthy', () => {
+  const duplicated = `${RATE_LIMIT}${RATE_LIMIT}`;
+  const progress = getDeploymentProgress({
+    status: 'failed',
+    raw_status: 'failed',
+    created_at: 1_700_000_000,
+    completed_at: 1_700_000_080,
+    backend_canister_id: 'abc',
+    frontend_canister_id: 'def',
+    assets_verified: 1,
+    wasm_verified: 1,
+    expected_step_count: 10,
+    error: duplicated,
+  });
+
+  assert.equal(progress.currentLabel, 'Failed');
+  assert.equal(progress.isFailed, true);
+  assert.equal(progress.isActive, false);
+  assert.equal(progress.isAutoRetrying, false);
+  assert.equal(progress.error, RATE_LIMIT);
+  assert.equal(progress.currentDescription, RATE_LIMIT);
+  assert.equal(progress.percent, 42);
+});
+
+test('auto-reopened job says Retrying automatically and keeps one copy of the last error', () => {
+  const createdAt = 1_700_000_000;
+  const failedAt = 1_700_003_360;
+  const attemptStart = 1_700_003_360_000;
+  const now = attemptStart + 8000;
+  const realNow = Date.now;
+  Date.now = () => now;
+  try {
+    const job = {
+      status: 'provisioning',
+      raw_status: 'provisioning',
+      created_at: createdAt,
+      completed_at: failedAt,
+      error: `${RATE_LIMIT}\n\n${RATE_LIMIT}`,
+      backend_canister_id: '',
+      frontend_canister_id: '',
+    };
+    const progress = getDeploymentProgress(job, {
+      attemptMemory: {
+        lastError: RATE_LIMIT,
+        failedAtMs: failedAt * 1000,
+        attemptStartedAtMs: attemptStart,
+        autoRetrying: true,
+      },
+      attemptStartedAtMs: attemptStart,
+    });
+
+    assert.equal(isAutoRetryingJob(job, { autoRetrying: true, lastError: RATE_LIMIT }), true);
+    assert.equal(progress.currentLabel, 'Retrying automatically');
+    assert.equal(progress.isAutoRetrying, true);
+    assert.equal(progress.isFailed, false);
+    assert.equal(progress.isActive, true);
+    assert.equal(progress.error, RATE_LIMIT);
+    assert.equal(progress.currentDescription, RATE_LIMIT);
+    assert.equal(progress.startedAtMs, createdAt * 1000);
+    assert.equal(progress.attemptStartedAtMs, attemptStart);
+    assert.equal(progress.totalDurationLabel, '8s');
+    const queue = progress.stages.find((s) => s.id === 'queue');
+    assert.ok(queue?.durationMs != null);
+    assert.ok(queue.durationMs <= 8000, `queue duration should be this attempt, got ${queue.durationMs}`);
+  } finally {
+    Date.now = realNow;
+  }
+});
+
+test('auto-retry is detected from leftover completed_at on the same job_id', () => {
+  const job = {
+    status: 'provisioning',
+    raw_status: 'provisioning',
+    created_at: 1_700_000_000,
+    completed_at: 1_700_003_360,
+    error: RATE_LIMIT,
+  };
+  assert.equal(isAutoRetryingJob(job), true);
+  const progress = getDeploymentProgress(job);
+  assert.equal(progress.currentLabel, 'Retrying automatically');
+  assert.equal(progress.startedAtMs, 1_700_000_000_000);
+});
+
+test('withLiveProgressTiming uses this-attempt start, not first enqueue', () => {
+  const now = 1_700_000_008_000;
+  const progress = getDeploymentProgress(
+    {
+      status: 'provisioning',
+      raw_status: 'provisioning',
+      created_at: (now - 56 * 60 * 1000) / 1000,
+      completed_at: (now - 8000) / 1000,
+      error: RATE_LIMIT,
+    },
+    { attemptStartedAtMs: now - 8000 },
+  );
+  const live = withLiveProgressTiming(progress, now, { 1: now - 8000 });
+  assert.equal(live.totalDurationLabel, '8s');
+  const activeStage = live.stages.find((s) => s.state === 'active');
+  assert.equal(activeStage?.durationLabel, '8s');
 });

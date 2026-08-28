@@ -44,3 +44,10 @@ test('portal source and canister_ids no longer mention fdr7z', () => {
 	assert.match(idsSource, /to4on-xyaaa-aaaan-q6n5a-cai/);
 	assert.match(idsSource, /qic2k-baaaa-aaaae-agvga-cai/);
 });
+
+test('frontend prebuild does not generate casals_backend', () => {
+	const pkg = JSON.parse(readFileSync(join(here, '../../package.json'), 'utf-8'));
+	assert.equal((pkg.scripts?.prebuild || '').includes('casals_backend'), false);
+	assert.match(pkg.scripts.prebuild, /dfx generate realm_registry_backend/);
+	assert.match(pkg.scripts.prebuild, /dfx generate realm_installer/);
+});

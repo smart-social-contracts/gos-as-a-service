@@ -11,6 +11,7 @@
   import { fetchCodexManifest } from '$lib/file-registry-client.js';
   import { parseDeploymentManifest } from '$lib/deployment-manifest-view.js';
   import { getDeploymentProgress } from '$lib/deployment-progress.js';
+  import { rememberJobAttempt, uniqueErrorText } from '$lib/deployment-attempt-memory.js';
   import { getObservedStageStarts, recordDeploymentStageObservation } from '$lib/deployment-stage-timing.js';
   import {
     findDraftForDeployment,
@@ -77,10 +78,18 @@
     ? getDeploymentProgress(deployment, {
         deployTask: deployment.deployTask,
         codexDependencies,
+        attemptMemory: jobId ? rememberJobAttempt(jobId, deployment) : null,
+        attemptStartedAtMs: deployment.progress?.attemptStartedAtMs,
         observedStageStarts:
-          browser && jobId ? getObservedStageStarts(jobId, deployment.progress?.startedAtMs ?? null) : null,
+          browser && jobId
+            ? getObservedStageStarts(
+                jobId,
+                deployment.progress?.attemptStartedAtMs ?? deployment.progress?.startedAtMs ?? null,
+              )
+            : null,
       })
     : null;
+  $: failureError = uniqueErrorText(deployment?.error || '');
 
   async function loadManifest() {
     if (!jobId || !userPrincipal) return;
@@ -119,7 +128,10 @@
     const n = Number(dateValue || 0);
     if (!Number.isFinite(n) || n <= 0) return '';
     const ms = n > 1e12 ? n : n * 1000;
-    return new Date(ms).toLocaleString();
+    return new Date(ms).toLocaleString(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
   }
 
   async function refresh() {
@@ -184,7 +196,7 @@
     await refresh();
     await loadManifest();
 
-    if (jobId && deployment?.progress?.isActive) {
+    if (jobId && (deployment?.progress?.isActive || deployment?.raw_status === 'failed')) {
       stopPolling = startDeploymentJobPolling(jobId, async (row) => {
         deployment = row;
         if (!row.progress?.isActive) {
@@ -353,8 +365,8 @@
       {#if isFailedDeployment(deployment)}
         <div class="failure-panel">
           <p class="failure-title">Deployment did not complete</p>
-          {#if deployment.error}
-            <p class="failure-error">{deployment.error}</p>
+          {#if failureError && failureError !== trackerProgress?.currentDescription && failureError !== trackerProgress?.error}
+            <p class="failure-error">{failureError}</p>
           {/if}
           <p class="failure-hint">
             Your wizard draft is available again. Edit your configuration or retry with the same settings.
@@ -389,7 +401,7 @@
         <a href="/my-dashboard?tab=realms" class="btn btn-outline">All deployments</a>
       </div>
 
-      {#if deployment.progress?.isActive}
+      {#if deployment.progress?.isActive || deployment.raw_status === 'failed'}
         <p class="refresh-note">This page refreshes automatically every 5 seconds.</p>
       {/if}
     </div>

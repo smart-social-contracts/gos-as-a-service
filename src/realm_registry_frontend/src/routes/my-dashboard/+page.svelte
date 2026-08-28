@@ -488,8 +488,11 @@
   function startDeploymentPolling() {
     // Poll every 10 seconds for deployment status updates
     deploymentPollInterval = setInterval(async () => {
-      const hasActiveDeployments = deployments.some((d) => d.progress?.isActive);
-      if (hasActiveDeployments) {
+      const hasActiveOrFailed = deployments.some((d) => {
+        const st = (d.raw_status || '').toLowerCase();
+        return d.progress?.isActive || st === 'failed';
+      });
+      if (hasActiveOrFailed) {
         await loadDeployments();
         await loadWizardDrafts();
       }
@@ -1041,6 +1044,7 @@
                           progress={deployment.progress}
                           variant={deployment.progress?.isActive ? 'full' : 'compact'}
                           showSteps={deployment.progress?.isActive}
+                          jobId={deployment.deployment_id}
                         />
                       {/if}
 
