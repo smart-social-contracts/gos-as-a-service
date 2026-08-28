@@ -10,6 +10,7 @@ import {
   BRANDING_LOGO_PATHS,
   clearSplashBrandHint,
   firstSplashLogoUrl,
+  HOST_SPLASH_MARK_PATH,
   isLeftoverBrandingBytes,
   isLeftoverPlatformLogoPath,
   isRealmBrandLogoPath,
@@ -63,6 +64,12 @@ test('leftover platform paths include clover and GOS planet, not /custom/logo.pn
   assert.equal(isRealmBrandLogoPath('/custom/logo.png'), true);
   assert.equal(isRealmBrandLogoPath('https://example.icp0.io/custom/logo.png'), true);
   assert.equal(pathnameFromAssetUrl('https://example.icp0.io/custom/logo.png'), '/custom/logo.png');
+});
+
+test('host splash mark is the GOS orb under /images/, never leftover /custom/logo.png', () => {
+  assert.equal(HOST_SPLASH_MARK_PATH, '/images/logo_sphere_only.svg');
+  assert.equal(isLeftoverPlatformLogoPath(HOST_SPLASH_MARK_PATH), true);
+  assert.equal(isRealmBrandLogoPath(HOST_SPLASH_MARK_PATH), false);
 });
 
 test('leftover hashes include clover, shipped Syntropia DNA, and shipped city background', () => {

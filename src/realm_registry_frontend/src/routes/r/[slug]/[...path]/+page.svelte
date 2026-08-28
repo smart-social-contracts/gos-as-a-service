@@ -16,8 +16,7 @@
   import { isUnknownSlugError, findJobForSlug, unknownSlugView } from '$lib/unknown-slug.js';
   import {
     clearSplashBrandHint,
-    firstSplashLogoUrl,
-    readSplashBrandHint,
+    HOST_SPLASH_MARK_PATH,
     writeSplashBrandHint,
   } from '$lib/realm-utils.js';
   import RealmsSphereLoader from '$lib/components/RealmsSphereLoader.svelte';
@@ -47,15 +46,6 @@
 
   $: slug = $page.params.slug;
   $: subPath = $page.url.pathname.replace(new RegExp(`^/r/${slug}`), '') || '/';
-  $: splashHint = realm
-    ? null
-    : data?.splashHint || (browser ? readSplashBrandHint(slug) : null);
-  $: splashCanisterId = realm?.frontendCanisterId || splashHint?.frontendCanisterId || '';
-  $: splashConfiguredLogo = realm?.logoUrl || splashHint?.configuredLogoUrl || '';
-  $: splashMarkUrl = firstSplashLogoUrl({
-    frontendCanisterId: splashCanisterId,
-    configuredLogoUrl: splashConfiguredLogo,
-  });
 
   let unsubAuth = () => {};
 
@@ -265,9 +255,7 @@
 
 <svelte:head>
   <title>{slug} — Realms</title>
-  {#if splashMarkUrl}
-    <link rel="preload" as="image" href={splashMarkUrl} />
-  {/if}
+  <link rel="preload" as="image" href={HOST_SPLASH_MARK_PATH} />
 </svelte:head>
 
 <div class="portal-shell">
@@ -324,19 +312,14 @@
         {/if}
       </div>
     {/if}
-    {#if (loading || (realm && !iframeReady)) && splashMarkUrl}
+    {#if loading || (realm && !iframeReady)}
       <div
         class="loading-overlay"
         role="status"
         aria-live="polite"
         transition:fade={{ duration: 300 }}
       >
-        <RealmsSphereLoader
-          size={128}
-          identified={!!slug}
-          frontendCanisterId={splashCanisterId}
-          configuredLogoUrl={splashConfiguredLogo}
-        />
+        <RealmsSphereLoader size={128} />
         <p class="loading-label">{iframeLoaded ? 'Preparing realm…' : 'Loading realm'}</p>
       </div>
     {/if}
