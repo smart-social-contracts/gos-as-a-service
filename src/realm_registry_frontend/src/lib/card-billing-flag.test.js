@@ -8,9 +8,9 @@ import {
 } from './card-billing-flag.js';
 
 test('unavailable copy is the go-live string', () => {
-	assert.equal(CARD_PAY_UNAVAILABLE_COPY, 'Not available in this demo');
+	assert.equal(CARD_PAY_UNAVAILABLE_COPY, 'Currently not available');
 	assert.notEqual(CARD_PAY_UNAVAILABLE_COPY.toLowerCase(), 'coming soon');
-	assert.notEqual(CARD_PAY_UNAVAILABLE_COPY, 'Currently not available');
+	assert.notEqual(CARD_PAY_UNAVAILABLE_COPY, 'Not available in this demo');
 });
 
 test('disable_card_billing defaults ON for staging and demo', () => {
@@ -44,10 +44,10 @@ test('explicit flag overrides the network default', () => {
 	assert.equal(canStartCardCheckout({ disableCardBilling: true, network: 'test' }), false);
 });
 
-test('Pay with Card label becomes the demo-unavailable state when disabled', () => {
+test('Pay with Card label becomes the unavailable state when disabled', () => {
 	assert.equal(
 		cardPayButtonLabel({ network: 'staging', availableLabel: 'Pay with Card' }),
-		'Not available in this demo'
+		'Currently not available'
 	);
 	assert.equal(
 		cardPayButtonLabel({
@@ -55,7 +55,7 @@ test('Pay with Card label becomes the demo-unavailable state when disabled', () 
 			network: 'test',
 			availableLabel: 'Pay with Card'
 		}),
-		'Not available in this demo'
+		'Currently not available'
 	);
 	assert.equal(
 		cardPayButtonLabel({
