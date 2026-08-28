@@ -10,6 +10,7 @@ const initial = {
 	testModeDemoData: false,
 	testModeSkipTerms: false,
 	testModeSkipPassportZkproof: false,
+	testModeDisableCardBilling: undefined,
 	error: null
 };
 
@@ -35,6 +36,10 @@ function createRegistryRuntimeFlagsStore() {
 					testModeDemoData: !!payload.test_mode_demo_data,
 					testModeSkipTerms: !!payload.test_mode_skip_terms,
 					testModeSkipPassportZkproof: !!payload.test_mode_skip_passport_zkproof,
+					testModeDisableCardBilling:
+						typeof payload.test_mode_disable_card_billing === 'boolean'
+							? payload.test_mode_disable_card_billing
+							: undefined,
 					error: null
 				});
 				if (typeof sessionStorage !== 'undefined' && !payload.test_mode_ii_bypass) {
@@ -66,6 +71,10 @@ export const testModeSkipTerms = derived(registryRuntimeFlags, ($f) => $f.testMo
 export const testModeSkipPassportZkproof = derived(
 	registryRuntimeFlags,
 	($f) => $f.testModeSkipPassportZkproof
+);
+export const testModeDisableCardBilling = derived(
+	registryRuntimeFlags,
+	($f) => $f.testModeDisableCardBilling
 );
 
 /** Ensure runtime flags are loaded (idempotent). */

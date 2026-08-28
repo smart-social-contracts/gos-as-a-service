@@ -1136,7 +1136,7 @@ def set_canister_config_json(args: text) -> text:
 
     Args (JSON, all optional): {network, test_flags_json (string), test_flags (object)}.
     test_flags keys: test_mode, ii_bypass, user_self_registration, demo_data,
-    skip_terms, skip_passport_zkproof, skip_authentication.
+    skip_terms, skip_passport_zkproof, skip_authentication, disable_card_billing.
 
     Controller-only. Returns: {"success": bool, "message"?: str, "error"?: str}.
     """
@@ -1164,7 +1164,7 @@ def set_test_flags_json(args: text) -> text:
 
     Args (JSON): {"test_flags": {...}} or a bare flags object with keys
     test_mode, ii_bypass, user_self_registration, demo_data, skip_terms,
-    skip_passport_zkproof.
+    skip_passport_zkproof, disable_card_billing.
 
     Returns: {"success": bool, "message"?: str, "error"?: str}.
     """

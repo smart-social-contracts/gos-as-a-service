@@ -20,7 +20,12 @@ _FLAG_MAP = {
     "skip_terms": "test_mode_skip_terms",
     "skip_passport_zkproof": "test_mode_skip_passport_zkproof",
     "skip_authentication": "test_mode_skip_authentication",
+    # Portal Stripe checkout stays in code; this flag only disables charging.
+    "disable_card_billing": "test_mode_disable_card_billing",
 }
+
+# Unset disable_card_billing defaults ON for dogfood portal networks.
+_DISABLE_CARD_BILLING_DEFAULT_NETWORKS = frozenset({"staging", "demo"})
 
 
 def _config_key(flag_attr: str) -> str:
@@ -39,6 +44,30 @@ def get_flag(name: str, default: bool = False) -> bool:
     if cfg is None:
         return default
     return cfg.value.strip().lower() in ("true", "1", "yes")
+
+
+def default_disable_card_billing(network: str | None = None) -> bool:
+    """True when card checkout should be blocked unless the flag is stored."""
+    net = (network if network is not None else get_network() or "").strip().lower()
+    if net in _DISABLE_CARD_BILLING_DEFAULT_NETWORKS:
+        return True
+    if net:
+        return False
+    try:
+        from core.env_config import _network_from_portal_url, get_portal_url
+
+        portal_net = _network_from_portal_url(get_portal_url())
+        return portal_net in _DISABLE_CARD_BILLING_DEFAULT_NETWORKS
+    except Exception:
+        return False
+
+
+def is_card_billing_disabled(network: str | None = None) -> bool:
+    """Runtime gate for portal Pay with Card. Stripe path is not removed."""
+    return get_flag(
+        "test_mode_disable_card_billing",
+        default_disable_card_billing(network),
+    )
 
 
 def _set_flag(name: str, value: bool) -> None:
@@ -86,6 +115,7 @@ def get_runtime_flags_payload() -> dict:
         "test_mode_skip_passport_zkproof": get_flag(
             "test_mode_skip_passport_zkproof", False
         ),
+        "test_mode_disable_card_billing": is_card_billing_disabled(),
     }
 
 
