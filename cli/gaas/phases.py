@@ -200,11 +200,14 @@ def _registry_runtime_config_json(descriptor: Descriptor, network: str) -> str |
   """
     if not _resolve_can_test_mode(descriptor):
         return None
+    test_flags = {
+        "test_mode": True,
+        "ii_bypass": True,
+    }
+    if (network or "").strip().lower() in ("staging", "demo"):
+        test_flags["disable_card_billing"] = True
     payload: dict = {
-        "test_flags": {
-            "test_mode": True,
-            "ii_bypass": True,
-        }
+        "test_flags": test_flags,
     }
     # Registry runtime_flags rejects test flags when network=ic; omit on mainnet.
     if network != "ic":

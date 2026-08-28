@@ -32,6 +32,13 @@
     loadDestroyRecords,
     saveDestroyRecord,
   } from '$lib/realm-destroy-records.js';
+  import { registryRuntimeFlags } from '$lib/stores/registryRuntimeFlags.js';
+  import {
+    CARD_PAY_UNAVAILABLE_COPY,
+    canStartCardCheckout,
+    cardPayButtonLabel,
+    isCardBillingDisabled,
+  } from '$lib/card-billing-flag.js';
 
   let userPrincipal = null;
   let loading = true;
@@ -98,6 +105,16 @@
   );
   $: hasVisibleRealms =
     dashboardCards.length > 0 || loadingDeployments || destroyRecords.length > 0;
+
+  $: cardBillingOptions = {
+    disableCardBilling: $registryRuntimeFlags.testModeDisableCardBilling,
+    network: $registryRuntimeFlags.network || CONFIG.deploy_queue_network,
+  };
+  $: cardBillingDisabled = isCardBillingDisabled(cardBillingOptions);
+  $: cardPayLabel = cardPayButtonLabel({
+    ...cardBillingOptions,
+    availableLabel: $_('dashboard.topup_button'),
+  });
 
   // Wizard drafts
   let wizardDrafts = [];
@@ -564,6 +581,7 @@
   }
 
   async function handleTopUp() {
+    if (!canStartCardCheckout(cardBillingOptions)) return;
     if (!userPrincipal || topUpAmount < 1 || topUpAmount > 50) return;
     
     topUpLoading = true;
@@ -826,10 +844,14 @@
 
                 <button 
                   class="topup-btn"
+                  class:unavailable={cardBillingDisabled}
                   on:click={handleTopUp}
-                  disabled={topUpLoading || topUpAmount < 1 || topUpAmount > 50}
+                  disabled={cardBillingDisabled || topUpLoading || topUpAmount < 1 || topUpAmount > 50}
+                  title={cardBillingDisabled ? CARD_PAY_UNAVAILABLE_COPY : undefined}
                 >
-                  {#if topUpLoading}
+                  {#if cardBillingDisabled}
+                    {cardPayLabel}
+                  {:else if topUpLoading}
                     <div class="btn-spinner"></div>
                     {$_('dashboard.processing')}
                   {:else}
@@ -837,7 +859,7 @@
                       <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
                       <line x1="1" y1="10" x2="23" y2="10"></line>
                     </svg>
-                    {$_('dashboard.topup_button')}
+                    {cardPayLabel}
                   {/if}
                 </button>
               </div>
@@ -1685,6 +1707,10 @@
   .topup-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  .topup-btn.unavailable {
+    opacity: 0.72;
   }
 
   .btn-spinner {

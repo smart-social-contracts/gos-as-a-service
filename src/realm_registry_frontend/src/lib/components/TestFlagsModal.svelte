@@ -20,6 +20,7 @@
     TEST_IDENTITY_FIXED_PICKER_MAX_INDEX,
     TEST_IDENTITY_MAX_INDEX,
   } from '$lib/test-identities.js';
+  import { isCardBillingDisabled } from '$lib/card-billing-flag.js';
 
   export let open = false;
 
@@ -31,7 +32,8 @@
     { key: 'user_self_registration', store: 'testModeUserSelfRegistration', label: 'User self-registration', hint: 'Allow users to join without an invitation code' },
     { key: 'demo_data', store: 'testModeDemoData', label: 'Demo data', hint: 'Auto-activate the demo data simulator' },
     { key: 'skip_terms', store: 'testModeSkipTerms', label: 'Skip terms', hint: 'Skip the terms & conditions step on join' },
-    { key: 'skip_passport_zkproof', store: 'testModeSkipPassportZkproof', label: 'Skip passport ZK-proof', hint: 'Bypass passport zero-knowledge verification' }
+    { key: 'skip_passport_zkproof', store: 'testModeSkipPassportZkproof', label: 'Skip passport ZK-proof', hint: 'Bypass passport zero-knowledge verification' },
+    { key: 'disable_card_billing', store: 'testModeDisableCardBilling', label: 'Disable card billing', hint: 'Keep Top Up Credits visible; Pay with Card cannot charge (Not available in this demo)' }
   ];
 
   let values = {};
@@ -58,7 +60,16 @@
   async function syncFromStore() {
     const snapshot = getRegistryRuntimeFlagsSnapshot();
     const next = {};
-    for (const f of FLAGS) next[f.key] = !!snapshot[f.store];
+    for (const f of FLAGS) {
+      if (f.key === 'disable_card_billing') {
+        next[f.key] = isCardBillingDisabled({
+          disableCardBilling: snapshot.testModeDisableCardBilling,
+          network: snapshot.network,
+        });
+      } else {
+        next[f.key] = !!snapshot[f.store];
+      }
+    }
     values = next;
     error = '';
     message = '';

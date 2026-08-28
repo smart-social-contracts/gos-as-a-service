@@ -439,6 +439,14 @@ def test_registry_runtime_config_json_can_test_mode() -> None:
     )
     assert _registry_runtime_config_json(billed_closed, "ic") is None
 
+    staging_desc = desc.model_copy(update={"flags": {"can_test_mode": True}})
+    staging_payload = json.loads(_registry_runtime_config_json(staging_desc, "staging"))
+    assert staging_payload["test_flags"]["disable_card_billing"] is True
+    demo_payload = json.loads(_registry_runtime_config_json(staging_desc, "demo"))
+    assert demo_payload["test_flags"]["disable_card_billing"] is True
+    test_payload = json.loads(_registry_runtime_config_json(staging_desc, "test"))
+    assert "disable_card_billing" not in test_payload["test_flags"]
+
 
 @patch("gaas.phases.dfx.get_principal")
 @patch("gaas.phases.dfx.canister_call")

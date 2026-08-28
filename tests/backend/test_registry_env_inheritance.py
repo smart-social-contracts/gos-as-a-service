@@ -26,6 +26,7 @@ def _clear_registry_config():
         "flag:test_mode_skip_terms",
         "flag:test_mode_skip_passport_zkproof",
         "flag:test_mode_skip_authentication",
+        "flag:test_mode_disable_card_billing",
     ):
         cfg = RegistryConfig[key]
         if cfg:
