@@ -1056,16 +1056,23 @@
                         {/if}
                         {#if deployment.cardKind === 'live' && isFailedDeployment(deployment)}
                           <a href={editDraftUrlForDeployment(deployment)} class="track-btn">Edit draft →</a>
-                          <button
-                            type="button"
-                            class="track-btn"
-                            disabled={retryingDeploymentId === deployment.deployment_id}
-                            on:click={() => retryFailedDeploymentJob(deployment)}
-                          >
-                            {retryingDeploymentId === deployment.deployment_id
-                              ? 'Retrying…'
-                              : 'Retry deploy →'}
-                          </button>
+                          {#if deployment.progress?.isBlocked}
+                            <span class="deployment-meta subtle">
+                              Retry unavailable: this deployment is blocked on a platform
+                              permission the installer cannot grant itself.
+                            </span>
+                          {:else}
+                            <button
+                              type="button"
+                              class="track-btn"
+                              disabled={retryingDeploymentId === deployment.deployment_id}
+                              on:click={() => retryFailedDeploymentJob(deployment)}
+                            >
+                              {retryingDeploymentId === deployment.deployment_id
+                                ? 'Retrying…'
+                                : 'Retry deploy →'}
+                            </button>
+                          {/if}
                           <button
                             type="button"
                             class="delete-deployment-btn"

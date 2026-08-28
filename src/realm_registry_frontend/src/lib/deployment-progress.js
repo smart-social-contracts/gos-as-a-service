@@ -56,6 +56,32 @@ const TERMINAL_STATUSES = new Set([
 
 const FAILED_STATUSES = new Set(['failed', 'failed_verification', 'cancelled']);
 
+/**
+ * Failures nobody can retry their way out of: the installer was refused a
+ * permission it cannot grant itself, so the deployment is waiting on a fix to
+ * the platform's canister topology, not on another attempt.
+ */
+const PERMISSION_BLOCK_PATTERNS = [
+  'managepermissions',
+  'does not hold commit',
+  'grant_permission failed',
+  'is not a controller',
+];
+
+/**
+ * True when an error means the deployment is blocked on a permission the
+ * installer cannot obtain. Such a job must never be dressed up as
+ * "Retrying automatically" — that hid a real permission hole for hours.
+ *
+ * @param {string} [error]
+ * @returns {boolean}
+ */
+export function isPermissionBlockedError(error) {
+  const text = (error || '').toLowerCase();
+  if (!text) return false;
+  return PERMISSION_BLOCK_PATTERNS.some((pattern) => text.includes(pattern));
+}
+
 /** True when the same job_id was reopened after a failure (heartbeat / retry). */
 export function isAutoRetryingJob(job, memory = null) {
   const status = (job?.raw_status || job?.status || '').toLowerCase();
@@ -570,7 +596,9 @@ export function getDeploymentProgress(job, options = {}) {
   const lastError = uniqueErrorText(
     job.last_error || job.previous_error || job.error || memory?.lastError || '',
   );
-  const isAutoRetrying = !isFailed && !isComplete && isAutoRetryingJob(job, memory);
+  const isBlocked = !isComplete && isPermissionBlockedError(lastError);
+  const isAutoRetrying =
+    !isFailed && !isComplete && !isBlocked && isAutoRetryingJob(job, memory);
 
   // A run that finished with errors stalled where the work actually failed —
   // the extension/codex phase — not at the registration it went on to do.
@@ -635,10 +663,12 @@ export function getDeploymentProgress(job, options = {}) {
       ? 'Complete'
       : isFailed
         ? 'Failed'
-        : isAutoRetrying
-          ? 'Retrying automatically'
-          : currentStage.label,
-    currentDescription: isFailed
+        : isBlocked
+          ? 'Blocked'
+          : isAutoRetrying
+            ? 'Retrying automatically'
+            : currentStage.label,
+    currentDescription: isFailed || isBlocked
       ? lastError || 'Deployment failed.'
       : isAutoRetrying
         ? lastError || currentStage.description
@@ -654,6 +684,7 @@ export function getDeploymentProgress(job, options = {}) {
     isFailed,
     isComplete,
     isAutoRetrying,
+    isBlocked,
     isActive: !isFailed && !isComplete,
     error: lastError || null,
     backendCanisterId: (job.backend_canister_id || '').trim() || null,

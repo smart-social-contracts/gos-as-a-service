@@ -79,6 +79,7 @@
       <span
         class="progress-label"
         class:failed={displayProgress.isFailed}
+        class:blocked={displayProgress.isBlocked && !displayProgress.isFailed}
         class:retrying={displayProgress.isAutoRetrying}
       >{displayProgress.currentLabel}</span>
       <span class="progress-percent" aria-hidden="true">{displayProgress.percent}%</span>
@@ -107,6 +108,8 @@
     <div class="progress-error" role="alert">
       {#if displayProgress.isFailed}
         <strong>Deployment failed</strong>
+      {:else if displayProgress.isBlocked}
+        <strong>Blocked — retrying cannot fix this</strong>
       {/if}
       <p>{displayProgress.error}</p>
     </div>
@@ -286,6 +289,10 @@
 
   .progress-label.retrying {
     color: #b45309;
+  }
+
+  .progress-label.blocked {
+    color: #b91c1c;
   }
 
   .progress-percent {
