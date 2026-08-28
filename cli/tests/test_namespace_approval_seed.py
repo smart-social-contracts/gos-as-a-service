@@ -158,3 +158,19 @@ def test_phase_seed_namespace_approvals_calls_seed(
         "ic",
         "deployer",
     )
+
+
+@patch("gaas.phases.seed_namespace_approvals")
+def test_phase_seed_namespace_approvals_warns_on_local_failure(
+    mock_seed: MagicMock,
+) -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        "file_registry": VALID_CANISTER_ID,
+        "marketplace_backend": "mmmmm-mmmmm-mmmmm-mmmmm-mmmmm-mmm",
+    }
+    desc = Descriptor.model_validate(data)
+    ctx = DeployContext(identity="default", network="local")
+    mock_seed.side_effect = RuntimeError("all 3 namespace approval attempt(s) failed")
+
+    phase_seed_namespace_approvals(desc, ctx)

@@ -15,6 +15,7 @@ from gaas.canister_liveness import (
     assert_frontend_http_live,
     assert_installer_live_for_network,
     collect_baked_portal_frontends,
+    fetch_local_canister_record,
     is_known_dead_canister,
     main,
     probe_baked_portal_frontends,
@@ -60,8 +61,72 @@ def test_assert_canister_exists_rejects_ic0301_payload():
         assert_canister_exists(GHOST_INSTALLER, fetch=fetch)
 
 
-def test_assert_installer_live_skips_local_network():
-    assert_installer_live_for_network("", "local", fetch=lambda _id: (_ for _ in ()).throw(AssertionError("fetch")))
+def test_assert_installer_live_skips_empty_id_on_local():
+    assert_installer_live_for_network(
+        "", "local", fetch=lambda _id: (_ for _ in ()).throw(AssertionError("fetch"))
+    )
+
+
+def test_assert_installer_live_rejects_ghost_on_local():
+    with pytest.raises(CanisterNotFoundError, match="IC0301"):
+        assert_installer_live_for_network(GHOST_INSTALLER, "local", fetch=_missing_fetch)
+
+
+def test_assert_installer_live_accepts_live_local_principal():
+    assert_installer_live_for_network(LIVE_INSTALLER, "local", fetch=_live_fetch)
+
+
+def test_assert_installer_live_local_does_not_call_ic_api(monkeypatch):
+    calls: list[str] = []
+
+    def local_fetch(canister_id: str):
+        calls.append(canister_id)
+        return 200, {"canister_id": canister_id}
+
+    monkeypatch.setattr("gaas.canister_liveness.fetch_local_canister_record", local_fetch)
+    monkeypatch.setattr(
+        "gaas.canister_liveness.fetch_canister_record",
+        lambda _id: (_ for _ in ()).throw(AssertionError("ic api")),
+    )
+    assert_installer_live_for_network(LIVE_INSTALLER, "local")
+    assert calls == [LIVE_INSTALLER]
+
+
+def test_fetch_local_canister_record_maps_missing_to_ic0301():
+    from gaas.dfx import DfxError
+
+    def _missing(*_args, **_kwargs):
+        raise DfxError("canister not found", command=[], stderr="IC0301")
+
+    with patch("gaas.dfx.canister_status", side_effect=_missing):
+        status, payload = fetch_local_canister_record(GHOST_INSTALLER)
+    assert status == 404
+    assert "IC0301" in json.dumps(payload)
+
+
+def test_fetch_local_canister_record_maps_generic_dfx_error_to_ic0301():
+    from gaas.dfx import DfxError
+
+    def _missing(*_args, **_kwargs):
+        raise DfxError("Http Error: status 400 Bad Request", command=[], stderr="")
+
+    with patch("gaas.dfx.canister_status", side_effect=_missing):
+        status, payload = fetch_local_canister_record(GHOST_INSTALLER)
+    assert status == 404
+    assert "IC0301" in json.dumps(payload)
+
+
+def test_fetch_local_canister_record_maps_running_status():
+    from unittest.mock import MagicMock
+
+    with patch(
+        "gaas.dfx.canister_status",
+        return_value=MagicMock(status="running"),
+    ):
+        status, payload = fetch_local_canister_record(LIVE_INSTALLER)
+    assert status == 200
+    assert payload["canister_id"] == LIVE_INSTALLER
+    assert payload["status"] == "running"
 
 
 def test_main_exits_nonzero_for_ghost(monkeypatch):
@@ -188,7 +253,7 @@ def test_adopt_allows_live_staging_installer(
 
     phase_create_canisters(desc, ctx)
 
-    mock_live.assert_called_once_with(LIVE_INSTALLER, "staging")
+    mock_live.assert_called_once_with(LIVE_INSTALLER, "ic")
     assert desc.canisters["realm_installer"] == LIVE_INSTALLER
 
 
@@ -312,3 +377,80 @@ def test_persist_guard_fails_gaas_new_on_dead_casals_frontend(mock_live, _persis
         _persist_and_guard_portal_frontends(desc, ctx, require_http=True)
     mock_live.assert_called_once()
     _persist.assert_not_called()
+
+
+@patch("gaas.phases.dfx.create_canister_via_ledger")
+@patch("gaas.phases.dfx.create_canister")
+@patch("gaas.phases.dfx.canister_status")
+@patch("gaas.phases.dfx.get_principal", return_value="aaaaa-aa")
+@patch("gaas.phases.dfx.use_identity")
+@patch("gaas.phases._persist_and_guard_portal_frontends")
+def test_adopt_rejects_ghost_local_installer(
+    _persist,
+    _use_identity,
+    _principal,
+    mock_status,
+    mock_create,
+    _ledger,
+    tmp_path: Path,
+) -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["name"] = "local"
+    data["domain"] = "local.localhost"
+    data["canisters"] = {
+        "realm_installer": GHOST_INSTALLER,
+        "realm_registry_backend": VALID_CANISTER_ID,
+    }
+    desc = Descriptor.model_validate(data)
+    path = tmp_path / "local.json"
+    desc.save(path)
+    ctx = DeployContext(identity="default", network="local", descriptor_path=path)
+
+    with patch(
+        "gaas.phases.assert_installer_live_for_network",
+        side_effect=CanisterNotFoundError("canister not found (IC0301)"),
+    ):
+        with pytest.raises(RuntimeError, match="IC0301"):
+            phase_create_canisters(desc, ctx)
+
+    mock_status.assert_not_called()
+    mock_create.assert_not_called()
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    assert saved["canisters"]["realm_installer"] == GHOST_INSTALLER
+    assert saved["canisters"]["realm_registry_backend"] == VALID_CANISTER_ID
+
+
+@patch("gaas.canister_liveness.fetch_local_canister_record", side_effect=_missing_fetch)
+@patch("gaas.phases.dfx.create_canister_via_ledger")
+@patch("gaas.phases.dfx.create_canister")
+@patch("gaas.phases.dfx.canister_status")
+@patch("gaas.phases.dfx.get_principal", return_value="aaaaa-aa")
+@patch("gaas.phases.dfx.use_identity")
+@patch("gaas.phases._persist_and_guard_portal_frontends")
+def test_adopt_rejects_ghost_local_installer_via_replica_ping(
+    _persist,
+    _use_identity,
+    _principal,
+    mock_status,
+    mock_create,
+    _ledger,
+    _local_fetch,
+    tmp_path: Path,
+) -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["name"] = "local"
+    data["domain"] = "local.localhost"
+    data["canisters"] = {"realm_installer": GHOST_INSTALLER}
+    desc = Descriptor.model_validate(data)
+    path = tmp_path / "local-ghost.json"
+    desc.save(path)
+    ctx = DeployContext(identity="default", network="local", descriptor_path=path)
+
+    with pytest.raises(RuntimeError, match="IC0301"):
+        phase_create_canisters(desc, ctx)
+
+    mock_status.assert_not_called()
+    mock_create.assert_not_called()
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    assert saved["canisters"]["realm_installer"] == GHOST_INSTALLER
+

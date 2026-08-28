@@ -1302,3 +1302,44 @@ def test_phase_install_backends_installs_file_registry_and_marketplace(
     installed_ids = [call.args[0] for call in mock_install.call_args_list]
     assert "aaaaa-aaaaa-aaaaa-aaaaa-aaa" in installed_ids
     assert "bbbbb-bbbbb-bbbbb-bbbbb-bbb" in installed_ids
+
+
+@patch("gaas.phases.resolve_casals_file_registry_wasm")
+@patch("gaas.phases.dfx.install_wasm")
+@patch("gaas.phases.dfx.detect_install_mode", return_value="install")
+@patch("gaas.phases.resolve_casals_wasm")
+@patch("gaas.phases.resolve_platform_backend_wasm")
+@patch("gaas.phases._find_repo_root")
+def test_phase_install_backends_local_uses_platform_file_registry_for_casals(
+    mock_repo_root,
+    mock_platform_wasm,
+    mock_casals_wasm,
+    mock_detect,
+    mock_install,
+    mock_casals_fr_wasm,
+    tmp_path: Path,
+) -> None:
+    mock_repo_root.return_value = tmp_path / "repo"
+    platform_wasm = tmp_path / "file_registry.wasm"
+    platform_wasm.write_bytes(b"wasm")
+    mock_platform_wasm.return_value = platform_wasm
+    mock_casals_wasm.return_value = tmp_path / "casals.wasm"
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        "realm_registry_backend": VALID_CANISTER_ID,
+        "realm_installer": VALID_CANISTER_ID,
+        "casals_backend": VALID_CANISTER_ID,
+        "casals_file_registry": "ccccc-ccccc-ccccc-ccccc-ccc",
+    }
+    descriptor = Descriptor.model_validate(data)
+    ctx = DeployContext(identity="default", network="local", work_dir=tmp_path / "work")
+
+    phase_install_backends(descriptor, ctx)
+
+    mock_casals_fr_wasm.assert_not_called()
+    casals_fr_install = next(
+        call
+        for call in mock_install.call_args_list
+        if call.args[0] == "ccccc-ccccc-ccccc-ccccc-ccc"
+    )
+    assert casals_fr_install.args[1] == str(platform_wasm)

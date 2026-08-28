@@ -375,10 +375,11 @@ def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
 
     installer_id = descriptor.canisters.get("realm_installer", "")
     if installer_id and (
-        descriptor.name == "staging" or ctx.network == "staging"
+        descriptor.name == "staging"
+        or ctx.network in ("staging", "local", "localhost")
     ):
         try:
-            assert_installer_live_for_network(installer_id, "staging")
+            assert_installer_live_for_network(installer_id, ctx.network)
         except CanisterNotFoundError as exc:
             raise RuntimeError(str(exc)) from exc
 
@@ -535,13 +536,26 @@ def phase_install_backends(descriptor: Descriptor, ctx: DeployContext) -> None:
 
     casals_fr_id = descriptor.canisters.get("casals_file_registry")
     if casals_fr_id:
-        wasm = resolve_casals_file_registry_wasm(
-            descriptor.casals.version,
-            descriptor.casals.release_repo,
-            work / "casals",
-            casals_src=ctx.casals_src,
-            session=ctx.http,
-        )
+        # Casals v0.3.0 file_registry lacks finalize_chunked_file_step. On a
+        # local replica, install this repo's file_registry wasm so seed can
+        # finish without talking to a newer Casals release / mainnet.
+        if ctx.network in ("local", "localhost") and repo_root is not None:
+            wasm = resolve_platform_backend_wasm(
+                "file_registry",
+                platform_version=platform_version,
+                release_repo=release_repo,
+                work_dir=work,
+                repo_root=repo_root,
+                session=ctx.http,
+            )
+        else:
+            wasm = resolve_casals_file_registry_wasm(
+                descriptor.casals.version,
+                descriptor.casals.release_repo,
+                work / "casals",
+                casals_src=ctx.casals_src,
+                session=ctx.http,
+            )
         mode = _backend_install_mode(casals_fr_id, ctx)
         console.print(f"  casals_file_registry: {mode} ({wasm.name})")
         dfx.install_wasm(
@@ -880,12 +894,18 @@ def phase_seed_namespace_approvals(descriptor: Descriptor, ctx: DeployContext) -
         )
         return
 
-    result = seed_namespace_approvals(
-        registry_id,
-        marketplace_id,
-        ctx.network,
-        ctx.identity,
-    )
+    try:
+        result = seed_namespace_approvals(
+            registry_id,
+            marketplace_id,
+            ctx.network,
+            ctx.identity,
+        )
+    except RuntimeError as exc:
+        if ctx.network in ("local", "localhost"):
+            console.print(f"[yellow]  warning: {exc}[/yellow]")
+            return
+        raise
     console.print(
         f"  namespace approvals: granted={result['granted']}, "
         f"approved={result['approved']}, skipped={result['skipped']}, "
@@ -1274,13 +1294,23 @@ def phase_seed_conductor(descriptor: Descriptor, ctx: DeployContext) -> None:
     except PlatformError:
         pass
 
-    seed_orchestration_templates(
-        casals_id,
-        gos_registry_id,
-        ctx.network,
-        identity=ctx.identity,
-        casals_src=ctx.casals_src,
-    )
+    try:
+        seed_orchestration_templates(
+            casals_id,
+            gos_registry_id,
+            ctx.network,
+            identity=ctx.identity,
+            casals_src=ctx.casals_src,
+        )
+    except RuntimeError as exc:
+        if ctx.network in ("local", "localhost") and "missing orchestration template" in str(
+            exc
+        ):
+            console.print(
+                f"[yellow]  warning: {exc}; skipping remaining conductor seed[/yellow]"
+            )
+            return
+        raise
     for entry in descriptor.gos:
         auth_result = authorize_gos_entry(
             casals_id,
@@ -1532,6 +1562,12 @@ def phase_configure_multisig(descriptor: Descriptor, ctx: DeployContext) -> None
     tree = get_tree(casals_id, ctx.network, identity=ctx.identity)
     tree_id = _find_canister_id(tree, "multisig")
     if not tree_id:
+        if ctx.network in ("local", "localhost"):
+            console.print(
+                "[yellow]  skip: no multisig in conductor tree "
+                "(orchestration templates unavailable)[/yellow]"
+            )
+            return
         raise RuntimeError(
             "multisig not found in conductor tree; run seed_conductor first"
         )
@@ -1580,6 +1616,12 @@ def phase_controller_topology(descriptor: Descriptor, ctx: DeployContext) -> Non
             tree = get_tree(casals_id, ctx.network, identity=ctx.identity)
             multisig_id = _find_canister_id(tree, "multisig")
     if not multisig_id:
+        if ctx.network in ("local", "localhost"):
+            console.print(
+                "[yellow]  skip: no multisig backend_id "
+                "(orchestration templates unavailable)[/yellow]"
+            )
+            return
         raise RuntimeError("multisig backend_id required for controller topology")
 
     deployer = dfx.get_principal(ctx.identity)

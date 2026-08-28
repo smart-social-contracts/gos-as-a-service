@@ -150,7 +150,9 @@ def upload_file(
     """Return uploaded, skipped, or failed."""
     size = local_path.stat().st_size
     if size == 0:
-        return "failed"
+        # Frontend tarballs often include empty placeholders; they were never
+        # stored, but treating them as a hard failure aborts the whole seed.
+        return "skipped"
 
     if existing_hashes and registry_path in existing_hashes:
         if existing_hashes[registry_path] == sha256_file(local_path):
@@ -244,9 +246,9 @@ def upload_directory(
     *,
     identity: str | None = None,
     existing_hashes: dict[str, str] | None = None,
-) -> tuple[int, int]:
+) -> tuple[int, list[str]]:
     uploaded = 0
-    failed = 0
+    failed_paths: list[str] = []
     for root, _dirs, files in os.walk(dist_dir):
         for fname in sorted(files):
             local = Path(root) / fname
@@ -261,10 +263,19 @@ def upload_directory(
                 existing_hashes=existing_hashes,
             )
             if result == "failed":
-                failed += 1
+                failed_paths.append(rel)
             elif result == "uploaded":
                 uploaded += 1
-    return uploaded, failed
+    return uploaded, failed_paths
+
+
+def _raise_frontend_upload_failures(frontend_ns: str, failed_paths: list[str]) -> None:
+    if not failed_paths:
+        return
+    raise RuntimeError(
+        f"frontend upload had {len(failed_paths)} failures for {frontend_ns}: "
+        + ", ".join(failed_paths)
+    )
 
 
 def seed_gos_entry(
@@ -296,7 +307,7 @@ def seed_gos_entry(
             frontend_hashes = fetch_namespace_hashes(
                 registry_id, frontend_ns, network, identity=identity
             )
-            _uploaded, failed = upload_directory(
+            _uploaded, failed_paths = upload_directory(
                 registry_id,
                 frontend_ns,
                 dist,
@@ -304,13 +315,12 @@ def seed_gos_entry(
                 identity=identity,
                 existing_hashes=frontend_hashes,
             )
-            if failed:
-                raise RuntimeError(f"frontend upload had {failed} failures for {frontend_ns}")
+            _raise_frontend_upload_failures(frontend_ns, failed_paths)
     else:
         frontend_hashes = fetch_namespace_hashes(
             registry_id, frontend_ns, network, identity=identity
         )
-        _uploaded, failed = upload_directory(
+        _uploaded, failed_paths = upload_directory(
             registry_id,
             frontend_ns,
             frontend_source,
@@ -318,8 +328,7 @@ def seed_gos_entry(
             identity=identity,
             existing_hashes=frontend_hashes,
         )
-        if failed:
-            raise RuntimeError(f"frontend upload had {failed} failures for {frontend_ns}")
+        _raise_frontend_upload_failures(frontend_ns, failed_paths)
 
     publish_namespace(registry_id, backend_ns, network, identity=identity)
     publish_namespace(registry_id, frontend_ns, network, identity=identity)
