@@ -1,5 +1,5 @@
 /** Go-live copy for disabled portal card checkout. Do not substitute. */
-export const CARD_PAY_UNAVAILABLE_COPY = 'Not available in this demo';
+export const CARD_PAY_UNAVAILABLE_COPY = 'Currently not available';
 
 const DEFAULT_ON_NETWORKS = new Set(['staging', 'demo']);
 
