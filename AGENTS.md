@@ -242,8 +242,38 @@ Returns JSON with `job_id`, `credits_held`, `status`.
 | `list_deployment_jobs()` | query | List all jobs |
 | `health()` | query | `{ ok: true }` sanity check |
 | `cancel_deployment(job_id)` | update | Cancel queued job |
+| `retry_deployment(job_id)` | update | **Resume** a failed job from its failed step (owner or controller) |
 
 The off-chain **realms-deployer** worker polls pending jobs, downloads release artifacts, runs `dfx` installs, and reports back. Casals path is triggered when `provision_via_casals` is enabled and the job enters `provisioning` status.
+
+#### Failed deploys resume; they never replay
+
+A deploy that failed after its canisters existed must not be re-driven from
+step zero — `enter_setup` and `configure_canister_ids` are one-shot on a live
+stand, so a replay fails every bootstrap step and leaves the realm half-built.
+
+- Deploy task ids come from `deploy_resume.deploy_task_id(job_id)`. Never mint
+  one from `ic.time()`: IC time is identical for every message in a round, so
+  two stands provisioned together shared a task and one adopted the other's
+  steps.
+- A second pass resumes the recorded task (completed steps keep their status;
+  only failed and provably abandoned `running` steps run again) and skips the
+  Casals provisioning calls entirely when the canisters and the task exist.
+- The **provision heartbeat never re-drives a failed job** (`pending` /
+  `provisioning` only). Recovery is an explicit `retry_deployment`.
+- A failed bootstrap step (`enter_setup`, `configure_canister_ids`,
+  `grant_frontend_access`) fails the job. It is not a partial success: the
+  realm never entered setup or cannot write its own frontend.
+
+#### Frontend asset permissions are Casals's to grant
+
+The realm backend needs `Commit` on its frontend asset canister (`/custom/`
+branding, `/ext/` extension frontends). Casals grants it to the paired stand
+backend when it provisions the frontend bundle. The installer holds no
+`ManagePermissions` there and **must not** be made a lasting controller of a
+realm asset canister — it verifies the grant with `list_permitted` and reports
+a precise failure when it is missing. Remaining platform-side work:
+[docs/CASALS_FOLLOWUP_ASSET_PERMISSIONS.md](docs/CASALS_FOLLOWUP_ASSET_PERMISSIONS.md).
 
 #### Platform provisioner (Casals)
 
