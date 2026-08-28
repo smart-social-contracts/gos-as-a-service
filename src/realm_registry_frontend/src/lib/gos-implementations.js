@@ -114,8 +114,20 @@ export const GOS_IMPLEMENTATIONS = resolveGosImplementations(runtimeGaasEnv());
 export const WIZARD_STEPS = [
 	{ id: 'platform', label: 'Platform' },
 	{ id: 'basics', label: 'Basics' },
+	{ id: 'subnet', label: 'Subnet' },
 	{ id: 'deploy', label: 'Review & Deploy' }
 ];
+
+/** Index of Review & Deploy — used when resuming a draft after a failed deploy. */
+export const DEPLOY_WIZARD_STEP = WIZARD_STEPS.findIndex((step) => step.id === 'deploy');
+
+/**
+ * @param {number} [stepIndex]
+ * @returns {string}
+ */
+export function wizardStepLabel(stepIndex) {
+	return WIZARD_STEPS[stepIndex]?.label || `Step ${(stepIndex || 0) + 1}`;
+}
 
 /**
  * @param {string} [id]

@@ -1,6 +1,6 @@
 import { building } from '$app/environment';
 import { CONFIG } from './config.js';
-import { detectNetwork, getCanisterId } from './network.js';
+import { getCanisterId } from './network.js';
 
 function isBuildingOrTesting() {
   return building || process.env.NODE_ENV === 'test';
@@ -19,11 +19,6 @@ let actorPromise = null;
 async function createCasalsActor() {
   if (isBuildingOrTesting()) {
     return { list_subnets: async () => '[]' };
-  }
-
-  const network = detectNetwork();
-  if (network !== 'ic') {
-    throw new Error('list_subnets is only available on the ic network');
   }
 
   const { createActor, canisterId: declaredCanisterId } = await import(
