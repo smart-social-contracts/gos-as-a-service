@@ -35,6 +35,9 @@ def test_canisters_are_name_first_for_network_js():
     # network.js getCanisterId resolves gaasEnv.canisters[name][network]
     assert env["canisters"]["realm_registry_backend"]["ic"] == "yhw3g-fyaaa-aaaas-qgorq-cai"
     assert env["canisters"]["realm_registry_frontend"]["ic"] == "qtank-3qaaa-aaaaa-qhb6q-cai"
+    # staging.gos.earth detects "staging" even when gaas new used --network ic
+    assert env["canisters"]["realm_registry_backend"]["test"] == "yhw3g-fyaaa-aaaas-qgorq-cai"
+    assert env["canisters"]["realm_registry_frontend"]["test"] == "qtank-3qaaa-aaaaa-qhb6q-cai"
 
 
 def test_ii_alternative_origins_include_frontend_raw_origin():

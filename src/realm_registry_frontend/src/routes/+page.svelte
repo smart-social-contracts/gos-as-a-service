@@ -74,9 +74,11 @@
   }
 
   const marketplaceCanisterId =
-    import.meta.env.CANISTER_ID_MARKETPLACE_FRONTEND || getCanisterId('marketplace_frontend') || '';
+    getCanisterId('marketplace_frontend') ||
+    import.meta.env.CANISTER_ID_MARKETPLACE_FRONTEND ||
+    '';
   const casalsCanisterId =
-    import.meta.env.CANISTER_ID_CASALS_FRONTEND || getCanisterId('casals_frontend') || '';
+    getCanisterId('casals_frontend') || import.meta.env.CANISTER_ID_CASALS_FRONTEND || '';
 
   $: marketplaceUrl = isLocalDevelopment()
     ? `http://localhost:${(typeof window !== 'undefined' && window.location.port) || '4943'}/?canisterId=marketplace_frontend`

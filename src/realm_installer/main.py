@@ -2787,7 +2787,8 @@ def _provision_via_casals_gen(job_id: str):
             f"job in '{job.status}', expected 'pending', 'provisioning', or 'failed'"
         )
     if status == "failed":
-        job.error = ""
+        # Keep last error + completed_at so the portal can say
+        # "Retrying automatically" on the same job_id. Do not mint a new job.
         job.status = "provisioning"
 
     claim_provision_lock(job, now_s=now_s())
@@ -3013,7 +3014,7 @@ def retry_deployment(job_id: text) -> ResultProvision:
         prev = (job.status or "pending").lower()
         if prev != "failed":
             return ResultProvision(Err=ie(f"cannot retry job with status '{prev}'"))
-        job.error = ""
+        # Same job_id; keep last error so the card can show auto/manual retry.
         job.status = "provisioning"
         _schedule_provision_kick(job_id, 0)
         return ResultProvision(Ok=_provision_ok_for_job(job_id, job))

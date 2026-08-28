@@ -11,7 +11,8 @@
     "map_view": "Kartenansicht",
     "create_realm": "Realm erstellen",
     "marketplace": "Marktplatz",
-    "architecture": "Architektur"
+    "architecture": "Architektur",
+    "architecture_unavailable": "Infrastruktur ist nicht verfügbar"
   },
   "hub": {
     "open": "Realms-Menü öffnen",

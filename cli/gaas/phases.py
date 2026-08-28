@@ -71,7 +71,12 @@ from gaas.platform import (
     resolve_casals_wasm,
     resolve_platform_backend_wasm,
 )
-from gaas.canister_liveness import CanisterNotFoundError, assert_installer_live_for_network
+from gaas.canister_ids_sync import persist_descriptor_canister_ids
+from gaas.canister_liveness import (
+    CanisterNotFoundError,
+    assert_casals_frontend_live,
+    assert_installer_live_for_network,
+)
 from gaas.preflight import PreflightReport, run_preflight
 from gaas.runlog import format_duration, get_run_log, print_log_path
 from gaas.source_build import resolve_gos_artifacts
@@ -418,6 +423,8 @@ def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
         descriptor.set_canister_id(name, canister_id)
         _save_descriptor(descriptor, ctx)
         console.print(f"  {name}: created {canister_id}")
+
+    _persist_and_guard_portal_frontends(descriptor, ctx, require_http=False)
 
     casals_id = (descriptor.canisters.get("casals_backend") or "").strip()
     if ctx.cycles_evacuated > 0 and casals_id:
@@ -890,6 +897,34 @@ def _is_interactive(ctx: DeployContext) -> bool:
     return not ctx.yes and sys.stdin.isatty()
 
 
+def _persist_and_guard_portal_frontends(
+    descriptor: Descriptor,
+    ctx: DeployContext,
+    *,
+    require_http: bool,
+) -> None:
+    """Rewrite inventory IDs and fail if a baked Casals frontend is dead."""
+    casals_frontend_id = (descriptor.canisters.get("casals_frontend") or "").strip()
+    try:
+        assert_casals_frontend_live(
+            casals_frontend_id,
+            ctx.network,
+            require_http=require_http,
+        )
+    except CanisterNotFoundError as exc:
+        raise RuntimeError(str(exc)) from exc
+
+    try:
+        repo_root = _find_repo_root(ctx)
+    except PlatformError:
+        return
+    persist_descriptor_canister_ids(repo_root, descriptor)
+    console.print(
+        f"  persisted canister IDs to {repo_root / 'canister_ids.json'} "
+        f"({descriptor.name})"
+    )
+
+
 def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
     platform_version, release_repo = _platform_release(descriptor)
     repo_root = _find_repo_root(ctx)
@@ -897,6 +932,7 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
     casals_staging = repo_root / "casals_frontend_dist"
 
     try:
+        _persist_and_guard_portal_frontends(descriptor, ctx, require_http=False)
         gaas_env_path = write_gaas_env(
             repo_root, descriptor, ctx.network, deployer_principal=dfx.get_principal(ctx.identity)
         )
@@ -1052,6 +1088,7 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
             f"  casals_frontend: reinstall assets done "
             f"({format_duration(time.monotonic() - start)})"
         )
+        _persist_and_guard_portal_frontends(descriptor, ctx, require_http=True)
 
         marketplace_frontend_id = descriptor.canisters.get("marketplace_frontend")
         if marketplace_frontend_id:

@@ -76,7 +76,11 @@
 <div class="deployment-progress" class:compact={variant === 'compact'}>
   <div class="progress-header">
     <div class="progress-label-row">
-      <span class="progress-label">{displayProgress.currentLabel}</span>
+      <span
+        class="progress-label"
+        class:failed={displayProgress.isFailed}
+        class:retrying={displayProgress.isAutoRetrying}
+      >{displayProgress.currentLabel}</span>
       <span class="progress-percent" aria-hidden="true">{displayProgress.percent}%</span>
     </div>
     <div
@@ -99,9 +103,11 @@
     <p class="progress-description">{displayProgress.currentDescription}</p>
   </div>
 
-  {#if displayProgress.isFailed && displayProgress.error}
+  {#if displayProgress.error && displayProgress.error !== displayProgress.currentDescription}
     <div class="progress-error" role="alert">
-      <strong>Deployment failed</strong>
+      {#if displayProgress.isFailed}
+        <strong>Deployment failed</strong>
+      {/if}
       <p>{displayProgress.error}</p>
     </div>
   {/if}
@@ -272,6 +278,14 @@
     font-weight: 600;
     font-size: 0.875rem;
     color: #171717;
+  }
+
+  .progress-label.failed {
+    color: #b91c1c;
+  }
+
+  .progress-label.retrying {
+    color: #b45309;
   }
 
   .progress-percent {

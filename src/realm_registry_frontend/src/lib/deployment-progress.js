@@ -1,3 +1,5 @@
+import { uniqueErrorText } from './deployment-attempt-memory.js';
+
 /** Pipeline stages shown to users (order matters). */
 export const DEPLOYMENT_PIPELINE = [
   {
@@ -53,6 +55,14 @@ const TERMINAL_STATUSES = new Set([
 ]);
 
 const FAILED_STATUSES = new Set(['failed', 'failed_verification', 'cancelled']);
+
+/** True when the same job_id was reopened after a failure (heartbeat / retry). */
+export function isAutoRetryingJob(job, memory = null) {
+  const status = (job?.raw_status || job?.status || '').toLowerCase();
+  if (!status || FAILED_STATUSES.has(status) || status === 'completed') return false;
+  if (memory?.autoRetrying || memory?.lastError) return true;
+  return Boolean(toTimestampMs(job?.completed_at));
+}
 
 const EXTENSIONS_STAGE_INDEX = DEPLOYMENT_PIPELINE.findIndex((s) => s.id === 'extensions');
 
@@ -551,11 +561,16 @@ function resolveStageDurationsMs(stages, startMs, endMs, observedStarts) {
 export function getDeploymentProgress(job, options = {}) {
   const deployTask = options?.deployTask ?? null;
   const codexDependencies = options?.codexDependencies ?? [];
+  const memory = options?.attemptMemory ?? null;
   const { status, index: stageIndex } = stageIndexForJob(job);
   const isTerminal = TERMINAL_STATUSES.has(status);
   const finishedWithErrors = deploymentFinishedWithErrors(job);
   const isFailed = FAILED_STATUSES.has(status) || finishedWithErrors;
   const isComplete = status === 'completed' && !finishedWithErrors;
+  const lastError = uniqueErrorText(
+    job.last_error || job.previous_error || job.error || memory?.lastError || '',
+  );
+  const isAutoRetrying = !isFailed && !isComplete && isAutoRetryingJob(job, memory);
 
   // A run that finished with errors stalled where the work actually failed —
   // the extension/codex phase — not at the registration it went on to do.
@@ -589,14 +604,18 @@ export function getDeploymentProgress(job, options = {}) {
   });
 
   const startedAtMs = toTimestampMs(job.created_at);
-  const finishedAtMs = isTerminal ? toTimestampMs(job.completed_at) ?? Date.now() : null;
+  const attemptStartedAtMs =
+    options?.attemptStartedAtMs ||
+    memory?.attemptStartedAtMs ||
+    (isAutoRetrying ? toTimestampMs(job.completed_at) || startedAtMs : startedAtMs);
+  const finishedAtMs = isFailed || isComplete ? toTimestampMs(job.completed_at) ?? Date.now() : null;
   const endMs = finishedAtMs ?? Date.now();
   const totalDurationMs =
-    startedAtMs && endMs >= startedAtMs ? endMs - startedAtMs : null;
+    attemptStartedAtMs && endMs >= attemptStartedAtMs ? endMs - attemptStartedAtMs : null;
 
   const { durations: stageDurationMs, estimated: durationsEstimated } =
-    startedAtMs != null
-      ? resolveStageDurationsMs(stages, startedAtMs, endMs, options?.observedStageStarts ?? null)
+    attemptStartedAtMs != null
+      ? resolveStageDurationsMs(stages, attemptStartedAtMs, endMs, options?.observedStageStarts ?? null)
       : { durations: {}, estimated: true };
 
   const stagesWithTiming = stages.map((stage, i) => {
@@ -612,10 +631,18 @@ export function getDeploymentProgress(job, options = {}) {
   return {
     status,
     stageIndex: activeIndex,
-    currentLabel: isComplete ? 'Complete' : isFailed ? 'Failed' : currentStage.label,
+    currentLabel: isComplete
+      ? 'Complete'
+      : isFailed
+        ? 'Failed'
+        : isAutoRetrying
+          ? 'Retrying automatically'
+          : currentStage.label,
     currentDescription: isFailed
-      ? job.error || 'Deployment failed.'
-      : stageDescription(status, job, currentStage, deployTask),
+      ? lastError || 'Deployment failed.'
+      : isAutoRetrying
+        ? lastError || currentStage.description
+        : stageDescription(status, job, currentStage, deployTask),
     percent,
     stages: stagesWithTiming,
     subSteps,
@@ -626,11 +653,13 @@ export function getDeploymentProgress(job, options = {}) {
     isTerminal,
     isFailed,
     isComplete,
-    isActive: !isTerminal,
-    error: (job.error || '').trim() || null,
+    isAutoRetrying,
+    isActive: !isFailed && !isComplete,
+    error: lastError || null,
     backendCanisterId: (job.backend_canister_id || '').trim() || null,
     frontendCanisterId: (job.frontend_canister_id || '').trim() || null,
     startedAtMs,
+    attemptStartedAtMs,
     finishedAtMs,
     totalDurationMs,
     totalDurationLabel: totalDurationMs != null ? formatDuration(totalDurationMs) : '',
@@ -657,7 +686,7 @@ export function getDeploymentStatusLabel(status) {
 export function withLiveProgressTiming(progress, nowMs, observedStageStarts = null) {
   if (!progress) return progress;
 
-  const startedAtMs = progress.startedAtMs;
+  const startedAtMs = progress.attemptStartedAtMs || progress.startedAtMs;
   const endMs = progress.finishedAtMs ?? nowMs;
   const totalDurationMs =
     startedAtMs && endMs >= startedAtMs ? endMs - startedAtMs : progress.totalDurationMs;

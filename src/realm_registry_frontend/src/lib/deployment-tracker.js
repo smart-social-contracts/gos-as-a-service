@@ -45,7 +45,9 @@ export function startDeploymentJobPolling(jobId, onUpdate, intervalMs = 5000) {
       if (!row) return;
       recordDeploymentStageObservation(jobId, row);
       onUpdate(row);
-      if (!isActiveQueueStatus(row.raw_status)) {
+      const st = (row.raw_status || '').toLowerCase();
+      // Keep polling `failed` — the installer heartbeat may reopen the same job_id.
+      if (!isActiveQueueStatus(st) && st !== 'failed') {
         stop();
       }
     } catch (e) {

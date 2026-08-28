@@ -23,8 +23,14 @@ def build_gaas_env(
     if frontend_id:
         ii_origins.append(frontend_ic_origin(frontend_id))
 
+    # Alias descriptor.name so a staging deploy with --network ic still
+    # resolves on staging.gos.earth (detectNetwork → "staging").
+    env_keys = [network]
+    name_key = (descriptor.name or "").strip()
+    if name_key and name_key not in env_keys:
+        env_keys.append(name_key)
     canisters = {
-        name: {network: canister_id}
+        name: {key: canister_id for key in env_keys}
         for name, canister_id in descriptor.canisters.items()
     }
     if "marketplace_backend" not in canisters:

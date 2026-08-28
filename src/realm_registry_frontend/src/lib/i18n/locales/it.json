@@ -11,7 +11,8 @@
     "map_view": "Vista mappa",
     "create_realm": "Crea Reame",
     "marketplace": "Mercato",
-    "architecture": "Architettura"
+    "architecture": "Architettura",
+    "architecture_unavailable": "L'infrastruttura non è disponibile"
   },
   "hub": {
     "open": "Apri menu Realms",

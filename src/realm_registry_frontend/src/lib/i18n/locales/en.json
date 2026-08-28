@@ -11,7 +11,8 @@
     "map_view": "Map view",
     "create_realm": "Create a realm",
     "marketplace": "Market place",
-    "architecture": "Infrastructure"
+    "architecture": "Infrastructure",
+    "architecture_unavailable": "Infrastructure is not available"
   },
   "hub": {
     "open": "Open Realms menu",

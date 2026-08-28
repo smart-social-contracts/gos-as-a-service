@@ -11,7 +11,10 @@ import {
   getGaasEnvViteDefine,
   loadGaasEnv,
 } from './scripts/gaas-env.js';
-import { assertInstallerLiveForBake } from './scripts/assert-canister-live.js';
+import {
+  assertCasalsFrontendLiveForBake,
+  assertInstallerLiveForBake,
+} from './scripts/assert-canister-live.js';
 
 dotenv.config({ path: '../../.env' });
 
@@ -87,6 +90,13 @@ function getCanisterIdDefines() {
   assertInstallerLiveForBake(defines['import.meta.env.CANISTER_ID_REALM_INSTALLER']
     ? JSON.parse(defines['import.meta.env.CANISTER_ID_REALM_INSTALLER'])
     : '', network, { repoRoot });
+  assertCasalsFrontendLiveForBake(
+    defines['import.meta.env.CANISTER_ID_CASALS_FRONTEND']
+      ? JSON.parse(defines['import.meta.env.CANISTER_ID_CASALS_FRONTEND'])
+      : '',
+    network,
+    { repoRoot }
+  );
 
   return defines;
 }
@@ -104,6 +114,9 @@ function getCanisterIdsDefine() {
       assertInstallerLiveForBake(allIds.realm_installer?.staging || '', 'staging', {
         repoRoot,
       });
+      for (const [net, id] of Object.entries(allIds.casals_frontend || {})) {
+        assertCasalsFrontendLiveForBake(id || '', net, { repoRoot });
+      }
     }
     return { '__CANISTER_IDS__': JSON.stringify(allIds) };
   } catch (e) {
