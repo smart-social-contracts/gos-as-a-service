@@ -12,7 +12,7 @@ _SLUG_CHARS = set("abcdefghijklmnopqrstuvwxyz0123456789-")
 RESERVED_SLUGS = frozenset({
     "www", "api", "join", "deploy", "admin", "registry", "portal",
     "staging", "demo", "test", "static", "assets", "health", "faq",
-    "create-realm", "my-dashboard", "connect", "r",
+    "create-realm", "deploy-gos", "my-dashboard", "connect", "r",
 })
 
 DEFAULT_LOADER_PROFILE = "realms-iframe-v1"

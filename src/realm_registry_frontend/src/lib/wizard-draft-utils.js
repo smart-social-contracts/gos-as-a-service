@@ -94,10 +94,12 @@ export function findDraftForDeployment(drafts, deployment) {
   return null;
 }
 
+export const DEPLOY_GOS_PATH = '/deploy-gos';
+
 export function draftResumeUrl(draft, step) {
   const id = (draft?.id || '').trim();
-  if (!id) return '/create-realm';
-  const base = `/create-realm?draft=${encodeURIComponent(id)}`;
+  if (!id) return DEPLOY_GOS_PATH;
+  const base = `${DEPLOY_GOS_PATH}?draft=${encodeURIComponent(id)}`;
   if (step == null) return base;
   return `${base}&step=${encodeURIComponent(String(step))}`;
 }

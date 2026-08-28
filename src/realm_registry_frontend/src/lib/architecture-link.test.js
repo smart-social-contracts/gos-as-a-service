@@ -38,6 +38,16 @@ test('RegistryHeader has no fdr7z fallback and no hardcoded canister URL', () =>
 	assert.match(headerSource, /\{#if architectureUrl\}/);
 });
 
+test('hamburger links to Deploy GOS and omits Marketplace', () => {
+	const en = JSON.parse(readFileSync(join(here, 'i18n/locales/en.json'), 'utf-8'));
+	assert.equal(en.controls.create_realm, 'Deploy GOS');
+	assert.match(headerSource, /href="\/deploy-gos"/);
+	assert.match(headerSource, /controls\.create_realm/);
+	assert.equal(headerSource.includes('href="/create-realm"'), false);
+	assert.equal(headerSource.includes('marketplaceUrl'), false);
+	assert.equal(headerSource.includes('controls.marketplace'), false);
+});
+
 test('portal source and canister_ids no longer mention fdr7z', () => {
 	assert.equal(pageSource.includes('fdr7z'), false);
 	assert.equal(idsSource.includes('fdr7z'), false);

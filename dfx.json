@@ -120,7 +120,14 @@
     "casals_backend": {
       "candid": "casals_backend.did",
       "type": "custom",
-      "wasm": "casals_backend.wasm"
+      "wasm": "casals_backend.wasm",
+      "remote": {
+        "id": {
+          "demo": "jo3cj-faaaa-aaaac-bffea-cai",
+          "staging": "th7fr-bqaaa-aaaan-q6n4q-cai",
+          "test": "qthgp-3yaaa-aaaae-agveq-cai"
+        }
+      }
     },
     "casals_file_registry": {
       "candid": "casals_backend.did",

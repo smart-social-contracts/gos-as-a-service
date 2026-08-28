@@ -109,8 +109,8 @@
   $: linkedDraft = deployment ? findDraftForDeployment(wizardDrafts, deployment) : null;
   $: editDraftHref = linkedDraft
     ? `${draftResumeUrl(linkedDraft, 6)}&edit=1`
-    : '/create-realm';
-  $: retryDeployHref = linkedDraft ? draftResumeUrl(linkedDraft, 6) : '/create-realm';
+    : '/deploy-gos';
+  $: retryDeployHref = linkedDraft ? draftResumeUrl(linkedDraft, 6) : '/deploy-gos';
   $: destroyAllowed = canDestroyRealm(deployment, realmStage) && !destroyState;
   $: destroyProgress = destroyState
     ? getDestroyProgress({

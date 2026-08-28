@@ -293,7 +293,7 @@
 
   function editDraftUrlForDeployment(deployment) {
     const draft = findDraftForDeployment(wizardDrafts, deployment);
-    if (!draft) return '/create-realm';
+    if (!draft) return '/deploy-gos';
     return `${draftResumeUrl(draft, DEPLOY_WIZARD_STEP)}&edit=1`;
   }
 
@@ -660,7 +660,7 @@
                 <line x1="12" y1="8" x2="12" y2="12"/>
                 <line x1="12" y1="16" x2="12.01" y2="16"/>
               </svg>
-              Invitation required — <a href="/create-realm">redeem a code</a>
+              Invitation required — <a href="/deploy-gos">redeem a code</a>
             {/if}
           </div>
         {/if}
@@ -918,7 +918,7 @@
           <div class="realms-section">
             <!-- Create Realm Button -->
             <div class="create-realm-header">
-              <a href="/create-realm" class="create-realm-btn">
+              <a href="/deploy-gos" class="create-realm-btn">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M12 5v14M5 12h14"/>
                 </svg>
