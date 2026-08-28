@@ -10,6 +10,8 @@ import {
   shouldShowVersionPicker,
   soleDeployVersionOption,
   visibleWizardSteps,
+  wizardStepLabel,
+  DEPLOY_WIZARD_STEP,
   WIZARD_STEPS,
 } from './gos-implementations.js';
 
@@ -36,12 +38,29 @@ test('getGosImplementation returns matching entry or undefined', () => {
   assert.equal(getGosImplementation(), undefined);
 });
 
-test('visibleWizardSteps returns platform-only wizard flow', () => {
+test('WIZARD_STEPS is Platform, Basics, Subnet, Review & Deploy', () => {
+  assert.deepEqual(
+    WIZARD_STEPS.map((s) => s.id),
+    ['platform', 'basics', 'subnet', 'deploy'],
+  );
+  assert.deepEqual(
+    WIZARD_STEPS.map((s) => s.label),
+    ['Platform', 'Basics', 'Subnet', 'Review & Deploy'],
+  );
+  assert.equal(DEPLOY_WIZARD_STEP, 3);
+  assert.equal(wizardStepLabel(0), 'Platform');
+  assert.equal(wizardStepLabel(1), 'Basics');
+  assert.equal(wizardStepLabel(2), 'Subnet');
+  assert.equal(wizardStepLabel(3), 'Review & Deploy');
+  assert.equal(wizardStepLabel(99), 'Step 100');
+});
+
+test('visibleWizardSteps includes the subnet step for every GOS', () => {
   const steps = visibleWizardSteps('realms-gos');
-  assert.deepEqual(steps.map((s) => s.id), ['platform', 'basics', 'deploy']);
+  assert.deepEqual(steps.map((s) => s.id), ['platform', 'basics', 'subnet', 'deploy']);
 
   const monadGosSteps = visibleWizardSteps('monad-gos');
-  assert.deepEqual(monadGosSteps.map((s) => s.id), ['platform', 'basics', 'deploy']);
+  assert.deepEqual(monadGosSteps.map((s) => s.id), ['platform', 'basics', 'subnet', 'deploy']);
 });
 
 test('buildGosManifestBlock includes correct fields for realms-gos', () => {

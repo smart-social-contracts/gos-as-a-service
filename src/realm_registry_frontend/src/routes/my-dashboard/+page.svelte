@@ -14,6 +14,7 @@
     isFailedDeployment,
     canDestroyRealm,
   } from '$lib/wizard-drafts.js';
+  import { DEPLOY_WIZARD_STEP, wizardStepLabel } from '$lib/gos-implementations.js';
   import { stageLabel } from '$lib/realm-stages.js';
   import ConfirmModal from '$lib/components/ConfirmModal.svelte';
   import ConnectClaude from '$lib/components/ConnectClaude.svelte';
@@ -252,13 +253,6 @@
       console.error('Failed to delete draft:', e);
     }
   }
-
-  function draftStepLabel(step) {
-    const labels = ['Platform', 'Basics', 'Review & Deploy'];
-    return labels[step] || `Step ${(step || 0) + 1}`;
-  }
-
-  const DEPLOY_WIZARD_STEP = 2;
 
   $: visibleDrafts = filterVisibleDrafts(wizardDrafts, deployments);
   $: registryByBackend = indexCreatedRealmsByBackend(createdRealms);
@@ -948,7 +942,7 @@
                       <div class="draft-info">
                         <span class="draft-name">{draft.realm_name || 'Untitled Realm'}</span>
                         <span class="draft-meta">
-                          Step: {draftStepLabel(draft.current_step)}
+                          Step: {wizardStepLabel(draft.current_step)}
                           {#if draft.deploy_version}
                             · v{draft.deploy_version}
                           {/if}

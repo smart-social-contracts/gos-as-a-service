@@ -13,6 +13,7 @@
     soleDeployVersionOption,
     visibleWizardSteps,
   } from '$lib/gos-implementations.js';
+  import SubnetPicker from '$lib/components/SubnetPicker.svelte';
   import { getAuthenticatedRegistryActor } from '$lib/canisters.js';
   import { deploymentJobUrl } from '$lib/deployment-url.js';
   import { friendlyNetworkError, retryOnTransientNetworkError } from '$lib/network-retry.js';
@@ -61,7 +62,6 @@
   let deployVersionOptions = [{ value: 'main', label: 'main (latest from file registry)' }];
   let loadingDeployVersions = true;
 
-  const showSubnetPlacement = CONFIG.default_deploy_queue_network === 'ic';
   let subnetOptions = [];
   let loadingSubnets = false;
   let subnetLoadError = null;
@@ -75,9 +75,11 @@
       subnetOptions = await listSubnets();
       subnetsFetched = true;
     } catch (e) {
-      subnetLoadError = e?.message || 'Could not load subnets';
-      formData.subnet_choice = 'automatic';
-      formData.subnet_id = '';
+      const raw = e?.message || '';
+      subnetLoadError =
+        /process is not defined/i.test(raw) || /canister ID is not set/i.test(raw)
+          ? 'Could not load available subnets'
+          : raw || 'Could not load subnets';
     } finally {
       loadingSubnets = false;
     }
@@ -87,9 +89,10 @@
     formData.subnet_choice = choice;
     if (choice !== 'other') {
       formData.subnet_id = '';
+      subnetLoadError = null;
       return;
     }
-    if (showSubnetPlacement && !subnetsFetched && !loadingSubnets) {
+    if (!subnetsFetched && !loadingSubnets) {
       void loadSubnetOptions();
     }
   }
@@ -101,12 +104,7 @@
   }
 
   function ensureSubnetOptionsForChoice() {
-    if (
-      showSubnetPlacement &&
-      formData.subnet_choice === 'other' &&
-      !subnetsFetched &&
-      !loadingSubnets
-    ) {
+    if (formData.subnet_choice === 'other' && !subnetsFetched && !loadingSubnets) {
       void loadSubnetOptions();
     }
   }
@@ -423,6 +421,9 @@
   $: if (currentStep >= visibleSteps.length) {
     currentStep = Math.max(0, visibleSteps.length - 1);
   }
+  $: if (currentStepId === 'subnet') {
+    ensureSubnetOptionsForChoice();
+  }
   $: soleDeployVersion = soleDeployVersionOption(deployVersionOptions);
   $: if (soleDeployVersion && formData.deploy_version !== soleDeployVersion.value) {
     formData.deploy_version = soleDeployVersion.value;
@@ -494,13 +495,6 @@
       ) {
         errors.deploy_version = 'Please select a valid software version';
       }
-      if (showSubnetPlacement && formData.subnet_choice === 'other') {
-        if (loadingSubnets) {
-          errors.subnet_id = 'Loading available subnets…';
-        } else if (!formData.subnet_id?.trim()) {
-          errors.subnet_id = 'Please select a subnet';
-        }
-      }
     }
 
     // Basics
@@ -515,6 +509,16 @@
         errors.slug = 'URL slug is required';
       } else if (slug.length < 3) {
         errors.slug = 'Slug must be at least 3 characters';
+      }
+    }
+
+    if (stepId === 'subnet') {
+      if (formData.subnet_choice === 'other') {
+        if (loadingSubnets) {
+          errors.subnet_id = 'Loading available subnets…';
+        } else if (!formData.subnet_id?.trim()) {
+          errors.subnet_id = 'Please select a subnet';
+        }
       }
     }
 
@@ -834,86 +838,83 @@
             <span class="error-message">{errors.deploy_version}</span>
           {/if}
         </div>
+      </div>
 
-        {#if showSubnetPlacement}
-          <div class="deploy-version-card">
-            <span class="subnet-placement-label">Subnet placement</span>
-            <p class="field-hint">Advanced — leave on Automatic unless you have data-residency requirements.</p>
-            <div class="codex-options" role="group" aria-label="Subnet placement">
-              <button
-                type="button"
-                class="codex-card"
-                class:selected={formData.subnet_choice === 'automatic'}
-                on:click={() => selectSubnetChoice('automatic')}
-              >
-                <div class="codex-radio">
-                  {#if formData.subnet_choice === 'automatic'}
-                    <div class="codex-radio-dot"></div>
-                  {/if}
-                </div>
-                <div class="codex-info">
-                  <span class="codex-name">Automatic (recommended)</span>
-                  <span class="codex-desc">The platform picks a healthy subnet for you.</span>
-                </div>
-              </button>
-              <button
-                type="button"
-                class="codex-card"
-                class:selected={formData.subnet_choice === 'european'}
-                on:click={() => selectSubnetChoice('european')}
-              >
-                <div class="codex-radio">
-                  {#if formData.subnet_choice === 'european'}
-                    <div class="codex-radio-dot"></div>
-                  {/if}
-                </div>
-                <div class="codex-info">
-                  <span class="codex-name">European</span>
-                  <span class="codex-desc">Deploy on the European subnet. Helps with GDPR and data-residency requirements.</span>
-                </div>
-              </button>
-              <button
-                type="button"
-                class="codex-card"
-                class:selected={formData.subnet_choice === 'other'}
-                on:click={() => selectSubnetChoice('other')}
-              >
-                <div class="codex-radio">
-                  {#if formData.subnet_choice === 'other'}
-                    <div class="codex-radio-dot"></div>
-                  {/if}
-                </div>
-                <div class="codex-info">
-                  <span class="codex-name">Other</span>
-                  <span class="codex-desc">Choose a specific subnet from the list of available subnets.</span>
-                </div>
-              </button>
-            </div>
-            {#if formData.subnet_choice === 'other'}
-              {#if loadingSubnets}
-                <p class="field-hint">Loading available subnets…</p>
-              {:else}
-                <select
-                  id="subnet-id"
-                  bind:value={formData.subnet_id}
-                  class="deploy-version-select"
-                  disabled={subnetOptions.length === 0}
-                >
-                  <option value="">Select a subnet…</option>
-                  {#each subnetOptions as subnetId (subnetId)}
-                    <option value={subnetId}>{subnetId}</option>
-                  {/each}
-                </select>
-              {/if}
-            {/if}
-            {#if subnetLoadError}
-              <span class="error-message">{subnetLoadError}</span>
-            {/if}
-            {#if errors.subnet_id}
-              <span class="error-message">{errors.subnet_id}</span>
-            {/if}
+    {:else if currentStepId === 'subnet'}
+      <!-- Subnet placement -->
+      <div class="form-step">
+        <h2>Subnet placement</h2>
+        <p class="step-description">Choose where your realm's canisters should land</p>
+
+        <div class="deploy-version-card">
+          <span class="subnet-placement-label">Subnet placement</span>
+          <p class="field-hint">Advanced — leave on Automatic unless you have data-residency requirements.</p>
+          <div class="codex-options" role="group" aria-label="Subnet placement">
+            <button
+              type="button"
+              class="codex-card"
+              class:selected={formData.subnet_choice === 'automatic'}
+              on:click={() => selectSubnetChoice('automatic')}
+            >
+              <div class="codex-radio">
+                {#if formData.subnet_choice === 'automatic'}
+                  <div class="codex-radio-dot"></div>
+                {/if}
+              </div>
+              <div class="codex-info">
+                <span class="codex-name">Automatic (recommended)</span>
+                <span class="codex-desc">The platform picks a healthy subnet for you.</span>
+              </div>
+            </button>
+            <button
+              type="button"
+              class="codex-card"
+              class:selected={formData.subnet_choice === 'european'}
+              on:click={() => selectSubnetChoice('european')}
+            >
+              <div class="codex-radio">
+                {#if formData.subnet_choice === 'european'}
+                  <div class="codex-radio-dot"></div>
+                {/if}
+              </div>
+              <div class="codex-info">
+                <span class="codex-name">European</span>
+                <span class="codex-desc">Deploy on the European subnet. Helps with GDPR and data-residency requirements.</span>
+              </div>
+            </button>
+            <button
+              type="button"
+              class="codex-card"
+              class:selected={formData.subnet_choice === 'other'}
+              on:click={() => selectSubnetChoice('other')}
+            >
+              <div class="codex-radio">
+                {#if formData.subnet_choice === 'other'}
+                  <div class="codex-radio-dot"></div>
+                {/if}
+              </div>
+              <div class="codex-info">
+                <span class="codex-name">Other</span>
+                <span class="codex-desc">Choose a specific subnet from the list of available subnets.</span>
+              </div>
+            </button>
           </div>
-        {/if}
+          {#if formData.subnet_choice === 'other'}
+            {#if loadingSubnets}
+              <p class="field-hint">Loading available subnets…</p>
+            {:else if subnetOptions.length > 0}
+              <SubnetPicker bind:value={formData.subnet_id} subnetIds={subnetOptions} />
+            {:else}
+              <p class="field-hint">No subnets available. Leave on Automatic or try again later.</p>
+            {/if}
+          {/if}
+          {#if formData.subnet_choice === 'other' && subnetLoadError}
+            <span class="error-message">{subnetLoadError}</span>
+          {/if}
+          {#if errors.subnet_id}
+            <span class="error-message">{errors.subnet_id}</span>
+          {/if}
+        </div>
       </div>
 
     {:else if currentStepId === 'deploy'}
@@ -945,12 +946,10 @@
             <span class="codex-detail-label">Software version</span>
             <span class="codex-detail-value">{formData.deploy_version}</span>
           </div>
-          {#if showSubnetPlacement}
-            <div class="codex-detail-row">
-              <span class="codex-detail-label">Subnet</span>
-              <span class="codex-detail-value">{subnetSummaryLabel()}</span>
-            </div>
-          {/if}
+          <div class="codex-detail-row">
+            <span class="codex-detail-label">Subnet</span>
+            <span class="codex-detail-value">{subnetSummaryLabel()}</span>
+          </div>
           <p class="codex-details-note">After deployment you will finish codex, token, and branding setup inside the realm.</p>
         </div>
 
