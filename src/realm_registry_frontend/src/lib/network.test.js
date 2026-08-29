@@ -23,10 +23,23 @@ const REPO_CANISTER_IDS = JSON.parse(
 const CASALS_BACKEND_IDS = {
 	test: 'qthgp-3yaaa-aaaae-agveq-cai',
 	staging: 'th7fr-bqaaa-aaaan-q6n4q-cai',
-	demo: 'jo3cj-faaaa-aaaac-bffea-cai'
+	demo: 'oia4k-baaaa-aaaae-ag3ha-cai'
 };
 
-const DEAD_CANISTER_PREFIXES = ['fdr7z', 'jj2e5', 'rbuam', 'fksuf', 'hznxf', 'gudtl', 'h6mrr', 'mcqbx'];
+const DEAD_CANISTER_PREFIXES = [
+	'fdr7z',
+	'jj2e5',
+	'rbuam',
+	'fksuf',
+	'hznxf',
+	'gudtl',
+	'h6mrr',
+	'mcqbx',
+	'jo3cj',
+	'rhw4p',
+	'ulsvn',
+	'hvwpv'
+];
 
 test('detectNetwork maps known hostnames', () => {
 	assert.equal(detectNetwork('test.gos.earth'), 'test');
