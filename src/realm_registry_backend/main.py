@@ -182,6 +182,7 @@ __basilisk_features__ = ["shell", "browse"]
 
 import json
 import traceback
+from typing import Tuple
 
 from api.credits import (
     add_user_credits, capture_deployment_hold, create_deployment_hold,
@@ -202,7 +203,7 @@ from api.status import get_status
 from _cdk import (
     Async, CallResult, Duration, Func, Opt, Principal, Query, Record, Service,
     StableBTreeMap, Variant, Vec, blob, float64, ic, init, match, nat,
-    nat64, post_upgrade, query, service_update, text, update, void,
+    nat16, nat64, post_upgrade, query, service_update, text, update, void,
 )
 from ic_python_db import Database
 from ic_python_logging import get_logger
@@ -334,6 +335,23 @@ class GenericResult(Variant, total=False):
     Ok: text
     Err: text
 
+# ── HTTP interface types (GET /version — gos-as-a-service#39) ──────────
+
+Header = Tuple[str, str]
+
+class HttpRequest(Record):
+    method: text
+    url: text
+    headers: Vec["Header"]
+    body: blob
+
+class HttpResponseIncoming(Record):
+    status_code: nat16
+    headers: Vec["Header"]
+    body: blob
+    streaming_strategy: Opt[text]
+    upgrade: Opt[bool]
+
 # ── Storage ────────────────────────────────────────────────────────────
 
 storage = StableBTreeMap[str, str](memory_id=1, max_key_size=200, max_value_size=2000)
@@ -401,6 +419,26 @@ def status() -> GetStatusResult:
         )}
     except Exception as e:
         return {"Err": str(e)}
+
+# ── HTTP interface (GET /version — gos-as-a-service#39) ────────────────
+
+@query
+def http_request(req: HttpRequest) -> HttpResponseIncoming:
+    """Upgrade to an update call so the /version response is certified."""
+    return {
+        "status_code": 200,
+        "headers": [],
+        "body": b"",
+        "streaming_strategy": None,
+        "upgrade": True,
+    }
+
+@update
+def http_request_update(req: HttpRequest) -> HttpResponseIncoming:
+    """Serve GET /version (build provenance) over the IC HTTP interface."""
+    from api.status import version_http_response
+
+    return version_http_response(req)
 
 @query
 def list_realms() -> Vec[RealmRecord]:

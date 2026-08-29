@@ -175,5 +175,7 @@ service : (text) -> {
   "report_canister_ready" : (text) -> (ResultReportReady);
   "report_frontend_verified" : (text) -> (ResultReportFrontend);
   "get_canister_logs" : (opt nat, opt nat, opt text, opt text) -> (vec PublicLogEntry) query;
+  "http_request" : (HttpRequest) -> (HttpResponseIncoming) query;
+  "http_request_update" : (HttpRequest) -> (HttpResponseIncoming);
   "__get_candid_interface_tmp_hack" : () -> (text) query;
 }

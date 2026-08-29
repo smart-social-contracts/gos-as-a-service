@@ -53,9 +53,12 @@ jobs:
           # Stamp version/commit placeholders so canister status() reports real values
           COMMIT="$(git rev-parse --short HEAD)"
           NOW="$(date -u '+%Y-%m-%d %H:%M:%S')"
+          # ISO 8601 UTC stamp for the GET /version endpoint (gos-as-a-service#39)
+          BUILT_AT_ISO="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
           echo "${TAG}" > version.txt
-          for f in src/realm_registry_backend/api/status.py src/realm_installer/main.py; do
-            sed -i "s/VERSION_PLACEHOLDER/${TAG}/g; s/COMMIT_HASH_PLACEHOLDER/${COMMIT}/g; s/COMMIT_DATETIME_PLACEHOLDER/${NOW}/g" "$f"
+          for f in src/realm_registry_backend/api/status.py src/realm_installer/main.py \
+                   src/realm_installer/version_http.py src/file_registry/main.py; do
+            sed -i "s/VERSION_PLACEHOLDER/${TAG}/g; s/COMMIT_HASH_PLACEHOLDER/${COMMIT}/g; s/COMMIT_DATETIME_PLACEHOLDER/${NOW}/g; s/BUILT_AT_ISO_PLACEHOLDER/${BUILT_AT_ISO}/g" "$f"
           done
           sed -i "s/BASILISK_VERSION_PLACEHOLDER/0.14.2/g; s/IC_PYTHON_DB_VERSION_PLACEHOLDER/0.11.0/g; s/IC_PYTHON_LOGGING_VERSION_PLACEHOLDER/0.3.4/g" \
             src/realm_registry_backend/api/status.py
@@ -89,6 +92,8 @@ jobs:
           npm run build --workspace=realm_registry_frontend
           tar czf realm_registry_frontend.tar.gz -C src/realm_registry_frontend/dist .
           echo "Frontend tarball: $(stat -c%s realm_registry_frontend.tar.gz) bytes"
+          # Generates dist/version (GET /version asset) before packaging
+          npm run build --workspace=file_registry_frontend
           tar czf file_registry_frontend.tar.gz -C src/file_registry_frontend/dist .
           echo "File registry frontend tarball: $(stat -c%s file_registry_frontend.tar.gz) bytes"
 

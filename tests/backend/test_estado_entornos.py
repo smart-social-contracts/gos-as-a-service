@@ -186,14 +186,22 @@ def test_staging_valencia_ilegible(informe):
 
 def test_demo_sin_realms(informe):
     assert "(sin realms registrados o no pude leerlos)" in informe
-    fila = _fila(informe, "Demo portal BE")
-    assert "ee66ff7" in fila
-    assert "hace 20 min" in fila
+    # Tras la reconstrucción de demo, el descriptor solo conserva el portal FE
+    # (DNS); el resto de piezas se reportan honestamente como ilegibles — no se
+    # inventa ningún SHA.
+    fila_fe = _fila(informe, "Demo portal FE")
+    assert "0x62626262…" in fila_fe
+    assert "SHA desconocido" in fila_fe
+    fila_be = _fila(informe, "Demo portal BE")
+    assert "sin id en descriptor" in fila_be
+    assert "no pude leerla" in fila_be
 
 
 def test_file_registry_fe_solo_donde_existe(informe):
     assert _fila(informe, "Test file registry FE")
-    assert _fila(informe, "Demo file registry FE")
+    # Solo test lo lista en su descriptor: demo lo perdió en la reconstrucción
+    # y staging no lo tiene; la fila no aparece donde no existe.
+    assert "Demo file registry FE" not in informe
     assert "Staging file registry FE" not in informe
 
 

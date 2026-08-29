@@ -81,6 +81,11 @@ jobs:
       - name: Install npm deps
         run: npm ci --legacy-peer-deps
 
+      # realms-gos "main" pin source-builds the realm backend; its build embeds
+      # candid:service metadata with ic-wasm.
+      - name: Install ic-wasm
+        run: npm install -g @icp-sdk/ic-wasm
+
       - name: Install GaaS CLI
         run: |
           cd cli
