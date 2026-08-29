@@ -4,6 +4,9 @@ Used before descriptor adopt and before a frontend bake that would inject a
 portal URL. A missing principal (IC0301 / HTTP 404) must not be written or
 baked. Known-dead IDs (fdr7z, installer ghosts, …) are rejected without a
 network call.
+
+Dashboard API 404 is not sufficient after ``dfx canister create`` — the
+index lags. Existence falls back to ``dfx canister status`` on the replica.
 """
 
 from __future__ import annotations
@@ -84,12 +87,16 @@ def _http_body_is_missing(status: int, body: str) -> bool:
     )
 
 
-def fetch_canister_record(
+def fetch_canister_record_from_api(
     canister_id: str,
     *,
     opener: urllib.request.OpenerDirector | None = None,
 ) -> tuple[int, object]:
-    """Anonymous IC API lookup. Returns ``(http_status, json_or_text)``."""
+    """Anonymous IC dashboard API lookup. Returns ``(http_status, json_or_text)``.
+
+    The dashboard index lags minutes behind ``dfx canister create``. A 404
+    here is not proof the principal is missing on the replica.
+    """
     url = IC_API_CANISTER_URL.format(canister_id=canister_id)
     request = urllib.request.Request(
         url,
@@ -107,6 +114,44 @@ def fetch_canister_record(
         payload: object = json.loads(raw) if raw else {}
     except json.JSONDecodeError:
         payload = raw
+    return status, payload
+
+
+def fetch_canister_record_via_replica(
+    canister_id: str,
+    *,
+    network: str = "ic",
+) -> tuple[int, object]:
+    """Ask the replica whether *canister_id* exists (``dfx canister status``)."""
+    from gaas.dfx import DfxError, canister_status
+
+    try:
+        status = canister_status(canister_id, network)
+    except DfxError as exc:
+        return 404, {"error": f"IC0301 canister not found ({exc})"}
+    return 200, {"canister_id": canister_id, "status": status.status}
+
+
+def _api_record_is_live(status: int, payload: object) -> bool:
+    if status != 200 or _is_not_found_payload(status, payload):
+        return False
+    if isinstance(payload, dict) and not payload.get("canister_id"):
+        return False
+    return True
+
+
+def fetch_canister_record(
+    canister_id: str,
+    *,
+    opener: urllib.request.OpenerDirector | None = None,
+) -> tuple[int, object]:
+    """Liveness lookup: dashboard API, then replica status if the API lags."""
+    status, payload = fetch_canister_record_from_api(canister_id, opener=opener)
+    if _api_record_is_live(status, payload):
+        return status, payload
+    replica_status, replica_payload = fetch_canister_record_via_replica(canister_id)
+    if _api_record_is_live(replica_status, replica_payload):
+        return replica_status, replica_payload
     return status, payload
 
 

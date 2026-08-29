@@ -15,6 +15,7 @@ from gaas.canister_liveness import (
     assert_frontend_http_live,
     assert_installer_live_for_network,
     collect_baked_portal_frontends,
+    fetch_canister_record,
     fetch_local_canister_record,
     is_known_dead_canister,
     main,
@@ -127,6 +128,51 @@ def test_fetch_local_canister_record_maps_running_status():
     assert status == 200
     assert payload["canister_id"] == LIVE_INSTALLER
     assert payload["status"] == "running"
+
+
+def test_fetch_canister_record_falls_back_to_replica_when_api_404():
+    from unittest.mock import MagicMock
+
+    with patch(
+        "gaas.canister_liveness.fetch_canister_record_from_api",
+        return_value=(404, {"code": 404, "status": "Not Found"}),
+    ), patch(
+        "gaas.dfx.canister_status",
+        return_value=MagicMock(status="running"),
+    ):
+        status, payload = fetch_canister_record(LIVE_CASALS_FRONTEND)
+    assert status == 200
+    assert payload["canister_id"] == LIVE_CASALS_FRONTEND
+    assert payload["status"] == "running"
+
+
+def test_fetch_canister_record_keeps_api_404_when_replica_also_missing():
+    from gaas.dfx import DfxError
+
+    def _missing(*_args, **_kwargs):
+        raise DfxError("canister not found", command=[], stderr="IC0301")
+
+    api_payload = {"code": 404, "status": "Not Found"}
+    with patch(
+        "gaas.canister_liveness.fetch_canister_record_from_api",
+        return_value=(404, api_payload),
+    ), patch("gaas.dfx.canister_status", side_effect=_missing):
+        status, payload = fetch_canister_record(GHOST_INSTALLER)
+    assert status == 404
+    assert payload == api_payload
+
+
+def test_assert_canister_exists_accepts_replica_fallback_after_api_404():
+    from unittest.mock import MagicMock
+
+    with patch(
+        "gaas.canister_liveness.fetch_canister_record_from_api",
+        return_value=(404, {"code": 404, "status": "Not Found"}),
+    ), patch(
+        "gaas.dfx.canister_status",
+        return_value=MagicMock(status="running"),
+    ):
+        assert_canister_exists(LIVE_CASALS_FRONTEND, role="casals_frontend")
 
 
 def test_main_exits_nonzero_for_ghost(monkeypatch):
