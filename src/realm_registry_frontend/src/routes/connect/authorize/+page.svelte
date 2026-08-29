@@ -199,7 +199,7 @@
 
       <p class="footnote">
         {$_('mcpConsent.footnote', {
-          default: 'You can revoke this access any time from your dashboard → Connect Claude.',
+          default: 'You can revoke this access any time from your dashboard → Connect ChatGPT, Claude, or Grok.',
         })}
       </p>
     {/if}

@@ -1,10 +1,11 @@
 <!--
-  Connect Claude — self-service MCP pairing tokens (issue #233 follow-up).
+  Connect personal assistants — self-service MCP pairing tokens (issue #233 follow-up).
 
   Lets the Internet-Identity-authenticated user mint a personal pairing token
   for the Geister MCP server, so they can drive their realms from their own
-  Claude (or any MCP client). The token is bound to their stable principal
-  (the same one the platform sees thanks to the II derivationOrigin setup).
+  ChatGPT, Claude, or Grok (or any MCP client). The token is bound to their
+  stable principal (the same one the platform sees thanks to the II
+  derivationOrigin setup).
 
   Svelte 4 (the registry frontend is Svelte 4).
 -->
@@ -12,9 +13,10 @@
   import { onMount } from 'svelte';
   import { _ } from 'svelte-i18n';
 
+  import { GEISTER_API_ORIGIN, MCP_URL } from '$lib/geister/constants.js';
+
   // Geister API host — same origin the registry assistant talks to.
-  const GEISTER_API = 'https://geister-api.realmsgos.dev';
-  const MCP_URL = 'https://geister-mcp.realmsgos.dev/mcp';
+  const GEISTER_API = GEISTER_API_ORIGIN;
 
   /** The user's IC principal as text (passed from the dashboard page). */
   export let principal = '';
@@ -163,11 +165,11 @@
 
 <div class="connect-section">
   <div class="intro">
-    <h3>{$_('connectClaude.title', { default: 'Connect your Claude' })}</h3>
+    <h3>{$_('connectClaude.title', { default: 'Connect ChatGPT, Claude, or Grok' })}</h3>
     <p>
       {$_('connectClaude.intro', {
         default:
-          'Use your realms from your own Claude (or any MCP client). Access acts on behalf of your principal — only approve clients you trust.',
+          'Use your realms from your own ChatGPT, Claude, or Grok (any MCP client). Access acts on behalf of your principal — only approve clients you trust.',
       })}
     </p>
   </div>
@@ -181,7 +183,7 @@
     <p class="oauth-desc">
       {$_('connectClaude.oauth_desc', {
         default:
-          'Add the server URL below as a custom connector in Claude. Claude opens a browser, you sign in with Internet Identity and approve access — no Node.js, no token to copy.',
+          'Add the server URL below as a custom connector in ChatGPT, Claude, or Grok. The client opens a browser, you sign in with Internet Identity and approve access — no Node.js, no token to copy.',
       })}
     </p>
     <div class="url-row">
@@ -191,7 +193,7 @@
       </button>
     </div>
     <ol class="steps">
-      <li>{$_('connectClaude.oauth_step1', { default: 'In Claude: Settings → Connectors → Add custom connector.' })}</li>
+      <li>{$_('connectClaude.oauth_step1', { default: 'In ChatGPT, Claude, or Grok: Settings → Connectors → add a custom MCP connector.' })}</li>
       <li>{$_('connectClaude.oauth_step2', { default: 'Paste the URL above and continue.' })}</li>
       <li>{$_('connectClaude.oauth_step3', { default: 'Sign in with Internet Identity and choose read-only or full access.' })}</li>
     </ol>

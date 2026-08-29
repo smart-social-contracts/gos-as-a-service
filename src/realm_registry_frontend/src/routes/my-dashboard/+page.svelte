@@ -708,7 +708,7 @@
             <path d="M10.5 13.5a5 5 0 0 0 7.07 0l2-2a5 5 0 0 0-7.07-7.07l-1.15 1.14"></path>
             <path d="M13.5 10.5a5 5 0 0 0-7.07 0l-2 2a5 5 0 0 0 7.07 7.07l1.14-1.14"></path>
           </svg>
-          {$_('dashboard.connect_tab', { default: 'Connect Claude' })}
+          {$_('dashboard.connect_tab', { default: 'Connect ChatGPT, Claude, or Grok' })}
         </button>
       </div>
 
