@@ -1,0 +1,6 @@
+Canister status call result for ehyfg-wyaaa-aaaae-qg3qq-cai.
+Status: Running
+Controllers: 3itd6-2sx7g-vefdk-xhebm-fucot-llay5-lhqd6-pkjac-m7mkf-vhwqq-fqe
+Memory Size: Nat(8956789)
+Balance: 2_412_345_678_901 Cycles
+Module hash: 0x6666666666666666666666666666666666666666666666666666666666666666

@@ -1,0 +1,6 @@
+Canister status call result for to4on-xyaaa-aaaan-q6n5a-cai.
+Status: Running
+Controllers: 3itd6-2sx7g-vefdk-xhebm-fucot-llay5-lhqd6-pkjac-m7mkf-vhwqq-fqe
+Memory Size: Nat(1556789)
+Balance: 1_812_345_678_901 Cycles
+Module hash: 0x5454545454545454545454545454545454545454545454545454545454545454
