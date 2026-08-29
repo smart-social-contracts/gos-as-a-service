@@ -32,6 +32,9 @@ KNOWN_DEAD_CANISTER_PREFIXES: frozenset[str] = frozenset(
         "hznxf",
         "gudtl",
         "h6mrr",
+        "ulsvn",
+        "hvwpv",
+        "jo3cj",
     }
 )
 

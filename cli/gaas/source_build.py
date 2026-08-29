@@ -165,10 +165,15 @@ def build_monad_gos_artifacts(repo_root: Path, dest_dir: Path) -> tuple[Path, Pa
 def build_realms_gos_artifacts(repo_root: Path, dest_dir: Path) -> tuple[Path, Path]:
     """Build Realms GOS release assets mirroring ``release.yml``."""
     py = ensure_basilisk_python(repo_root)
+    path_prefix = str(Path.home() / ".local" / "bin")
+    existing_path = os.environ.get("PATH", "")
     env = {
         **os.environ,
         "CANISTER_CANDID_PATH": str(
             repo_root / "src" / "realm_backend" / "realm_backend.did"
+        ),
+        "PATH": (
+            f"{path_prefix}:{existing_path}" if existing_path else path_prefix
         ),
     }
     run_subprocess(

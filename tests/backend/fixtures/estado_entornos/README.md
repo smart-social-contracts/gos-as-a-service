@@ -7,9 +7,11 @@ vivo:
 ./scripts/estado_entornos.sh --fixtures tests/backend/fixtures/estado_entornos
 ```
 
-Los ids de canister son los reales de `environments/*.json` (son públicos y
-están en este repo); las respuestas son inventadas. Un fichero ausente simula
-un fallo del CLI (p.ej. identidad que no es controller del canister).
+Los ids de canister son los de `descriptor.json` en cada entorno (si existe)
+o, si no, los de `environments/*.json`. Las respuestas son inventadas. Un
+fichero ausente simula un fallo del CLI (p.ej. identidad que no es controller).
+`demo/descriptor.json` fija el inventario enlatado para que un rebuild en
+vivo de `environments/demo.json` no rompa los unit tests.
 
 Layout por entorno (`test/`, `staging/`, `demo/`):
 

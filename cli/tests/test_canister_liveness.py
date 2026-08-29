@@ -310,6 +310,8 @@ def test_adopt_allows_live_staging_installer(
 def test_known_dead_prefixes_include_fdr7z():
     assert is_known_dead_canister(DEAD_CASALS_FRONTEND)
     assert is_known_dead_canister("h6mrr-iiaaa-aaaae-ag2uq-cai")
+    assert is_known_dead_canister("ulsvn-pyaaa-aaaae-qj4tq-cai")
+    assert is_known_dead_canister("hvwpv-aiaaa-aaaam-ajddq-cai")
     assert not is_known_dead_canister(LIVE_CASALS_FRONTEND)
 
 

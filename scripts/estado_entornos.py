@@ -76,6 +76,7 @@ GAAS_PIECES: tuple[tuple[str, str, str], ...] = (
     ("realm_installer", "installer", "backend"),
     ("casals_frontend", "Casals FE", "frontend"),
     ("casals_backend", "Casals BE", "backend"),
+    ("casals_file_registry", "Casals file registry", "backend"),
     ("marketplace_frontend", "marketplace FE", "frontend"),
     ("marketplace_backend", "marketplace BE", "backend"),
     ("file_registry", "file registry", "backend"),
@@ -931,7 +932,7 @@ def assemble_env(
     for key, piece, kind in GAAS_PIECES:
         canister_id = str(canisters.get(key, "") or "")
         if not canister_id:
-            if key == "file_registry_frontend":
+            if key in ("file_registry_frontend", "casals_file_registry"):
                 continue  # no existe en este entorno; no es un error
             gaas_rows.append(Row(pieza=f"{label} {piece}", nota="sin id en descriptor"))
             continue
@@ -1097,7 +1098,13 @@ def print_env_text(section: dict, now: float, out) -> None:
     print("", file=out)
 
 
-def load_descriptor(repo_root: Path, env: str) -> dict:
+def load_descriptor(
+    repo_root: Path, env: str, fixtures_root: Path | None = None
+) -> dict:
+    if fixtures_root is not None:
+        fixture_desc = fixtures_root / env / "descriptor.json"
+        if fixture_desc.is_file():
+            return json.loads(fixture_desc.read_text(encoding="utf-8"))
     path = repo_root / "environments" / f"{env}.json"
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -1203,7 +1210,9 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 http = HttpGetter(args.timeout)
         try:
-            descriptor = load_descriptor(Path(args.repo_root), env)
+            descriptor = load_descriptor(
+                Path(args.repo_root), env, fixtures_root=fixtures_root
+            )
         except (OSError, json.JSONDecodeError) as exc:
             print(f"No pude leer environments/{env}.json: {exc}", file=sys.stderr)
             return 2
