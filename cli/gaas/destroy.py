@@ -360,7 +360,15 @@ def destroy_except_frontend(
     preserved_frontend_ids = _preserved_frontend_ids(descriptor)
     preserve_set = set(preserved_frontend_ids)
 
-    wallet = dfx.get_wallet(network, identity=identity)
+    ephemeral_holding = False
+    try:
+        wallet = dfx.get_wallet(network, identity=identity)
+    except dfx.DfxError:
+        # No dfx cycles-wallet on this identity (typical for cycles-ledger
+        # operators). Park treasury on a temporary canister, then refund it
+        # so preflight/create --no-wallet can spend from the ledger.
+        wallet = dfx.create_ephemeral_canister(network, identity=identity)
+        ephemeral_holding = True
     deployer_principal = dfx.get_principal(identity)
 
     for name, canister_id in _also_destroy_targets(
@@ -418,6 +426,9 @@ def destroy_except_frontend(
         max_cycles=CONDUCTOR_DELETE_MAX,
     )
 
+    if ephemeral_holding:
+        dfx.refund_canister_to_ledger(wallet, network, identity=identity)
+
     destroyed_ids = {
         entry["canister_id"]
         for entry in orchestra_destroyed + extra_destroyed
@@ -435,6 +446,7 @@ def destroy_except_frontend(
         "ok": True,
         "preserved_frontend_ids": preserved_frontend_ids,
         "wallet": wallet,
+        "ephemeral_holding": ephemeral_holding,
         "cycles_reclaimed": cycles_reclaimed,
         "cycles_evacuated": cycles_evacuated,
         "destroyed": orchestra_destroyed + extra_destroyed,
