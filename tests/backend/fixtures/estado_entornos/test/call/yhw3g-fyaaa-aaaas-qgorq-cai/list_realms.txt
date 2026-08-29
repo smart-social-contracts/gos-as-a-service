@@ -1,0 +1,1 @@
+(vec { record { id = "r9bea-aaaaa-aaaaa-aaaaa-cai"; name = "realmstest9"; url = "https://test.gos.earth/r/realmstest9"; backend_url = ""; logo = ""; users_count = 3 : nat64; created_at = 1787220000.0 : float64; frontend_canister_id = "r9fro-aaaaa-aaaaa-aaaaa-cai"; listing_status = "live" } })

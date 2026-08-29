@@ -1,0 +1,6 @@
+Canister status call result for t42zu-3iaaa-aaaan-q6n6a-cai.
+Status: Running
+Controllers: 3itd6-2sx7g-vefdk-xhebm-fucot-llay5-lhqd6-pkjac-m7mkf-vhwqq-fqe
+Memory Size: Nat(7556789)
+Balance: 5_812_345_678_901 Cycles
+Module hash: 0x5858585858585858585858585858585858585858585858585858585858585858

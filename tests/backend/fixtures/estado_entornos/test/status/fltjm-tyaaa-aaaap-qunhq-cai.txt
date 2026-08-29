@@ -1,0 +1,6 @@
+Canister status call result for fltjm-tyaaa-aaaap-qunhq-cai.
+Status: Running
+Controllers: 3itd6-2sx7g-vefdk-xhebm-fucot-llay5-lhqd6-pkjac-m7mkf-vhwqq-fqe
+Memory Size: Nat(27456789)
+Balance: 4_112_345_678_901 Cycles
+Module hash: 0x3333333333333333333333333333333333333333333333333333333333333333

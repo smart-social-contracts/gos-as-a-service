@@ -1,0 +1,1 @@
+(variant { Ok = record { jobs = vec {}; count = 0 : nat32 } })

@@ -1,0 +1,1 @@
+(vec { record { id = "valen-ciaaa-aaaaa-aaaaa-cai"; name = "Valencia"; url = "https://staging.gos.earth/r/valencia"; backend_url = ""; logo = ""; users_count = 12 : nat64; created_at = 1787000000.0 : float64; frontend_canister_id = "va1fe-aaaaa-aaaaa-aaaaa-cai"; listing_status = "live" } })
