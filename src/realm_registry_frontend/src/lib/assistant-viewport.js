@@ -41,8 +41,9 @@ export function computeAssistantPanelBox(input) {
   }
 
   if (docked) {
+    const chromeGap = phone || chromeHidesBottom ? 8 : 0;
     return {
-      heightPx: Math.max(MIN_PANEL_HEIGHT, Math.round(visualHeight)),
+      heightPx: Math.max(MIN_PANEL_HEIGHT, Math.round(visualHeight) - chromeGap),
       topPx: Math.round(visualOffsetTop),
       bottomPx: null,
     };

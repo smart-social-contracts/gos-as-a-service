@@ -30,10 +30,10 @@ test('docked iPhone panel fits the visual viewport so the composer is not under 
     layoutWidth: 390,
   });
   assert.ok(box);
-  assert.equal(box.heightPx, 668);
+  assert.equal(box.heightPx, 660);
   assert.equal(box.topPx, 0);
   assert.equal(box.bottomPx, null);
-  assert.equal(assistantPanelBoxStyle(box), 'height: 668px; top: 0px; bottom: auto');
+  assert.equal(assistantPanelBoxStyle(box), 'height: 660px; top: 0px; bottom: auto');
 });
 
 test('docked panel follows visualViewport offsetTop when the URL bar consumes the top', () => {
@@ -45,7 +45,7 @@ test('docked panel follows visualViewport offsetTop when the URL bar consumes th
     layoutWidth: 390,
   });
   assert.ok(box);
-  assert.equal(box.heightPx, 620);
+  assert.equal(box.heightPx, 612);
   assert.equal(box.topPx, 47);
 });
 
