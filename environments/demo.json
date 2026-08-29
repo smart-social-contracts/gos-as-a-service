@@ -21,7 +21,9 @@
     "casals_file_registry": "ms4uw-7qaaa-aaaae-ag3ia-cai",
     "file_registry": "mv5sc-siaaa-aaaae-ag3iq-cai",
     "file_registry_frontend": "m46z6-eaaaa-aaaae-ag3ja-cai",
-    "marketplace_backend": "m377k-jyaaa-aaaae-ag3jq-cai"
+    "marketplace_backend": "m377k-jyaaa-aaaae-ag3jq-cai",
+    "realm_registry_backend": "mjrky-pyaaa-aaaah-qu27a-cai",
+    "realm_installer": "moqmm-caaaa-aaaah-qu27q-cai"
   },
   "casals": {
     "version": "main",

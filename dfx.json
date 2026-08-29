@@ -15,7 +15,7 @@
       ],
       "remote": {
         "id": {
-          "demo": "2s4td-daaaa-aaaao-bazmq-cai",
+          "demo": "moqmm-caaaa-aaaah-qu27q-cai",
           "staging": "ta6df-miaaa-aaaan-q6n4a-cai",
           "test": "fltjm-tyaaa-aaaap-qunhq-cai"
         }
@@ -45,7 +45,7 @@
       ],
       "remote": {
         "id": {
-          "demo": "vi64l-3aaaa-aaaae-qj4va-cai",
+          "demo": "mv5sc-siaaa-aaaae-ag3iq-cai",
           "staging": "feqzn-wyaaa-aaaae-ag23q-cai",
           "test": "uq2mu-kaaaa-aaaah-avqcq-cai"
         }
@@ -68,7 +68,7 @@
       "type": "assets",
       "remote": {
         "id": {
-          "demo": "7ja5c-dqaaa-aaaae-qj5oa-cai",
+          "demo": "m46z6-eaaaa-aaaae-ag3ja-cai",
           "staging": "m4td3-eaaaa-aaaao-qqbva-cai",
           "test": "2no7h-xqaaa-aaaad-qlxeq-cai"
         }
@@ -89,7 +89,7 @@
       ],
       "remote": {
         "id": {
-          "demo": "rhw4p-gqaaa-aaaac-qbw7q-cai",
+          "demo": "mjrky-pyaaa-aaaah-qu27a-cai",
           "staging": "snqhl-daaaa-aaaan-q6n3q-cai",
           "test": "yhw3g-fyaaa-aaaas-qgorq-cai"
         }
@@ -125,7 +125,7 @@
       "wasm": "casals_backend.wasm",
       "remote": {
         "id": {
-          "demo": "jo3cj-faaaa-aaaac-bffea-cai",
+          "demo": "oia4k-baaaa-aaaae-ag3ha-cai",
           "staging": "th7fr-bqaaa-aaaan-q6n4q-cai",
           "test": "qthgp-3yaaa-aaaae-agveq-cai"
         }
@@ -148,7 +148,7 @@
       "type": "assets",
       "remote": {
         "id": {
-          "demo": "hvwpv-aiaaa-aaaam-ajddq-cai",
+          "demo": "opb26-myaaa-aaaae-ag3hq-cai",
           "staging": "to4on-xyaaa-aaaan-q6n5a-cai",
           "test": "qic2k-baaaa-aaaae-agvga-cai"
         }
