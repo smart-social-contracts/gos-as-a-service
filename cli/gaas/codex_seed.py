@@ -405,6 +405,7 @@ def publish_package(
     *,
     identity: str | None,
     label: str,
+    marketplace_id: str | None = None,
 ) -> str:
     uploaded, skipped, failed = _upload_specs(
         registry_id, namespace, uploads, network, identity=identity
@@ -412,7 +413,13 @@ def publish_package(
     if failed:
         raise CodexSeedError(f"{label}: {failed} upload(s) failed under {namespace}")
     if uploaded > 0:
-        publish_namespace(registry_id, namespace, network, identity=identity)
+        publish_namespace(
+            registry_id,
+            namespace,
+            network,
+            identity=identity,
+            marketplace_id=marketplace_id,
+        )
     console.print(
         f"  {label}: {namespace} "
         f"({uploaded} uploaded, {skipped} skipped)"
@@ -426,6 +433,7 @@ def publish_codex_dir(
     network: str,
     *,
     identity: str | None = None,
+    marketplace_id: str | None = None,
 ) -> str:
     package_id, version, prefix, uploads = collect_codex_uploads(source_dir)
     namespace = package_namespace(package_id, version, namespace_prefix=prefix)
@@ -435,6 +443,7 @@ def publish_codex_dir(
         uploads,
         network,
         identity=identity,
+        marketplace_id=marketplace_id,
         label=f"codex {package_id}@{version}",
     )
 
@@ -446,6 +455,7 @@ def publish_extension_dir(
     *,
     identity: str | None = None,
     namespace_prefix: str = "ext",
+    marketplace_id: str | None = None,
 ) -> str:
     ext_id, version, uploads = collect_extension_package_uploads(source_dir)
     namespace = package_namespace(ext_id, version, namespace_prefix=namespace_prefix)
@@ -455,6 +465,7 @@ def publish_extension_dir(
         uploads,
         network,
         identity=identity,
+        marketplace_id=marketplace_id,
         label=f"extension {ext_id}@{version}",
     )
 
@@ -541,6 +552,7 @@ def _try_seed_extensions(
     *,
     identity: str | None,
     catalog: GosCatalog,
+    marketplace_id: str | None = None,
 ) -> list[str]:
     extensions_repo_root: Path | None = None
     nested = realms_root / "extensions"
@@ -593,7 +605,11 @@ def _try_seed_extensions(
         try:
             namespaces.append(
                 publish_extension_dir(
-                    registry_id, ext_dir, network, identity=identity
+                    registry_id,
+                    ext_dir,
+                    network,
+                    identity=identity,
+                    marketplace_id=marketplace_id,
                 )
             )
         except CodexSeedError:
@@ -622,6 +638,7 @@ def seed_codex_catalog(
     catalog: GosCatalog,
     existing_realms_checkout: Path | None = None,
     session=None,
+    marketplace_id: str | None = None,
 ) -> list[str]:
     """Publish codex (and best-effort extension) catalogs for one GOS source tree."""
     ref = _clone_ref_for_version(version, release_repo, session=session)
@@ -648,7 +665,13 @@ def seed_codex_catalog(
     for codex_dir in codex_dirs:
         try:
             namespaces.append(
-                publish_codex_dir(registry_id, codex_dir, network, identity=identity)
+                publish_codex_dir(
+                    registry_id,
+                    codex_dir,
+                    network,
+                    identity=identity,
+                    marketplace_id=marketplace_id,
+                )
             )
         except CodexSeedError:
             failures.append(codex_dir.name)
@@ -668,6 +691,7 @@ def seed_codex_catalog(
             network,
             identity=identity,
             catalog=catalog,
+            marketplace_id=marketplace_id,
         )
     )
     return namespaces

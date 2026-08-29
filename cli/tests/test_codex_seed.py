@@ -327,6 +327,7 @@ def test_publish_codex_dir_publishes_namespace_on_upload(
         "codex/syntropia/0.8.9",
         "local",
         identity="deployer",
+        marketplace_id=None,
     )
 
 
@@ -355,6 +356,7 @@ def test_publish_extension_dir_namespace(
         "ext/package_manager/0.5.0",
         "local",
         identity="deployer",
+        marketplace_id=None,
     )
 
 
@@ -406,6 +408,7 @@ def test_phase_seed_file_registry_wires_codex_catalog(
     data["canisters"] = {
         "file_registry": VALID_CANISTER_ID,
         "realm_registry_backend": VALID_CANISTER_ID,
+        "marketplace_backend": "mmmmm-mmmmm-mmmmm-mmmmm-mmmmm-mmm",
     }
     descriptor = Descriptor.model_validate(data)
     ctx = DeployContext(
@@ -423,6 +426,7 @@ def test_phase_seed_file_registry_wires_codex_catalog(
     assert args[0] == VALID_CANISTER_ID
     assert args[1] == "smart-social-contracts/realms"
     assert kwargs["catalog"] == REALMS_CATALOG
+    assert kwargs["marketplace_id"] == "mmmmm-mmmmm-mmmmm-mmmmm-mmmmm-mmm"
 
 
 @patch("gaas.phases.seed_codex_catalog")

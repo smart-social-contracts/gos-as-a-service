@@ -16,6 +16,11 @@ from gaas.descriptor import Descriptor
 from gaas.destroy import destroy_via_casals
 from gaas.dns import render_dns_records
 from gaas.known import DEFAULT_REQUIRED_CYCLES
+from gaas.namespace_approval_seed import (
+    ApprovalStampError,
+    refuse_demo_environment,
+    seed_namespace_approvals,
+)
 from gaas.phases import DeployContext, PHASES, run_phases, run_seed_phases
 from gaas.preflight import PreflightReport
 from gaas.runlog import print_log_path, start_run_log, stop_run_log
@@ -323,6 +328,70 @@ def seed_command(
         descriptor_path=descriptor,
         yes=yes,
         casals_src=casals_src,
+    )
+
+
+@app.command("stamp-namespace-approvals")
+def stamp_namespace_approvals_command(
+    descriptor: Path = typer.Argument(..., help="Descriptor JSON path"),
+    identity: str = typer.Option(..., "--identity", help="dfx identity"),
+    network: str = typer.Option("ic", "--network", help="Target network: ic or local"),
+    force: bool = typer.Option(
+        True,
+        "--force/--no-force",
+        help="Restamp every ext/ and codex/ namespace (default: yes; republish invalidates hashes)",
+    ),
+    namespace: Optional[str] = typer.Option(
+        None,
+        "--namespace",
+        help="Stamp only this namespace (repeat not supported; comma-separated ok)",
+    ),
+) -> None:
+    """Stamp marketplace approvals on file-registry ext/ and codex/ namespaces.
+
+    Routes through marketplace admin_approve_namespace so realms accept the
+    stamp. Refuses demo. Used after gaas publish and as the deploy-files hook.
+    """
+    if network not in {"ic", "local"}:
+        console.print("[red]--network must be 'ic' or 'local'[/red]")
+        raise typer.Exit(code=1)
+
+    desc = Descriptor.load(descriptor)
+    try:
+        refuse_demo_environment(desc.name)
+    except ApprovalStampError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    registry_id = (desc.canisters.get("file_registry") or "").strip()
+    marketplace_id = (desc.canisters.get("marketplace_backend") or "").strip()
+    if not registry_id or not marketplace_id:
+        console.print(
+            "[red]descriptor must list file_registry and marketplace_backend[/red]"
+        )
+        raise typer.Exit(code=1)
+
+    namespaces = None
+    if namespace:
+        namespaces = [part.strip() for part in namespace.split(",") if part.strip()]
+
+    try:
+        result = seed_namespace_approvals(
+            registry_id,
+            marketplace_id,
+            network,
+            identity,
+            force=force,
+            namespaces=namespaces,
+        )
+    except RuntimeError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    console.print(
+        f"namespace approvals: granted={result['granted']}, "
+        f"approved={result['approved']}, skipped={result['skipped']}, "
+        f"failed={result['failed']}"
     )
 
 

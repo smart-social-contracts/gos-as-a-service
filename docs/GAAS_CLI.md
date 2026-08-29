@@ -522,7 +522,7 @@ gaas new [DESCRIPTOR] [OPTIONS]
 3. Installing backends
 4. Configuring backends (registry, installer, casals `set_settings`)
 5. Seeding file registry (GOS WASM/frontend bundles, version catalog entries, and codex/extension packages from the Realms source tree)
-6. Seeding file-registry namespace approvals (`ext/` and `codex/` via marketplace `admin_approve_namespace`, after granting `_approvers`)
+6. Seeding file-registry namespace approvals (`ext/` and `codex/` via marketplace `admin_approve_namespace`, after granting `_approvers`). Every successful `publish_namespace` of an `ext/` or `codex/` package also stamps immediately (republish restamps the new hash). The seed phase then force-restamps any leftover installable namespaces.
 7. Seeding conductor orchestra (templates, authorized WASMs, sheet, multisig deploy)
 
    For each GOS entry, the conductor authorizes the **backend realm WASM** from `wasm/<backend_wasm_key>/<version>/` and the **frontend certified-assets canister WASM** (`realms-assetstorage.wasm.gz` under `wasm/realm-assetstorage/<version>/`). The frontend dist bundle remains in `frontend/<frontend_wasm_key>/<version>/` for the realm installer to sync after canister install; it is not registered as an installable WASM module.
@@ -561,12 +561,39 @@ gaas seed DESCRIPTOR --identity NAME [--network ic|local] [--yes] [--casals-src 
 
 1. Validating descriptor and required canister IDs (`casals_backend`, platform canisters used by conductor seed, and at least one GOS binary registry — `casals_file_registry` preferred, `file_registry` as legacy fallback)
 2. Seeding file registry (GOS WASM/frontend bundles to `casals_file_registry`; version catalog and codex/extension packages to `file_registry`)
-3. Seeding file-registry namespace approvals (`ext/` and `codex/` only — grants marketplace approver ACL on `_approvers`, then calls `admin_approve_namespace` for each unapproved installable namespace; skipped when `file_registry` or `marketplace_backend` is absent from the descriptor)
+3. Seeding file-registry namespace approvals (`ext/` and `codex/` only — grants marketplace approver ACL on `_approvers`, then force-calls `admin_approve_namespace` for each installable namespace so republished hashes are restamped; skipped when `file_registry` or `marketplace_backend` is absent from the descriptor)
+
+### `gaas stamp-namespace-approvals`
+
+Stamp (or restamp) marketplace approvals on file-registry `ext/` and `codex/` namespaces after a first-party publish. Routes through marketplace `admin_approve_namespace` so realms accept the stamp. **Refuses demo.**
+
+```
+gaas stamp-namespace-approvals DESCRIPTOR --identity NAME [--network ic|local] [--force|--no-force] [--namespace ext/foo/1.0.0]
+```
+
+Used by Test/staging file-publish pipelines. Realms `deploy-files.yml` must call this (or `scripts/stamp_namespace_approvals.sh -e test|staging`) after `realms files publish` so a new version cannot be born unapproved. On IC, `gaas` `publish_namespace` of an installable namespace fails closed if `marketplace_backend` is missing.
 4. Seeding conductor orchestra (templates, authorized WASMs, sheet, multisig, platform stand registration for present canisters, and per-canister cycle policies)
 
 The command prints a summary of uploaded artifact keys/hashes and which WASM hashes were newly authorized vs already authorized on the conductor. Re-running with unchanged artifacts is idempotent.
 
 Requires canister IDs already present in the descriptor. Does **not** run deployer cycle checks, canister creation, backend install/configure, frontend deploy, DNS, smoke checks, commander grants, or controller topology.
+
+### First-party file-registry publish and approval stamps
+
+Realm install reads `get_namespace_approval_icc` / `approved: true`. Marketplace `verification_status` is UI-only. Approvals are hash-bound: a republish invalidates `content_matches` until the namespace is stamped again.
+
+`gaas store_file` / `publish_namespace` (and therefore `gaas seed` catalog publish) now finalize every `ext/` and `codex/` publish by granting marketplace `_approvers` and calling marketplace `admin_approve_namespace`. The call is attributed to the marketplace principal, which is who realms trust. On `ic`, publish of an installable namespace without `marketplace_backend` fails closed.
+
+After Realms `files publish` / `deploy-files.yml` (Test or staging only — never demo):
+
+```bash
+# from this repo, after files are on the registry
+scripts/stamp_namespace_approvals.sh -e test --identity ci
+# or
+gaas stamp-namespace-approvals environments/test.json --identity ci --network ic --force
+```
+
+Add that as a required step after `realms files publish` in Realms `.github/workflows/deploy-files.yml` when `environment` is `test` or `staging`. Do not run it against demo.
 
 ### `gaas status`
 

@@ -217,6 +217,7 @@ def publish_namespace(
     network: str,
     *,
     identity: str | None = None,
+    marketplace_id: str | None = None,
 ) -> None:
     raw = dfx.canister_call(
         registry_id,
@@ -229,6 +230,19 @@ def publish_namespace(
     result = json.loads(raw)
     if not (isinstance(result, dict) and result.get("ok") is True):
         raise RuntimeError(f"publish_namespace({namespace}) failed: {result}")
+
+    # First-party ext/codex must leave a marketplace-attributed hash stamp.
+    # Imported here to keep wasm/frontend publish free of the approval module
+    # at import time; stamp_after_publish no-ops for non-installable namespaces.
+    from gaas.namespace_approval_seed import stamp_after_publish
+
+    stamp_after_publish(
+        registry_id,
+        namespace,
+        network,
+        identity,
+        marketplace_id=marketplace_id,
+    )
 
 
 def extract_frontend_tar(tar_path: Path, dest: Path) -> Path:

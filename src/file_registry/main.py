@@ -477,6 +477,7 @@ def list_namespaces() -> text:
             "owner": ns_info.get("owner", ""),
             "description": ns_info.get("description", ""),
             "approved": approval["approved"],
+            "content_matches": approval.get("content_matches"),
         })
     result.sort(key=lambda x: x["namespace"])
     return json.dumps(result)
