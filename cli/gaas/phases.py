@@ -1036,6 +1036,7 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
                 identity=ctx.identity,
                 mode="reinstall",
                 yes=True,
+                extra_network_ids=dict(descriptor.canisters),
             )
             console.print(
                 f"  {canister}: reinstall assets done "

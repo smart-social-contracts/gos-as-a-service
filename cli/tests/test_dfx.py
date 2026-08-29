@@ -1,5 +1,7 @@
 """Parsing tests for dfx output helpers."""
 
+import json
+
 import pytest
 
 from gaas.dfx import (
@@ -75,6 +77,41 @@ def test_parse_canister_cycles_balance_from_status():
         "Balance: 3_072_815_616 cycles\n"
     )
     assert parse_canister_cycles_balance(raw_cycles) == 3_072_815_616
+
+
+def test_deploy_assets_maps_extra_network_ids(tmp_path, monkeypatch):
+    from gaas import dfx
+
+    def fake_run(args, **kwargs):
+        written = json.loads((tmp_path / "canister_ids.json").read_text(encoding="utf-8"))
+        assert written["realm_registry_frontend"]["ic"] == "2zaor-5yaaa-aaaac-qbxaa-cai"
+        assert written["realm_registry_backend"]["ic"] == "mjrky-pyaaa-aaaah-qu27a-cai"
+        assert written["realm_registry_backend"]["demo"] == "mjrky-pyaaa-aaaah-qu27a-cai"
+
+    monkeypatch.setattr(dfx, "_run", fake_run)
+    (tmp_path / "canister_ids.json").write_text(
+        json.dumps(
+            {
+                "realm_registry_backend": {
+                    "demo": "mjrky-pyaaa-aaaah-qu27a-cai",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    dfx.deploy_assets_canister(
+        "realm_registry_frontend",
+        "2zaor-5yaaa-aaaac-qbxaa-cai",
+        "ic",
+        repo_root=tmp_path,
+        extra_network_ids={
+            "realm_registry_backend": "mjrky-pyaaa-aaaah-qu27a-cai",
+            "realm_registry_frontend": "2zaor-5yaaa-aaaac-qbxaa-cai",
+        },
+    )
+    restored = json.loads((tmp_path / "canister_ids.json").read_text(encoding="utf-8"))
+    assert "ic" not in restored["realm_registry_backend"]
+    assert restored["realm_registry_backend"]["demo"] == "mjrky-pyaaa-aaaah-qu27a-cai"
 
 
 def test_deploy_assets_passes_yes_flag(tmp_path, monkeypatch):

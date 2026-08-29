@@ -580,8 +580,15 @@ def deploy_assets_canister(
     identity: str | None = None,
     mode: InstallMode = "reinstall",
     yes: bool = False,
+    extra_network_ids: dict[str, str] | None = None,
 ) -> None:
-    """Deploy an assets canister by temporarily mapping canister_ids.json."""
+    """Deploy an assets canister by temporarily mapping canister_ids.json.
+
+    ``extra_network_ids`` are written under ``network`` for the duration of
+    the deploy so the certified-assets plugin bakes a complete ``ic_env``
+    cookie. Without them, ``dfx deploy --network ic`` only sees the
+    frontend ID and keeps a stale backend principal in Set-Cookie.
+    """
     ids_path = repo_root / "canister_ids.json"
     backup: str | None = None
     if ids_path.is_file():
@@ -589,6 +596,12 @@ def deploy_assets_canister(
     data: dict[str, dict[str, str]] = {}
     if backup:
         data = json.loads(backup)
+    for name, extra_id in (extra_network_ids or {}).items():
+        cid = (extra_id or "").strip()
+        if not name or not cid:
+            continue
+        extra_entry = data.setdefault(name, {})
+        extra_entry[network] = cid
     entry = data.setdefault(canister_name, {})
     entry[network] = canister_id
     ids_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
