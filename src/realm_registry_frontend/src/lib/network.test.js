@@ -26,7 +26,7 @@ const CASALS_BACKEND_IDS = {
 	demo: 'jo3cj-faaaa-aaaac-bffea-cai'
 };
 
-const DEAD_CANISTER_PREFIXES = ['fdr7z', 'jj2e5', 'rbuam', 'fksuf', 'hznxf', 'h6mrr', 'mcqbx'];
+const DEAD_CANISTER_PREFIXES = ['fdr7z', 'jj2e5', 'rbuam', 'fksuf', 'hznxf', 'gudtl', 'h6mrr', 'mcqbx'];
 
 test('detectNetwork maps known hostnames', () => {
 	assert.equal(detectNetwork('test.gos.earth'), 'test');

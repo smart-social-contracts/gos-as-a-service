@@ -58,7 +58,7 @@ export function assertInstallerLiveForBake(canisterId, network, options = {}) {
 	}
 }
 
-const KNOWN_DEAD_PREFIXES = new Set(['fdr7z', 'jj2e5', 'rbuam', 'fksuf', 'hznxf', 'h6mrr']);
+const KNOWN_DEAD_PREFIXES = new Set(['fdr7z', 'jj2e5', 'rbuam', 'fksuf', 'hznxf', 'gudtl', 'h6mrr']);
 
 /**
  * Fail closed before a persistent-network bake injects CANISTER_ID_CASALS_FRONTEND.

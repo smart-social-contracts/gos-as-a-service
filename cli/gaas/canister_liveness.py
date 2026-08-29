@@ -22,7 +22,7 @@ ICP0_FRONTEND_URL = "https://{canister_id}.icp0.io/"
 _TIMEOUT_S = 20
 
 # First group of principals that must never be baked into the portal.
-# fdr7z = destroyed staging Casals UI; fksuf/hznxf/jj2e5/rbuam = installer/monitor ghosts.
+# fdr7z = destroyed staging Casals UI; fksuf/hznxf/gudtl/jj2e5/rbuam = installer/monitor ghosts.
 KNOWN_DEAD_CANISTER_PREFIXES: frozenset[str] = frozenset(
     {
         "fdr7z",
@@ -30,6 +30,7 @@ KNOWN_DEAD_CANISTER_PREFIXES: frozenset[str] = frozenset(
         "rbuam",
         "fksuf",
         "hznxf",
+        "gudtl",
         "h6mrr",
     }
 )

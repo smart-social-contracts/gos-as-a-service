@@ -31,13 +31,11 @@
   },
   "realm_installer": {
     "demo": "2s4td-daaaa-aaaao-bazmq-cai",
-    "ic": "hznxf-fqaaa-aaaae-ag2ua-cai",
     "staging": "ta6df-miaaa-aaaan-q6n4a-cai",
     "test": "fltjm-tyaaa-aaaap-qunhq-cai"
   },
   "realm_registry_backend": {
     "demo": "rhw4p-gqaaa-aaaac-qbw7q-cai",
-    "ic": "gudtl-kyaaa-aaaae-ag2tq-cai",
     "staging": "snqhl-daaaa-aaaan-q6n3q-cai",
     "test": "yhw3g-fyaaa-aaaas-qgorq-cai"
   },

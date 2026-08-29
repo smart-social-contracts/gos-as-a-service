@@ -422,8 +422,17 @@ def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
                 )
 
         descriptor.set_canister_id(name, canister_id)
+        try:
+            created = dfx.canister_status(
+                canister_id, ctx.network, identity=ctx.identity
+            )
+        except dfx.DfxError as exc:
+            raise RuntimeError(
+                f"refusing to use {name} {canister_id}: create did not leave a "
+                f"live canister on {ctx.network} ({exc})"
+            ) from exc
         _save_descriptor(descriptor, ctx)
-        console.print(f"  {name}: created {canister_id}")
+        console.print(f"  {name}: created {canister_id} ({created.status})")
 
     _persist_and_guard_portal_frontends(descriptor, ctx, require_http=False)
 

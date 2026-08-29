@@ -188,7 +188,9 @@ def test_canister_ids_and_dfx_point_staging_installer_at_ta6df():
     ids = json.loads((root / "canister_ids.json").read_text(encoding="utf-8"))
     dfx = json.loads((root / "dfx.json").read_text(encoding="utf-8"))
     assert ids["realm_installer"]["staging"] == LIVE_INSTALLER
-    assert ids["realm_installer"]["ic"] == "hznxf-fqaaa-aaaae-ag2ua-cai"
+    assert "ic" not in ids["realm_installer"]
+    assert "hznxf" not in json.dumps(ids)
+    assert "gudtl" not in json.dumps(ids)
     assert (
         dfx["canisters"]["realm_installer"]["remote"]["id"]["staging"] == LIVE_INSTALLER
     )
