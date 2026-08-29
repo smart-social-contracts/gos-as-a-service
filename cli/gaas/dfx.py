@@ -713,7 +713,7 @@ def get_wallet(network: str, *, identity: str | None = None) -> str:
     return wallet
 
 
-EPHEMERAL_HOLDING_CYCLES = 300_000_000_000  # 0.3T; covers the 0.1T create fee
+EPHEMERAL_HOLDING_CYCLES = 1_000_000_000_000  # 1T; IC create fee is 0.5T
 
 
 def create_ephemeral_canister(
