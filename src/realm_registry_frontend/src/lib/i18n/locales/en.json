@@ -93,7 +93,7 @@
     "globe_title": "Explore the globe",
     "globe_body": "Realms appear on this 3D map. Click a glowing pin to fly there and open its details.",
     "rail_title": "Quick actions",
-    "rail_body": "Open the Realms logo (top left) for tour, Deploy GOS, Infrastructure, and language. Sign in with Internet Identity from the top right.",
+    "rail_body": "Open the grid / apps button (top left) for tour, Deploy GOS, Infrastructure, and language. Sign in with Internet Identity from the top right.",
     "browse_title": "Browse realms",
     "browse_body": "Open the realm browser to search, filter by stage, and scroll the list of registered realms.",
     "panel_title": "Realm browser",
