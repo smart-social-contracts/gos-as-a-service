@@ -15,7 +15,7 @@ MARKETPLACE_FRONTEND_NAME = "marketplace_frontend"
 PRESERVED_FRONTEND_NAMES = (FRONTEND_NAME, MARKETPLACE_FRONTEND_NAME)
 ORCHESTRA_BATCH = 1
 EVAC_CHUNK = 10_000_000_000_000  # 10T
-EVAC_MIN_RESERVE = 100_000_000_000  # 100B
+EVAC_MIN_RESERVE = 500_000_000_000  # 500B — last chunk must stay above freeze + delete max
 CONDUCTOR_DELETE_MAX = 500_000_000_000  # 500B
 CASALS_DESTROY_TOPUP = 300_000_000_000  # 300B — enough to leave the 30-day freeze
 HOLDING_ENV = "GAAS_CYCLES_HOLDING"
@@ -145,16 +145,14 @@ def _preserved_frontend_ids(descriptor: Descriptor) -> list[str]:
 
 
 def _orchestra_preserve_ids(descriptor: Descriptor) -> list[str]:
-    """IDs Casals ``destroy_orchestra`` will accept.
+    """IDs passed to Casals ``destroy_orchestra``.
 
-    Casals rejects unknown ``preserve`` entries. The DNS marketplace frontend is
-    platform-owned and is usually not in the orchestra, so it is skipped here and
-    kept instead via extra-destroy filtering.
+    Include every DNS-mapped frontend. On demo the marketplace frontend is a
+    registered orchestra canister — omitting it lets ``destroy_orchestra``
+    drain-delete it and burn ``demo.realmsgos.org``. Casals rejects unknown
+    preserve entries; the destroy loop retries without extras if that happens.
     """
-    frontend_id = (descriptor.canisters.get(FRONTEND_NAME) or "").strip()
-    if not frontend_id:
-        raise RuntimeError(f"descriptor.canisters.{FRONTEND_NAME} is required")
-    return [frontend_id]
+    return list(_preserved_frontend_ids(descriptor))
 
 
 def _also_destroy_targets(
@@ -220,15 +218,28 @@ def run_destroy_orchestra_loop(
     cycles_reclaimed = 0
     last_remaining: int | None = None
     stalled = 0
+    preserve = list(preserve)
+    dropped_unknown_preserve = False
 
     while True:
-        parsed = _casals_call(
-            casals_id,
-            "destroy_orchestra",
-            {"preserve": preserve, "limit": batch},
-            network=network,
-            identity=identity,
-        )
+        try:
+            parsed = _casals_call(
+                casals_id,
+                "destroy_orchestra",
+                {"preserve": preserve, "limit": batch},
+                network=network,
+                identity=identity,
+            )
+        except dfx.DfxError as exc:
+            if (
+                not dropped_unknown_preserve
+                and len(preserve) > 1
+                and "unknown preserve" in str(exc).lower()
+            ):
+                preserve = preserve[:1]
+                dropped_unknown_preserve = True
+                continue
+            raise
         if parsed.get("ok") is False:
             raise RuntimeError(parsed.get("error") or "destroy_orchestra failed")
         errors = parsed.get("errors") or []

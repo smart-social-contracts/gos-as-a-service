@@ -13,6 +13,7 @@ from gaas.descriptor import Descriptor
 from gaas.destroy import (
     CASALS_DESTROY_TOPUP,
     CONDUCTOR_DELETE_MAX,
+    EVAC_MIN_RESERVE,
     FRONTEND_NAME,
     HOLDING_ENV,
     also_destroy_descriptor_canisters,
@@ -442,6 +443,32 @@ def test_run_destroy_orchestra_loop_until_done() -> None:
     assert mock_casals.call_count == 2
 
 
+def test_run_destroy_orchestra_loop_drops_unknown_preserve() -> None:
+    with patch("gaas.destroy._casals_call") as mock_casals:
+        mock_casals.side_effect = [
+            DfxError(
+                "unknown preserve entries: h4gmt-waaaa-aaaac-bfxoq-cai",
+                command=["dfx", "canister", "call"],
+                stderr="unknown preserve entries",
+            ),
+            {"ok": True, "destroyed": [], "remaining": 0, "done": True, "cycles_reclaimed": 0},
+        ]
+        destroyed, reclaimed = run_destroy_orchestra_loop(
+            CASALS_ID,
+            preserve=[FRONTEND_ID, MARKETPLACE_FRONTEND_ID],
+            network="ic",
+            identity="deployer",
+        )
+    assert destroyed == []
+    assert reclaimed == 0
+    second_preserve = mock_casals.call_args_list[1][0][2]["preserve"]
+    assert second_preserve == [FRONTEND_ID]
+
+
+def test_evac_min_reserve_matches_conductor_delete_max() -> None:
+    assert EVAC_MIN_RESERVE == CONDUCTOR_DELETE_MAX
+
+
 @patch("gaas.destroy._casals_call")
 def test_also_destroy_skips_missing_canisters(mock_casals: MagicMock) -> None:
     with patch("gaas.destroy.dfx.canister_status") as mock_status:
@@ -567,7 +594,7 @@ def test_destroy_except_frontend_preserves_marketplace_when_present(
     orchestra_preserve = json.loads(
         _parse_candid_string(mock_call.call_args_list[0][0][2])
     )["preserve"]
-    assert orchestra_preserve == [FRONTEND_ID]
+    assert orchestra_preserve == [FRONTEND_ID, MARKETPLACE_FRONTEND_ID]
     assert desc.canisters == {
         FRONTEND_NAME: FRONTEND_ID,
         "marketplace_frontend": MARKETPLACE_FRONTEND_ID,
