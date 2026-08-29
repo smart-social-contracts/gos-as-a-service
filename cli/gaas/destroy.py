@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 from gaas import dfx
@@ -16,6 +17,8 @@ ORCHESTRA_BATCH = 1
 EVAC_CHUNK = 10_000_000_000_000  # 10T
 EVAC_MIN_RESERVE = 100_000_000_000  # 100B
 CONDUCTOR_DELETE_MAX = 500_000_000_000  # 500B
+CASALS_DESTROY_TOPUP = 300_000_000_000  # 300B — enough to leave the 30-day freeze
+HOLDING_ENV = "GAAS_CYCLES_HOLDING"
 
 
 def destroy_via_casals(
@@ -78,6 +81,11 @@ def destroy_via_casals(
     return parsed
 
 
+def _is_out_of_cycles_error(exc: BaseException) -> bool:
+    text = str(exc)
+    return "IC0207" in text or "out of cycles" in text.lower()
+
+
 def _casals_call(
     casals_id: str,
     method: str,
@@ -86,17 +94,42 @@ def _casals_call(
     network: str,
     identity: str,
 ) -> dict[str, Any]:
-    raw = dfx.canister_call(
-        casals_id,
-        method,
-        dfx.candid_text_arg(json.dumps(payload)),
-        network,
-        identity=identity,
-    )
+    arg = dfx.candid_text_arg(json.dumps(payload))
+    try:
+        raw = dfx.canister_call(
+            casals_id, method, arg, network, identity=identity
+        )
+    except dfx.DfxError as exc:
+        if not _is_out_of_cycles_error(exc):
+            raise
+        dfx.top_up_canister(
+            casals_id, CASALS_DESTROY_TOPUP, network, identity=identity
+        )
+        raw = dfx.canister_call(
+            casals_id, method, arg, network, identity=identity
+        )
     parsed = json.loads(raw)
     if not isinstance(parsed, dict):
         raise RuntimeError(f"Casals {method} returned non-object JSON")
     return parsed
+
+
+def _resolve_cycles_destination(
+    network: str, identity: str
+) -> tuple[str, bool]:
+    """Return (canister_id, ephemeral_holding).
+
+    Prefer a configured dfx wallet. When none exists, reuse ``GAAS_CYCLES_HOLDING``
+    if set (resume after a failed destroy that already created the holding
+    canister) instead of burning another 0.5T create fee.
+    """
+    try:
+        return dfx.get_wallet(network, identity=identity), False
+    except dfx.DfxError:
+        existing = (os.environ.get(HOLDING_ENV) or "").strip()
+        if existing:
+            return existing, True
+        return dfx.create_ephemeral_canister(network, identity=identity), True
 
 
 def _preserved_frontend_ids(descriptor: Descriptor) -> list[str]:
@@ -360,15 +393,7 @@ def destroy_except_frontend(
     preserved_frontend_ids = _preserved_frontend_ids(descriptor)
     preserve_set = set(preserved_frontend_ids)
 
-    ephemeral_holding = False
-    try:
-        wallet = dfx.get_wallet(network, identity=identity)
-    except dfx.DfxError:
-        # No dfx cycles-wallet on this identity (typical for cycles-ledger
-        # operators). Park treasury on a temporary canister, then refund it
-        # so preflight/create --no-wallet can spend from the ledger.
-        wallet = dfx.create_ephemeral_canister(network, identity=identity)
-        ephemeral_holding = True
+    wallet, ephemeral_holding = _resolve_cycles_destination(network, identity)
     deployer_principal = dfx.get_principal(identity)
 
     for name, canister_id in _also_destroy_targets(
