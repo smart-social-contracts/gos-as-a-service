@@ -147,3 +147,31 @@ def test_casals_policy_cache_is_usable(tmp_path: Path) -> None:
     cached.mkdir()
     (cached / ".ic-assets.json5").write_text(_CASALS_ASSETS, encoding="utf-8")
     assert _casals_frontend_cache_usable(cached) is True
+
+
+def test_local_backend_wasm_packs_with_basilisk(tmp_path: Path, monkeypatch) -> None:
+    from unittest.mock import MagicMock
+
+    from gaas.platform import _local_backend_wasm
+
+    entry = tmp_path / "src" / "realm_registry_backend" / "main.py"
+    entry.parent.mkdir(parents=True)
+    entry.write_text("pass\n", encoding="utf-8")
+    wasm = tmp_path / ".basilisk" / "realm_registry_backend" / "realm_registry_backend.wasm"
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, **_kwargs):
+        calls.append(list(cmd))
+        wasm.parent.mkdir(parents=True)
+        wasm.write_bytes(b"wasm")
+        return MagicMock()
+
+    monkeypatch.setattr("gaas.runlog.run_subprocess", fake_run)
+    fake_py = tmp_path / ".venv-basilisk" / "bin" / "python"
+    fake_py.parent.mkdir(parents=True)
+    fake_py.write_text("", encoding="utf-8")
+
+    got = _local_backend_wasm(tmp_path, "realm_registry_backend")
+    assert got == wasm
+    assert calls[0][0] == str(fake_py)
+    assert calls[0][1:4] == ["-m", "basilisk", "realm_registry_backend"]

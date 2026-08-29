@@ -450,10 +450,13 @@ def _ensure_uncompressed_wasm(path: Path) -> Path:
 
 
 def _basilisk_env(repo_root: Path) -> dict[str, str] | None:
-    """Put the repo's .venv-basilisk first on PATH so `python -m basilisk` uses it."""
-    venv_bin = repo_root / ".venv-basilisk" / "bin"
-    if venv_bin.is_dir():
-        return {"PATH": f"{venv_bin}{os.pathsep}{os.environ.get('PATH', '')}"}
+    """Put a basilisk venv first on PATH so `python -m basilisk` uses it."""
+    for venv_bin in (
+        repo_root / ".venv-basilisk" / "bin",
+        Path.home() / ".venv-basilisk" / "bin",
+    ):
+        if venv_bin.is_dir():
+            return {"PATH": f"{venv_bin}{os.pathsep}{os.environ.get('PATH', '')}"}
     return None
 
 
@@ -485,19 +488,51 @@ def find_local_assetstorage_wasm(repo_root: Path | None = None) -> Path:
 
 
 def _local_backend_wasm(repo_root: Path, canister: str) -> Path:
-    from gaas import dfx
+    """Pack a Basilisk backend from this checkout without a local replica.
+
+    ``dfx build --network local`` needs ``dfx start`` plus local canister IDs.
+    Current-main deploys (``platform.version`` unset) run on operator hosts
+    that often have neither. Invoke ``python -m basilisk`` directly; that is
+    what ``dfx.json`` ``build`` already runs.
+    """
+    from gaas.runlog import run_subprocess
+    from gaas.source_build import ensure_basilisk_python
 
     dfx_name = DFX_CANISTER_NAMES.get(canister)
     if not dfx_name:
         raise PlatformError(f"no local dfx build mapping for {canister}")
-    dfx.build_canister(dfx_name, "local", cwd=repo_root, env_extra=_basilisk_env(repo_root))
-    gz = repo_root / ".dfx" / "local" / "canisters" / dfx_name / f"{dfx_name}.wasm.gz"
-    if gz.is_file():
-        return _ensure_uncompressed_wasm(gz)
+    entry = repo_root / "src" / dfx_name / "main.py"
+    candid = repo_root / "src" / dfx_name / f"{dfx_name}.did"
+    if not entry.is_file():
+        raise PlatformError(f"missing Basilisk entry {entry}")
+    repo_py = repo_root / ".venv-basilisk" / "bin" / "python"
+    home_py = Path.home() / ".venv-basilisk" / "bin" / "python"
+    if repo_py.is_file():
+        py = repo_py
+    elif home_py.is_file():
+        py = home_py
+    else:
+        py = ensure_basilisk_python(repo_root)
+    env = {
+        **os.environ,
+        "CANISTER_CANDID_PATH": str(candid) if candid.is_file() else os.environ.get(
+            "CANISTER_CANDID_PATH", ""
+        ),
+        "PATH": f"{py.parent}{os.pathsep}{os.environ.get('PATH', '')}",
+    }
+    run_subprocess(
+        [str(py), "-m", "basilisk", dfx_name, str(entry)],
+        cwd=repo_root,
+        env=env,
+        check=True,
+    )
     plain = repo_root / ".basilisk" / dfx_name / f"{dfx_name}.wasm"
     if plain.is_file():
         return plain
-    raise PlatformError(f"dfx build {dfx_name} did not produce WASM under {repo_root}")
+    gz = repo_root / ".dfx" / "local" / "canisters" / dfx_name / f"{dfx_name}.wasm.gz"
+    if gz.is_file():
+        return _ensure_uncompressed_wasm(gz)
+    raise PlatformError(f"basilisk pack {dfx_name} did not produce WASM under {repo_root}")
 
 
 def fetch_platform_backend(
