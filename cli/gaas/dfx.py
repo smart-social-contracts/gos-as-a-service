@@ -369,6 +369,7 @@ def create_canister(
     *,
     identity: str | None = None,
     with_cycles: int | None = None,
+    cwd: str | Path | None = None,
 ) -> str:
     args = [
         "dfx",
@@ -383,7 +384,7 @@ def create_canister(
         args.extend(["--identity", identity])
     if with_cycles is not None:
         args.extend(["--with-cycles", str(with_cycles)])
-    result = _run(args, check=True)
+    result = _run(args, check=True, cwd=cwd)
     return _parse_created_canister_id(result)
 
 
@@ -710,3 +711,76 @@ def get_wallet(network: str, *, identity: str | None = None) -> str:
             stdout=result.stdout,
         )
     return wallet
+
+
+EPHEMERAL_HOLDING_CYCLES = 1_000_000_000_000  # 1T; IC create fee is 0.5T
+
+
+def create_ephemeral_canister(
+    network: str,
+    *,
+    identity: str | None = None,
+    with_cycles: int = EPHEMERAL_HOLDING_CYCLES,
+) -> str:
+    """Allocate a cycles-ledger canister for treasury evacuation when no dfx wallet exists.
+
+    ``gaas new --destroy-except-realm-registry-frontend`` then refunds this
+    canister so the cycles land on the identity's cycles ledger (the same
+    account ``create --no-wallet`` spends from).
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        (root / "empty.did").write_text("service : {}\n", encoding="utf-8")
+        (root / "empty.wasm").write_bytes(b"\x00asm")
+        (root / "dfx.json").write_text(
+            json.dumps(
+                {
+                    "canisters": {
+                        "gaas_cycles_holding": {
+                            "type": "custom",
+                            "candid": "empty.did",
+                            "wasm": "empty.wasm",
+                        }
+                    },
+                    "networks": {
+                        "ic": {
+                            "providers": ["https://icp0.io"],
+                            "type": "persistent",
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        return create_canister(
+            "gaas_cycles_holding",
+            network,
+            identity=identity,
+            with_cycles=with_cycles,
+            cwd=root,
+        )
+
+
+def refund_canister_to_ledger(
+    canister_id: str,
+    network: str,
+    *,
+    identity: str | None = None,
+) -> None:
+    """Delete a canister so leftover cycles return to the identity's cycles ledger.
+
+    Used only for the ephemeral holding canister created when ``get_wallet``
+    is unavailable. Never use this on DNS-mapped frontends.
+    """
+    args = [
+        "dfx",
+        "canister",
+        "--network",
+        network,
+        "delete",
+        canister_id,
+        "--yes",
+    ]
+    if identity:
+        args.extend(["--identity", identity])
+    _run(args, allow_canister_delete=True)

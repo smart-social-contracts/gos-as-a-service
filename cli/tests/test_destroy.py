@@ -11,8 +11,11 @@ from typer.testing import CliRunner
 
 from gaas.descriptor import Descriptor
 from gaas.destroy import (
+    CASALS_DESTROY_TOPUP,
     CONDUCTOR_DELETE_MAX,
+    EVAC_MIN_RESERVE,
     FRONTEND_NAME,
+    HOLDING_ENV,
     also_destroy_descriptor_canisters,
     clear_destroyed_descriptor_ids,
     destroy_except_frontend,
@@ -283,6 +286,7 @@ def test_destroy_except_frontend_orchestra_loop_and_extras(
     mock_dust_delete.assert_called_once()
     assert desc.canisters == {FRONTEND_NAME: FRONTEND_ID}
     assert desc.multisig.backend_id is None
+    assert result["ephemeral_holding"] is False
 
 
 @patch("gaas.destroy.dfx.delete_dust_canister")
@@ -439,6 +443,32 @@ def test_run_destroy_orchestra_loop_until_done() -> None:
     assert mock_casals.call_count == 2
 
 
+def test_run_destroy_orchestra_loop_drops_unknown_preserve() -> None:
+    with patch("gaas.destroy._casals_call") as mock_casals:
+        mock_casals.side_effect = [
+            DfxError(
+                "unknown preserve entries: h4gmt-waaaa-aaaac-bfxoq-cai",
+                command=["dfx", "canister", "call"],
+                stderr="unknown preserve entries",
+            ),
+            {"ok": True, "destroyed": [], "remaining": 0, "done": True, "cycles_reclaimed": 0},
+        ]
+        destroyed, reclaimed = run_destroy_orchestra_loop(
+            CASALS_ID,
+            preserve=[FRONTEND_ID, MARKETPLACE_FRONTEND_ID],
+            network="ic",
+            identity="deployer",
+        )
+    assert destroyed == []
+    assert reclaimed == 0
+    second_preserve = mock_casals.call_args_list[1][0][2]["preserve"]
+    assert second_preserve == [FRONTEND_ID]
+
+
+def test_evac_min_reserve_matches_conductor_delete_max() -> None:
+    assert EVAC_MIN_RESERVE == CONDUCTOR_DELETE_MAX
+
+
 @patch("gaas.destroy._casals_call")
 def test_also_destroy_skips_missing_canisters(mock_casals: MagicMock) -> None:
     with patch("gaas.destroy.dfx.canister_status") as mock_status:
@@ -564,12 +594,165 @@ def test_destroy_except_frontend_preserves_marketplace_when_present(
     orchestra_preserve = json.loads(
         _parse_candid_string(mock_call.call_args_list[0][0][2])
     )["preserve"]
-    assert orchestra_preserve == [FRONTEND_ID]
+    assert orchestra_preserve == [FRONTEND_ID, MARKETPLACE_FRONTEND_ID]
     assert desc.canisters == {
         FRONTEND_NAME: FRONTEND_ID,
         "marketplace_frontend": MARKETPLACE_FRONTEND_ID,
     }
     mock_dust_delete.assert_called_once()
+
+
+@patch("gaas.destroy.dfx.refund_canister_to_ledger")
+@patch("gaas.destroy.dfx.create_ephemeral_canister")
+@patch("gaas.destroy.dfx.delete_dust_canister")
+@patch("gaas.destroy.dfx.canister_status")
+@patch("gaas.destroy.dfx.get_principal")
+@patch("gaas.destroy.dfx.get_wallet")
+@patch("gaas.destroy.dfx.canister_call")
+@patch("gaas.destroy.ensure_casals_controller")
+def test_destroy_except_frontend_ephemeral_holding_when_no_wallet(
+    mock_ensure: MagicMock,
+    mock_call: MagicMock,
+    mock_wallet: MagicMock,
+    mock_principal: MagicMock,
+    mock_status: MagicMock,
+    mock_dust_delete: MagicMock,
+    mock_create_holding: MagicMock,
+    mock_refund: MagicMock,
+    tmp_path: Path,
+) -> None:
+    desc = _full_descriptor(tmp_path)
+    mock_wallet.side_effect = DfxError(
+        "No wallet configured",
+        command=["dfx", "identity", "get-wallet"],
+        stderr="No wallet configured",
+    )
+    mock_create_holding.return_value = WALLET_ID
+    mock_principal.return_value = DEPLOYER_PRINCIPAL
+    mock_call.side_effect = [
+        json.dumps({"ok": True, "destroyed": [], "remaining": 0, "done": True, "cycles_reclaimed": 0}),
+        json.dumps({"ok": True, "cycles_reclaimed": 0}),
+        json.dumps({"ok": True, "cycles_reclaimed": 0}),
+        json.dumps({"ok": True, "cycles_reclaimed": 0}),
+        json.dumps({"ok": True}),
+    ]
+    mock_status.side_effect = [
+        CanisterStatus(canister_id=REGISTRY_ID, status="running", raw=""),
+        CanisterStatus(canister_id=INSTALLER_ID, status="running", raw=""),
+        CanisterStatus(canister_id="ccccc-ccccc-ccccc-ccccc-ccccc-ccc", status="running", raw=""),
+        CanisterStatus(
+            canister_id=CASALS_ID,
+            status="running",
+            raw="Balance: 100_000_000_000 cycles",
+        ),
+        CanisterStatus(
+            canister_id=CASALS_ID,
+            status="running",
+            raw="Balance: 100_000_000_000 cycles",
+        ),
+    ]
+
+    result = destroy_except_frontend(desc, network="ic", identity="deployer")
+
+    assert result["ok"] is True
+    assert result["wallet"] == WALLET_ID
+    assert result["ephemeral_holding"] is True
+    mock_create_holding.assert_called_once_with("ic", identity="deployer")
+    mock_dust_delete.assert_called_once()
+    mock_refund.assert_called_once_with(WALLET_ID, "ic", identity="deployer")
+
+
+@patch("gaas.destroy.dfx.refund_canister_to_ledger")
+@patch("gaas.destroy.dfx.create_ephemeral_canister")
+@patch("gaas.destroy.dfx.delete_dust_canister")
+@patch("gaas.destroy.dfx.canister_status")
+@patch("gaas.destroy.dfx.get_principal")
+@patch("gaas.destroy.dfx.get_wallet")
+@patch("gaas.destroy.dfx.canister_call")
+@patch("gaas.destroy.ensure_casals_controller")
+def test_destroy_except_frontend_reuses_gaas_cycles_holding(
+    mock_ensure: MagicMock,
+    mock_call: MagicMock,
+    mock_wallet: MagicMock,
+    mock_principal: MagicMock,
+    mock_status: MagicMock,
+    mock_dust_delete: MagicMock,
+    mock_create_holding: MagicMock,
+    mock_refund: MagicMock,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    desc = _full_descriptor(tmp_path)
+    leftover = "pd2xr-bqaaa-aaaad-agxrq-cai"
+    monkeypatch.setenv(HOLDING_ENV, leftover)
+    mock_wallet.side_effect = DfxError(
+        "No wallet configured",
+        command=["dfx", "identity", "get-wallet"],
+        stderr="No wallet configured",
+    )
+    mock_principal.return_value = DEPLOYER_PRINCIPAL
+    mock_call.side_effect = [
+        json.dumps({"ok": True, "destroyed": [], "remaining": 0, "done": True, "cycles_reclaimed": 0}),
+        json.dumps({"ok": True, "cycles_reclaimed": 0}),
+        json.dumps({"ok": True, "cycles_reclaimed": 0}),
+        json.dumps({"ok": True, "cycles_reclaimed": 0}),
+        json.dumps({"ok": True}),
+    ]
+    mock_status.side_effect = [
+        CanisterStatus(canister_id=REGISTRY_ID, status="running", raw=""),
+        CanisterStatus(canister_id=INSTALLER_ID, status="running", raw=""),
+        CanisterStatus(canister_id="ccccc-ccccc-ccccc-ccccc-ccccc-ccc", status="running", raw=""),
+        CanisterStatus(
+            canister_id=CASALS_ID,
+            status="running",
+            raw="Balance: 100_000_000_000 cycles",
+        ),
+        CanisterStatus(
+            canister_id=CASALS_ID,
+            status="running",
+            raw="Balance: 100_000_000_000 cycles",
+        ),
+    ]
+
+    result = destroy_except_frontend(desc, network="ic", identity="deployer")
+
+    assert result["ok"] is True
+    assert result["wallet"] == leftover
+    assert result["ephemeral_holding"] is True
+    mock_create_holding.assert_not_called()
+    mock_refund.assert_called_once_with(leftover, "ic", identity="deployer")
+
+
+@patch("gaas.destroy.dfx.top_up_canister")
+@patch("gaas.destroy.dfx.canister_call")
+def test_casals_call_tops_up_once_on_ic0207(
+    mock_call: MagicMock,
+    mock_top_up: MagicMock,
+) -> None:
+    from gaas.destroy import _casals_call
+
+    mock_call.side_effect = [
+        DfxError(
+            "out of cycles IC0207",
+            command=["dfx", "canister", "call"],
+            stderr='Canister jo3cj-faaaa-aaaac-bffea-cai is out of cycles: error code Some("IC0207")',
+        ),
+        json.dumps({"ok": True, "destroyed": [], "remaining": 0, "done": True}),
+    ]
+
+    parsed = _casals_call(
+        CASALS_ID,
+        "destroy_orchestra",
+        {"preserve": [FRONTEND_ID], "limit": 1},
+        network="ic",
+        identity="deployer",
+    )
+
+    assert parsed["ok"] is True
+    mock_top_up.assert_called_once_with(
+        CASALS_ID, CASALS_DESTROY_TOPUP, "ic", identity="deployer"
+    )
+    assert mock_call.call_count == 2
 
 
 def test_clear_destroyed_descriptor_ids_keeps_both_dns_frontends() -> None:

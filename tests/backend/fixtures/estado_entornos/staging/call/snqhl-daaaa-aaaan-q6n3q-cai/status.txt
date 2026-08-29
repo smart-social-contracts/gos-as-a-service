@@ -1,0 +1,1 @@
+(variant { Ok = record { version = "0.3.1"; commit = "dd55ee6ff00"; commit_datetime = "2026-08-29 06:00:00"; status = "ok"; realms_count = 1 : nat64; dependencies = vec { "ic-basilisk==0.14.2" }; python_version = "3.11.14" } })

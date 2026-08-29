@@ -1,0 +1,6 @@
+Canister status call result for 2s4td-daaaa-aaaao-bazmq-cai.
+Status: Running
+Controllers: 3itd6-2sx7g-vefdk-xhebm-fucot-llay5-lhqd6-pkjac-m7mkf-vhwqq-fqe
+Memory Size: Nat(29456789)
+Balance: 4_012_345_678_901 Cycles
+Module hash: 0x6363636363636363636363636363636363636363636363636363636363636363

@@ -1,0 +1,1 @@
+(variant { Ok = record { version = "0.3.1"; commit = "bb22cc3ddee"; commit_datetime = "2026-08-27 09:15:00"; status = "ok" } })

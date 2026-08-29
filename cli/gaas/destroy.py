@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 from gaas import dfx
@@ -14,8 +15,10 @@ MARKETPLACE_FRONTEND_NAME = "marketplace_frontend"
 PRESERVED_FRONTEND_NAMES = (FRONTEND_NAME, MARKETPLACE_FRONTEND_NAME)
 ORCHESTRA_BATCH = 1
 EVAC_CHUNK = 10_000_000_000_000  # 10T
-EVAC_MIN_RESERVE = 100_000_000_000  # 100B
+EVAC_MIN_RESERVE = 500_000_000_000  # 500B — last chunk must stay above freeze + delete max
 CONDUCTOR_DELETE_MAX = 500_000_000_000  # 500B
+CASALS_DESTROY_TOPUP = 300_000_000_000  # 300B — enough to leave the 30-day freeze
+HOLDING_ENV = "GAAS_CYCLES_HOLDING"
 
 
 def destroy_via_casals(
@@ -78,6 +81,11 @@ def destroy_via_casals(
     return parsed
 
 
+def _is_out_of_cycles_error(exc: BaseException) -> bool:
+    text = str(exc)
+    return "IC0207" in text or "out of cycles" in text.lower()
+
+
 def _casals_call(
     casals_id: str,
     method: str,
@@ -86,17 +94,42 @@ def _casals_call(
     network: str,
     identity: str,
 ) -> dict[str, Any]:
-    raw = dfx.canister_call(
-        casals_id,
-        method,
-        dfx.candid_text_arg(json.dumps(payload)),
-        network,
-        identity=identity,
-    )
+    arg = dfx.candid_text_arg(json.dumps(payload))
+    try:
+        raw = dfx.canister_call(
+            casals_id, method, arg, network, identity=identity
+        )
+    except dfx.DfxError as exc:
+        if not _is_out_of_cycles_error(exc):
+            raise
+        dfx.top_up_canister(
+            casals_id, CASALS_DESTROY_TOPUP, network, identity=identity
+        )
+        raw = dfx.canister_call(
+            casals_id, method, arg, network, identity=identity
+        )
     parsed = json.loads(raw)
     if not isinstance(parsed, dict):
         raise RuntimeError(f"Casals {method} returned non-object JSON")
     return parsed
+
+
+def _resolve_cycles_destination(
+    network: str, identity: str
+) -> tuple[str, bool]:
+    """Return (canister_id, ephemeral_holding).
+
+    Prefer a configured dfx wallet. When none exists, reuse ``GAAS_CYCLES_HOLDING``
+    if set (resume after a failed destroy that already created the holding
+    canister) instead of burning another 0.5T create fee.
+    """
+    try:
+        return dfx.get_wallet(network, identity=identity), False
+    except dfx.DfxError:
+        existing = (os.environ.get(HOLDING_ENV) or "").strip()
+        if existing:
+            return existing, True
+        return dfx.create_ephemeral_canister(network, identity=identity), True
 
 
 def _preserved_frontend_ids(descriptor: Descriptor) -> list[str]:
@@ -112,16 +145,14 @@ def _preserved_frontend_ids(descriptor: Descriptor) -> list[str]:
 
 
 def _orchestra_preserve_ids(descriptor: Descriptor) -> list[str]:
-    """IDs Casals ``destroy_orchestra`` will accept.
+    """IDs passed to Casals ``destroy_orchestra``.
 
-    Casals rejects unknown ``preserve`` entries. The DNS marketplace frontend is
-    platform-owned and is usually not in the orchestra, so it is skipped here and
-    kept instead via extra-destroy filtering.
+    Include every DNS-mapped frontend. On demo the marketplace frontend is a
+    registered orchestra canister — omitting it lets ``destroy_orchestra``
+    drain-delete it and burn ``demo.realmsgos.org``. Casals rejects unknown
+    preserve entries; the destroy loop retries without extras if that happens.
     """
-    frontend_id = (descriptor.canisters.get(FRONTEND_NAME) or "").strip()
-    if not frontend_id:
-        raise RuntimeError(f"descriptor.canisters.{FRONTEND_NAME} is required")
-    return [frontend_id]
+    return list(_preserved_frontend_ids(descriptor))
 
 
 def _also_destroy_targets(
@@ -187,15 +218,28 @@ def run_destroy_orchestra_loop(
     cycles_reclaimed = 0
     last_remaining: int | None = None
     stalled = 0
+    preserve = list(preserve)
+    dropped_unknown_preserve = False
 
     while True:
-        parsed = _casals_call(
-            casals_id,
-            "destroy_orchestra",
-            {"preserve": preserve, "limit": batch},
-            network=network,
-            identity=identity,
-        )
+        try:
+            parsed = _casals_call(
+                casals_id,
+                "destroy_orchestra",
+                {"preserve": preserve, "limit": batch},
+                network=network,
+                identity=identity,
+            )
+        except dfx.DfxError as exc:
+            if (
+                not dropped_unknown_preserve
+                and len(preserve) > 1
+                and "unknown preserve" in str(exc).lower()
+            ):
+                preserve = preserve[:1]
+                dropped_unknown_preserve = True
+                continue
+            raise
         if parsed.get("ok") is False:
             raise RuntimeError(parsed.get("error") or "destroy_orchestra failed")
         errors = parsed.get("errors") or []
@@ -360,7 +404,7 @@ def destroy_except_frontend(
     preserved_frontend_ids = _preserved_frontend_ids(descriptor)
     preserve_set = set(preserved_frontend_ids)
 
-    wallet = dfx.get_wallet(network, identity=identity)
+    wallet, ephemeral_holding = _resolve_cycles_destination(network, identity)
     deployer_principal = dfx.get_principal(identity)
 
     for name, canister_id in _also_destroy_targets(
@@ -418,6 +462,9 @@ def destroy_except_frontend(
         max_cycles=CONDUCTOR_DELETE_MAX,
     )
 
+    if ephemeral_holding:
+        dfx.refund_canister_to_ledger(wallet, network, identity=identity)
+
     destroyed_ids = {
         entry["canister_id"]
         for entry in orchestra_destroyed + extra_destroyed
@@ -435,6 +482,7 @@ def destroy_except_frontend(
         "ok": True,
         "preserved_frontend_ids": preserved_frontend_ids,
         "wallet": wallet,
+        "ephemeral_holding": ephemeral_holding,
         "cycles_reclaimed": cycles_reclaimed,
         "cycles_evacuated": cycles_evacuated,
         "destroyed": orchestra_destroyed + extra_destroyed,

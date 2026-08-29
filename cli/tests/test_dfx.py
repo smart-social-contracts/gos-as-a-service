@@ -11,6 +11,7 @@ from gaas.dfx import (
     parse_controllers,
     parse_cycles_balance,
     parse_module_hash,
+    refund_canister_to_ledger,
     reject_canister_delete,
     _run as _real_dfx_run,
 )
@@ -220,6 +221,22 @@ def test_get_wallet(monkeypatch) -> None:
         )(),
     )
     assert get_wallet("ic", identity="deployer") == "wallet-principal"
+
+
+def test_refund_canister_to_ledger_allows_delete(monkeypatch) -> None:
+    from gaas import dfx
+
+    captured: dict = {}
+
+    def fake_run(args, **kwargs):
+        captured["args"] = args
+        captured["allow"] = kwargs.get("allow_canister_delete")
+
+    monkeypatch.setattr(dfx, "_run", fake_run)
+    refund_canister_to_ledger("abc", "ic", identity="deployer")
+    assert captured["allow"] is True
+    assert "delete" in captured["args"]
+    assert "abc" in captured["args"]
 
 
 def test_run_retries_without_run_deprecated_on_stock_dfx(monkeypatch) -> None:

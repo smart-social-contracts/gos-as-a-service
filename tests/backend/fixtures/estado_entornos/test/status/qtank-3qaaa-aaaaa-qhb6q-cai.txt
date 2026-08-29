@@ -1,0 +1,6 @@
+Canister status call result for qtank-3qaaa-aaaaa-qhb6q-cai.
+Status: Running
+Controllers: 3itd6-2sx7g-vefdk-xhebm-fucot-llay5-lhqd6-pkjac-m7mkf-vhwqq-fqe
+Memory Size: Nat(456789)
+Balance: 2_512_345_678_901 Cycles
+Module hash: 0x2222222222222222222222222222222222222222222222222222222222222222

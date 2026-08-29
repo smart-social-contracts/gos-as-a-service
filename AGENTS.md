@@ -337,6 +337,39 @@ dfx canister call snqhl-daaaa-aaaan-q6n3q-cai list_realms '()' \
   --query --network staging
 ```
 
+## Estado de los entornos (informe read-only)
+
+`scripts/estado_entornos.py` imprime el estado de Test / Staging / Demo: por
+entorno, una sección **GaaS** (portal FE/BE, installer, Casals FE/BE,
+marketplace FE/BE, file_registry y su FE si existe) y una **Realms** (cada
+realm vivo del registry, FE y BE). Cada fila: SHA corto si es legible, hash de
+módulo corto, fecha del build en Europe/Zurich y "hace …". Lo ilegible se
+reporta explícito (`no pude leerla` / `hora desconocida` / `SHA desconocido`);
+nunca se inventa. Solo lectura: `--query` + `canister status`; nunca upgrade,
+reinstall ni escrituras (Demo incluido).
+
+```bash
+# Invoke line (controller identity: deployer o my-dev-identity1)
+./scripts/estado_entornos.sh --identity deployer
+
+# Opciones útiles
+./scripts/estado_entornos.sh --identity my-dev-identity1 --env staging
+./scripts/estado_entornos.sh --no-wasm-map   # más rápido, sin mapa hash→versión
+./scripts/estado_entornos.sh --json          # salida máquina
+
+# Dry-run sin IC (fixtures enlatados, así corre en CI)
+./scripts/estado_entornos.sh --fixtures tests/backend/fixtures/estado_entornos
+```
+
+Fuentes: `environments/{test,staging,demo}.json` (inventario), `canister
+status` vía `icp` si existe o `dfx` (module_hash, solo donde la identidad es
+controller), `status()` de registry/installer (commit + commit_datetime
+estampados por el release workflow), meta tags `commit-hash`/`commit-datetime`
+del HTML de frontends, `list_realms` del registry, `list_deployment_jobs` del
+installer (hash real + fecha de deploy por realm) y el file_registry
+(`wasm/**` descargado → sha256 del módulo → versión/fecha de publicación).
+Las filas nunca muestran principals — solo nombres de producto.
+
 ## Basilisk builds
 
 ```bash

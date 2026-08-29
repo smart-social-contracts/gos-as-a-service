@@ -1,0 +1,6 @@
+Canister status call result for vi64l-3aaaa-aaaae-qj4va-cai.
+Status: Running
+Controllers: 3itd6-2sx7g-vefdk-xhebm-fucot-llay5-lhqd6-pkjac-m7mkf-vhwqq-fqe
+Memory Size: Nat(6856789)
+Balance: 5_512_345_678_901 Cycles
+Module hash: 0x6868686868686868686868686868686868686868686868686868686868686868
