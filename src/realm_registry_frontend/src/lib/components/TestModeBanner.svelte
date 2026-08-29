@@ -32,7 +32,9 @@
       <span class="title">{$_('demo_banner.title')}</span> {$_('demo_banner.description')}
     </p>
     <button type="button" class="dismiss" on:click={dismissBanner} aria-label={$_('demo_banner.dismiss_label')}>
-      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+      <!-- SVG must not be the hit target: click on <path> is mouse-dead in
+           some browsers while Tab+Enter still fires on the button. -->
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
       </svg>
     </button>
@@ -68,6 +70,13 @@
     cursor: pointer;
     display: flex;
     align-items: center;
+    pointer-events: auto;
+    position: relative;
+    z-index: 1;
+  }
+  .dismiss svg,
+  .dismiss path {
+    pointer-events: none;
   }
   .dismiss:hover { background: rgba(255,255,255,0.15); }
 </style>
