@@ -11,6 +11,8 @@ from gaas.platform import (
     _casals_frontend_cache_usable,
     _casals_ic_env_cookie_value,
     _inject_casals_ic_env_assets,
+    _portal_ic_env_cookie_value,
+    inject_portal_ic_env_assets,
 )
 
 CONDUCTOR_ID = "qthgp-3yaaa-aaaae-agveq-cai"
@@ -33,6 +35,30 @@ _CASALS_ASSETS = """[
   }
 ]
 """
+
+
+def test_inject_portal_ic_env_assets_overrides_json5_comments(tmp_path: Path) -> None:
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / ".ic-assets.json5").write_text(
+        '[\n  {\n    // comment\n    "match": "**/*",\n    "headers": {"Referrer-Policy": "same-origin"}\n  }\n]\n',
+        encoding="utf-8",
+    )
+    inject_portal_ic_env_assets(
+        dist,
+        "mjrky-pyaaa-aaaah-qu27a-cai",
+        "2zaor-5yaaa-aaaac-qbxaa-cai",
+    )
+    config = json.loads((dist / ".ic-assets.json5").read_text())
+    cookie = config[0]["headers"]["Set-Cookie"]
+    decoded = urllib.parse.unquote(cookie.split("=", 1)[1].split(";", 1)[0])
+    assert "mjrky-pyaaa-aaaah-qu27a-cai" in decoded
+    assert "rhw4p" not in decoded
+    assert "2zaor-5yaaa-aaaac-qbxaa-cai" in decoded
+    encoded = _portal_ic_env_cookie_value(
+        "mjrky-pyaaa-aaaah-qu27a-cai", "2zaor-5yaaa-aaaac-qbxaa-cai"
+    )
+    assert encoded in cookie
 
 
 def test_casals_ic_env_cookie_value_format() -> None:

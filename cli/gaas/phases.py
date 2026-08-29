@@ -66,6 +66,7 @@ from gaas.platform import (
     fetch_platform_frontend_archive,
     find_gos_repo_root,
     frontend_dist_dir,
+    inject_portal_ic_env_assets,
     resolve_casals_file_registry_wasm,
     resolve_casals_frontend_dist,
     resolve_casals_wasm,
@@ -1026,6 +1027,13 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
             dfx_name = DFX_CANISTER_NAMES[canister]
             if not dfx_name:
                 raise RuntimeError(f"no dfx mapping for {canister}")
+            backend_id = descriptor.canisters.get("realm_registry_backend") or ""
+            if backend_id:
+                inject_portal_ic_env_assets(dist, backend_id, canister_id)
+                console.print(
+                    f"  {canister}: injected ic_env cookie "
+                    f"realm_registry_backend={backend_id}"
+                )
             console.print(f"  {canister}: reinstall assets to {canister_id}")
             start = time.monotonic()
             dfx.deploy_assets_canister(

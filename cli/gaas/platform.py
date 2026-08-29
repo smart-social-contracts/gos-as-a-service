@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import gzip
+import json
 import os
 import shutil
 import sys
@@ -13,7 +14,12 @@ from pathlib import Path
 import requests
 
 from gaas.artifacts import ArtifactError, fetch_release_assets
-from gaas.ic_assets import merge_casals_ic_assets, url_to_origin
+from gaas.ic_assets import (
+    merge_casals_ic_assets,
+    strip_json5_line_comments,
+    upsert_set_cookie,
+    url_to_origin,
+)
 from gaas.runlog import run_subprocess
 from gaas.known import (
     CASALS_BACKEND_WASM_ASSET,
@@ -185,6 +191,36 @@ def fetch_casals_frontend_archive(
     raise ArtifactError(
         f"{CASALS_FRONTEND_ARCHIVE} missing from {release_repo} {version}"
     )
+
+
+def _portal_ic_env_cookie_value(backend_id: str, frontend_id: str = "") -> str:
+    """URL-encoded ic_env cookie for the GaaS portal (certified-assets format)."""
+    pairs = ["ic_root_key=", f"PUBLIC_CANISTER_ID:realm_registry_backend={backend_id}"]
+    if frontend_id:
+        pairs.append(f"PUBLIC_CANISTER_ID:realm_registry_frontend={frontend_id}")
+    return urllib.parse.quote("&".join(pairs), safe="")
+
+
+def inject_portal_ic_env_assets(dist_dir: Path, backend_id: str, frontend_id: str = "") -> None:
+    """Write the portal ic_env Set-Cookie onto dist ``.ic-assets.json5``.
+
+    ``dfx deploy --network ic`` otherwise keeps a stale backend principal in
+    the certified Set-Cookie (the plugin does not reliably replace it).
+    """
+    path = dist_dir / ".ic-assets.json5"
+    existing = path.read_text(encoding="utf-8") if path.is_file() else "[]"
+    try:
+        config = json.loads(strip_json5_line_comments(existing))
+    except json.JSONDecodeError:
+        config = []
+    if isinstance(config, dict):
+        config = [config]
+    if not isinstance(config, list):
+        config = []
+    cookie_val = _portal_ic_env_cookie_value(backend_id, frontend_id)
+    cookie_header = f"ic_env={cookie_val}; SameSite=Lax"
+    upsert_set_cookie(config, cookie_header)
+    path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
 
 
 def _casals_ic_env_cookie_value(conductor_id: str, frontend_id: str = "") -> str:

@@ -46,6 +46,39 @@ def merge_connect_src(csp: str, origin: str) -> str:
     return joined
 
 
+def strip_json5_line_comments(text: str) -> str:
+    """Drop ``//`` comments so portal ``.ic-assets.json5`` can be parsed as JSON."""
+    lines: list[str] = []
+    for line in text.splitlines():
+        stripped = line.lstrip()
+        if stripped.startswith("//"):
+            continue
+        comment = line.find(" //")
+        if comment >= 0:
+            line = line[:comment].rstrip()
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def upsert_set_cookie(config: list, cookie_header: str) -> None:
+    """Write Set-Cookie onto catch-all and HTML rules (last-match-wins)."""
+    matches = {"**/*", "**/*.{html,shtml}", "**/*.{html,json}"}
+    found = False
+    for rule in config:
+        if not isinstance(rule, dict):
+            continue
+        if rule.get("match") not in matches:
+            continue
+        headers = rule.setdefault("headers", {})
+        if not isinstance(headers, dict):
+            rule["headers"] = {"Set-Cookie": cookie_header}
+        else:
+            headers["Set-Cookie"] = cookie_header
+        found = True
+    if not found:
+        config.append({"match": "**/*", "headers": {"Set-Cookie": cookie_header}})
+
+
 def merge_casals_ic_assets(
     existing_text: str,
     cookie_header: str,
