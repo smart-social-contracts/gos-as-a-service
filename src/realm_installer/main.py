@@ -10,6 +10,7 @@ __basilisk_features__ = ["shell", "browse"]
 import hashlib
 import json
 import traceback
+from typing import Tuple
 
 from baton_deferral import (
     build_baton_handoff_payload,
@@ -77,6 +78,7 @@ from bootstrap import (
     _resolve_marketplace_canister_id,
 )
 from ic_assets import ensure_frame_ancestor, portal_url_to_origin
+from version_http import version_http_response
 from installer_config import (
     InstallerConfig,
     apply_installer_config,
@@ -90,8 +92,8 @@ from installer_config import (
 
 from basilisk import (
     Async, CallResult, Duration, Opt, Principal, Record, Service,
-    StableBTreeMap, Variant, Vec, ic, init, int8, match, nat, nat32,
-    nat64, null, post_upgrade, query, service_query, service_update,
+    StableBTreeMap, Variant, Vec, blob, ic, init, int8, match, nat, nat16,
+    nat32, nat64, null, post_upgrade, query, service_query, service_update,
     text, update,
 )
 from basilisk.canisters.management import management_canister
@@ -389,6 +391,22 @@ class StatusRecord(Record, _CA):
 class GetStatusResult(Variant, total=False):
     Ok: StatusRecord
     Err: text
+
+# HTTP interface types (GET /version — gos-as-a-service#39)
+Header = Tuple[str, str]
+
+class HttpRequest(Record, _CA):
+    method: text
+    url: text
+    headers: Vec["Header"]
+    body: blob
+
+class HttpResponseIncoming(Record, _CA):
+    status_code: nat16
+    headers: Vec["Header"]
+    body: blob
+    streaming_strategy: Opt[text]
+    upgrade: Opt[bool]
 
 class TakeSnapshotOk(Record, _CA):
     job_id: text
@@ -2114,6 +2132,22 @@ def status() -> GetStatusResult:
         version="VERSION_PLACEHOLDER", commit="COMMIT_HASH_PLACEHOLDER",
         commit_datetime="COMMIT_DATETIME_PLACEHOLDER", status="ok",
     )}
+
+@query
+def http_request(req: HttpRequest) -> HttpResponseIncoming:
+    """Upgrade to an update call so the /version response is certified."""
+    return {
+        "status_code": 200,
+        "headers": [],
+        "body": b"",
+        "streaming_strategy": None,
+        "upgrade": True,
+    }
+
+@update
+def http_request_update(req: HttpRequest) -> HttpResponseIncoming:
+    """Serve GET /version (build provenance) over the IC HTTP interface."""
+    return version_http_response(req)
 
 @query
 def health() -> HealthView:

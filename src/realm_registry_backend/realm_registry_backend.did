@@ -187,5 +187,7 @@ service : (text) -> {
   "get_runtime_flags" : () -> (text) query;
   "set_canister_config_json" : (text) -> (text);
   "set_test_flags_json" : (text) -> (text);
+  "http_request" : (HttpRequest) -> (HttpResponseIncoming) query;
+  "http_request_update" : (HttpRequest) -> (HttpResponseIncoming);
   "__get_candid_interface_tmp_hack" : () -> (text) query;
 }

@@ -1,6 +1,0 @@
-Canister status call result for jo3cj-faaaa-aaaac-bffea-cai.
-Status: Running
-Controllers: 3itd6-2sx7g-vefdk-xhebm-fucot-llay5-lhqd6-pkjac-m7mkf-vhwqq-fqe
-Memory Size: Nat(1056789)
-Balance: 4_912_345_678_901 Cycles
-Module hash: 0x6464646464646464646464646464646464646464646464646464646464646464

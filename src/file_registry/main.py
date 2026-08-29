@@ -94,6 +94,24 @@ NS_PREFIX_EXT = "ext/"
 NS_PREFIX_CODEX = "codex/"
 NS_PREFIX_WASM = "wasm"
 
+# GET /version build provenance (gos-as-a-service#39). Stamped by release.yml
+# at build time; a field still holding its placeholder (local/dev builds) is
+# omitted honestly — never invented at query time.
+_VERSION_STAMP = "VERSION_PLACEHOLDER"
+_SHA_STAMP = "COMMIT_HASH_PLACEHOLDER"
+_BUILT_AT_STAMP = "BUILT_AT_ISO_PLACEHOLDER"
+
+
+def _version_payload() -> dict:
+    payload = {"canister": "file_registry"}
+    if "PLACEHOLDER" not in _SHA_STAMP:
+        payload["sha"] = _SHA_STAMP
+    if "PLACEHOLDER" not in _BUILT_AT_STAMP:
+        payload["built_at"] = _BUILT_AT_STAMP
+    if "PLACEHOLDER" not in _VERSION_STAMP:
+        payload["version"] = _VERSION_STAMP
+    return payload
+
 # ---------------------------------------------------------------------------
 # HTTP types (for the http_request query endpoint)
 # ---------------------------------------------------------------------------
@@ -1832,6 +1850,13 @@ def _handle_http(req: dict) -> dict:
 
     if method == "OPTIONS":
         return _http_response(204, b"", "text/plain")
+
+    # Build provenance — same /version contract as every platform canister
+    if path == "version":
+        body = json.dumps(_version_payload()).encode("utf-8")
+        return _http_response(200, body, "application/json", [
+            ("Cache-Control", "no-cache, must-revalidate"),
+        ])
 
     # Root: return list of namespaces
     if not path:

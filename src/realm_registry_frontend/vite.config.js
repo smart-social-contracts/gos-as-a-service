@@ -3,9 +3,9 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 import environment from 'vite-plugin-environment';
 import dotenv from 'dotenv';
-import { execSync } from 'child_process';
 import { readFileSync, existsSync } from 'fs';
 import { dirname, join } from 'path';
+import { getBuildTimeValues } from './scripts/build-info.js';
 import {
   generateWellKnownFiles,
   getGaasEnvViteDefine,
@@ -36,24 +36,8 @@ if (gaasEnv) {
   console.log(`gaas-env: loaded deployment descriptor for ${gaasEnv.domain}`);
 }
 
-function getBuildTimeValues() {
-  let version = 'dev';
-  let commitHash = 'local';
-  const buildTime = new Date().toISOString().replace('T', ' ').substring(0, 19);
-  
-  try {
-    version = readFileSync('../../version.txt', 'utf-8').trim();
-  } catch (e) {
-    // version.txt not found, use default
-  }
-  
-  try {
-    commitHash = execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim();
-  } catch (e) {
-    // git not available, use default
-  }
-  
-  return { version, commitHash, buildTime };
+function getBuildValues() {
+  return getBuildTimeValues(repoRoot);
 }
 
 // Resolve canister IDs from canister_ids.json for the active DFX_NETWORK.
@@ -128,7 +112,7 @@ function getCanisterIdsDefine() {
   }
 }
 
-const buildValues = getBuildTimeValues();
+const buildValues = getBuildValues();
 const canisterDefines = getCanisterIdDefines();
 const canisterIdsDefine = getCanisterIdsDefine();
 const gaasEnvDefine = getGaasEnvViteDefine(gaasEnv);

@@ -101,6 +101,35 @@ def test_list_deployment_jobs_returns_structured_payload():
     print(f"✓ (jobs={len(ok['jobs'])})")
 
 
+def test_http_version_endpoint_serves_build_provenance():
+    """GET /version over the IC HTTP interface (gos-as-a-service#39).
+
+    ``http_request`` must ask the gateway to upgrade; ``http_request_update``
+    serves the JSON body. Local-replica deploys are unstamped, so only the
+    static ``canister`` field is asserted.
+    """
+    print("  - test_http_version_endpoint_serves_build_provenance...", end=" ")
+    req = '(record { method = "GET"; url = "/version"; headers = vec {}; body = blob "" })'
+
+    out, code, err = _dfx_call("http_request", req, query=True, output_json=False)
+    assert code == 0, f"http_request failed: {err}"
+    assert "upgrade = opt true" in out, f"expected upgrade=true, got: {out}"
+
+    out, code, err = _dfx_call("http_request_update", req, output_json=False)
+    assert code == 0, f"http_request_update failed: {err}"
+    assert "status_code = 200" in out, f"expected 200, got: {out}"
+    assert "realm_installer" in out, f"expected canister name in body, got: {out}"
+
+    out, code, err = _dfx_call(
+        "http_request_update",
+        '(record { method = "GET"; url = "/nope"; headers = vec {}; body = blob "" })',
+        output_json=False,
+    )
+    assert code == 0, f"http_request_update 404 check failed: {err}"
+    assert "status_code = 404" in out, f"expected 404, got: {out}"
+    print("✓")
+
+
 # ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
@@ -118,6 +147,7 @@ if __name__ == "__main__":
         test_candid_surface_has_core_methods,
         test_health_returns_ok,
         test_list_deployment_jobs_returns_structured_payload,
+        test_http_version_endpoint_serves_build_provenance,
     ]
 
     failed = 0

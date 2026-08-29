@@ -1,40 +1,19 @@
+"""GET /version — build provenance over the IC HTTP interface.
+
+Contract: gos-as-a-service#39 — every platform canister serves build
+provenance at /version for the "estado de los entornos" command.
+Values are stamped at build/release time (release.yml sed on the
+placeholders below). A field still holding its placeholder (local/dev
+builds) is omitted honestly — never invented at query time.
+"""
+
 import json
-import sys
-from api.registry import count_registered_realms
-
-
-def get_status() -> dict:
-    version = "VERSION_PLACEHOLDER"
-    commit = "COMMIT_HASH_PLACEHOLDER"
-    commit_datetime = "COMMIT_DATETIME_PLACEHOLDER"
-    return {
-        "version": version,
-        "commit": commit,
-        "commit_datetime": commit_datetime,
-        "status": "ok",
-        "realms_count": count_registered_realms(),
-        "dependencies": [
-            "ic-basilisk==BASILISK_VERSION_PLACEHOLDER",
-            "ic-python-db==IC_PYTHON_DB_VERSION_PLACEHOLDER",
-            "ic-python-logging==IC_PYTHON_LOGGING_VERSION_PLACEHOLDER",
-        ],
-        "python_version": sys.version,
-    }
-
-
-# ── GET /version (IC HTTP interface) ───────────────────────────────────
-#
-# Contract: gos-as-a-service#39 — every platform canister serves build
-# provenance at /version for the "estado de los entornos" command.
-# Values are stamped at build/release time (release.yml sed on the
-# placeholders below). A field still holding its placeholder (local/dev
-# builds) is omitted honestly — never invented at query time.
 
 _VERSION_STAMP = "VERSION_PLACEHOLDER"
 _SHA_STAMP = "COMMIT_HASH_PLACEHOLDER"
 _BUILT_AT_STAMP = "BUILT_AT_ISO_PLACEHOLDER"
 
-_CANISTER_NAME = "realm_registry_backend"
+_CANISTER_NAME = "realm_installer"
 
 
 def get_version_payload() -> dict:

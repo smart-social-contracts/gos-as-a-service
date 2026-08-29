@@ -20,3 +20,5 @@ vite.config.js.timestamp-*.mjs
 *.egg-info/
 !src/file_registry_frontend/dist/
 !src/file_registry_frontend/dist/**
+# Generated at build time by scripts/write-version-file.js (gos-as-a-service#39)
+src/file_registry_frontend/dist/version

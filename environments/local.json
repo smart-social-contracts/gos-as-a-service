@@ -5,7 +5,7 @@
   "gos": [
     {
       "implementation": "realms-gos",
-      "version": "v0.4.0",
+      "version": "main",
       "release_repo": "smart-social-contracts/realms",
       "artifacts": {
         "backend_wasm_key": "realm-backend",
