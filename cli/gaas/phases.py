@@ -875,6 +875,10 @@ def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None
                     if existing_realms_checkout.is_dir()
                     else None,
                     session=ctx.http,
+                    marketplace_id=(
+                        descriptor.canisters.get("marketplace_backend") or ""
+                    ).strip()
+                    or None,
                 )
                 seeded_catalog_sources.add(catalog_key)
         elif catalog_spec is not None:
@@ -900,6 +904,7 @@ def phase_seed_namespace_approvals(descriptor: Descriptor, ctx: DeployContext) -
             marketplace_id,
             ctx.network,
             ctx.identity,
+            force=True,
         )
     except RuntimeError as exc:
         if ctx.network in ("local", "localhost"):
