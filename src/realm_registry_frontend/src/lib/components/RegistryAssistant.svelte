@@ -32,6 +32,7 @@
   import { renderMarkdown } from '$lib/geister/assistant-markdown.js';
   import { loadPrefs, loadPanelWidth, savePanelWidth } from '$lib/geister/assistant-prefs.js';
   import { clampPanelWidth, defaultPanelWidth } from '$lib/panel-width.js';
+  import { assistantPanelBoxStyle, computeAssistantPanelBox } from '$lib/assistant-viewport.js';
   import {
     fetchConversations,
     createConversation,
@@ -119,6 +120,10 @@
 
   // Resize drag state
   let isResizing = false;
+  /** Inline box that keeps the composer inside the visual viewport on phones. */
+  let panelViewportStyle = '';
+  /** @type {(() => void) | undefined} */
+  let unsubViewport;
 
   function syncChrome() {
     assistantChrome.set({ open, docked, width: panelWidth, resizing: isResizing });
@@ -319,6 +324,23 @@
     docked = !!value;
     persistDocked(docked);
     syncChrome();
+    updatePanelViewport();
+  }
+
+  function updatePanelViewport() {
+    if (typeof window === 'undefined') {
+      panelViewportStyle = '';
+      return;
+    }
+    const vv = window.visualViewport;
+    const box = computeAssistantPanelBox({
+      docked,
+      visualHeight: vv?.height ?? window.innerHeight,
+      visualOffsetTop: vv?.offsetTop ?? 0,
+      layoutHeight: window.innerHeight,
+      layoutWidth: window.innerWidth,
+    });
+    panelViewportStyle = assistantPanelBoxStyle(box);
   }
 
   function toggleDock() {
@@ -717,6 +739,21 @@
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onFocus);
     };
+
+    updatePanelViewport();
+    const vv = window.visualViewport;
+    window.addEventListener('resize', updatePanelViewport);
+    if (vv) {
+      vv.addEventListener('resize', updatePanelViewport);
+      vv.addEventListener('scroll', updatePanelViewport);
+    }
+    unsubViewport = () => {
+      window.removeEventListener('resize', updatePanelViewport);
+      if (vv) {
+        vv.removeEventListener('resize', updatePanelViewport);
+        vv.removeEventListener('scroll', updatePanelViewport);
+      }
+    };
   });
 
   onDestroy(() => {
@@ -726,6 +763,7 @@
     unsubToggleRequest?.();
     unsubCloseRequest?.();
     unsubPrefsFocus?.();
+    unsubViewport?.();
     document.body.style.userSelect = '';
     document.body.style.cursor = '';
   });
@@ -976,7 +1014,7 @@
     class:docked
     class:open
     class:resizing={isResizing}
-    style="width: {docked ? panelWidth + 'px' : 'min(' + panelWidth + 'px, calc(100vw - 48px))'}"
+    style="width: {docked ? panelWidth + 'px' : 'min(' + panelWidth + 'px, calc(100vw - 48px))'}; {panelViewportStyle}"
     aria-hidden={!open}
     aria-label={$_('assistant.title', { default: 'Realms AI Assistant' })}
   >
@@ -1315,9 +1353,10 @@
 
   .assistant-panel {
     position: fixed;
-    bottom: 88px;
+    bottom: calc(88px + env(safe-area-inset-bottom, 0px));
     right: 24px;
-    height: min(560px, calc(100vh - 130px));
+    height: min(560px, calc(100dvh - 130px));
+    max-height: calc(100dvh - 16px);
     background: #fff;
     border: 1px solid #e5e5e5;
     border-radius: 14px;
@@ -1331,8 +1370,9 @@
   .assistant-panel.docked {
     top: 0;
     right: 0;
-    bottom: 0;
-    height: 100vh;
+    bottom: auto;
+    height: 100dvh;
+    max-height: 100dvh;
     border-radius: 0;
     border: none;
     border-left: 1px solid #e5e5e5;
@@ -1406,8 +1446,14 @@
   }
 
   @media (max-width: 767px) {
+    .assistant-panel {
+      right: 0;
+      left: 0;
+      width: 100% !important;
+    }
     .assistant-panel.docked {
       width: 100% !important;
+      border-radius: 0;
     }
     .resize-handle {
       display: none;
@@ -1808,7 +1854,9 @@
     flex-direction: column;
     gap: 8px;
     padding: 10px;
-    border-top: 1px solid #eee;
+    padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid #d4d4d4;
+    background: #fff;
     flex-shrink: 0;
   }
   .suggestions {
@@ -1837,17 +1885,21 @@
   }
   .input-row {
     display: flex;
+    align-items: stretch;
     gap: 8px;
   }
   .assistant-input textarea {
     flex: 1;
     resize: none;
-    border: 1px solid #ddd;
+    border: 1px solid #bbb;
     border-radius: 8px;
     padding: 8px 10px;
     font: inherit;
-    font-size: 0.9rem;
+    font-size: 16px;
+    min-height: 42px;
     max-height: 120px;
+    background: #fff;
+    color: #111;
   }
   .assistant-send {
     background: #111;
@@ -1857,6 +1909,7 @@
     padding: 0 14px;
     font-size: 0.88rem;
     cursor: pointer;
+    min-height: 42px;
   }
   .assistant-send:disabled {
     opacity: 0.5;
