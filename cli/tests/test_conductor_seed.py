@@ -194,6 +194,11 @@ def test_find_local_assetstorage_wasm_raises_when_missing(tmp_path: Path, monkey
         "_run",
         lambda *args, **kwargs: (_ for _ in ()).throw(dfx.DfxError("no cache", command=[], stderr="")),
     )
+    monkeypatch.setattr(
+        dfx,
+        "find_assetstorage_wasm",
+        lambda: (_ for _ in ()).throw(RuntimeError("download failed")),
+    )
     with pytest.raises(PlatformError, match="assetstorage.wasm.gz"):
         find_local_assetstorage_wasm(tmp_path)
 
