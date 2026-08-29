@@ -545,10 +545,11 @@ def phase_install_backends(descriptor: Descriptor, ctx: DeployContext) -> None:
 
     casals_fr_id = descriptor.canisters.get("casals_file_registry")
     if casals_fr_id:
-        # Casals v0.3.0 file_registry lacks finalize_chunked_file_step. On a
-        # local replica, install this repo's file_registry wasm so seed can
-        # finish without talking to a newer Casals release / mainnet.
-        if ctx.network in ("local", "localhost") and repo_root is not None:
+        # Casals' bundled file_registry (v0.3.x submodule) has only
+        # finalize_chunked_file. Seed needs finalize_chunked_file_step for
+        # multi-MB WASMs (one-shot finalize hits IC0522). Install this repo's
+        # file_registry wasm onto the Casals-owned canister on every network.
+        if repo_root is not None:
             wasm = resolve_platform_backend_wasm(
                 "file_registry",
                 platform_version=platform_version,

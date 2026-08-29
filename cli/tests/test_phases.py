@@ -1310,7 +1310,7 @@ def test_phase_install_backends_installs_file_registry_and_marketplace(
 @patch("gaas.phases.resolve_casals_wasm")
 @patch("gaas.phases.resolve_platform_backend_wasm")
 @patch("gaas.phases._find_repo_root")
-def test_phase_install_backends_local_uses_platform_file_registry_for_casals(
+def test_phase_install_backends_uses_platform_file_registry_for_casals(
     mock_repo_root,
     mock_platform_wasm,
     mock_casals_wasm,
@@ -1332,7 +1332,7 @@ def test_phase_install_backends_local_uses_platform_file_registry_for_casals(
         "casals_file_registry": "ccccc-ccccc-ccccc-ccccc-ccc",
     }
     descriptor = Descriptor.model_validate(data)
-    ctx = DeployContext(identity="default", network="local", work_dir=tmp_path / "work")
+    ctx = DeployContext(identity="default", network="ic", work_dir=tmp_path / "work")
 
     phase_install_backends(descriptor, ctx)
 
