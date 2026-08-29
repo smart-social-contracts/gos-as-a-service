@@ -98,7 +98,7 @@ Pass `--destroy-except-realm-registry-frontend` when DNS-mapped frontends must s
 everything else — including other frontends such as `casals_frontend` — should be recreated:
 
 - **`realm_registry_frontend`** — required; `*.gos.earth` (e.g. staging `77243-aqaaa-aaaau-aggza-cai`)
-- **`marketplace_frontend`** — preserved when present in the descriptor; `*.realmsgos.org`
+- **`marketplace_frontend`** — preserved when present in the descriptor; `*.realmsgos.org`. Pass its canister ID to Casals `destroy_orchestra` as well: on demo/staging it is a registered orchestra canister, and omitting it drain-deletes the DNS host.
 
 ```bash
 gaas new environments/staging.json --identity deployer --network ic --yes --destroy-except-realm-registry-frontend
@@ -108,7 +108,7 @@ This **first phase**:
 
 1. Drain-destroys every orchestra/registry/platform canister except DNS-mapped frontends
 2. Converts leftover ICP in the Casals treasury
-3. Evacuates cycles to your **cycles wallet** (not the frontends — asset canisters cannot fund creates). If `dfx identity get-wallet` is unset, gaas creates a temporary holding canister from the cycles ledger (1T; IC create fee is 0.5T), evacuates onto it, then deletes that canister so the cycles refund to the identity's cycles ledger (the account `create --no-wallet` spends from). Set `GAAS_CYCLES_HOLDING=<canister-id>` to reuse a leftover holding canister after a failed destroy instead of paying the create fee again. If Casals is frozen (`IC0207`), gaas tops it up from the cycles ledger and retries the destroy call once.
+3. Evacuates cycles to your **cycles wallet** (not the frontends — asset canisters cannot fund creates). If `dfx identity get-wallet` is unset, gaas creates a temporary holding canister from the cycles ledger (1T; IC create fee is 0.5T), evacuates onto it, then deletes that canister so the cycles refund to the identity's cycles ledger (the account `create --no-wallet` spends from). Set `GAAS_CYCLES_HOLDING=<canister-id>` to reuse a leftover holding canister after a failed destroy instead of paying the create fee again. If Casals is frozen (`IC0207`), gaas tops it up from the cycles ledger and retries the destroy call once. The last evacuate chunk keeps a 500B reserve so the conductor stays above freeze (a 100B reserve can `IC0504` mid-transfer).
 4. Dust-deletes the Casals conductor when balance ≤ 500B cycles
 5. Clears destroyed IDs from the descriptor (DNS-mapped frontend IDs kept)
 
