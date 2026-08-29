@@ -30,7 +30,9 @@
   import { assistantOpenRequest, assistantToggleRequest, assistantCloseRequest } from '$lib/assistant-open.js';
   import { API_URL, CHAT_REQUEST_TIMEOUT_MS, geisterNetwork } from '$lib/geister/constants.js';
   import { renderMarkdown } from '$lib/geister/assistant-markdown.js';
-  import { loadPrefs, loadPanelWidth, savePanelWidth } from '$lib/geister/assistant-prefs.js';
+  import ConnectPersonalProviders from '$lib/components/ConnectPersonalProviders.svelte';
+  import { loadPrefs, loadPanelWidth, savePanelWidth, dismissConnectSuggestion } from '$lib/geister/assistant-prefs.js';
+  import { shouldOfferPersonalConnect } from '$lib/geister/assistant-providers.js';
   import { clampPanelWidth, defaultPanelWidth } from '$lib/panel-width.js';
   import { assistantPanelBoxStyle, computeAssistantPanelBox } from '$lib/assistant-viewport.js';
   import {
@@ -101,6 +103,7 @@
   let showSuggestions = true;
   let sharePageContext = true;
   let defaultAssistantId = '';
+  let offerPersonalConnect = true;
   /** @type {{ id: string, name: string, emoji?: string, description?: string }[]} */
   let availableAssistants = [];
   /** @type {{ id: string, name: string, emoji?: string, description?: string } | null} */
@@ -362,10 +365,16 @@
     showSuggestions = prefs.showSuggestions;
     sharePageContext = prefs.sharePageContext;
     defaultAssistantId = prefs.defaultAssistant || '';
+    offerPersonalConnect = shouldOfferPersonalConnect(prefs);
     if (defaultAssistantId && availableAssistants.length > 0) {
       const match = availableAssistants.find((a) => a.id === defaultAssistantId);
       if (match) selectedAssistant = match;
     }
+  }
+
+  function hideConnectSuggestion() {
+    dismissConnectSuggestion();
+    offerPersonalConnect = false;
   }
 
   async function ensureRealmContext(slug, { attempt = 0 } = {}) {
@@ -1197,6 +1206,14 @@
               'Ask me anything about the realms in the registry — which to join, how to create one, or how Realms works.',
           })}
         </div>
+        {#if offerPersonalConnect}
+          <ConnectPersonalProviders
+            variant="panel"
+            showDismiss={true}
+            on:dismiss={hideConnectSuggestion}
+            on:connected={applyPrefs}
+          />
+        {/if}
       {/if}
       {#each messages as m, i (i)}
         <div class="assistant-msg" class:user={m.isUser}>
@@ -1673,6 +1690,9 @@
     color: #888;
     font-size: 0.88rem;
     line-height: 1.5;
+  }
+  .assistant-empty + :global(.connect-card) {
+    margin-top: 4px;
   }
 
   .assistant-msg {

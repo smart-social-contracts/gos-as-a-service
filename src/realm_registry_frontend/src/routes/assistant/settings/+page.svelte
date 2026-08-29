@@ -1,7 +1,10 @@
 <script>
   import { onMount } from 'svelte';
   import { _ } from 'svelte-i18n';
+  import { page } from '$app/stores';
   import { loadPrefs, savePrefs } from '$lib/geister/assistant-prefs.js';
+  import ConnectPersonalProviders from '$lib/components/ConnectPersonalProviders.svelte';
+  import { isPersonalProviderId } from '$lib/geister/assistant-providers.js';
   import {
     fetchConversations,
     deleteConversation,
@@ -143,6 +146,22 @@
       </a>
       <h1 class="settings-title">{$_('assistant.settings_title', { default: 'Realms Assistant — Settings' })}</h1>
     </header>
+
+    <section class="settings-section" id="personal-assistants">
+      <h2 class="settings-section-title">{$_('assistant.connect_section', { default: 'Personal assistants' })}</h2>
+      <p class="settings-section-desc">
+        {$_('assistant.connect_section_desc', {
+          default:
+            'Connect ChatGPT, Claude, or Grok with the Realms MCP connector. The built-in assistant keeps working if you skip this.',
+        })}
+      </p>
+      <ConnectPersonalProviders
+        variant="settings"
+        initialProvider={isPersonalProviderId($page.url.searchParams.get('connect'))
+          ? $page.url.searchParams.get('connect')
+          : ''}
+      />
+    </section>
 
     <section class="settings-section">
       <h2 class="settings-section-title">{$_('assistant.default_assistant', { default: 'Default assistant' })}</h2>
