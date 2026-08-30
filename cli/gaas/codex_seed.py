@@ -318,7 +318,16 @@ def collect_legacy_codex_uploads(source_dir: Path, codex_id: str, version: str) 
 
 
 def collect_codex_uploads(source_dir: Path) -> tuple[str, str, str, list[UploadSpec]]:
-    """Return (package_id, version, namespace_prefix, uploads) for a codex directory."""
+    """Return (package_id, version, namespace_prefix, uploads) for a codex directory.
+
+    Unified packages (``kind: codex`` + ``backend/``) publish under ``ext/`` —
+    the same namespace ``install_codex_from_registry`` tries first. Files keep
+    the ``backend/`` prefix (``backend/modules/membership.py``); the realm
+    installer strips that prefix so ``_codex_module_stem`` sees
+    ``modules/membership.py``. Publishing unified packages under ``codex/``
+    instead makes install fall back to the legacy pull, which does not flatten
+    and then seeds zero Codex Viewer rows.
+    """
     manifest = _read_manifest(source_dir)
     package_id = manifest.get("id") or source_dir.name
     version = manifest.get("version") or "0.0.0"
@@ -327,7 +336,7 @@ def collect_codex_uploads(source_dir: Path) -> tuple[str, str, str, list[UploadS
         return (
             package_id,
             version,
-            "codex",
+            "ext",
             collect_extension_uploads(source_dir, package_id),
         )
 

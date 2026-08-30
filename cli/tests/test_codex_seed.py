@@ -90,12 +90,46 @@ def test_collect_unified_codex_skips_tests_readme_pycache(tmp_path: Path) -> Non
 
     assert package_id == "syntropia"
     assert version == "0.8.9"
-    assert prefix == "codex"
+    assert prefix == "ext"
     paths = {spec.registry_path for spec in uploads}
     assert paths == {"manifest.json", "backend/entry.py", "backend/data.json"}
     assert not any("tests/" in path for path in paths)
     assert not any("__pycache__" in path for path in paths)
     assert "README.md" not in paths
+
+
+def test_collect_agora_shaped_unified_codex_publishes_ext_with_backend_modules(
+    tmp_path: Path,
+) -> None:
+    """gaas new must seed agora under ext/ so install flattens modules/.
+
+    Agora (and the other default GOS codices) ship ``kind: codex`` plus
+    ``backend/modules/<stem>.py``. The realm seeder's ``_codex_module_stem``
+    only accepts top-level ``modules/<stem>.py`` — which the unified
+    ``ext/`` install produces by stripping ``backend/``. A ``codex/``
+    publish leaves ``backend/modules/membership.py`` unflattened, the
+    seeder claims 0 modules, and ``prune_codex_table([])`` wipes Codex Viewer.
+    """
+    codex_dir = _write_unified_codex(tmp_path, "agora", "0.9.5")
+    modules = codex_dir / "backend" / "modules"
+    modules.mkdir()
+    (modules / "membership.py").write_text("def init():\n    pass\n", encoding="utf-8")
+    (modules / "nested").mkdir()
+    (modules / "nested" / "helper.py").write_text("x = 1\n", encoding="utf-8")
+
+    package_id, version, prefix, uploads = collect_codex_uploads(codex_dir)
+
+    assert package_id == "agora"
+    assert version == "0.9.5"
+    assert prefix == "ext"
+    assert package_namespace(package_id, version, namespace_prefix=prefix) == (
+        "ext/agora/0.9.5"
+    )
+    paths = {spec.registry_path for spec in uploads}
+    assert "manifest.json" in paths
+    assert "backend/modules/membership.py" in paths
+    assert "backend/modules/nested/helper.py" in paths
+    assert "modules/membership.py" not in paths
 
 
 def test_collect_legacy_codex_uploads_py_and_json_only(tmp_path: Path) -> None:
@@ -324,7 +358,43 @@ def test_publish_codex_dir_publishes_namespace_on_upload(
 
     mock_publish.assert_called_once_with(
         VALID_CANISTER_ID,
-        "codex/syntropia/0.8.9",
+        "ext/syntropia/0.8.9",
+        "local",
+        identity="deployer",
+        marketplace_id=None,
+    )
+
+
+@patch("gaas.codex_seed.publish_namespace")
+@patch("gaas.codex_seed.upload_file")
+@patch("gaas.codex_seed.fetch_namespace_hashes")
+def test_publish_agora_dir_uses_ext_namespace(
+    mock_hashes: MagicMock,
+    mock_upload: MagicMock,
+    mock_publish: MagicMock,
+    tmp_path: Path,
+) -> None:
+    codex_dir = _write_unified_codex(tmp_path, "agora", "0.9.5")
+    (codex_dir / "backend" / "modules").mkdir()
+    (codex_dir / "backend" / "modules" / "membership.py").write_text(
+        "def init():\n    pass\n", encoding="utf-8"
+    )
+    mock_hashes.return_value = {}
+    mock_upload.return_value = "uploaded"
+
+    namespace = publish_codex_dir(
+        VALID_CANISTER_ID,
+        codex_dir,
+        "local",
+        identity="deployer",
+    )
+
+    assert namespace == "ext/agora/0.9.5"
+    uploaded_paths = [call.args[2] for call in mock_upload.call_args_list]
+    assert "backend/modules/membership.py" in uploaded_paths
+    mock_publish.assert_called_once_with(
+        VALID_CANISTER_ID,
+        "ext/agora/0.9.5",
         "local",
         identity="deployer",
         marketplace_id=None,
