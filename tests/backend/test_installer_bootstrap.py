@@ -8,6 +8,7 @@ _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 sys.path.insert(0, os.path.join(_REPO_ROOT, "src/realm_installer"))
 
 from bootstrap import (  # noqa: E402
+    bootstrap_json_error,
     build_enter_setup_candid,
     configure_canister_ids_args,
     configure_canister_ids_payload,
@@ -331,6 +332,15 @@ def test_realms_gos_explicit_still_has_configure_and_grant():
         "configure_canister_ids",
         "grant_frontend_access",
     ]
+
+
+def test_bootstrap_json_error_detects_unauthorized_enter_setup():
+    assert bootstrap_json_error('{"ok": false, "error": "unauthorized"}') == "unauthorized"
+    assert bootstrap_json_error({"ok": False, "error": "unauthorized"}) == "unauthorized"
+    assert bootstrap_json_error('{"success": false, "error": "nope"}') == "nope"
+    assert bootstrap_json_error('{"ok": true}') == ""
+    assert bootstrap_json_error("") == ""
+    assert bootstrap_json_error(None) == ""
 
 
 def test_blank_gos_implementation_gets_enter_setup_and_realms_bootstrap():

@@ -24,11 +24,13 @@ from gaas.phases import (
     phase_create_canisters,
     phase_destroy_except_frontend,
     phase_domain_wiring,
+    phase_ensure_provision_cycles,
     phase_grant_commanders,
     phase_install_backends,
     phase_install_frontends,
     phase_seed_conductor,
     phase_seed_file_registry,
+    provision_cycle_targets,
     run_phases,
 )
 from gaas.gaas_env import build_gaas_env
@@ -40,6 +42,7 @@ def test_phases_order() -> None:
     ids = [phase_id for phase_id, _title, _func in PHASES]
     assert ids == [
         "destroy_except_frontend",
+        "ensure_cycles",
         "validate",
         "create_canisters",
         "install_backends",
@@ -48,6 +51,7 @@ def test_phases_order() -> None:
         "seed_namespace_approvals",
         "seed_conductor",
         "prime_cycles_snapshot",
+        "ensure_provision_cycles",
         "configure_multisig",
         "install_frontends",
         "domain_wiring",
@@ -152,7 +156,7 @@ def test_run_phases_validate_failure(mock_preflight) -> None:
     with pytest.raises(RuntimeError, match="preflight failed"):
         run_phases(desc, ctx)
 
-    assert ctx.completed_phases == ["destroy_except_frontend"]
+    assert ctx.completed_phases == ["destroy_except_frontend", "ensure_cycles"]
 
 
 @patch("gaas.phases.dfx.top_up_canister")
@@ -1343,3 +1347,174 @@ def test_phase_install_backends_uses_platform_file_registry_for_casals(
         if call.args[0] == "ccccc-ccccc-ccccc-ccccc-ccc"
     )
     assert casals_fr_install.args[1] == str(platform_wasm)
+
+
+def test_provision_cycle_targets_casals_and_file_registry() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        "casals_backend": VALID_CANISTER_ID,
+        "file_registry": "p43qv-jyaaa-aaaas-qgz2q-cai",
+    }
+    desc = Descriptor.model_validate(data)
+    targets = {name: (cid, needed) for name, cid, needed in provision_cycle_targets(desc)}
+    assert targets["casals_backend"][1] == 9_000_000_000_000
+    assert targets["file_registry"][1] == desc.threshold_cycles()
+
+
+@patch("gaas.phases.dfx")
+def test_phase_ensure_provision_cycles_skips_when_funded(mock_dfx: MagicMock) -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        "casals_backend": VALID_CANISTER_ID,
+        "file_registry": "p43qv-jyaaa-aaaas-qgz2q-cai",
+    }
+    desc = Descriptor.model_validate(data)
+    mock_dfx.parse_canister_cycles_balance.return_value = 16_000_000_000_000
+    mock_dfx.canister_status.return_value = MagicMock(raw="")
+    ctx = DeployContext(identity="deployer", network="ic")
+    phase_ensure_provision_cycles(desc, ctx)
+    mock_dfx.top_up_canister.assert_not_called()
+
+
+@patch("gaas.phases.ensure_canister_has")
+@patch("gaas.phases.refill_children_from_casals")
+@patch("gaas.phases.dfx")
+def test_phase_ensure_provision_cycles_tops_short_casals_from_wallet(
+    mock_dfx: MagicMock,
+    mock_refill: MagicMock,
+    mock_dest_pull: MagicMock,
+) -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        "casals_backend": "pj4by-iqaaa-aaaas-qgzza-cai",
+        "file_registry": "p43qv-jyaaa-aaaas-qgz2q-cai",
+    }
+    data["cycles"] = {"threshold_tc": 2, "pull_from": ["staging"], "pull_leave_tc": 40}
+    desc = Descriptor.model_validate(data)
+    balances = {
+        "pj4by-iqaaa-aaaas-qgzza-cai": 6_000_000_000_000,
+        "p43qv-jyaaa-aaaas-qgz2q-cai": 2_500_000_000_000,
+    }
+
+    def _status(canister_id: str, *_args, **_kwargs):
+        return MagicMock(raw=str(balances[canister_id]))
+
+    def _parse(raw):
+        return int(raw)
+
+    def _top_up(canister_id, amount, *_args, **_kwargs):
+        balances[canister_id] += amount
+
+    mock_dfx.canister_status.side_effect = _status
+    mock_dfx.parse_canister_cycles_balance.side_effect = _parse
+    mock_dfx.cycles_balance.return_value = 4_000_000_000_000
+    mock_dfx.top_up_canister.side_effect = _top_up
+    ctx = DeployContext(identity="deployer", network="ic")
+
+    phase_ensure_provision_cycles(desc, ctx)
+
+    mock_refill.assert_not_called()
+    mock_dest_pull.assert_not_called()
+    mock_dfx.top_up_canister.assert_called_once()
+    assert mock_dfx.top_up_canister.call_args.args[0] == "pj4by-iqaaa-aaaas-qgzza-cai"
+    assert mock_dfx.top_up_canister.call_args.args[1] == 3_000_000_000_000
+    assert balances["pj4by-iqaaa-aaaas-qgzza-cai"] == 9_000_000_000_000
+
+
+@patch("gaas.phases.ensure_canister_has")
+@patch("gaas.phases.refill_children_from_casals")
+@patch("gaas.phases.dfx")
+def test_phase_ensure_provision_cycles_moves_casals_surplus_to_file_registry(
+    mock_dfx: MagicMock,
+    mock_refill: MagicMock,
+    mock_dest_pull: MagicMock,
+) -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        "casals_backend": "owusp-liaaa-aaaas-qgz5q-cai",
+        "file_registry": "onrok-rqaaa-aaaas-qgz7a-cai",
+    }
+    data["cycles"] = {"threshold_tc": 2, "pull_from": ["staging"], "pull_leave_tc": 40}
+    desc = Descriptor.model_validate(data)
+    balances = {
+        "owusp-liaaa-aaaas-qgz5q-cai": 15_957_000_000_000,
+        "onrok-rqaaa-aaaas-qgz7a-cai": 588_000_000_000,
+    }
+
+    def _status(canister_id: str, *_args, **_kwargs):
+        return MagicMock(raw=str(balances[canister_id]))
+
+    def _parse(raw):
+        return int(raw)
+
+    def _refill(_casals_id, children, *, surplus, **_kwargs):
+        name, cid, short = children[0]
+        send = min(short, surplus)
+        balances[cid] += send
+        balances[_casals_id] -= send
+        return [(name, send)]
+
+    mock_dfx.canister_status.side_effect = _status
+    mock_dfx.parse_canister_cycles_balance.side_effect = _parse
+    mock_dfx.cycles_balance.return_value = 707_000_000_000
+    mock_refill.side_effect = _refill
+    ctx = DeployContext(identity="deployer", network="ic")
+
+    phase_ensure_provision_cycles(desc, ctx)
+
+    mock_refill.assert_called_once()
+    assert mock_refill.call_args.args[1][0][0] == "file_registry"
+    assert mock_refill.call_args.kwargs["surplus"] == 6_957_000_000_000
+    mock_dest_pull.assert_not_called()
+    mock_dfx.top_up_canister.assert_not_called()
+    assert balances["onrok-rqaaa-aaaas-qgz7a-cai"] == 2_000_000_000_000
+
+
+@patch("gaas.phases.ensure_canister_has")
+@patch("gaas.phases.refill_children_from_casals")
+@patch("gaas.phases.dfx")
+def test_phase_ensure_provision_cycles_dest_pulls_when_casals_also_short(
+    mock_dfx: MagicMock,
+    mock_refill: MagicMock,
+    mock_dest_pull: MagicMock,
+) -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        "casals_backend": "pj4by-iqaaa-aaaas-qgzza-cai",
+        "file_registry": "p43qv-jyaaa-aaaas-qgz2q-cai",
+    }
+    data["cycles"] = {"threshold_tc": 2, "pull_from": ["staging"], "pull_leave_tc": 40}
+    desc = Descriptor.model_validate(data)
+    balances = {
+        "pj4by-iqaaa-aaaas-qgzza-cai": 3_870_000_000_000,
+        "p43qv-jyaaa-aaaas-qgz2q-cai": 588_000_000_000,
+    }
+
+    def _status(canister_id: str, *_args, **_kwargs):
+        return MagicMock(raw=str(balances[canister_id]))
+
+    def _parse(raw):
+        return int(raw)
+
+    def _dest_pull(_desc, canister_id, *, required, **_kwargs):
+        send = max(0, required - balances[canister_id])
+        balances[canister_id] += send
+        return {"pulled": send, "dipped": True}
+
+    mock_dfx.canister_status.side_effect = _status
+    mock_dfx.parse_canister_cycles_balance.side_effect = _parse
+    mock_dfx.cycles_balance.return_value = 0
+    mock_refill.return_value = []
+    mock_dest_pull.side_effect = _dest_pull
+    ctx = DeployContext(identity="deployer", network="ic")
+
+    phase_ensure_provision_cycles(desc, ctx)
+
+    assert mock_dest_pull.call_count == 2
+    dests = [call.args[1] for call in mock_dest_pull.call_args_list]
+    assert dests == [
+        "pj4by-iqaaa-aaaas-qgzza-cai",
+        "p43qv-jyaaa-aaaas-qgz2q-cai",
+    ]
+    assert balances["pj4by-iqaaa-aaaas-qgzza-cai"] == 9_000_000_000_000
+    assert balances["p43qv-jyaaa-aaaas-qgz2q-cai"] == 2_000_000_000_000

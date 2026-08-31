@@ -232,6 +232,10 @@ class CyclesConfig(BaseModel):
     """Unified cycle threshold (TC) for all platform canisters."""
 
     threshold_tc: float = 2
+    # Sibling env names or descriptor paths. ``gaas new`` pulls a wallet
+    # shortfall from those Casals treasuries (leaving ``pull_leave_tc``).
+    pull_from: list[str] = Field(default_factory=list)
+    pull_leave_tc: float = 40
 
     @field_validator("threshold_tc")
     @classmethod
@@ -240,8 +244,30 @@ class CyclesConfig(BaseModel):
             raise ValueError("cycles.threshold_tc must be a positive number")
         return value
 
+    @field_validator("pull_leave_tc")
+    @classmethod
+    def validate_pull_leave_tc(cls, value: float) -> float:
+        if value < 0:
+            raise ValueError("cycles.pull_leave_tc must be >= 0")
+        return value
+
+    @field_validator("pull_from")
+    @classmethod
+    def validate_pull_from(cls, value: list[str]) -> list[str]:
+        cleaned: list[str] = []
+        for index, entry in enumerate(value or []):
+            ref = (entry or "").strip()
+            if not ref:
+                raise ValueError(f"cycles.pull_from[{index}]: must be non-empty")
+            if ref not in cleaned:
+                cleaned.append(ref)
+        return cleaned
+
     def threshold_cycles(self) -> int:
         return int(self.threshold_tc * 1_000_000_000_000)
+
+    def pull_leave_cycles(self) -> int:
+        return int(self.pull_leave_tc * 1_000_000_000_000)
 
 
 class DnsConfig(BaseModel):

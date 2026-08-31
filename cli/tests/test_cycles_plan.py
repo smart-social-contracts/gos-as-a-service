@@ -9,6 +9,7 @@ import pytest
 from rich.console import Console
 
 from gaas.cycles_plan import (
+    FILE_REGISTRY_SEED_BUDGET,
     REALM_OPS_MARGIN_CYCLES,
     REALMS_PER_DEPLOY_ASSUMPTION,
     WALLET_CREATE_CYCLES,
@@ -16,6 +17,8 @@ from gaas.cycles_plan import (
     _casals_backend_required,
     _realm_provisioning_budget,
     build_cycles_plan,
+    casals_provision_floor,
+    create_attach_cycles,
     print_cycles_plan,
     remediation_canister_top_up,
     remediation_wallet_convert,
@@ -28,6 +31,11 @@ from gaas.preflight import run_preflight
 from tests.conftest import SAMPLE_DESCRIPTOR, VALID_CANISTER_ID
 
 DEFAULT_THRESHOLD = 2_000_000_000_000
+
+# IC mainnet create with 0.5T --with-cycles fails: freeze + first 12 KiB
+# memory grow needs ~26B more. Keep the attached amount above that floor.
+def test_wallet_initial_funding_covers_ic_create_memory_grow() -> None:
+    assert WALLET_INITIAL_FUNDING >= 1_250_000_000_000
 
 
 def _descriptor(**overrides) -> Descriptor:
@@ -44,7 +52,17 @@ def test_wallet_required_all_canisters_missing() -> None:
     )
     wallet = next(item for item in plan.items if item.label == "wallet")
     per = WALLET_CREATE_CYCLES + WALLET_INITIAL_FUNDING
-    assert wallet.required == per * len(PLATFORM_CANISTER_NAMES)
+    desc = _descriptor(canisters={})
+    extra = 0
+    for name in PLATFORM_CANISTER_NAMES:
+        extra += max(
+            0, create_attach_cycles(name, desc) - WALLET_INITIAL_FUNDING
+        )
+    assert wallet.required == per * len(PLATFORM_CANISTER_NAMES) + extra
+    assert extra == (
+        max(0, _casals_backend_required(desc) - WALLET_INITIAL_FUNDING)
+        + max(0, FILE_REGISTRY_SEED_BUDGET + DEFAULT_THRESHOLD - WALLET_INITIAL_FUNDING)
+    )
     assert len(plan.items) == 1
 
 
@@ -58,7 +76,7 @@ def test_wallet_required_partial_create_mix() -> None:
         "ic",
         wallet_balance=5_000_000_000_000,
         canister_balances={
-            "file_registry": DEFAULT_THRESHOLD,
+            "file_registry": DEFAULT_THRESHOLD + FILE_REGISTRY_SEED_BUDGET,
             "casals_backend": _casals_backend_required(
                 _descriptor(
                     canisters=canisters,
@@ -114,7 +132,7 @@ def test_canister_headrooms_and_multisig_extra() -> None:
     frontend = next(
         item for item in plan_no_multisig.items if item.label == "casals_frontend"
     )
-    assert file_reg.required == threshold
+    assert file_reg.required == threshold + FILE_REGISTRY_SEED_BUDGET
     assert installer.required == threshold
     assert frontend.required == threshold
 
@@ -128,7 +146,7 @@ def test_descriptor_threshold_tc_overrides_default_headroom() -> None:
         canister_balances={"file_registry": 0},
     )
     file_reg = next(item for item in plan.items if item.label == "file_registry")
-    assert file_reg.required == 3_000_000_000_000
+    assert file_reg.required == 3_000_000_000_000 + FILE_REGISTRY_SEED_BUDGET
 
 
 def test_conductor_includes_realm_provisioning_budget() -> None:
@@ -145,6 +163,36 @@ def test_conductor_includes_realm_provisioning_budget() -> None:
         REALMS_PER_DEPLOY_ASSUMPTION * per_realm
     )
     assert _casals_backend_required(desc) == 16_000_000_000_000
+    assert casals_provision_floor(desc) == threshold + per_realm
+    assert casals_provision_floor(desc) == 9_000_000_000_000
+
+
+def test_wallet_covers_adopted_frontend_shortfall() -> None:
+    """Recreate-keep-frontend: wallet funds the portal top-up instead of failing."""
+    canisters = {"realm_registry_frontend": VALID_CANISTER_ID}
+    frontend_available = 200_000_000_000
+    missing = len([n for n in PLATFORM_CANISTER_NAMES if n not in canisters])
+    create_cost = missing * (WALLET_CREATE_CYCLES + WALLET_INITIAL_FUNDING)
+    desc = _descriptor(canisters=canisters)
+    for name in PLATFORM_CANISTER_NAMES:
+        if name not in canisters:
+            create_cost += max(
+                0, create_attach_cycles(name, desc) - WALLET_INITIAL_FUNDING
+            )
+    topup = DEFAULT_THRESHOLD - frontend_available
+    plan = build_cycles_plan(
+        desc,
+        "ic",
+        wallet_balance=create_cost + topup,
+        canister_balances={"realm_registry_frontend": frontend_available},
+    )
+    assert plan.ok
+    wallet = next(item for item in plan.items if item.label == "wallet")
+    assert wallet.required == create_cost + topup
+    frontend = next(
+        item for item in plan.items if item.label == "realm_registry_frontend"
+    )
+    assert frontend.shortfall == 0
 
 
 def test_shortfall_detection_wallet_and_canister() -> None:
@@ -159,7 +207,9 @@ def test_shortfall_detection_wallet_and_canister() -> None:
     wallet = next(item for item in plan.items if item.label == "wallet")
     file_reg = next(item for item in plan.items if item.label == "file_registry")
     assert wallet.shortfall > 0
-    assert file_reg.shortfall == DEFAULT_THRESHOLD - 100_000_000_000
+    assert file_reg.shortfall == (
+        DEFAULT_THRESHOLD + FILE_REGISTRY_SEED_BUDGET - 100_000_000_000
+    )
 
 
 def test_remediation_commands() -> None:

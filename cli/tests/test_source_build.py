@@ -24,6 +24,73 @@ def descriptor_main() -> Descriptor:
     return Descriptor.model_validate(data)
 
 
+def test_ensure_ic_wasm_skips_install_when_on_path(tmp_path: Path) -> None:
+    from gaas.source_build import ensure_ic_wasm
+
+    fake = tmp_path / "bin"
+    fake.mkdir()
+    (fake / "ic-wasm").write_text("#!/bin/sh\n")
+    (fake / "ic-wasm").chmod(0o755)
+
+    with patch("gaas.source_build.shutil.which", return_value=str(fake / "ic-wasm")), patch(
+        "gaas.source_build.run_subprocess"
+    ) as run_mock:
+        assert ensure_ic_wasm() == fake
+    run_mock.assert_not_called()
+
+
+def test_ensure_ic_wasm_installs_into_local_prefix(tmp_path: Path) -> None:
+    from gaas.source_build import ensure_ic_wasm
+
+    prefix = tmp_path / "local"
+
+    def _install(*_args, **_kwargs):
+        dest = prefix / "bin"
+        dest.mkdir(parents=True)
+        (dest / "ic-wasm").write_text("#!/bin/sh\n")
+        (dest / "ic-wasm").chmod(0o755)
+
+    with patch("gaas.source_build.shutil.which", return_value=None), patch(
+        "gaas.source_build.run_subprocess", side_effect=_install
+    ) as run_mock:
+        assert ensure_ic_wasm(prefix) == prefix / "bin"
+
+    run_mock.assert_called_once()
+    cmd = run_mock.call_args[0][0]
+    assert cmd[:4] == ["npm", "install", "-g", "--prefix"]
+    assert cmd[4] == str(prefix)
+    assert cmd[5] == "@icp-sdk/ic-wasm"
+
+
+def test_build_realms_gos_artifacts_puts_ic_wasm_on_path(tmp_path: Path) -> None:
+    from gaas.source_build import build_realms_gos_artifacts
+
+    repo = tmp_path / "realms"
+    (repo / "src" / "realm_backend").mkdir(parents=True)
+    (repo / ".basilisk" / "realm_backend").mkdir(parents=True)
+    wasm = repo / ".basilisk" / "realm_backend" / "realm_backend.wasm.gz"
+    wasm.write_bytes(b"gz")
+    dest = tmp_path / "out"
+    fe = repo / "src" / "realm_frontend"
+    fe.mkdir(parents=True)
+    (fe / "dist").mkdir()
+    (fe / "dist" / "index.html").write_text("<html></html>")
+
+    captured: dict[str, str] = {}
+
+    def _run(cmd, **kwargs):
+        if any("build_base_wasm.py" in str(part) for part in cmd):
+            captured["PATH"] = (kwargs.get("env") or {}).get("PATH", "")
+        return MagicMock(returncode=0)
+
+    with patch("gaas.source_build.ensure_basilisk_python", return_value=tmp_path / "py"), patch(
+        "gaas.source_build.ensure_ic_wasm", return_value=tmp_path / "ic-wasm-bin"
+    ), patch("gaas.source_build.run_subprocess", side_effect=_run):
+        build_realms_gos_artifacts(repo, dest)
+
+    assert str(tmp_path / "ic-wasm-bin") in captured["PATH"]
+
+
 def test_resolve_gos_artifacts_main_build_wiring(tmp_path: Path) -> None:
     from gaas.source_build import resolve_gos_artifacts
 
@@ -32,7 +99,9 @@ def test_resolve_gos_artifacts_main_build_wiring(tmp_path: Path) -> None:
     backend.write_bytes(b"wasm")
     frontend.write_bytes(b"tar")
 
-    with patch("gaas.source_build.clone_repo") as clone_mock, patch(
+    with patch("gaas.source_build.resolve_realms_src", return_value=None), patch(
+        "gaas.source_build.clone_repo"
+    ) as clone_mock, patch(
         "gaas.source_build.build_realms_gos_artifacts",
         return_value=(backend, frontend),
     ) as build_mock:
@@ -205,7 +274,9 @@ def test_resolve_gos_artifacts_main_refreshes_existing_clone(tmp_path: Path) -> 
     backend.write_bytes(b"wasm")
     frontend.write_bytes(b"tar")
 
-    with patch("gaas.source_build.clone_repo") as clone_mock, patch(
+    with patch("gaas.source_build.resolve_realms_src", return_value=None), patch(
+        "gaas.source_build.clone_repo"
+    ) as clone_mock, patch(
         "gaas.source_build.build_realms_gos_artifacts",
         return_value=(backend, frontend),
     ):
@@ -227,13 +298,44 @@ def test_resolve_gos_artifacts_main_refreshes_existing_clone(tmp_path: Path) -> 
     )
 
 
+def test_resolve_gos_artifacts_main_prefers_sibling_realms(tmp_path: Path) -> None:
+    from gaas.source_build import resolve_gos_artifacts
+
+    backend = tmp_path / "realm_backend.wasm.gz"
+    frontend = tmp_path / "realm_frontend.tar.gz"
+    backend.write_bytes(b"wasm")
+    frontend.write_bytes(b"tar")
+    local = tmp_path / "local-realms"
+
+    with patch("gaas.source_build.resolve_realms_src", return_value=local), patch(
+        "gaas.source_build.clone_repo"
+    ) as clone_mock, patch(
+        "gaas.source_build.build_realms_gos_artifacts",
+        return_value=(backend, frontend),
+    ) as build_mock:
+        resolve_gos_artifacts(
+            implementation="realms-gos",
+            version="main",
+            release_repo="smart-social-contracts/realms",
+            backend_asset="realm_backend.wasm.gz",
+            frontend_asset="realm_frontend.tar.gz",
+            dest_dir=tmp_path / "artifacts",
+            clone_parent=tmp_path / "src-clone",
+        )
+
+    clone_mock.assert_not_called()
+    assert build_mock.call_args[0][0] == local
+
+
 def test_resolve_casals_wasm_main_clones_and_builds(tmp_path: Path) -> None:
     from gaas.platform import resolve_casals_wasm
 
     wasm_path = tmp_path / "casals_backend.wasm"
     wasm_path.write_bytes(b"wasm")
 
-    with patch("gaas.platform.clone_repo") as clone_mock, patch(
+    with patch("gaas.platform.resolve_casals_src", return_value=None), patch(
+        "gaas.platform.clone_repo"
+    ) as clone_mock, patch(
         "gaas.platform.build_casals_wasm", return_value=wasm_path
     ) as build_mock:
         clone_mock.return_value = tmp_path / "clone"
@@ -245,6 +347,29 @@ def test_resolve_casals_wasm_main_clones_and_builds(tmp_path: Path) -> None:
 
     clone_mock.assert_called_once()
     build_mock.assert_called_once()
+    assert result == wasm_path
+
+
+def test_resolve_casals_wasm_main_prefers_sibling(tmp_path: Path) -> None:
+    from gaas.platform import resolve_casals_wasm
+
+    wasm_path = tmp_path / "casals_backend.wasm"
+    wasm_path.write_bytes(b"wasm")
+    local = tmp_path / "local-casals"
+
+    with patch("gaas.platform.resolve_casals_src", return_value=local), patch(
+        "gaas.platform.clone_repo"
+    ) as clone_mock, patch(
+        "gaas.platform.build_casals_wasm", return_value=wasm_path
+    ) as build_mock:
+        result = resolve_casals_wasm(
+            "main",
+            "smart-social-contracts/Casals",
+            tmp_path / "casals",
+        )
+
+    clone_mock.assert_not_called()
+    build_mock.assert_called_once_with(local, tmp_path / "casals")
     assert result == wasm_path
 
 

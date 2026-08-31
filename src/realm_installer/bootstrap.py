@@ -144,6 +144,46 @@ def enter_setup_args(manifest: dict, backend_id: str) -> dict:
     }
 
 
+def bootstrap_json_error(raw) -> str:
+    """Return an error string when a (text) bootstrap call encoded failure.
+
+    Inter-canister ``call_raw`` success is not enough: Realms ``enter_setup``
+    and ``set_canister_config_json`` reply with JSON ``{"ok": false}`` /
+    ``{"success": false}`` instead of trapping. Treating that as completed
+    left a virgin realm (no creator) and then failed ``configure_canister_ids``.
+    """
+    payload = raw
+    if isinstance(payload, (bytes, bytearray)):
+        try:
+            payload = payload.decode("utf-8")
+        except UnicodeDecodeError:
+            return ""
+    if isinstance(payload, str):
+        text = payload.strip()
+        if text.startswith("(") and text.endswith(")"):
+            text = text[1:-1].strip().rstrip(",")
+        if text.startswith('"') and text.endswith('"'):
+            try:
+                import json as _json
+
+                text = _json.loads(text)
+            except Exception:
+                text = text[1:-1]
+        payload = text
+    if isinstance(payload, str):
+        try:
+            import json as _json
+
+            payload = _json.loads(payload)
+        except Exception:
+            return ""
+    if not isinstance(payload, dict):
+        return ""
+    if payload.get("ok") is False or payload.get("success") is False:
+        return str(payload.get("error") or payload.get("err") or payload)
+    return ""
+
+
 def build_enter_setup_candid(creator: str, registry_id: str, environment: str) -> str:
     """Candid for Realms/Chora ``enter_setup(principal, text, text)``."""
     def _text(value: str) -> str:

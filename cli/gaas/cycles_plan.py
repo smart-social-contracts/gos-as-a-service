@@ -22,13 +22,21 @@ from gaas.descriptor import Descriptor
 from gaas.known import KNOWN_CANISTER_NAMES, PLATFORM_CANISTER_NAMES
 
 # Wallet pays dfx canister create (ledger fee) plus initial --with-cycles funding.
+# --with-cycles must cover freeze threshold + first memory grow after the ledger
+# takes the create fee from the attached amount. 0.5T fails on IC mainnet
+# ("insufficient cycles … cannot grow memory by 12288 bytes").
 WALLET_CREATE_CYCLES: int = 100_000_000_000  # 0.1T — IC canister creation fee
-WALLET_INITIAL_FUNDING: int = 500_000_000_000  # 0.5T — headroom for first install per canister
+# 0.75T attached leaves ~0.25T after the ~0.5T create tax — too little for a
+# Basilisk install (IC0207, ~93B short). 1.25T attached leaves ~0.75T.
+WALLET_INITIAL_FUNDING: int = 1_250_000_000_000
 
 # Conductor realm-provisioning budget (observed on test.gos.earth: ~2T/create_canister).
 REALM_OPS_MARGIN_CYCLES: int = 1_000_000_000_000  # 1T — wasm pulls, bundle upload, inter-canister calls
 REALMS_PER_DEPLOY_ASSUMPTION: int = 2  # price conductor for a couple of realm deployments
 REALM_CANISTERS_PER_DEPLOY: int = 3  # backend + frontend + baton
+# Seed uploads (GOS wasm + 3 codices + ~36 extensions) burn ~1.4 TC off
+# file_registry. Price create/adopt so the installer 2 TC floor survives seed.
+FILE_REGISTRY_SEED_BUDGET: int = 2_000_000_000_000
 
 ICP_TO_CYCLES: int = 1_000_000_000_000  # ~1 ICP ≈ 1T cycles for convert remediation
 
@@ -85,10 +93,37 @@ def _casals_backend_required(descriptor: Descriptor) -> int:
     return threshold + realm_budget + multisig_extra
 
 
-def _canister_headroom(name: str, descriptor: Descriptor) -> int:
+def casals_provision_floor(descriptor: Descriptor) -> int:
+    """Raw Casals balance so installer spendable covers one realm.
+
+    The installer checks ``spendable = balance - treasury_reserve``. Reserve
+    equals ``threshold_tc``. One realm is three creates (backend, frontend,
+    baton) plus the ops margin — the same math as
+    ``_realm_provisioning_budget``. Seed + autopilot often move the
+    create-time treasury onto children; callers refill to this floor so
+    ``realms new`` does not stop for a manual top-up.
+    """
+    threshold = _threshold_cycles(descriptor)
+    return threshold + _realm_provisioning_budget(threshold)
+
+
+def canister_headroom(name: str, descriptor: Descriptor) -> int:
     if name == "casals_backend":
         return _casals_backend_required(descriptor)
+    if name == "file_registry":
+        return _threshold_cycles(descriptor) + FILE_REGISTRY_SEED_BUDGET
     return _threshold_cycles(descriptor)
+
+
+def _canister_headroom(name: str, descriptor: Descriptor) -> int:
+    return canister_headroom(name, descriptor)
+
+
+def create_attach_cycles(name: str, descriptor: Descriptor) -> int:
+    """Cycles attached at ``dfx canister create`` time on IC mainnet."""
+    if name in ("casals_backend", "file_registry"):
+        return max(WALLET_INITIAL_FUNDING, canister_headroom(name, descriptor))
+    return WALLET_INITIAL_FUNDING
 
 
 def _wallet_required_per_canister() -> int:
@@ -143,6 +178,13 @@ def build_cycles_plan(
     for name in PLATFORM_CANISTER_NAMES:
         if name not in descriptor.canisters:
             wallet_required += _wallet_required_per_canister()
+            # Create attach for Casals / file_registry is the headroom, not
+            # the 1.25T default. Price the extra so preflight matches create.
+            extra = max(
+                0,
+                create_attach_cycles(name, descriptor) - WALLET_INITIAL_FUNDING,
+            )
+            wallet_required += extra
 
     if wallet_balance is None and network == "ic":
         try:
@@ -150,15 +192,7 @@ def build_cycles_plan(
         except dfx.DfxError:
             wallet_balance = None
 
-    plan.items.append(
-        CyclesLineItem(
-            label="wallet",
-            canister_id=None,
-            required=wallet_required,
-            available=wallet_balance,
-        )
-    )
-
+    adopted: list[CyclesLineItem] = []
     for name in KNOWN_CANISTER_NAMES:
         canister_id = descriptor.canisters.get(name)
         if not canister_id:
@@ -172,7 +206,7 @@ def build_cycles_plan(
                 )
             except dfx.DfxError:
                 available = None
-        plan.items.append(
+        adopted.append(
             CyclesLineItem(
                 label=name,
                 canister_id=canister_id,
@@ -180,6 +214,32 @@ def build_cycles_plan(
                 available=available,
             )
         )
+
+    topup = sum(item.shortfall for item in adopted)
+    wallet_required += topup
+    wallet_item = CyclesLineItem(
+        label="wallet",
+        canister_id=None,
+        required=wallet_required,
+        available=wallet_balance,
+    )
+    plan.items.append(wallet_item)
+
+    # When the wallet can fund adopted-canister top-ups, do not fail preflight
+    # on those rows — create/adopt will top them up from the wallet.
+    cover_adopted = wallet_item.shortfall == 0
+    for item in adopted:
+        if cover_adopted and item.shortfall > 0:
+            plan.items.append(
+                CyclesLineItem(
+                    label=item.label,
+                    canister_id=item.canister_id,
+                    required=item.required,
+                    available=item.required,
+                )
+            )
+        else:
+            plan.items.append(item)
 
     for item in plan.items:
         if item.shortfall <= 0:

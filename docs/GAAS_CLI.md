@@ -108,7 +108,7 @@ This **first phase**:
 
 1. Drain-destroys every orchestra/registry/platform canister except DNS-mapped frontends
 2. Converts leftover ICP in the Casals treasury
-3. Evacuates cycles to your **cycles wallet** (not the frontends — asset canisters cannot fund creates). If `dfx identity get-wallet` is unset, gaas creates a temporary holding canister from the cycles ledger (1T; IC create fee is 0.5T), evacuates onto it, then deletes that canister so the cycles refund to the identity's cycles ledger (the account `create --no-wallet` spends from). Set `GAAS_CYCLES_HOLDING=<canister-id>` to reuse a leftover holding canister after a failed destroy instead of paying the create fee again. If Casals is frozen (`IC0207`), gaas tops it up from the cycles ledger and retries the destroy call once. The last evacuate chunk keeps a 500B reserve so the conductor stays above freeze (a 100B reserve can `IC0504` mid-transfer).
+3. Evacuates cycles to your **cycles wallet** (not the DNS-mapped frontends — those cannot fund creates). If `dfx identity get-wallet` is unset, gaas creates a temporary holding canister from the cycles ledger (1T; IC create fee is 0.5T), evacuates onto it, then deletes that canister so the cycles refund to the identity's cycles ledger (the account `create --no-wallet` spends from). When the ledger is empty (typical after a successful prior `gaas new`), creating that holding fails; gaas then evacuates onto a doomed non-DNS sibling (`casals_frontend` first) and refund-deletes it after the conductor is gone. Set `GAAS_CYCLES_HOLDING=<canister-id>` to reuse a leftover holding canister after a failed destroy instead of paying the create fee again. A persisted holding that is already `IC0301` is dropped and a new one is minted — evacuating onto a dead principal reports a deposit without moving treasury cycles. If an evacuate call reports `deposited > 0` but the treasury does not drop, destroy aborts instead of looping. If Casals is frozen (`IC0207`), gaas tops it up from the cycles ledger and retries the destroy call once. The last evacuate chunk keeps a 500B reserve so the conductor stays above freeze (a 100B reserve can `IC0504` mid-transfer).
 4. Dust-deletes the Casals conductor when balance ≤ 500B cycles
 5. Clears destroyed IDs from the descriptor (DNS-mapped frontend IDs kept)
 
@@ -257,12 +257,18 @@ Unified cycle threshold for all platform canisters. When omitted, defaults to **
 | Field | Required | Default | Description |
 |---|---|---|---|
 | `threshold_tc` | no | `2` | Minimum/top-up threshold in teracycles (TC) for every platform canister. GaaS writes this into Casals via `set_settings` (`default_min_cycles`, `default_topup_cycles`, `treasury_reserve`, `create_cycles`) and into the realm installer via `configure` (`cycle_threshold_cycles`). |
+| `pull_from` | no | `[]` | Sibling env names or descriptor paths. On `gaas new`, if the deploy ledger is short, pull the shortfall plus 1 TC overhead (holding create tax) from those Casals treasuries. |
+| `pull_leave_tc` | no | `40` | Preferred TC to leave on each source treasury when pulling. If the wallet is still short (typical after a from-scratch recreate), `gaas new` may pull further down to an 8 TC hard floor so leftover plus holding-create tax does not fail the run. After seed, a later phase refills Casals to one-realm spendable (reserve + 7 TC) and file_registry to the 2 TC installer floor. Dest-Casals surplus moves onto children first; leftover sibling pulls deposit onto the short canister (no holding mint). |
+
+The deploy identity's cycles ledger is the ops pool. A new Casals conductor is funded to the treasury budget (threshold + assumed realm provisions, ~16 TC at the default 2 TC threshold), not the 1.25 TC create attach. `gaas cycles status DESCRIPTOR` and `gaas cycles pull SOURCE.json --amount 25t --leave-tc 40` are the same path used by `gaas new`.
 
 Example:
 
 ```json
 "cycles": {
-  "threshold_tc": 2
+  "threshold_tc": 2,
+  "pull_from": ["staging", "test"],
+  "pull_leave_tc": 40
 }
 ```
 
@@ -393,7 +399,7 @@ Default wallet estimate per missing canister: **0.6 TC** (0.1T creation + 0.5T i
 | **dfx identity** | Named identity with controller access to target canisters. Create with `dfx identity new <name>`. |
 | **Cycles (IC mainnet)** | Preflight estimates wallet + canister requirements from the descriptor. Check balance: `dfx cycles balance --network ic`. Top up via the [cycles ledger](https://internetcomputer.org/docs/current/developer-docs/setup/cycles/cycles-wallet) or IC faucet for test principals. |
 | **Local replica** | For `--network local`: `dfx start --background` before deploy. Preflight runs `dfx ping local`. |
-| **Node.js / npm** | Required for the registry frontend build during the install-frontends phase. |
+| **Node.js / npm** | Required for the registry frontend build during the install-frontends phase. Source-build (`gos.version: main`) also needs ``ic-wasm``; `gaas` installs `@icp-sdk/ic-wasm` into `~/.local` when it is missing. |
 | **Casals checkout (fallback)** | If Casals release artifacts are unavailable, gaas may fall back to a local Casals repo checkout. Keep a clone of [smart-social-contracts/Casals](https://github.com/smart-social-contracts/Casals) handy. |
 
 Validate a descriptor without deploying:

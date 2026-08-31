@@ -12,6 +12,12 @@ from rich.syntax import Syntax
 from rich.table import Table
 
 from gaas import dfx
+from gaas.cycles_ops import (
+    format_cycles,
+    parse_cycles_amount,
+    pull_from_casals_treasury,
+)
+from gaas.cycles_plan import build_cycles_plan, print_cycles_plan
 from gaas.descriptor import Descriptor
 from gaas.destroy import destroy_via_casals
 from gaas.dns import render_dns_records
@@ -402,6 +408,87 @@ def dns_records_command(
     """Print DNS records required for the environment domain."""
     desc = Descriptor.load(descriptor)
     _print_dns_table(desc)
+
+
+cycles_app = typer.Typer(
+    name="cycles",
+    help="Ops-pool cycles: ledger + Casals treasury status and pull",
+    no_args_is_help=True,
+)
+app.add_typer(cycles_app, name="cycles")
+
+
+@cycles_app.command("status")
+def cycles_status_command(
+    descriptor: Path = typer.Argument(..., help="Descriptor JSON path"),
+    identity: str = typer.Option("deployer", "--identity", help="dfx / icp identity"),
+    network: str = typer.Option("ic", "--network", help="Target network: ic or local"),
+) -> None:
+    """Show the identity cycles ledger and descriptor canister balances."""
+    desc = Descriptor.load(descriptor)
+    plan = build_cycles_plan(desc, network, identity=identity)
+    print_cycles_plan(plan, console)
+    try:
+        wallet = dfx.cycles_balance(network, identity=identity)
+        console.print(f"Ledger: {format_cycles(wallet)}")
+    except dfx.DfxError as exc:
+        console.print(f"[yellow]Ledger: unread ({exc})[/yellow]")
+
+
+@cycles_app.command("pull")
+def cycles_pull_command(
+    source: Path = typer.Argument(..., help="Source environment descriptor (e.g. staging.json)"),
+    identity: str = typer.Option(..., "--identity", help="dfx / icp identity"),
+    network: str = typer.Option("ic", "--network", help="Target network: ic or local"),
+    amount: str = typer.Option(
+        "25t",
+        "--amount",
+        help="Cycles to move (25t or a raw count). Capped so the source keeps --leave-tc.",
+    ),
+    leave_tc: float = typer.Option(
+        40.0,
+        "--leave-tc",
+        help="Minimum teracycles to leave on the source Casals treasury",
+    ),
+) -> None:
+    """Move surplus cycles from a Casals treasury onto the identity cycles ledger."""
+    if network not in {"ic", "local"}:
+        console.print("[red]--network must be 'ic' or 'local'[/red]")
+        raise typer.Exit(code=1)
+    try:
+        wanted = parse_cycles_amount(amount)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    if leave_tc < 0:
+        console.print("[red]--leave-tc must be >= 0[/red]")
+        raise typer.Exit(code=1)
+
+    desc = Descriptor.load(source)
+    casals_id = (desc.canisters.get("casals_backend") or "").strip()
+    if not casals_id:
+        console.print("[red]source descriptor has no casals_backend[/red]")
+        raise typer.Exit(code=1)
+    leave = int(leave_tc * 1_000_000_000_000)
+    try:
+        moved = pull_from_casals_treasury(
+            casals_id,
+            wanted,
+            leave=leave,
+            network=network,
+            identity=identity,
+        )
+    except RuntimeError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    console.print(
+        f"Pulled {format_cycles(moved)} from {desc.name} ({casals_id}) "
+        f"onto the cycles ledger (leave {leave_tc:g} TC)"
+    )
+    if moved <= 0:
+        console.print(
+            "[yellow]Nothing moved — source is already at the leave floor.[/yellow]"
+        )
 
 
 @app.command("status")

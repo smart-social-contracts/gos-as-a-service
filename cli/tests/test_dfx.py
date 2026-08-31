@@ -322,6 +322,64 @@ def test_parse_candid_string_preserves_json_escaped_backslash_before_n():
     assert json.loads(decoded) == {"path": "C:\\new", "quote": 'say "hi"'}
 
 
+def test_create_canister_retries_after_stale_already_created(tmp_path, monkeypatch) -> None:
+    from gaas import dfx
+
+    dead = "ag7nn-xyaaa-aaaas-qgy6q-cai"
+    live = "yhw3g-fyaaa-aaaas-qgorq-cai"
+    calls = {"create": 0}
+
+    def fake_run(args, **kwargs):
+        if args[:3] == ["dfx", "canister", "--network"] and "create" in args:
+            calls["create"] += 1
+            if calls["create"] == 1:
+                return type(
+                    "R",
+                    (),
+                    {
+                        "returncode": 0,
+                        "stdout": (
+                            f"realm_registry_backend canister was already created "
+                            f"on network ic and has canister id: {dead}\n"
+                        ),
+                        "stderr": "",
+                    },
+                )()
+            return type(
+                "R",
+                (),
+                {
+                    "returncode": 0,
+                    "stdout": (
+                        f"realm_registry_backend canister created on network ic "
+                        f"with canister id: {live}\n"
+                    ),
+                    "stderr": "",
+                },
+            )()
+        raise AssertionError(f"unexpected dfx args: {args}")
+
+    def fake_status(canister_id, network, identity=None):
+        raise DfxError(
+            f"Canister {canister_id} not found IC0301",
+            command=["dfx", "canister", "status", canister_id],
+            stderr="IC0301",
+        )
+
+    forgotten: list[set[str]] = []
+
+    monkeypatch.setattr(dfx, "_run", fake_run)
+    monkeypatch.setattr(dfx, "canister_status", fake_status)
+    monkeypatch.setattr(
+        "gaas.canister_ids_sync.forget_canister_ids",
+        lambda root, ids: forgotten.append(set(ids)),
+    )
+
+    assert dfx.create_canister("realm_registry_backend", "ic", identity="deployer") == live
+    assert calls["create"] == 2
+    assert forgotten == [{dead}]
+
+
 def test_parse_candid_string_plain_json_roundtrip():
     import json
 

@@ -64,6 +64,12 @@ CANISTER_DELETE_FORBIDDEN = (
 )
 
 
+def is_insufficient_cycles_error(exc: BaseException) -> bool:
+    """True when dfx refused a create because the cycles ledger is empty."""
+    text = f"{exc} {getattr(exc, 'stderr', '')}".lower()
+    return "insufficient cycles balance" in text or "out of cycles" in text
+
+
 def reject_canister_delete(args: list[str]) -> None:
     """Refuse raw `dfx canister delete` — it burns leftover cycles."""
     for index, arg in enumerate(args):
@@ -385,7 +391,21 @@ def create_canister(
     if with_cycles is not None:
         args.extend(["--with-cycles", str(with_cycles)])
     result = _run(args, check=True, cwd=cwd)
-    return _parse_created_canister_id(result)
+    canister_id = _parse_created_canister_id(result)
+    if "already created" in (result.stdout + result.stderr).lower():
+        try:
+            canister_status(canister_id, network, identity=identity)
+        except DfxError as exc:
+            if is_canister_not_found_error(exc):
+                from gaas.canister_ids_sync import forget_canister_ids
+
+                root = Path(cwd) if cwd else Path.cwd()
+                forget_canister_ids(root, {canister_id})
+                result = _run(args, check=True, cwd=cwd)
+                canister_id = _parse_created_canister_id(result)
+            else:
+                raise
+    return canister_id
 
 
 def create_canister_via_ledger(

@@ -72,9 +72,18 @@ def resolve_casals_src(explicit: Path | None = None) -> Path | None:
         path = Path(env).resolve()
         if (path / "src" / "main.py").is_file():
             return path
-    sibling = Path("/srv/dev/Casals")
-    if (sibling / "src" / "main.py").is_file():
-        return sibling
+    candidates = [
+        Path("/srv/dev/Casals"),
+        Path.cwd() / "Casals",
+        Path.cwd().parent / "Casals",
+    ]
+    for parent in Path(__file__).resolve().parents:
+        candidates.append(parent / "Casals")
+    for sibling in candidates:
+        if (sibling / "src" / "main.py").is_file() and (
+            sibling / "casals_backend.did"
+        ).is_file():
+            return sibling
     return None
 
 
@@ -101,13 +110,26 @@ def _basilisk_python(casals_root: Path) -> Path:
     return py
 
 
+def _casals_sources_newer_than(casals_root: Path, artifact: Path) -> bool:
+    if not artifact.is_file():
+        return True
+    artifact_mtime = artifact.stat().st_mtime
+    src_root = casals_root / "src"
+    if not src_root.is_dir():
+        return False
+    for path in src_root.rglob("*.py"):
+        if path.stat().st_mtime > artifact_mtime:
+            return True
+    return False
+
+
 def build_casals_wasm(casals_root: Path, dest: Path) -> Path:
     dest.mkdir(parents=True, exist_ok=True)
     output = dest / "casals_backend.wasm"
-    if output.is_file():
-        return output
     built = casals_root / ".basilisk" / "casals_backend" / "casals_backend.wasm"
-    if built.is_file():
+    if output.is_file() and not _casals_sources_newer_than(casals_root, output):
+        return output
+    if built.is_file() and not _casals_sources_newer_than(casals_root, built):
         shutil.copy2(built, output)
         return output
     py = _basilisk_python(casals_root)

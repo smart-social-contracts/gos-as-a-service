@@ -46,6 +46,18 @@ from gaas.file_registry_client import (
     sha256_file,
 )
 from gaas.gaas_env import frontend_ic_origin, remove_gaas_env, write_gaas_env
+from gaas.cycles_ops import (
+    ensure_canister_has,
+    ensure_wallet_cycles,
+    format_cycles,
+    refill_children_from_casals,
+)
+from gaas.cycles_plan import (
+    WALLET_INITIAL_FUNDING,
+    canister_headroom,
+    casals_provision_floor,
+    create_attach_cycles,
+)
 from gaas.known import (
     ADOPT_ONLY_CANISTER_NAMES,
     DEFAULT_CANISTER_COUNT,
@@ -343,12 +355,49 @@ def phase_destroy_except_frontend(descriptor: Descriptor, ctx: DeployContext) ->
         identity=ctx.identity,
     )
     ctx.cycles_evacuated = int(result.get("cycles_evacuated") or 0)
+    if result.get("conductor_already_gone"):
+        console.print(
+            "  Casals conductor already gone (IC0301 or unset) — "
+            "cleared ghost IDs, kept DNS-mapped frontends"
+        )
+    elif result.get("conductor_uninstalled"):
+        n = len(result.get("destroyed") or [])
+        console.print(
+            f"  Casals conductor had no WASM — refund-deleted {n} unfinished "
+            "canisters to the cycles ledger, kept DNS-mapped frontends"
+        )
     console.print(
         f"  Cycles reclaimed: {int(result['cycles_reclaimed']):,}; "
         f"evacuated to wallet: {ctx.cycles_evacuated:,}"
     )
     console.print(f"  Preserved frontends: {', '.join(result['preserved_frontend_ids'])}")
     _save_descriptor(descriptor, ctx)
+
+
+def phase_ensure_cycles(descriptor: Descriptor, ctx: DeployContext) -> None:
+    """If the ledger is short, pull the shortfall from ``cycles.pull_from``."""
+    if ctx.network != "ic" or not descriptor.cycles.pull_from:
+        return
+    result = ensure_wallet_cycles(
+        descriptor,
+        network=ctx.network,
+        identity=ctx.identity,
+        descriptor_path=ctx.descriptor_path,
+    )
+    pulled = int(result.get("pulled") or 0)
+    if pulled:
+        dip_note = " (incl. hard leave-floor pull)" if result.get("dipped") else ""
+        console.print(
+            f"  pulled {format_cycles(pulled)} from "
+            f"{', '.join(descriptor.cycles.pull_from)} onto the cycles ledger"
+            f"{dip_note}"
+        )
+    leftover = int(result.get("shortfall") or 0)
+    if leftover > 0:
+        console.print(
+            f"  [yellow]wallet still short {format_cycles(leftover)} "
+            "after pull; preflight will fail if convert/top-up is needed[/yellow]"
+        )
 
 
 def phase_validate(descriptor: Descriptor, ctx: DeployContext) -> None:
@@ -372,7 +421,7 @@ def phase_validate(descriptor: Descriptor, ctx: DeployContext) -> None:
 def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
     dfx.use_identity(ctx.identity)
     principal = dfx.get_principal(ctx.identity)
-    cycles = DEFAULT_CYCLES_PER_CANISTER if ctx.network == "ic" else None
+    default_attach = WALLET_INITIAL_FUNDING if ctx.network == "ic" else None
 
     installer_id = descriptor.canisters.get("realm_installer", "")
     if installer_id and (
@@ -394,19 +443,38 @@ def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
                     f"identity {principal!r} is not a controller of adopted canister "
                     f"{name} ({existing_id}); controllers: {', '.join(controllers)}"
                 )
+            if default_attach and ctx.network == "ic":
+                balance = dfx.parse_canister_cycles_balance(status.raw)
+                needed = canister_headroom(name, descriptor)
+                if balance is not None and balance < needed:
+                    topup = needed - balance
+                    dfx.top_up_canister(
+                        existing_id,
+                        topup,
+                        ctx.network,
+                        identity=ctx.identity,
+                    )
+                    console.print(
+                        f"  {name}: adopt {existing_id} ({status.status}); "
+                        f"topped up {topup:,} cycles"
+                    )
+                    continue
             console.print(f"  {name}: adopt {existing_id} ({status.status})")
             continue
 
         if name in ADOPT_ONLY_CANISTER_NAMES:
             continue
 
+        attach = (
+            create_attach_cycles(name, descriptor) if ctx.network == "ic" else None
+        )
         dfx_name = DFX_CANISTER_NAMES.get(name)
         if dfx_name:
             canister_id = dfx.create_canister(
                 dfx_name,
                 ctx.network,
                 identity=ctx.identity,
-                with_cycles=cycles,
+                with_cycles=attach,
             )
         else:
             canister_id = dfx.create_canister_via_ledger(
@@ -414,10 +482,10 @@ def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
                 identity=ctx.identity,
                 controller=principal,
             )
-            if cycles and ctx.network == "ic":
+            if attach and ctx.network == "ic":
                 dfx.top_up_canister(
                     canister_id,
-                    cycles,
+                    attach,
                     ctx.network,
                     identity=ctx.identity,
                 )
@@ -461,6 +529,28 @@ def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
         except Exception as exc:
             console.print(
                 f"[yellow]  warning: get_cycles after treasury restore failed: {exc}[/yellow]"
+            )
+
+    if ctx.network == "ic" and casals_id:
+        try:
+            funded = dfx.canister_status(
+                casals_id, ctx.network, identity=ctx.identity
+            )
+            balance = dfx.parse_canister_cycles_balance(funded.raw)
+        except dfx.DfxError:
+            balance = None
+        needed = canister_headroom("casals_backend", descriptor)
+        if balance is not None and balance < needed:
+            topup = needed - balance
+            dfx.top_up_canister(
+                casals_id,
+                topup,
+                ctx.network,
+                identity=ctx.identity,
+            )
+            console.print(
+                f"  casals_backend: topped treasury to {needed:,} "
+                f"(+{topup:,} cycles)"
             )
 
 
@@ -1565,6 +1655,162 @@ def phase_prime_cycles_snapshot(descriptor: Descriptor, ctx: DeployContext) -> N
     )
 
 
+def provision_cycle_targets(
+    descriptor: Descriptor,
+) -> list[tuple[str, str, int]]:
+    """``(name, canister_id, required_raw_balance)`` for one realm provision."""
+    targets: list[tuple[str, str, int]] = []
+    casals_id = (descriptor.canisters.get("casals_backend") or "").strip()
+    if casals_id:
+        targets.append(
+            ("casals_backend", casals_id, casals_provision_floor(descriptor))
+        )
+    registry_id = (descriptor.canisters.get("file_registry") or "").strip()
+    if registry_id:
+        targets.append(
+            ("file_registry", registry_id, descriptor.threshold_cycles())
+        )
+    return targets
+
+
+def _provision_shortfalls(
+    descriptor: Descriptor, ctx: DeployContext
+) -> list[tuple[str, str, int, int]]:
+    """``(name, canister_id, needed, shortfall)`` below the installer floor."""
+    shortfalls: list[tuple[str, str, int, int]] = []
+    for name, canister_id, needed in provision_cycle_targets(descriptor):
+        try:
+            status = dfx.canister_status(
+                canister_id, ctx.network, identity=ctx.identity
+            )
+            balance = dfx.parse_canister_cycles_balance(status.raw)
+        except dfx.DfxError:
+            balance = None
+        if balance is None:
+            console.print(
+                f"  [yellow]warning: cannot read cycles on {name}; skipping[/yellow]"
+            )
+            continue
+        if balance < needed:
+            shortfalls.append((name, canister_id, needed, needed - balance))
+    return shortfalls
+
+
+def phase_ensure_provision_cycles(descriptor: Descriptor, ctx: DeployContext) -> None:
+    """Refill Casals + file_registry after seed so the installer can mint a realm.
+
+    Create-time funding prices the conductor for seed and two realm provisions.
+    Seed plus autopilot then move most of that float onto children, leaving
+    spendable below the installer's 7 TC check.
+
+    Never mint a cycles holding here (ledger is often empty after seed).
+    Order: dest-Casals surplus → children, then leftover wallet, then sibling
+    dest-pull onto each short canister.
+    """
+    if ctx.network != "ic":
+        return
+    if not provision_cycle_targets(descriptor):
+        return
+
+    shortfalls = _provision_shortfalls(descriptor, ctx)
+    if not shortfalls:
+        console.print("  provision cycles already at installer floor")
+        return
+
+    need = sum(item[3] for item in shortfalls)
+    console.print(
+        f"  seed left treasury short of one-realm provision; "
+        f"need {format_cycles(need)} more"
+    )
+
+    casals_id = (descriptor.canisters.get("casals_backend") or "").strip()
+    children = [
+        (name, cid, short)
+        for name, cid, _needed, short in shortfalls
+        if name != "casals_backend"
+    ]
+    if casals_id and children:
+        try:
+            status = dfx.canister_status(
+                casals_id, ctx.network, identity=ctx.identity
+            )
+            casals_bal = dfx.parse_canister_cycles_balance(status.raw)
+        except dfx.DfxError:
+            casals_bal = None
+        floor = casals_provision_floor(descriptor)
+        surplus = max(0, int(casals_bal or 0) - floor)
+        if surplus > 0:
+            moved = refill_children_from_casals(
+                casals_id,
+                children,
+                surplus=surplus,
+                network=ctx.network,
+                identity=ctx.identity,
+            )
+            for name, amount in moved:
+                console.print(
+                    f"  {name}: moved {format_cycles(amount)} from dest Casals "
+                    f"(above {format_cycles(floor)} floor)"
+                )
+
+    shortfalls = _provision_shortfalls(descriptor, ctx)
+    if not shortfalls:
+        return
+
+    try:
+        wallet = dfx.cycles_balance(ctx.network, identity=ctx.identity) or 0
+    except dfx.DfxError:
+        wallet = 0
+    for name, canister_id, needed, topup in shortfalls:
+        send = min(topup, int(wallet))
+        if send <= 0:
+            continue
+        dfx.top_up_canister(
+            canister_id, send, ctx.network, identity=ctx.identity
+        )
+        wallet -= send
+        console.print(
+            f"  {name}: topped {format_cycles(send)} from the cycles ledger "
+            f"toward {format_cycles(needed)}"
+        )
+
+    shortfalls = _provision_shortfalls(descriptor, ctx)
+    if not shortfalls:
+        return
+
+    if descriptor.cycles.pull_from:
+        for name, canister_id, needed, _topup in shortfalls:
+            pulled = ensure_canister_has(
+                descriptor,
+                canister_id,
+                required=needed,
+                network=ctx.network,
+                identity=ctx.identity,
+                descriptor_path=ctx.descriptor_path,
+            )
+            if pulled.get("pulled"):
+                dip_note = (
+                    " (incl. hard leave-floor pull)" if pulled.get("dipped") else ""
+                )
+                console.print(
+                    f"  {name}: pulled {format_cycles(int(pulled['pulled']))} "
+                    f"from {', '.join(descriptor.cycles.pull_from)} onto "
+                    f"{canister_id}{dip_note}"
+                )
+
+    still_short: list[str] = []
+    for name, canister_id, needed, topup in _provision_shortfalls(descriptor, ctx):
+        still_short.append(
+            f"{name} {canister_id} needs {format_cycles(topup)} more "
+            f"(floor {format_cycles(needed)})"
+        )
+    if still_short:
+        raise RuntimeError(
+            "orchestra not funded for the first realm after seed:\n  - "
+            + "\n  - ".join(still_short)
+        )
+
+
 def phase_configure_multisig(descriptor: Descriptor, ctx: DeployContext) -> None:
     """Mandatory governance step: configure the orchestra multisig as N-of-M.
 
@@ -1840,6 +2086,11 @@ PHASES: list[tuple[str, str, PhaseFunc]] = [
         "Destroying canisters except realm registry frontend",
         phase_destroy_except_frontend,
     ),
+    (
+        "ensure_cycles",
+        "Ensuring deploy wallet cycles (pull sibling treasuries if needed)",
+        phase_ensure_cycles,
+    ),
     ("validate", "Validating descriptor, identity, cycles", phase_validate),
     ("create_canisters", "Creating canisters", phase_create_canisters),
     ("install_backends", "Installing backends", phase_install_backends),
@@ -1855,6 +2106,11 @@ PHASES: list[tuple[str, str, PhaseFunc]] = [
         "prime_cycles_snapshot",
         "Priming conductor cycles snapshot",
         phase_prime_cycles_snapshot,
+    ),
+    (
+        "ensure_provision_cycles",
+        "Ensuring conductor cycles for the first realm",
+        phase_ensure_provision_cycles,
     ),
     ("configure_multisig", "Configuring multisig signers", phase_configure_multisig),
     ("install_frontends", "Building + installing frontends", phase_install_frontends),

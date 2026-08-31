@@ -16,14 +16,14 @@
   ],
   "canisters": {
     "realm_registry_frontend": "2zaor-5yaaa-aaaac-qbxaa-cai",
-    "casals_backend": "oia4k-baaaa-aaaae-ag3ha-cai",
-    "casals_frontend": "opb26-myaaa-aaaae-ag3hq-cai",
-    "casals_file_registry": "ms4uw-7qaaa-aaaae-ag3ia-cai",
-    "file_registry": "mv5sc-siaaa-aaaae-ag3iq-cai",
-    "file_registry_frontend": "m46z6-eaaaa-aaaae-ag3ja-cai",
-    "marketplace_backend": "m377k-jyaaa-aaaae-ag3jq-cai",
-    "realm_registry_backend": "rhw4p-gqaaa-aaaac-qbw7q-cai",
-    "realm_installer": "moqmm-caaaa-aaaah-qu27q-cai"
+    "realm_registry_backend": "oyw7h-qyaaa-aaaas-qgz4q-cai",
+    "realm_installer": "orvu3-gqaaa-aaaas-qgz5a-cai",
+    "casals_backend": "owusp-liaaa-aaaas-qgz5q-cai",
+    "casals_frontend": "odtdc-kaaaa-aaaas-qgz6a-cai",
+    "casals_file_registry": "oesfw-hyaaa-aaaas-qgz6q-cai",
+    "file_registry": "onrok-rqaaa-aaaas-qgz7a-cai",
+    "file_registry_frontend": "okqi6-4iaaa-aaaas-qgz7q-cai",
+    "marketplace_backend": "zq4lx-haaaa-aaaas-qg2aa-cai"
   },
   "casals": {
     "version": "main",
@@ -33,7 +33,6 @@
     ]
   },
   "multisig": {
-    "backend_id": "nnuhb-4iaaa-aaaae-ag3mq-cai",
     "signers": [
       "3itd6-2sx7g-vefdk-xhebm-fucot-llay5-lhqd6-pkjac-m7mkf-vhwqq-fqe"
     ],
@@ -52,7 +51,12 @@
     "can_test_mode": true
   },
   "cycles": {
-    "threshold_tc": 2.0
+    "threshold_tc": 2.0,
+    "pull_from": [
+      "staging",
+      "test"
+    ],
+    "pull_leave_tc": 40.0
   },
   "dns": {
     "provider": "manual"

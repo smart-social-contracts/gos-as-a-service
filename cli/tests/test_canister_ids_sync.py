@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from gaas.canister_ids_sync import persist_descriptor_canister_ids
+from gaas.canister_ids_sync import forget_canister_ids, persist_descriptor_canister_ids
 from gaas.descriptor import Descriptor
 from tests.conftest import SAMPLE_DESCRIPTOR
 
@@ -114,3 +114,39 @@ def test_persist_local_does_not_write_dfx_remote_id(tmp_path: Path) -> None:
     remote_ids = dfx["canisters"]["realm_registry_backend"]["remote"]["id"]
     assert "local" not in remote_ids
     assert remote_ids["staging"] == "snqhl-daaaa-aaaan-q6n3q-cai"
+
+
+def test_forget_canister_ids_drops_dead_ic_and_demo_mappings(tmp_path: Path) -> None:
+    dead = "ag7nn-xyaaa-aaaas-qgy6q-cai"
+    (tmp_path / "canister_ids.json").write_text(
+        json.dumps(
+            {
+                "realm_registry_backend": {"demo": dead, "ic": dead},
+                "realm_registry_frontend": {"demo": "2zaor-5yaaa-aaaac-qbxaa-cai"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "dfx.json").write_text(
+        json.dumps(
+            {
+                "canisters": {
+                    "realm_registry_backend": {
+                        "remote": {"id": {"demo": dead, "ic": dead, "test": "keep-me"}}
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    forget_canister_ids(tmp_path, {dead})
+
+    ids = json.loads((tmp_path / "canister_ids.json").read_text(encoding="utf-8"))
+    assert "realm_registry_backend" not in ids
+    assert ids["realm_registry_frontend"]["demo"] == "2zaor-5yaaa-aaaac-qbxaa-cai"
+    dfx = json.loads((tmp_path / "dfx.json").read_text(encoding="utf-8"))
+    remote = dfx["canisters"]["realm_registry_backend"]["remote"]["id"]
+    assert "demo" not in remote
+    assert "ic" not in remote
+    assert remote["test"] == "keep-me"

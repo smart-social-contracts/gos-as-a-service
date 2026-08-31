@@ -87,3 +87,52 @@ def persist_descriptor_canister_ids(repo_root: Path, descriptor: Any) -> Path:
                 _write_json(dfx_path, dfx_data)
 
     return ids_path
+
+
+def forget_canister_ids(repo_root: Path, canister_ids: set[str]) -> Path:
+    """Drop destroyed IDs from ``canister_ids.json`` and ``dfx.json`` remotes.
+
+    After ``gaas new --destroy-except-…`` the descriptor is cleared but a stale
+    ``canister_ids.json`` / ``dfx.json`` ``ic`` mapping makes ``dfx create``
+    reuse an IC0301 principal.
+    """
+    root = Path(repo_root)
+    dead = {cid.strip() for cid in canister_ids if (cid or "").strip()}
+    ids_path = root / "canister_ids.json"
+    if dead:
+        ids_data = _read_json(ids_path)
+        changed = False
+        for name, entry in list(ids_data.items()):
+            if not isinstance(entry, dict):
+                continue
+            for net, cid in list(entry.items()):
+                if str(cid).strip() in dead:
+                    del entry[net]
+                    changed = True
+            if not entry:
+                del ids_data[name]
+                changed = True
+        if changed:
+            _write_json(ids_path, ids_data)
+
+        dfx_path = root / "dfx.json"
+        dfx_data = _read_json(dfx_path)
+        dfx_canisters = dfx_data.get("canisters")
+        if isinstance(dfx_canisters, dict):
+            dfx_changed = False
+            for spec in dfx_canisters.values():
+                if not isinstance(spec, dict):
+                    continue
+                remote = spec.get("remote")
+                if not isinstance(remote, dict):
+                    continue
+                remote_ids = remote.get("id")
+                if not isinstance(remote_ids, dict):
+                    continue
+                for net, cid in list(remote_ids.items()):
+                    if str(cid).strip() in dead:
+                        del remote_ids[net]
+                        dfx_changed = True
+            if dfx_changed:
+                _write_json(dfx_path, dfx_data)
+    return ids_path

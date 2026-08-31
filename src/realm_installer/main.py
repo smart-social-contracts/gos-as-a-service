@@ -61,6 +61,7 @@ from claim_args import build_claim_slug_args
 from stand_create_args import build_stand_create_args, casals_placement_from_cfg
 from manifest_access import can_view_deployment_manifest
 from bootstrap import (
+    bootstrap_json_error,
     configure_canister_ids_args,
     configure_canister_ids_payload,
     deploy_step_kinds,
@@ -1281,9 +1282,14 @@ def _execute_configure_canister_ids(task, step, args):
         raw = unwrap_call_result(config_result)
         parsed = json.loads(raw) if isinstance(raw, str) else raw
     except Exception:
+        raw = None
         parsed = None
-    if isinstance(parsed, dict) and parsed.get("success") is False:
-        step.error = (parsed.get("error") or "set_canister_config_json failed")[:1990]
+    json_err = bootstrap_json_error(raw if raw is not None else parsed)
+    if json_err or (isinstance(parsed, dict) and parsed.get("success") is False):
+        step.error = (
+            f"set_canister_config_json failed: "
+            f"{json_err or parsed.get('error') or 'set_canister_config_json failed'}"
+        )[:1990]
         step.status = "failed"
         jlog(task.name).error(f"step {step.idx} configure_canister_ids failed: {step.error}")
         step.completed_at = now_s()
@@ -1351,6 +1357,10 @@ def _execute_enter_setup(task, step, args):
         raw = unwrap_call_result(setup_result)
         if isinstance(raw, (bytes, bytearray)):
             raw = ic.candid_decode(raw)
+        json_err = bootstrap_json_error(raw)
+        if json_err:
+            _record_enter_setup_failure(task, step, json_err)
+            return
         if isinstance(raw, dict):
             err = raw.get("err")
             if err is None and raw.get("Err") is not None:

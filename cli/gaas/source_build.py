@@ -162,19 +162,55 @@ def build_monad_gos_artifacts(repo_root: Path, dest_dir: Path) -> tuple[Path, Pa
     return backend_out, frontend_out
 
 
+def ensure_ic_wasm(prefix: Path | None = None) -> Path:
+    """Return the directory containing ``ic-wasm``, installing it if needed.
+
+    Realms ``scripts/build_base_wasm.py`` embeds ``candid:service`` via
+    ``ic-wasm``. CI installs ``@icp-sdk/ic-wasm`` globally; operator hosts and
+    Cloud VMs often do not, and a source-build ``gaas new`` then dies mid-seed.
+    Install into ``~/.local`` (not the system npm prefix) so it works without
+    root.
+    """
+    found = shutil.which("ic-wasm")
+    if found:
+        return Path(found).resolve().parent
+    prefix = Path(prefix) if prefix is not None else Path.home() / ".local"
+    bin_dir = prefix / "bin"
+    local_bin = bin_dir / "ic-wasm"
+    npm_bin = prefix / "lib" / "node_modules" / ".bin" / "ic-wasm"
+    if local_bin.is_file():
+        return bin_dir
+    if npm_bin.is_file():
+        return npm_bin.parent
+    prefix.mkdir(parents=True, exist_ok=True)
+    run_subprocess(
+        ["npm", "install", "-g", "--prefix", str(prefix), "@icp-sdk/ic-wasm"],
+        check=True,
+    )
+    if local_bin.is_file():
+        return bin_dir
+    if npm_bin.is_file():
+        return npm_bin.parent
+    raise SourceBuildError(
+        "ic-wasm install did not produce a binary under "
+        f"{bin_dir} or {npm_bin.parent} — install @icp-sdk/ic-wasm"
+    )
+
+
 def build_realms_gos_artifacts(repo_root: Path, dest_dir: Path) -> tuple[Path, Path]:
     """Build Realms GOS release assets mirroring ``release.yml``."""
     py = ensure_basilisk_python(repo_root)
-    path_prefix = str(Path.home() / ".local" / "bin")
+    ic_wasm_bin = ensure_ic_wasm()
+    path_parts = [str(ic_wasm_bin), str(Path.home() / ".local" / "bin")]
     existing_path = os.environ.get("PATH", "")
+    if existing_path:
+        path_parts.append(existing_path)
     env = {
         **os.environ,
         "CANISTER_CANDID_PATH": str(
             repo_root / "src" / "realm_backend" / "realm_backend.did"
         ),
-        "PATH": (
-            f"{path_prefix}:{existing_path}" if existing_path else path_prefix
-        ),
+        "PATH": os.pathsep.join(path_parts),
     }
     run_subprocess(
         [str(py), "scripts/build_base_wasm.py", "--gzip"],
@@ -247,6 +283,35 @@ def build_casals_release_artifacts(
     return backend_out, frontend_out
 
 
+def resolve_realms_src() -> Path | None:
+    """Prefer a local Realms checkout over cloning GitHub HEAD for ``main``.
+
+    ``gaas new`` with ``gos.version=main`` must seed the WASM from the
+    workspace operator is iterating, otherwise recreate-from-scratch keeps
+    installing a stale GitHub ``main`` that cannot first-boot a new installer.
+    """
+    env = (os.environ.get("REALMS_SRC") or "").strip()
+    if env:
+        path = Path(env).expanduser().resolve()
+        if (path / "src" / "realm_backend" / "main.py").is_file():
+            return path
+    candidates = [
+        Path.cwd() / "realms",
+        Path.cwd().parent / "realms",
+    ]
+    for parent in Path(__file__).resolve().parents:
+        candidates.append(parent / "realms")
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        if (candidate / "src" / "realm_backend" / "main.py").is_file():
+            return candidate.resolve()
+    return None
+
+
 def resolve_gos_artifacts(
     *,
     implementation: str,
@@ -266,7 +331,10 @@ def resolve_gos_artifacts(
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     if resolved.source_build:
-        repo_root = clone_repo(
+        local_realms = (
+            resolve_realms_src() if implementation == "realms-gos" else None
+        )
+        repo_root = local_realms or clone_repo(
             release_repo, clone_parent, refresh=resolved.source_build
         )
         if implementation == "realms-gos":

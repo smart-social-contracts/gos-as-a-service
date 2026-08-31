@@ -54,6 +54,20 @@ export const idlFactory = ({ IDL }) => {
     'Ok' : IDL.Vec(CreditTransactionRecord),
     'Err' : IDL.Text,
   });
+  const Header = IDL.Tuple(IDL.Text, IDL.Text);
+  const HttpRequest = IDL.Record({
+    'url' : IDL.Text,
+    'method' : IDL.Text,
+    'body' : IDL.Vec(IDL.Nat8),
+    'headers' : IDL.Vec(Header),
+  });
+  const HttpResponseIncoming = IDL.Record({
+    'body' : IDL.Vec(IDL.Nat8),
+    'headers' : IDL.Vec(Header),
+    'upgrade' : IDL.Opt(IDL.Bool),
+    'streaming_strategy' : IDL.Opt(IDL.Text),
+    'status_code' : IDL.Nat16,
+  });
   const AddRealmResult = IDL.Variant({ 'Ok' : IDL.Text, 'Err' : IDL.Text });
   const StatusRecord = IDL.Record({
     'python_version' : IDL.Text,
@@ -69,7 +83,9 @@ export const idlFactory = ({ IDL }) => {
     'Err' : IDL.Text,
   });
   return IDL.Service({
+    '__browse__' : IDL.Func([IDL.Text], [IDL.Text], ['query']),
     '__get_candid_interface_tmp_hack' : IDL.Func([], [IDL.Text], ['query']),
+    '__shell__' : IDL.Func([IDL.Text], [IDL.Text], []),
     'add_credits' : IDL.Func(
         [IDL.Text, IDL.Nat64, IDL.Text, IDL.Text],
         [AddCreditsResult],
@@ -116,6 +132,8 @@ export const idlFactory = ({ IDL }) => {
         [TransactionHistoryResult],
         ['query'],
       ),
+    'http_request' : IDL.Func([HttpRequest], [HttpResponseIncoming], ['query']),
+    'http_request_update' : IDL.Func([HttpRequest], [HttpResponseIncoming], []),
     'is_principal_activated' : IDL.Func([IDL.Text], [GenericResult], ['query']),
     'list_activated_principals' : IDL.Func([], [IDL.Text], ['query']),
     'list_invitation_codes' : IDL.Func([], [IDL.Text], ['query']),
