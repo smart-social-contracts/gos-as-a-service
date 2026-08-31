@@ -19,12 +19,7 @@ from gaas.cycles_ops import (
     refill_children_from_casals,
     resolve_pull_source_paths,
 )
-from gaas.cycles_plan import (
-    FILE_REGISTRY_SEED_BUDGET,
-    WALLET_CREATE_CYCLES,
-    WALLET_INITIAL_FUNDING,
-    create_attach_cycles,
-)
+from gaas.cycles_plan import WALLET_CREATE_CYCLES, WALLET_INITIAL_FUNDING, create_attach_cycles
 from gaas.descriptor import CyclesConfig, Descriptor
 from tests.conftest import SAMPLE_DESCRIPTOR, VALID_CANISTER_ID
 
@@ -46,9 +41,7 @@ def test_parse_cycles_amount() -> None:
 
 def test_create_attach_casals_is_treasury_budget() -> None:
     desc = _descriptor(canisters={})
-    assert create_attach_cycles("file_registry", desc) == (
-        desc.threshold_cycles() + FILE_REGISTRY_SEED_BUDGET
-    )
+    assert create_attach_cycles("file_registry", desc) == WALLET_INITIAL_FUNDING
     assert create_attach_cycles("casals_backend", desc) > WALLET_INITIAL_FUNDING
     assert create_attach_cycles("casals_backend", desc) >= 16_000_000_000_000
 

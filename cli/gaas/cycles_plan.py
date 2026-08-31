@@ -34,9 +34,11 @@ WALLET_INITIAL_FUNDING: int = 1_250_000_000_000
 REALM_OPS_MARGIN_CYCLES: int = 1_000_000_000_000  # 1T — wasm pulls, bundle upload, inter-canister calls
 REALMS_PER_DEPLOY_ASSUMPTION: int = 2  # price conductor for a couple of realm deployments
 REALM_CANISTERS_PER_DEPLOY: int = 3  # backend + frontend + baton
-# Seed uploads (GOS wasm + 3 codices + ~36 extensions) burn ~1.4 TC off
-# file_registry. Price create/adopt so the installer 2 TC floor survives seed.
-FILE_REGISTRY_SEED_BUDGET: int = 2_000_000_000_000
+# Seed burns ~1.4 TC off file_registry. Do not price that into create attach —
+# it over-asks the wallet after a from-scratch evacuate and sibling pull
+# already hit the 8 TC hard leave floor. Post-seed
+# ``phase_ensure_provision_cycles`` moves dest-Casals surplus (or sibling
+# dest-pull) onto file_registry so the installer 2 TC floor is restored.
 
 ICP_TO_CYCLES: int = 1_000_000_000_000  # ~1 ICP ≈ 1T cycles for convert remediation
 
@@ -110,8 +112,6 @@ def casals_provision_floor(descriptor: Descriptor) -> int:
 def canister_headroom(name: str, descriptor: Descriptor) -> int:
     if name == "casals_backend":
         return _casals_backend_required(descriptor)
-    if name == "file_registry":
-        return _threshold_cycles(descriptor) + FILE_REGISTRY_SEED_BUDGET
     return _threshold_cycles(descriptor)
 
 
@@ -121,7 +121,7 @@ def _canister_headroom(name: str, descriptor: Descriptor) -> int:
 
 def create_attach_cycles(name: str, descriptor: Descriptor) -> int:
     """Cycles attached at ``dfx canister create`` time on IC mainnet."""
-    if name in ("casals_backend", "file_registry"):
+    if name == "casals_backend":
         return max(WALLET_INITIAL_FUNDING, canister_headroom(name, descriptor))
     return WALLET_INITIAL_FUNDING
 

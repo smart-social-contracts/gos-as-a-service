@@ -9,7 +9,6 @@ import pytest
 from rich.console import Console
 
 from gaas.cycles_plan import (
-    FILE_REGISTRY_SEED_BUDGET,
     REALM_OPS_MARGIN_CYCLES,
     REALMS_PER_DEPLOY_ASSUMPTION,
     WALLET_CREATE_CYCLES,
@@ -59,9 +58,8 @@ def test_wallet_required_all_canisters_missing() -> None:
             0, create_attach_cycles(name, desc) - WALLET_INITIAL_FUNDING
         )
     assert wallet.required == per * len(PLATFORM_CANISTER_NAMES) + extra
-    assert extra == (
-        max(0, _casals_backend_required(desc) - WALLET_INITIAL_FUNDING)
-        + max(0, FILE_REGISTRY_SEED_BUDGET + DEFAULT_THRESHOLD - WALLET_INITIAL_FUNDING)
+    assert extra == max(
+        0, _casals_backend_required(desc) - WALLET_INITIAL_FUNDING
     )
     assert len(plan.items) == 1
 
@@ -76,7 +74,7 @@ def test_wallet_required_partial_create_mix() -> None:
         "ic",
         wallet_balance=5_000_000_000_000,
         canister_balances={
-            "file_registry": DEFAULT_THRESHOLD + FILE_REGISTRY_SEED_BUDGET,
+            "file_registry": DEFAULT_THRESHOLD,
             "casals_backend": _casals_backend_required(
                 _descriptor(
                     canisters=canisters,
@@ -132,7 +130,7 @@ def test_canister_headrooms_and_multisig_extra() -> None:
     frontend = next(
         item for item in plan_no_multisig.items if item.label == "casals_frontend"
     )
-    assert file_reg.required == threshold + FILE_REGISTRY_SEED_BUDGET
+    assert file_reg.required == threshold
     assert installer.required == threshold
     assert frontend.required == threshold
 
@@ -146,7 +144,7 @@ def test_descriptor_threshold_tc_overrides_default_headroom() -> None:
         canister_balances={"file_registry": 0},
     )
     file_reg = next(item for item in plan.items if item.label == "file_registry")
-    assert file_reg.required == 3_000_000_000_000 + FILE_REGISTRY_SEED_BUDGET
+    assert file_reg.required == 3_000_000_000_000
 
 
 def test_conductor_includes_realm_provisioning_budget() -> None:
@@ -207,9 +205,7 @@ def test_shortfall_detection_wallet_and_canister() -> None:
     wallet = next(item for item in plan.items if item.label == "wallet")
     file_reg = next(item for item in plan.items if item.label == "file_registry")
     assert wallet.shortfall > 0
-    assert file_reg.shortfall == (
-        DEFAULT_THRESHOLD + FILE_REGISTRY_SEED_BUDGET - 100_000_000_000
-    )
+    assert file_reg.shortfall == DEFAULT_THRESHOLD - 100_000_000_000
 
 
 def test_remediation_commands() -> None:
