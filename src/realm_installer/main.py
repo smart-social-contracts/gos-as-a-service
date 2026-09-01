@@ -70,6 +70,7 @@ from bootstrap import (
     resolve_founder,
     manifest_has_codex_block,
     needs_enter_setup_step,
+    realm_backend_install_arg,
     resync_extension_frontends_args,
     resolve_legacy_install_lists,
     has_extension_installs,
@@ -3198,6 +3199,7 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
     if want_backend and not backend_id:
         backend_id = yield from _casals_create_or_reuse_canister(
             casals, job_id, stand, f"{stand}-backend", "backend", backend_wasm_key,
+            install_arg=realm_backend_install_arg(str(ic.id())),
         )
         job.backend_canister_id = backend_id
         job.wasm_verified = 1

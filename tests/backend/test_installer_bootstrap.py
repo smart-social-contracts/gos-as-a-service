@@ -17,6 +17,7 @@ from bootstrap import (  # noqa: E402
     gos_implementation,
     manifest_has_codex_block,
     needs_enter_setup_step,
+    realm_backend_install_arg,
     resolve_legacy_install_lists,
     resync_extension_frontends_args,
     uses_monad_gos_bootstrap,
@@ -341,3 +342,16 @@ def test_blank_gos_implementation_gets_enter_setup_and_realms_bootstrap():
         "configure_canister_ids",
         "grant_frontend_access",
     ]
+
+
+def test_realm_backend_install_arg_is_opt_text_tuple():
+    installer = "lusjm-wqaaa-aaaau-ago7q-cai"
+    assert realm_backend_install_arg(installer) == f'(opt "{installer}")'
+
+
+def test_realm_backend_install_arg_rejects_empty():
+    try:
+        realm_backend_install_arg("  ")
+    except ValueError:
+        return
+    raise AssertionError("expected ValueError")
