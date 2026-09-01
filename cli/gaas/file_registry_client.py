@@ -9,8 +9,10 @@ import os
 import tarfile
 import tempfile
 from pathlib import Path
+from typing import Callable
 
 from gaas import dfx
+from gaas.progress import ByteProgress
 
 CHUNK_SIZE = 64 * 1024
 FINALIZE_BATCH = 8
@@ -146,9 +148,15 @@ def upload_file(
     *,
     identity: str | None = None,
     existing_hashes: dict[str, str] | None = None,
+    on_bytes: Callable[[int], None] | None = None,
 ) -> str:
     """Return uploaded, skipped, or failed."""
     size = local_path.stat().st_size
+
+    def _note(n: int) -> None:
+        if on_bytes is not None and n:
+            on_bytes(n)
+
     if size == 0:
         # Frontend tarballs often include empty placeholders; they were never
         # stored, but treating them as a hard failure aborts the whole seed.
@@ -156,6 +164,7 @@ def upload_file(
 
     if existing_hashes and registry_path in existing_hashes:
         if existing_hashes[registry_path] == sha256_file(local_path):
+            _note(size)
             return "skipped"
         delete_file(registry_id, namespace, registry_path, network, identity=identity)
     total_chunks = max(1, (size + CHUNK_SIZE - 1) // CHUNK_SIZE)
@@ -185,6 +194,7 @@ def upload_file(
             result = json.loads(raw)
             if not (isinstance(result, dict) and result.get("ok") is True):
                 return "failed"
+            _note(len(blob))
 
     local_sha = sha256_file(local_path)
     while True:
@@ -252,6 +262,16 @@ def extract_frontend_tar(tar_path: Path, dest: Path) -> Path:
     return dest
 
 
+def _directory_files(dist_dir: Path) -> list[tuple[str, Path]]:
+    items: list[tuple[str, Path]] = []
+    for root, _dirs, files in os.walk(dist_dir):
+        for fname in sorted(files):
+            local = Path(root) / fname
+            rel = local.relative_to(dist_dir).as_posix()
+            items.append((rel, local))
+    return items
+
+
 def upload_directory(
     registry_id: str,
     namespace: str,
@@ -260,26 +280,33 @@ def upload_directory(
     *,
     identity: str | None = None,
     existing_hashes: dict[str, str] | None = None,
+    progress_label: str | None = None,
 ) -> tuple[int, list[str]]:
     uploaded = 0
     failed_paths: list[str] = []
-    for root, _dirs, files in os.walk(dist_dir):
-        for fname in sorted(files):
-            local = Path(root) / fname
-            rel = local.relative_to(dist_dir).as_posix()
-            result = upload_file(
-                registry_id,
-                namespace,
-                rel,
-                local,
-                network,
-                identity=identity,
-                existing_hashes=existing_hashes,
-            )
-            if result == "failed":
-                failed_paths.append(rel)
-            elif result == "uploaded":
-                uploaded += 1
+    files = _directory_files(dist_dir)
+    total = sum(local.stat().st_size for _rel, local in files)
+    progress = (
+        ByteProgress(progress_label, total) if progress_label is not None else None
+    )
+    on_bytes = progress.add if progress is not None else None
+    for rel, local in files:
+        result = upload_file(
+            registry_id,
+            namespace,
+            rel,
+            local,
+            network,
+            identity=identity,
+            existing_hashes=existing_hashes,
+            on_bytes=on_bytes,
+        )
+        if result == "failed":
+            failed_paths.append(rel)
+        elif result == "uploaded":
+            uploaded += 1
+    if progress is not None:
+        progress.finish()
     return uploaded, failed_paths
 
 
@@ -304,6 +331,10 @@ def seed_gos_entry(
 ) -> None:
     backend_hashes = fetch_namespace_hashes(registry_id, backend_ns, network, identity=identity)
     backend_path = backend_asset_path.name
+    backend_progress = ByteProgress(
+        f"uploading {backend_ns}/{backend_path}",
+        backend_asset_path.stat().st_size,
+    )
     if upload_file(
         registry_id,
         backend_ns,
@@ -312,8 +343,10 @@ def seed_gos_entry(
         network,
         identity=identity,
         existing_hashes=backend_hashes,
+        on_bytes=backend_progress.add,
     ) == "failed":
         raise RuntimeError(f"failed uploading {backend_ns}/{backend_path}")
+    backend_progress.finish()
 
     if frontend_source.is_file() and frontend_source.name.endswith(".tar.gz"):
         with tempfile.TemporaryDirectory(prefix="gaas-fe-") as tmp:
@@ -328,6 +361,7 @@ def seed_gos_entry(
                 network,
                 identity=identity,
                 existing_hashes=frontend_hashes,
+                progress_label=f"uploading {frontend_ns}",
             )
             _raise_frontend_upload_failures(frontend_ns, failed_paths)
     else:
@@ -341,6 +375,7 @@ def seed_gos_entry(
             network,
             identity=identity,
             existing_hashes=frontend_hashes,
+            progress_label=f"uploading {frontend_ns}",
         )
         _raise_frontend_upload_failures(frontend_ns, failed_paths)
 

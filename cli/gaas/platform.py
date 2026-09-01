@@ -61,10 +61,14 @@ def find_gos_repo_root(start: Path | None = None) -> Path:
     )
 
 
+def _is_casals_checkout(path: Path) -> bool:
+    return (path / "src" / "main.py").is_file() and (path / "casals_backend.did").is_file()
+
+
 def resolve_casals_src(explicit: Path | None = None) -> Path | None:
     if explicit is not None:
         path = explicit.resolve()
-        if (path / "src" / "main.py").is_file() and (path / "casals_backend.did").is_file():
+        if _is_casals_checkout(path):
             return path
         raise PlatformError(f"--casals-src {path} is not a Casals checkout")
     env = os.environ.get("CASALS_SRC", "").strip()
@@ -72,9 +76,30 @@ def resolve_casals_src(explicit: Path | None = None) -> Path | None:
         path = Path(env).resolve()
         if (path / "src" / "main.py").is_file():
             return path
-    sibling = Path("/srv/dev/Casals")
-    if (sibling / "src" / "main.py").is_file():
-        return sibling
+    candidates: list[Path] = [Path("/srv/dev/Casals")]
+    cwd = Path.cwd().resolve()
+    for base in (cwd, *cwd.parents):
+        candidates.extend([base / "casals", base / "Casals"])
+    try:
+        gos_root = find_gos_repo_root(cwd)
+        candidates.extend(
+            [
+                gos_root.parent / "casals",
+                gos_root.parent / "Casals",
+                gos_root / "casals",
+                gos_root / "Casals",
+            ]
+        )
+    except PlatformError:
+        pass
+    seen: set[Path] = set()
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        if _is_casals_checkout(resolved):
+            return resolved
     return None
 
 

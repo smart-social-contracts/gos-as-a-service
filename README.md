@@ -92,9 +92,7 @@ dfx deploy realm_registry_backend realm_installer
 
 # Frontend
 npm install
-dfx generate realm_registry_backend
-dfx generate realm_installer
-npm run build --workspace=realm_registry_frontend
+npm run build --workspace=src/realm_registry_frontend
 dfx deploy realm_registry_frontend
 ```
 

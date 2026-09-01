@@ -4,9 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "setup": "npm i && dfx canister create realm_registry_backend && dfx generate realm_registry_backend && dfx deploy",
+    "setup": "npm i",
     "start": "vite --port 3000",
-    "prebuild": "cd ../.. && dfx generate realm_registry_backend && dfx generate realm_installer",
     "build": "vite build",
     "postbuild": "node scripts/write-version-file.js",
     "test": "npm run test:unit",

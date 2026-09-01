@@ -229,9 +229,17 @@ class MultisigConfig(BaseModel):
 
 
 class CyclesConfig(BaseModel):
-    """Unified cycle threshold (TC) for all platform canisters."""
+    """Cycle policy for platform canisters.
+
+    ``threshold_tc`` is the running-canister autopilot floor (min/top-up /
+    treasury reserve). ``create_tc`` is the birth endowment Casals attaches
+    when minting a canister. They must stay independent: a cheap running
+    floor (e.g. demo 0.5 TC) is not enough to install WASM under the replica's
+    30-day freeze.
+    """
 
     threshold_tc: float = 2
+    create_tc: float = 2
 
     @field_validator("threshold_tc")
     @classmethod
@@ -240,8 +248,20 @@ class CyclesConfig(BaseModel):
             raise ValueError("cycles.threshold_tc must be a positive number")
         return value
 
+    @field_validator("create_tc")
+    @classmethod
+    def validate_create_tc(cls, value: float) -> float:
+        if value < 2:
+            raise ValueError(
+                "cycles.create_tc must be >= 2 (Casals CREATE_CYCLES floor)"
+            )
+        return value
+
     def threshold_cycles(self) -> int:
         return int(self.threshold_tc * 1_000_000_000_000)
+
+    def create_cycles(self) -> int:
+        return int(self.create_tc * 1_000_000_000_000)
 
 
 class DnsConfig(BaseModel):
@@ -278,6 +298,10 @@ class Descriptor(BaseModel):
     flags: dict[str, bool] = Field(default_factory=dict)  # can_test_mode: skip billing credit checks
     cycles: CyclesConfig = Field(default_factory=CyclesConfig)
     dns: DnsConfig = Field(default_factory=DnsConfig)
+    # Reserved cycles holding canister for --destroy-except-frontend runs. The
+    # evacuated treasury lives here (not the shared ledger) so create/restore
+    # cannot double-spend it. Persisted so a re-run resumes without re-creating.
+    holding_canister_id: str | None = None
 
     @field_validator("name")
     @classmethod
@@ -378,6 +402,9 @@ class Descriptor(BaseModel):
 
     def threshold_cycles(self) -> int:
         return self.cycles.threshold_cycles()
+
+    def create_cycles(self) -> int:
+        return self.cycles.create_cycles()
 
     def set_multisig_backend_id(self, canister_id: str) -> None:
         if not CANISTER_ID_RE.match(canister_id):

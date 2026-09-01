@@ -34,11 +34,13 @@ def clone_repo(release_repo: str, dest_parent: Path, *, refresh: bool = False) -
                 ["git", "fetch", "origin", "main", "--depth", "1"],
                 cwd=dest,
                 check=True,
+                label=f"git fetch {release_repo}",
             )
             run_subprocess(
                 ["git", "checkout", "FETCH_HEAD"],
                 cwd=dest,
                 check=True,
+                label=f"git checkout {release_repo}",
             )
         return dest
     dest_parent.mkdir(parents=True, exist_ok=True)
@@ -52,6 +54,7 @@ def clone_repo(release_repo: str, dest_parent: Path, *, refresh: bool = False) -
             str(dest),
         ],
         check=True,
+        label=f"git clone {release_repo}",
     )
     return dest
 
@@ -73,6 +76,7 @@ def clone_repo_at_ref(release_repo: str, dest: Path, ref: str) -> Path:
             str(dest),
         ],
         check=True,
+        label=f"git clone {release_repo}@{ref}",
     )
     return dest
 
@@ -83,12 +87,13 @@ def ensure_basilisk_python(repo_root: Path) -> Path:
     py = venv / "bin" / "python"
     if py.is_file():
         return py
-    run_subprocess([sys.executable, "-m", "venv", str(venv)], check=True, cwd=repo_root)
+    run_subprocess([sys.executable, "-m", "venv", str(venv)], check=True, cwd=repo_root, label="create basilisk venv")
     pip = venv / "bin" / "pip"
-    run_subprocess([str(pip), "install", "-q", "--upgrade", "pip"], check=True)
+    run_subprocess([str(pip), "install", "-q", "--upgrade", "pip"], check=True, label="pip upgrade")
     run_subprocess(
         [str(pip), "install", "-q", *list(_BASILISK_REQUIREMENTS)],
         check=True,
+        label="pip install basilisk",
     )
     return py
 
@@ -143,13 +148,13 @@ def _find_monad_backend_wasm(repo_root: Path) -> Path:
 
 def build_monad_gos_artifacts(repo_root: Path, dest_dir: Path) -> tuple[Path, Path]:
     """Build Monad GOS release assets from an icp-cli checkout."""
-    run_subprocess(["icp", "build", "monad_backend"], cwd=repo_root, check=True)
+    run_subprocess(["icp", "build", "monad_backend"], cwd=repo_root, check=True, label="build monad_backend")
 
     backend_src = _find_monad_backend_wasm(repo_root)
 
     fe_dir = repo_root / "src" / "monad_frontend"
-    run_subprocess(["npm", "install"], cwd=fe_dir, check=True)
-    run_subprocess(["npm", "run", "build"], cwd=fe_dir, check=True)
+    run_subprocess(["npm", "install"], cwd=fe_dir, check=True, label="npm install (monad_frontend)")
+    run_subprocess(["npm", "run", "build"], cwd=fe_dir, check=True, label="build monad_frontend")
     dist = fe_dir / "dist"
     if not dist.is_dir() or not any(dist.iterdir()):
         raise SourceBuildError(f"Monad GOS frontend build did not produce {dist}")
@@ -181,6 +186,7 @@ def build_realms_gos_artifacts(repo_root: Path, dest_dir: Path) -> tuple[Path, P
         cwd=repo_root,
         env=env,
         check=True,
+        label="build realm_backend wasm",
     )
     backend_src = repo_root / ".basilisk" / "realm_backend" / "realm_backend.wasm.gz"
     if not backend_src.is_file():
@@ -200,6 +206,7 @@ def build_realms_gos_artifacts(repo_root: Path, dest_dir: Path) -> tuple[Path, P
         ["npm", "install", "--legacy-peer-deps"],
         cwd=repo_root,
         check=True,
+        label="npm install (realms workspace)",
     )
     # Workspace packages ship source only; realm_frontend imports
     # @realmsgos/extension-bridge which must be compiled (tsc) first.
@@ -207,8 +214,14 @@ def build_realms_gos_artifacts(repo_root: Path, dest_dir: Path) -> tuple[Path, P
         ["npm", "run", "build", "-w", "packages/extension-bridge", "--if-present"],
         cwd=repo_root,
         check=True,
+        label="build extension-bridge",
     )
-    run_subprocess(["npm", "run", "build"], cwd=fe_dir, check=True)
+    run_subprocess(
+        ["npm", "run", "build"],
+        cwd=fe_dir,
+        check=True,
+        label="build realm_frontend",
+    )
     dist = fe_dir / "dist"
     if not dist.is_dir() or not any(dist.iterdir()):
         raise SourceBuildError(f"Realms frontend build did not produce {dist}")

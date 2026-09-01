@@ -1,12 +1,13 @@
 """Cycles requirement estimation and balance verification for deploy preflight.
 
-The conductor (casals_backend) creates realm canisters at the descriptor cycle
-threshold each (its ``create_cycles`` setting) and pays for orchestration work
-(wasm pulls, bundle uploads, inter-canister calls). A single realm deployment
-creates backend + frontend + baton (3 canisters) plus ~1T ops margin. We price
-the conductor for ``REALMS_PER_DEPLOY_ASSUMPTION`` realm deployments on top of
-its treasury reserve (the same threshold). All platform canisters share one
-minimum headroom from ``descriptor.cycles.threshold_tc``.
+The conductor (casals_backend) creates realm canisters at the descriptor
+``create_tc`` endowment (Casals ``create_cycles``) and pays for orchestration
+work (wasm pulls, bundle uploads, inter-canister calls). A single realm
+deployment creates backend + frontend + baton (3 canisters) plus ~1T ops
+margin. We price the conductor for ``REALMS_PER_DEPLOY_ASSUMPTION`` realm
+deployments on top of its treasury reserve (``threshold_tc``). Running
+platform canisters share one minimum headroom from ``threshold_tc``.
+Birth endowment (``create_tc``, floor 2 TC) is independent of that floor.
 """
 
 from __future__ import annotations
@@ -31,6 +32,9 @@ REALMS_PER_DEPLOY_ASSUMPTION: int = 2  # price conductor for a couple of realm d
 REALM_CANISTERS_PER_DEPLOY: int = 3  # backend + frontend + baton
 
 ICP_TO_CYCLES: int = 1_000_000_000_000  # ~1 ICP ≈ 1T cycles for convert remediation
+# Extra cycles attached to every auto top-up so idle burn between status
+# and the next phase cannot fail preflight by a few million cycles.
+TOP_UP_BUFFER_CYCLES: int = 100_000_000_000  # 100B
 
 
 @dataclass(frozen=True)
@@ -65,14 +69,23 @@ class CyclesPlan:
         return 0
 
 
+CASALS_CREATE_CYCLES_FLOOR: int = 2_000_000_000_000  # Casals CREATE_CYCLES
+CASALS_FREEZE_HEADROOM: int = 500_000_000_000  # 500B above endow so freeze + install fit
+CASALS_OPERATING_MIN: int = CASALS_CREATE_CYCLES_FLOOR + CASALS_FREEZE_HEADROOM
+
+
 def _threshold_cycles(descriptor: Descriptor) -> int:
     return descriptor.threshold_cycles()
 
 
-def _realm_provisioning_budget(threshold_cycles: int) -> int:
+def _create_cycles(descriptor: Descriptor) -> int:
+    return descriptor.create_cycles()
+
+
+def _realm_provisioning_budget(create_cycles: int) -> int:
     """Cycles the conductor spends provisioning one realm (3 creates + ops)."""
     return (
-        REALM_CANISTERS_PER_DEPLOY * threshold_cycles
+        REALM_CANISTERS_PER_DEPLOY * create_cycles
         + REALM_OPS_MARGIN_CYCLES
     )
 
@@ -80,8 +93,9 @@ def _realm_provisioning_budget(threshold_cycles: int) -> int:
 def _casals_backend_required(descriptor: Descriptor) -> int:
     """Treasury reserve plus budget for assumed realm deployments."""
     threshold = _threshold_cycles(descriptor)
-    multisig_extra = 0 if descriptor.multisig.backend_id else threshold
-    realm_budget = REALMS_PER_DEPLOY_ASSUMPTION * _realm_provisioning_budget(threshold)
+    create = _create_cycles(descriptor)
+    multisig_extra = 0 if descriptor.multisig.backend_id else create
+    realm_budget = REALMS_PER_DEPLOY_ASSUMPTION * _realm_provisioning_budget(create)
     return threshold + realm_budget + multisig_extra
 
 
@@ -127,6 +141,13 @@ def remediation_canister_top_up(
     return f"dfx cycles top-up {canister_id} {shortfall_cycles} --network {network}"
 
 
+def topup_amount_with_buffer(shortfall_cycles: int) -> int:
+    """Cycles to send so the canister stays above required after idle burn."""
+    if shortfall_cycles <= 0:
+        return 0
+    return shortfall_cycles + TOP_UP_BUFFER_CYCLES
+
+
 def build_cycles_plan(
     descriptor: Descriptor,
     network: str,
@@ -139,16 +160,43 @@ def build_cycles_plan(
     plan = CyclesPlan(network=network)
     balances = canister_balances or {}
 
+    create = _create_cycles(descriptor)
+    if create < CASALS_CREATE_CYCLES_FLOOR:
+        plan.items.append(
+            CyclesLineItem(
+                label="create_tc (Casals birth endowment)",
+                canister_id=None,
+                required=CASALS_CREATE_CYCLES_FLOOR,
+                available=create,
+            )
+        )
+        plan.remediations.append(
+            "Set cycles.create_tc to at least 2 (Casals CREATE_CYCLES floor)"
+        )
+
     wallet_required = 0
     for name in PLATFORM_CANISTER_NAMES:
         if name not in descriptor.canisters:
             wallet_required += _wallet_required_per_canister()
+
+    holding_id = (descriptor.holding_canister_id or "").strip()
+    holding_balance: int | None = None
+    if holding_id and network == "ic":
+        try:
+            holding_balance = dfx.canister_cycles_balance(
+                holding_id, network, identity=identity
+            )
+        except dfx.DfxError:
+            holding_balance = None
 
     if wallet_balance is None and network == "ic":
         try:
             wallet_balance = dfx.cycles_balance(network, identity=identity)
         except dfx.DfxError:
             wallet_balance = None
+
+    if holding_balance is not None:
+        wallet_required = max(0, wallet_required - holding_balance)
 
     plan.items.append(
         CyclesLineItem(
@@ -158,6 +206,16 @@ def build_cycles_plan(
             available=wallet_balance,
         )
     )
+
+    if holding_id:
+        plan.items.append(
+            CyclesLineItem(
+                label="cycles holding (reserved)",
+                canister_id=holding_id,
+                required=0,
+                available=holding_balance,
+            )
+        )
 
     for name in KNOWN_CANISTER_NAMES:
         canister_id = descriptor.canisters.get(name)

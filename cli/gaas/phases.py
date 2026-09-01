@@ -25,7 +25,6 @@ from gaas.descriptor import CANISTER_ID_RE, Descriptor
 from gaas.destroy import destroy_except_frontend
 from gaas.dns import render_dns_records, wait_for_dns
 from gaas.domain_reg import attempt_domain_registration
-from gaas.codex_seed import seed_codex_catalog
 from gaas.conductor_seed import (
     authorize_gos_entry,
     configure_multisig_signers,
@@ -38,6 +37,7 @@ from gaas.conductor_seed import (
     _find_canister_id,
     _section_names,
 )
+from gaas.cycles_plan import _casals_backend_required
 from gaas.file_registry_client import (
     ensure_version_catalog_entry,
     fetch_namespace_hashes,
@@ -54,11 +54,7 @@ from gaas.known import (
     DEFAULT_PLATFORM_RELEASE_REPO,
     DFX_CANISTER_NAMES,
     KNOWN_CANISTER_NAMES,
-)
-from gaas.marketplace import (
-    build_marketplace_backend_wasm,
-    build_marketplace_frontend,
-    configure_marketplace_backend,
+    LEGACY_CANISTER_NAMES,
 )
 from gaas.namespace_approval_seed import seed_namespace_approvals
 from gaas.platform import (
@@ -72,10 +68,14 @@ from gaas.platform import (
     resolve_casals_wasm,
     resolve_platform_backend_wasm,
 )
-from gaas.canister_ids_sync import persist_descriptor_canister_ids
+from gaas.canister_ids_sync import (
+    forget_named_canister_ids,
+    persist_descriptor_canister_ids,
+)
 from gaas.canister_liveness import (
     CanisterNotFoundError,
     assert_casals_frontend_live,
+    assert_frontend_ic_env,
     assert_installer_live_for_network,
 )
 from gaas.preflight import PreflightReport, run_preflight
@@ -124,6 +124,7 @@ class DeployContext:
     keep_env_file: bool = False
     reinstall_backends: bool = False
     destroy_except_frontend: bool = False
+    output_file: Path | None = None
     cycles_evacuated: int = 0
     work_dir: Path | None = None
     http: requests.Session | None = None
@@ -144,6 +145,8 @@ def _work_dir(ctx: DeployContext) -> Path:
 def _save_descriptor(descriptor: Descriptor, ctx: DeployContext) -> None:
     if ctx.descriptor_path:
         descriptor.save(ctx.descriptor_path)
+    if ctx.output_file:
+        descriptor.save(ctx.output_file)
 
 
 def _normalize_version(version: str) -> str:
@@ -225,8 +228,6 @@ def _installer_config_json(descriptor: Descriptor) -> str:
     canisters = descriptor.canisters
     payload = {
         "registry_backend_id": canisters.get("realm_registry_backend", ""),
-        "file_registry_id": canisters.get("file_registry", ""),
-        "marketplace_id": canisters.get("marketplace_backend", ""),
         "casals_canister_id": canisters.get("casals_backend", ""),
         "casals_section": DEFAULT_CASALS_SECTION,
         "portal_url": _portal_url(descriptor),
@@ -241,6 +242,7 @@ def _installer_config_json(descriptor: Descriptor) -> str:
 def _casals_settings_json(descriptor: Descriptor, deployer_principal: str) -> str:
     canisters = descriptor.canisters
     threshold = descriptor.threshold_cycles()
+    create = descriptor.create_cycles()
     file_registry_id = (
         canisters.get("casals_file_registry") or canisters.get("file_registry", "")
     )
@@ -251,7 +253,7 @@ def _casals_settings_json(descriptor: Descriptor, deployer_principal: str) -> st
         "default_min_cycles": threshold,
         "default_topup_cycles": threshold,
         "treasury_reserve": threshold,
-        "create_cycles": threshold,
+        "create_cycles": create,
         "monitor_enabled": False,
     }
     file_registry_frontend_id = canisters.get("file_registry_frontend")
@@ -276,8 +278,6 @@ def _infra_canister_names() -> tuple[str, ...]:
         "realm_registry_backend",
         "realm_registry_frontend",
         "realm_installer",
-        "file_registry",
-        "file_registry_frontend",
     )
 
 
@@ -343,10 +343,17 @@ def phase_destroy_except_frontend(descriptor: Descriptor, ctx: DeployContext) ->
         identity=ctx.identity,
     )
     ctx.cycles_evacuated = int(result.get("cycles_evacuated") or 0)
-    console.print(
-        f"  Cycles reclaimed: {int(result['cycles_reclaimed']):,}; "
-        f"evacuated to wallet: {ctx.cycles_evacuated:,}"
-    )
+    holding = (descriptor.holding_canister_id or "").strip()
+    if holding:
+        console.print(
+            f"  Cycles reclaimed: {int(result['cycles_reclaimed']):,}; "
+            f"evacuated to holding {holding}: {ctx.cycles_evacuated:,}"
+        )
+    else:
+        console.print(
+            f"  Cycles reclaimed: {int(result['cycles_reclaimed']):,}; "
+            f"evacuated to wallet: {ctx.cycles_evacuated:,}"
+        )
     console.print(f"  Preserved frontends: {', '.join(result['preserved_frontend_ids'])}")
     _save_descriptor(descriptor, ctx)
 
@@ -369,8 +376,32 @@ def phase_validate(descriptor: Descriptor, ctx: DeployContext) -> None:
     print_log_path()
 
 
+def _release_holding_to_ledger_for_creates(
+    descriptor: Descriptor, ctx: DeployContext
+) -> None:
+    """Refund the destroy holding canister before ``dfx canister create``.
+
+    ``create --no-wallet --with-cycles`` spends the identity's cycles ledger,
+    not the holding canister. Evacuated treasury parked in holding would
+    otherwise leave create failing with "Insufficient cycles balance" while
+    preflight treats holding as covering the wallet line.
+    """
+    if ctx.network != "ic":
+        return
+    holding_id = (descriptor.holding_canister_id or "").strip()
+    if not holding_id:
+        return
+    dfx.refund_canister_to_ledger(holding_id, ctx.network, identity=ctx.identity)
+    descriptor.holding_canister_id = None
+    _save_descriptor(descriptor, ctx)
+    console.print(
+        f"  cycles holding {holding_id}: refunded to ledger for canister creates"
+    )
+
+
 def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
     dfx.use_identity(ctx.identity)
+    _release_holding_to_ledger_for_creates(descriptor, ctx)
     principal = dfx.get_principal(ctx.identity)
     cycles = DEFAULT_CYCLES_PER_CANISTER if ctx.network == "ic" else None
 
@@ -386,27 +417,47 @@ def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
 
     for name in KNOWN_CANISTER_NAMES:
         existing_id = descriptor.canisters.get(name)
-        if existing_id:
-            status = dfx.canister_status(existing_id, ctx.network, identity=ctx.identity)
-            controllers = status.controllers
-            if controllers and principal not in controllers:
-                raise RuntimeError(
-                    f"identity {principal!r} is not a controller of adopted canister "
-                    f"{name} ({existing_id}); controllers: {', '.join(controllers)}"
+        if name in LEGACY_CANISTER_NAMES:
+            if existing_id:
+                console.print(
+                    f"  skip {name}: leftover ID owned by `realms seed`, not `gaas new`"
                 )
-            console.print(f"  {name}: adopt {existing_id} ({status.status})")
             continue
+        if existing_id:
+            try:
+                status = dfx.canister_status(
+                    existing_id, ctx.network, identity=ctx.identity
+                )
+            except dfx.DfxError as exc:
+                if not dfx.is_canister_not_found_error(exc):
+                    raise
+                console.print(
+                    f"  {name}: {existing_id} not found; creating replacement"
+                )
+                descriptor.canisters.pop(name, None)
+                existing_id = None
+            else:
+                controllers = status.controllers
+                if controllers and principal not in controllers:
+                    raise RuntimeError(
+                        f"identity {principal!r} is not a controller of adopted canister "
+                        f"{name} ({existing_id}); controllers: {', '.join(controllers)}"
+                    )
+                console.print(f"  {name}: adopt {existing_id} ({status.status})")
+                continue
 
         if name in ADOPT_ONLY_CANISTER_NAMES:
             continue
 
         dfx_name = DFX_CANISTER_NAMES.get(name)
         if dfx_name:
-            canister_id = dfx.create_canister(
+            canister_id = _create_named_canister(
+                name,
                 dfx_name,
-                ctx.network,
-                identity=ctx.identity,
-                with_cycles=cycles,
+                descriptor,
+                ctx,
+                principal=principal,
+                cycles=cycles,
             )
         else:
             canister_id = dfx.create_canister_via_ledger(
@@ -438,30 +489,138 @@ def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
     _persist_and_guard_portal_frontends(descriptor, ctx, require_http=False)
 
     casals_id = (descriptor.canisters.get("casals_backend") or "").strip()
-    if ctx.cycles_evacuated > 0 and casals_id:
-        dfx.top_up_canister(
-            casals_id,
-            ctx.cycles_evacuated,
-            ctx.network,
-            identity=ctx.identity,
-        )
-        console.print(
-            f"  casals_backend: restored {ctx.cycles_evacuated:,} evacuated cycles"
-        )
-        try:
-            dfx.canister_call(
+    if casals_id and ctx.network == "ic":
+        holding_id = (descriptor.holding_canister_id or "").strip()
+        if holding_id:
+            balance = dfx.canister_cycles_balance(
+                casals_id, ctx.network, identity=ctx.identity
+            )
+            if balance is None:
+                raise RuntimeError(
+                    f"could not read casals_backend balance for {casals_id}"
+                )
+            if balance < _casals_backend_required(descriptor):
+                amount = _casals_backend_required(descriptor) - balance
+                dfx.transfer_cycles(
+                    holding_id,
+                    casals_id,
+                    amount,
+                    ctx.network,
+                    identity=ctx.identity,
+                )
+                console.print(
+                    f"  casals_backend: transferred {amount:,} cycles from holding "
+                    f"{holding_id} (need ≥ {_casals_backend_required(descriptor):,} "
+                    "for treasury + realm provisioning)"
+                )
+        else:
+            needed = _casals_backend_required(descriptor)
+            added = dfx.ensure_min_cycles(
                 casals_id,
-                "get_cycles",
-                "()",
+                needed,
                 ctx.network,
                 identity=ctx.identity,
-                query=False,
             )
-            console.print("  casals_backend: primed cycles snapshot (get_cycles)")
-        except Exception as exc:
-            console.print(
-                f"[yellow]  warning: get_cycles after treasury restore failed: {exc}[/yellow]"
+            if added:
+                console.print(
+                    f"  casals_backend: topped up {added:,} cycles "
+                    f"(need ≥ {needed:,} for treasury + realm provisioning)"
+                )
+            elif ctx.cycles_evacuated:
+                console.print(
+                    f"  casals_backend: already has ≥ {needed:,} cycles "
+                    "(evacuated treasury funded remint via the cycles ledger)"
+                )
+
+
+def _named_create_network_keys(descriptor: Descriptor, network: str) -> list[str]:
+    keys = [network]
+    env = (descriptor.name or "").strip()
+    if env and env not in keys:
+        keys.append(env)
+    return keys
+
+
+def _forget_stale_named_ids(
+    descriptor: Descriptor, ctx: DeployContext, dfx_name: str
+) -> None:
+    try:
+        repo = _find_repo_root(ctx)
+    except PlatformError:
+        return
+    forget_named_canister_ids(
+        repo, dfx_name, _named_create_network_keys(descriptor, ctx.network)
+    )
+
+
+def _canister_is_live(canister_id: str, ctx: DeployContext) -> bool:
+    try:
+        dfx.canister_status(canister_id, ctx.network, identity=ctx.identity)
+    except dfx.DfxError as exc:
+        if dfx.is_canister_not_found_error(exc):
+            return False
+        raise
+    return True
+
+
+def _create_named_canister(
+    name: str,
+    dfx_name: str,
+    descriptor: Descriptor,
+    ctx: DeployContext,
+    *,
+    principal: str,
+    cycles: int | None,
+) -> str:
+    """Mint a live named canister; never reuse a drained leftover ID.
+
+    ``dfx canister create <name>`` returns the principal already stored in
+    ``canister_ids.json`` / ``dfx.json`` even when that canister is IC0301.
+    Forget those keys first. If dfx still hands back a dead ID, mint via
+    the cycles ledger (IC) or retry named create (local).
+    """
+    try:
+        cwd: Path | None = _find_repo_root(ctx)
+    except PlatformError:
+        cwd = None
+    _forget_stale_named_ids(descriptor, ctx, dfx_name)
+    canister_id = dfx.create_canister(
+        dfx_name,
+        ctx.network,
+        identity=ctx.identity,
+        with_cycles=cycles,
+        cwd=cwd,
+    )
+    if _canister_is_live(canister_id, ctx):
+        return canister_id
+    console.print(
+        f"  {name}: dfx reused dead id {canister_id}; minting a replacement"
+    )
+    _forget_stale_named_ids(descriptor, ctx, dfx_name)
+    if ctx.network == "ic":
+        fresh = dfx.create_canister_via_ledger(
+            ctx.network,
+            identity=ctx.identity,
+            controller=principal,
+        )
+        if cycles:
+            dfx.top_up_canister(
+                fresh, cycles, ctx.network, identity=ctx.identity
             )
+    else:
+        fresh = dfx.create_canister(
+            dfx_name,
+            ctx.network,
+            identity=ctx.identity,
+            with_cycles=cycles,
+            cwd=cwd,
+        )
+    if not _canister_is_live(fresh, ctx):
+        raise RuntimeError(
+            f"refusing to use {name} {fresh}: create did not leave a "
+            f"live canister on {ctx.network}"
+        )
+    return fresh
 
 
 def _platform_release(descriptor: Descriptor) -> tuple[str | None, str]:
@@ -581,53 +740,14 @@ def phase_install_backends(descriptor: Descriptor, ctx: DeployContext) -> None:
 
     file_registry_id = descriptor.canisters.get("file_registry")
     if file_registry_id:
-        wasm = resolve_platform_backend_wasm(
-            "file_registry",
-            platform_version=platform_version,
-            release_repo=release_repo,
-            work_dir=work,
-            repo_root=repo_root,
-            session=ctx.http,
-        )
-        mode = _backend_install_mode(file_registry_id, ctx)
-        console.print(f"  file_registry: {mode} ({wasm.name})")
-        dfx.install_wasm(
-            file_registry_id,
-            str(wasm),
-            ctx.network,
-            mode,
-            "(null)",
-            identity=ctx.identity,
-            yes=True,
+        console.print(
+            "  skip file_registry: owned by `realms seed`, not `gaas new`"
         )
 
     marketplace_id = descriptor.canisters.get("marketplace_backend")
     if marketplace_id:
-        if repo_root is None:
-            try:
-                repo_root = _find_repo_root(ctx)
-            except PlatformError:
-                repo_root = work
-        wasm = build_marketplace_backend_wasm(
-            descriptor,
-            gos_repo_root=repo_root,
-            work_dir=work,
-        )
-        mode = _backend_install_mode(marketplace_id, ctx)
-        console.print(f"  marketplace_backend: {mode} ({wasm.name})")
-        dfx.install_wasm(
-            marketplace_id,
-            str(wasm),
-            ctx.network,
-            mode,
-            "(null)",
-            identity=ctx.identity,
-            yes=True,
-        )
-        configure_marketplace_backend(
-            descriptor,
-            network=ctx.network,
-            identity=ctx.identity,
+        console.print(
+            "  skip marketplace_backend: owned by `realms seed`, not `gaas new`"
         )
 
 
@@ -865,37 +985,11 @@ def phase_seed_file_registry(descriptor: Descriptor, ctx: DeployContext) -> None
                     f"  {entry.implementation}@{version_label}: already in version catalog"
                 )
 
-        catalog_key = (entry.release_repo, resolved.descriptor_version)
         catalog_spec = entry.resolved_catalog()
-        if realms_registry_id:
-            if catalog_spec is None:
-                console.print(
-                    f"  skip codex/extension catalog seed for {entry.implementation} "
-                    f"(no catalog declared)"
-                )
-            elif catalog_key not in seeded_catalog_sources:
-                seed_codex_catalog(
-                    realms_registry_id,
-                    entry.release_repo,
-                    entry.version,
-                    work,
-                    ctx.network,
-                    identity=ctx.identity,
-                    catalog=catalog_spec,
-                    existing_realms_checkout=existing_realms_checkout
-                    if existing_realms_checkout.is_dir()
-                    else None,
-                    session=ctx.http,
-                    marketplace_id=(
-                        descriptor.canisters.get("marketplace_backend") or ""
-                    ).strip()
-                    or None,
-                )
-                seeded_catalog_sources.add(catalog_key)
-        elif catalog_spec is not None:
+        if catalog_spec is not None:
             console.print(
                 f"  skip codex/extension catalog seed for {entry.implementation} "
-                f"(file_registry absent)"
+                "(owned by `realms seed`, not `gaas new`)"
             )
 
 
@@ -931,6 +1025,45 @@ def phase_seed_namespace_approvals(descriptor: Descriptor, ctx: DeployContext) -
 
 def _is_interactive(ctx: DeployContext) -> bool:
     return not ctx.yes and sys.stdin.isatty()
+
+
+def _set_frontend_ic_env(
+    canister_id: str,
+    descriptor: Descriptor,
+    ctx: DeployContext,
+    *,
+    label: str,
+) -> None:
+    """Set PUBLIC_CANISTER_ID env vars *before* an asset sync.
+
+    Certified-assets builds ``ic_env`` from canister environment variables, not
+    from ``.ic-assets.json5``. ``dfx deploy`` never injects those vars, so a
+    kept frontend keeps a stale backend principal in the cookie until this
+    runs and the WASM recertifies on deploy.
+    """
+    env_vars = dfx.public_canister_id_env_vars(descriptor.canisters)
+    if not env_vars:
+        return
+    console.print(f"  {label}: set PUBLIC_CANISTER_ID env vars for ic_env cookie")
+    dfx.set_canister_environment_variables(
+        canister_id,
+        env_vars,
+        ctx.network,
+        identity=ctx.identity,
+    )
+
+
+def _verify_frontend_ic_env(
+    canister_id: str,
+    required: dict[str, str],
+    ctx: DeployContext,
+    *,
+    label: str,
+) -> None:
+    if ctx.network == "local":
+        return
+    assert_frontend_ic_env(canister_id, required)
+    console.print(f"  {label}: ic_env cookie verified")
 
 
 def _persist_and_guard_portal_frontends(
@@ -1034,6 +1167,9 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
                     f"  {canister}: injected ic_env cookie "
                     f"realm_registry_backend={backend_id}"
                 )
+            _set_frontend_ic_env(
+                canister_id, descriptor, ctx, label=canister
+            )
             console.print(f"  {canister}: reinstall assets to {canister_id}")
             start = time.monotonic()
             dfx.deploy_assets_canister(
@@ -1050,54 +1186,20 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
                 f"  {canister}: reinstall assets done "
                 f"({format_duration(time.monotonic() - start)})"
             )
+            _verify_frontend_ic_env(
+                canister_id,
+                {
+                    "PUBLIC_CANISTER_ID:realm_registry_backend": backend_id,
+                    "PUBLIC_CANISTER_ID:realm_registry_frontend": canister_id,
+                },
+                ctx,
+                label=canister,
+            )
 
         file_registry_frontend_id = descriptor.canisters.get("file_registry_frontend")
         if file_registry_frontend_id:
-            canister = "file_registry_frontend"
-            dist = frontend_dist_dir(
-                canister,
-                platform_version=platform_version,
-                release_repo=release_repo,
-                work_dir=work,
-                repo_root=repo_root,
-                session=ctx.http,
-            )
-            if not dist.is_dir() or not any(dist.iterdir()):
-                if platform_version:
-                    archive = fetch_platform_frontend_archive(
-                        canister,
-                        platform_version,
-                        release_repo,
-                        work / "frontends" / canister,
-                        session=ctx.http,
-                    )
-                    extract_dir = work / "frontends" / canister / "dist"
-                    extract_dir.mkdir(parents=True, exist_ok=True)
-                    with tarfile.open(archive, "r:gz") as tar:
-                        tar.extractall(extract_dir)
-                    dist = extract_dir
-                else:
-                    raise RuntimeError(f"frontend build produced empty dist for {canister}")
-
-            dfx_name = DFX_CANISTER_NAMES[canister]
-            if not dfx_name:
-                raise RuntimeError(f"no dfx mapping for {canister}")
-            file_registry_id = descriptor.canisters.get("file_registry") or ""
-            console.print(f"  {canister}: reinstall assets to {file_registry_frontend_id}")
-            start = time.monotonic()
-            with _injected_file_registry_id(dist / "index.html", file_registry_id):
-                dfx.deploy_assets_canister(
-                    dfx_name,
-                    file_registry_frontend_id,
-                    ctx.network,
-                    repo_root=repo_root,
-                    identity=ctx.identity,
-                    mode="reinstall",
-                    yes=True,
-                )
             console.print(
-                f"  {canister}: reinstall assets done "
-                f"({format_duration(time.monotonic() - start)})"
+                "  skip file_registry_frontend: owned by `realms seed`, not `gaas new`"
             )
 
         casals_frontend_id = descriptor.canisters.get("casals_frontend")
@@ -1117,6 +1219,9 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
         if casals_staging.exists():
             shutil.rmtree(casals_staging)
         shutil.copytree(casals_dist, casals_staging)
+        _set_frontend_ic_env(
+            casals_frontend_id, descriptor, ctx, label="casals_frontend"
+        )
         console.print(f"  casals_frontend: reinstall assets to {casals_frontend_id}")
         start = time.monotonic()
         dfx.deploy_assets_canister(
@@ -1127,44 +1232,29 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
             identity=ctx.identity,
             mode="reinstall",
             yes=True,
+            extra_network_ids=dict(descriptor.canisters),
         )
         console.print(
             f"  casals_frontend: reinstall assets done "
             f"({format_duration(time.monotonic() - start)})"
         )
+        _verify_frontend_ic_env(
+            casals_frontend_id,
+            {
+                "PUBLIC_CANISTER_ID:casals_backend": descriptor.canisters.get(
+                    "casals_backend", ""
+                ),
+                "PUBLIC_CANISTER_ID:casals_frontend": casals_frontend_id,
+            },
+            ctx,
+            label="casals_frontend",
+        )
         _persist_and_guard_portal_frontends(descriptor, ctx, require_http=True)
 
         marketplace_frontend_id = descriptor.canisters.get("marketplace_frontend")
         if marketplace_frontend_id:
-            marketplace_backend_id = descriptor.canisters.get("marketplace_backend") or ""
-            file_registry_id = descriptor.canisters.get("file_registry") or ""
-            if not marketplace_backend_id:
-                raise RuntimeError(
-                    "marketplace_backend ID required to rebuild marketplace_frontend"
-                )
             console.print(
-                f"  marketplace_frontend: build + reinstall assets to {marketplace_frontend_id}"
-            )
-            start = time.monotonic()
-            build_marketplace_frontend(
-                descriptor,
-                gos_repo_root=repo_root,
-                work_dir=work,
-                marketplace_backend_id=marketplace_backend_id,
-                file_registry_id=file_registry_id,
-            )
-            dfx.deploy_assets_canister(
-                "marketplace_frontend",
-                marketplace_frontend_id,
-                ctx.network,
-                repo_root=repo_root,
-                identity=ctx.identity,
-                mode="reinstall",
-                yes=True,
-            )
-            console.print(
-                f"  marketplace_frontend: reinstall assets done "
-                f"({format_duration(time.monotonic() - start)})"
+                "  skip marketplace_frontend: owned by `realms seed`, not `gaas new`"
             )
     finally:
         if gaas_env_path and not ctx.keep_env_file:
@@ -1361,7 +1451,10 @@ def phase_seed_conductor(descriptor: Descriptor, ctx: DeployContext) -> None:
             ]
         )
     ensure_sheet_and_deploy_multisig(
-        casals_id, ctx.network, identity=ctx.identity
+        casals_id,
+        ctx.network,
+        identity=ctx.identity,
+        holding_id=(descriptor.holding_canister_id or "").strip() or None,
     )
     platform_canisters: list[tuple[str, str, str]] = []
     for name, key, kind in (
@@ -1677,9 +1770,13 @@ def phase_controller_topology(descriptor: Descriptor, ctx: DeployContext) -> Non
     if descriptor.canisters.get("casals_file_registry"):
         infra_names.append("casals_file_registry")
     if descriptor.canisters.get("marketplace_backend"):
-        infra_names.append("marketplace_backend")
+        console.print(
+            "  skip marketplace_backend controllers: owned by `realms seed`"
+        )
     if descriptor.canisters.get("marketplace_frontend"):
-        infra_names.append("marketplace_frontend")
+        console.print(
+            "  skip marketplace_frontend controllers: owned by `realms seed`"
+        )
     for name in infra_names:
         canister_id = descriptor.canisters.get(name)
         if not canister_id:
@@ -1881,4 +1978,30 @@ def run_phases(
         ctx.completed_phases.append(phase_id)
         if ctx.stopped:
             break
+    _refund_cycles_holding(descriptor, ctx)
     return ctx
+
+
+def _refund_cycles_holding(descriptor: Descriptor, ctx: DeployContext) -> None:
+    """Return the reserved holding canister's cycles to the ledger after a run.
+
+    Only on a fully completed run (not ``ctx.stopped``) so a failed/resumed run
+    keeps its reserved budget. Best-effort: a refund failure must not fail the
+    deploy — the holding ID stays in the descriptor for manual recovery.
+    """
+    if ctx.stopped or ctx.network != "ic":
+        return
+    holding_id = (descriptor.holding_canister_id or "").strip()
+    if not holding_id:
+        return
+    try:
+        dfx.refund_canister_to_ledger(holding_id, ctx.network, identity=ctx.identity)
+    except dfx.DfxError as exc:
+        console.print(
+            f"  [yellow]warning:[/yellow] could not refund cycles holding "
+            f"{holding_id}: {exc}; left in descriptor for manual recovery"
+        )
+        return
+    descriptor.holding_canister_id = None
+    _save_descriptor(descriptor, ctx)
+    console.print(f"  cycles holding {holding_id}: refunded to ledger")

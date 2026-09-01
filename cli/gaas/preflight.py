@@ -7,7 +7,12 @@ from dataclasses import dataclass, field
 from rich.console import Console
 
 from gaas import dfx
-from gaas.cycles_plan import CyclesPlan, build_cycles_plan, print_cycles_plan
+from gaas.cycles_plan import (
+    CyclesPlan,
+    build_cycles_plan,
+    print_cycles_plan,
+    topup_amount_with_buffer,
+)
 from gaas.descriptor import Descriptor
 from gaas.known import (
     DEFAULT_CYCLES_PER_CANISTER,
@@ -108,6 +113,16 @@ def run_preflight(
             wallet_item = next(item for item in plan.items if item.label == "wallet")
             report.available_cycles = wallet_item.available
             print_cycles_plan(plan, out)
+            if not plan.ok:
+                plan = _auto_top_up_canister_shortfalls(
+                    descriptor, plan, identity, network, out
+                )
+                report.cycles_plan = plan
+                report.required_cycles = plan.wallet_required
+                wallet_item = next(
+                    item for item in plan.items if item.label == "wallet"
+                )
+                report.available_cycles = wallet_item.available
 
             if plan.ok:
                 report.checks.append(
@@ -161,3 +176,49 @@ def run_preflight(
             )
 
     return report
+
+
+def _auto_top_up_canister_shortfalls(
+    descriptor: Descriptor,
+    plan: CyclesPlan,
+    identity: str,
+    network: str,
+    out: Console,
+) -> CyclesPlan:
+    """Spend cycles-ledger balance to cover canister shortfalls, then re-plan.
+
+    Wallet shortfalls (need ``dfx cycles convert``) are left for the caller.
+    ``wallet.required`` is reserved for upcoming ``dfx canister create``.
+    """
+    wallet = next(item for item in plan.items if item.label == "wallet")
+    targets = [
+        (item, topup_amount_with_buffer(item.shortfall))
+        for item in plan.items
+        if item.shortfall > 0 and item.canister_id
+    ]
+    if not targets:
+        return plan
+
+    spendable = max(0, (wallet.available or 0) - wallet.required)
+    needed = sum(amount for _, amount in targets)
+    if spendable < needed:
+        out.print(
+            f"  cycles ledger has {spendable:,} spendable "
+            f"(after reserving {wallet.required:,} for creates); "
+            f"need {needed:,} to top up canisters"
+        )
+        return plan
+
+    out.print(
+        "Topping up canister cycle shortfalls from the cycles ledger "
+        "(plus idle-burn buffer)..."
+    )
+    for item, amount in targets:
+        dfx.top_up_canister(
+            item.canister_id, amount, network, identity=identity, check=True
+        )
+        out.print(f"  {item.label} ({item.canister_id}): +{amount:,}")
+
+    refreshed = build_cycles_plan(descriptor, network, identity=identity)
+    print_cycles_plan(refreshed, out)
+    return refreshed

@@ -18,6 +18,9 @@ vite.config.js.timestamp-*.mjs
 /gaas-env.json
 .venv/
 *.egg-info/
+*.log
+logs/*
+!logs/.gitkeep
 !src/file_registry_frontend/dist/
 !src/file_registry_frontend/dist/**
 # Generated at build time by scripts/write-version-file.js (gos-as-a-service#39)

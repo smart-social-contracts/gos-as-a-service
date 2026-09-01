@@ -40,6 +40,7 @@ from provision_kick import (
 from asset_permissions import (
     grant_frontend_access_outcome,
     grant_permission_candid,
+    is_permission_denied,
     list_permitted_candid,
     principal_in_candid_vec,
 )
@@ -164,6 +165,8 @@ class CasalsService(Service):
     def orchestration_configure_baton(self, args: text) -> text: ...
     @service_update
     def destroy_stand(self, args: text) -> text: ...
+    @service_update
+    def grant_stand_backend_commit(self, args: text) -> text: ...
 
 # ── Entities ───────────────────────────────────────────────────────────
 
@@ -1403,6 +1406,24 @@ def _execute_grant_frontend_access(task, step, args):
             permitted_after = yield from _frontend_commit_permitted(
                 frontend_id, backend_id, task.name
             )
+            if (
+                not permitted_after
+                and is_permission_denied(grant_error)
+            ):
+                casals_id = (_config().casals_canister_id or "").strip()
+                if casals_id:
+                    jlog(task.name).info(
+                        f"asking Casals {casals_id} to grant_stand_backend_commit "
+                        f"on frontend {frontend_id}"
+                    )
+                    casals = CasalsService(Principal.from_str(casals_id))
+                    repair: CallResult = yield casals.grant_stand_backend_commit(
+                        json.dumps({"canister": frontend_id})
+                    )
+                    jlog(task.name).info(f"grant_stand_backend_commit → {repair}")
+                    permitted_after = yield from _frontend_commit_permitted(
+                        frontend_id, backend_id, task.name
+                    )
 
     status, note, error = grant_frontend_access_outcome(
         permitted_before=permitted_before,

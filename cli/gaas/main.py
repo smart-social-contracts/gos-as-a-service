@@ -23,7 +23,7 @@ from gaas.namespace_approval_seed import (
 )
 from gaas.phases import DeployContext, PHASES, run_phases, run_seed_phases
 from gaas.preflight import PreflightReport
-from gaas.runlog import print_log_path, start_run_log, stop_run_log
+from gaas.runlog import print_log_path, print_path, resolve_output_file_path, start_run_log, stop_run_log
 from gaas.wizard import confirm_deploy, run_wizard
 
 app = typer.Typer(
@@ -32,6 +32,14 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 console = Console()
+_CONSOLE_ERROR_LIMIT = 2000
+
+
+def _short_error(exc: BaseException) -> str:
+    text = str(exc)
+    if len(text) <= _CONSOLE_ERROR_LIMIT:
+        return text
+    return text[:_CONSOLE_ERROR_LIMIT] + f"\n... <{len(text)} chars total, omitted>"
 
 
 def _print_preflight(report: PreflightReport) -> None:
@@ -82,6 +90,8 @@ def _run_deploy_pipeline(
     keep_env_file: bool = False,
     reinstall_backends: bool = False,
     destroy_except_frontend: bool = False,
+    log_file: Path | None = None,
+    output_file: Path | None = None,
 ) -> None:
     ctx = DeployContext(
         identity=identity,
@@ -95,36 +105,45 @@ def _run_deploy_pipeline(
         keep_env_file=keep_env_file,
         reinstall_backends=reinstall_backends,
         destroy_except_frontend=destroy_except_frontend,
+        output_file=output_file,
     )
     total = len(PHASES)
-    run_log = start_run_log(descriptor.name)
+    run_log = start_run_log(descriptor.name, log_file=log_file)
+    ctx.output_file = resolve_output_file_path(
+        descriptor.name, output_file=output_file, ts=run_log.ts
+    )
+    print_log_path()
+    print_path("GaaS config:", ctx.output_file)
 
     def on_start(index: int, _phase_id: str, title: str) -> None:
         console.print(f"[{index}/{total}] {title}...")
 
     try:
         run_phases(descriptor, ctx, on_phase_start=on_start)
+        if ctx.preflight:
+            _print_preflight(ctx.preflight)
+        if ctx.stopped and len(ctx.completed_phases) < total:
+            console.print(
+                f"\n[yellow]Pipeline paused after phase {len(ctx.completed_phases)}/{total}.[/yellow]"
+            )
+            if descriptor_path:
+                console.print(
+                    f"Resume later with: gaas new {descriptor_path} --identity {identity} --network {network}"
+                )
+            raise typer.Exit(code=1)
+        console.print("\n[green]Deployment complete.[/green]")
     except RuntimeError as exc:
-        console.print(f"[red]Deployment failed:[/red] {exc}")
+        console.print(f"[red]Deployment failed:[/red] {_short_error(exc)}")
         raise typer.Exit(code=1) from exc
     finally:
+        if ctx.output_file:
+            try:
+                descriptor.save(ctx.output_file)
+                print_path("Wrote GaaS config:", ctx.output_file)
+            except Exception as exc:
+                console.print(f"[yellow]Could not write GaaS config: {exc}[/yellow]")
         print_log_path()
         stop_run_log()
-
-    if ctx.preflight:
-        _print_preflight(ctx.preflight)
-
-    if ctx.stopped and len(ctx.completed_phases) < total:
-        console.print(
-            f"\n[yellow]Pipeline paused after phase {len(ctx.completed_phases)}/{total}.[/yellow]"
-        )
-        if descriptor_path:
-            console.print(
-                f"Resume later with: gaas new {descriptor_path} --identity {identity} --network {network}"
-            )
-        raise typer.Exit(code=1)
-
-    console.print("\n[green]Deployment complete.[/green]")
 
 
 def _run_seed_pipeline(
@@ -135,6 +154,7 @@ def _run_seed_pipeline(
     descriptor_path: Path | None = None,
     yes: bool = False,
     casals_src: Path | None = None,
+    log_file: Path | None = None,
 ) -> None:
     ctx = DeployContext(
         identity=identity,
@@ -144,21 +164,21 @@ def _run_seed_pipeline(
         casals_src=casals_src,
     )
     total = 3
-    start_run_log(descriptor.name)
+    start_run_log(descriptor.name, log_file=log_file)
+    print_log_path()
 
     def on_start(index: int, _phase_id: str, title: str) -> None:
         console.print(f"[{index}/{total}] {title}...")
 
     try:
         run_seed_phases(descriptor, ctx, on_phase_start=on_start)
+        console.print("\n[green]Seed complete.[/green]")
     except RuntimeError as exc:
-        console.print(f"[red]Seed failed:[/red] {exc}")
+        console.print(f"[red]Seed failed:[/red] {_short_error(exc)}")
         raise typer.Exit(code=1) from exc
     finally:
         print_log_path()
         stop_run_log()
-
-    console.print("\n[green]Seed complete.[/green]")
 
 
 @app.command("new")
@@ -233,6 +253,27 @@ def new_command(
         hidden=True,
         help="Deprecated alias for --can-test-mode",
     ),
+    log_file: Optional[Path] = typer.Option(
+        None,
+        "--log-file",
+        help=(
+            "Write the full run transcript (console + dfx/icp output) to this path. "
+            "A file path gets _YYYYMMDD_HHMMSS before the extension; a directory "
+            "gets gaas-new-<env>_YYYYMMDD_HHMMSS.log. "
+            "Default: <repo>/logs/gaas-new-<env>_YYYYMMDD_HHMMSS.log"
+        ),
+    ),
+    output_file: Optional[Path] = typer.Option(
+        None,
+        "--output-file",
+        help=(
+            "Write the live GaaS config (pretty JSON, including canister IDs) to this "
+            "path. A file path gets _YYYYMMDD_HHMMSS before the extension; a directory "
+            "gets gaas-config-<env>_YYYYMMDD_HHMMSS.json. "
+            "Default: <repo>/logs/gaas-config-<env>_YYYYMMDD_HHMMSS.json. "
+            "Pass that file to `realms new --gaas-config`."
+        ),
+    ),
 ) -> None:
     """Create or deploy a GaaS environment from a descriptor."""
     if network is not None and network not in {"ic", "local"}:
@@ -265,6 +306,8 @@ def new_command(
                 keep_env_file=keep_env_file,
                 reinstall_backends=reinstall_backends,
                 destroy_except_frontend=destroy_except_frontend,
+                log_file=log_file,
+                output_file=output_file,
             )
         else:
             cmd_identity = resolved_identity
@@ -296,6 +339,8 @@ def new_command(
         keep_env_file=keep_env_file,
         reinstall_backends=reinstall_backends,
         destroy_except_frontend=destroy_except_frontend,
+        log_file=log_file,
+        output_file=output_file,
     )
 
 
@@ -314,6 +359,16 @@ def seed_command(
         "--casals-src",
         help="Local Casals checkout for orchestration template WASM",
     ),
+    log_file: Optional[Path] = typer.Option(
+        None,
+        "--log-file",
+        help=(
+            "Write the full run transcript (console + dfx/icp output) to this path. "
+            "A file path gets _YYYYMMDD_HHMMSS before the extension; a directory "
+            "gets gaas-new-<env>_YYYYMMDD_HHMMSS.log. "
+            "Default: <repo>/logs/gaas-new-<env>_YYYYMMDD_HHMMSS.log"
+        ),
+    ),
 ) -> None:
     """Re-seed GOS artifacts and conductor authorization on an existing environment."""
     if network not in {"ic", "local"}:
@@ -328,6 +383,7 @@ def seed_command(
         descriptor_path=descriptor,
         yes=yes,
         casals_src=casals_src,
+        log_file=log_file,
     )
 
 

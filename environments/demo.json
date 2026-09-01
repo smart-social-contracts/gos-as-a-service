@@ -16,24 +16,21 @@
   ],
   "canisters": {
     "realm_registry_frontend": "2zaor-5yaaa-aaaac-qbxaa-cai",
-    "casals_backend": "oia4k-baaaa-aaaae-ag3ha-cai",
-    "casals_frontend": "opb26-myaaa-aaaae-ag3hq-cai",
-    "casals_file_registry": "ms4uw-7qaaa-aaaae-ag3ia-cai",
-    "file_registry": "mv5sc-siaaa-aaaae-ag3iq-cai",
-    "file_registry_frontend": "m46z6-eaaaa-aaaae-ag3ja-cai",
-    "marketplace_backend": "m377k-jyaaa-aaaae-ag3jq-cai",
-    "realm_registry_backend": "rhw4p-gqaaa-aaaac-qbw7q-cai",
-    "realm_installer": "moqmm-caaaa-aaaah-qu27q-cai"
+    "realm_registry_backend": "tmp6q-uiaaa-aaaah-av3bq-cai",
+    "realm_installer": "tzip5-vaaaa-aaaah-av3ca-cai",
+    "casals_backend": "t6jjj-yyaaa-aaaah-av3cq-cai",
+    "casals_frontend": "txkcv-oqaaa-aaaah-av3da-cai",
+    "casals_file_registry": "tqleb-diaaa-aaaah-av3dq-cai"
   },
   "casals": {
-    "version": "main",
+    "version": "v0.3.1",
     "release_repo": "smart-social-contracts/Casals",
     "commanders": [
       "3itd6-2sx7g-vefdk-xhebm-fucot-llay5-lhqd6-pkjac-m7mkf-vhwqq-fqe"
     ]
   },
   "multisig": {
-    "backend_id": "nnuhb-4iaaa-aaaae-ag3mq-cai",
+    "backend_id": "s5fap-maaaa-aaaah-av3ea-cai",
     "signers": [
       "3itd6-2sx7g-vefdk-xhebm-fucot-llay5-lhqd6-pkjac-m7mkf-vhwqq-fqe"
     ],
@@ -52,7 +49,8 @@
     "can_test_mode": true
   },
   "cycles": {
-    "threshold_tc": 2.0
+    "threshold_tc": 0.5,
+    "create_tc": 2.0
   },
   "dns": {
     "provider": "manual"

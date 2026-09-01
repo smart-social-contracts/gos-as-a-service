@@ -25,7 +25,7 @@ def _descriptor() -> Descriptor:
                 "realm_registry_backend": "yhw3g-fyaaa-aaaas-qgorq-cai",
                 "realm_registry_frontend": "qtank-3qaaa-aaaaa-qhb6q-cai",
             },
-            "casals": {"version": "v0.3.0"},
+            "casals": {"version": "v0.3.1"},
         }
     )
 

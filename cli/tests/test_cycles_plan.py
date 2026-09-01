@@ -11,6 +11,7 @@ from rich.console import Console
 from gaas.cycles_plan import (
     REALM_OPS_MARGIN_CYCLES,
     REALMS_PER_DEPLOY_ASSUMPTION,
+    TOP_UP_BUFFER_CYCLES,
     WALLET_CREATE_CYCLES,
     WALLET_INITIAL_FUNDING,
     _casals_backend_required,
@@ -20,6 +21,7 @@ from gaas.cycles_plan import (
     remediation_canister_top_up,
     remediation_wallet_convert,
     render_cycles_plan_table,
+    topup_amount_with_buffer,
     wallet_convert_amount_icp,
 )
 from gaas.descriptor import CyclesConfig, Descriptor, MultisigConfig
@@ -46,6 +48,27 @@ def test_wallet_required_all_canisters_missing() -> None:
     per = WALLET_CREATE_CYCLES + WALLET_INITIAL_FUNDING
     assert wallet.required == per * len(PLATFORM_CANISTER_NAMES)
     assert len(plan.items) == 1
+
+
+def test_wallet_required_reduced_by_holding(monkeypatch) -> None:
+    holding_id = "pd2xr-bqaaa-aaaad-agxrq-cai"
+    monkeypatch.setattr(
+        "gaas.cycles_plan.dfx.canister_cycles_balance",
+        lambda *_a, **_k: 5_000_000_000_000,
+    )
+    plan = build_cycles_plan(
+        _descriptor(canisters={}, holding_canister_id=holding_id),
+        "ic",
+        wallet_balance=10_000_000_000_000,
+        canister_balances={},
+    )
+    wallet = next(item for item in plan.items if item.label == "wallet")
+    holding = next(item for item in plan.items if item.label == "cycles holding (reserved)")
+    per = WALLET_CREATE_CYCLES + WALLET_INITIAL_FUNDING
+    full = per * len(PLATFORM_CANISTER_NAMES)
+    assert wallet.required == max(0, full - 5_000_000_000_000)
+    assert holding.required == 0
+    assert holding.available == 5_000_000_000_000
 
 
 def test_wallet_required_partial_create_mix() -> None:
@@ -129,6 +152,36 @@ def test_descriptor_threshold_tc_overrides_default_headroom() -> None:
     )
     file_reg = next(item for item in plan.items if item.label == "file_registry")
     assert file_reg.required == 3_000_000_000_000
+
+
+def test_create_tc_is_independent_of_running_threshold() -> None:
+    canisters = {
+        "file_registry": VALID_CANISTER_ID,
+        "casals_backend": VALID_CANISTER_ID,
+    }
+    desc = _descriptor(
+        canisters=canisters,
+        cycles=CyclesConfig(threshold_tc=0.5, create_tc=2),
+        multisig=MultisigConfig(backend_id=None),
+    )
+    plan = build_cycles_plan(
+        desc,
+        "ic",
+        wallet_balance=0,
+        canister_balances={
+            "file_registry": 500_000_000_000,
+            "casals_backend": 20_000_000_000_000,
+        },
+    )
+    file_reg = next(item for item in plan.items if item.label == "file_registry")
+    assert file_reg.required == 500_000_000_000
+    create = 2_000_000_000_000
+    per_realm = 3 * create + REALM_OPS_MARGIN_CYCLES
+    casals = next(item for item in plan.items if item.label == "casals_backend")
+    assert casals.required == 500_000_000_000 + (
+        REALMS_PER_DEPLOY_ASSUMPTION * per_realm
+    ) + create
+    assert not any(item.label.startswith("create_tc") for item in plan.items)
 
 
 def test_conductor_includes_realm_provisioning_budget() -> None:
@@ -251,3 +304,91 @@ def test_run_preflight_passes_when_plan_ok(mock_build, _principal, _identity) ->
     )
     assert report.ok
     assert any(c.name == "cycles_plan" and c.passed for c in report.checks)
+
+
+def test_topup_amount_with_buffer() -> None:
+    assert topup_amount_with_buffer(0) == 0
+    assert topup_amount_with_buffer(-1) == 0
+    assert topup_amount_with_buffer(3_000_000) == 3_000_000 + TOP_UP_BUFFER_CYCLES
+
+
+@patch("gaas.preflight.dfx.identity_exists", return_value=True)
+@patch("gaas.preflight.dfx.get_principal", return_value="aaaaa-aa")
+@patch("gaas.preflight.dfx.top_up_canister")
+@patch("gaas.preflight.build_cycles_plan")
+def test_run_preflight_auto_tops_up_canister_shortfalls(
+    mock_build, mock_top_up, _principal, _identity
+) -> None:
+    from gaas.cycles_plan import CyclesLineItem, CyclesPlan
+
+    short = CyclesPlan(
+        network="ic",
+        items=[
+            CyclesLineItem("wallet", None, 0, 2_000_000_000_000),
+            CyclesLineItem(
+                "realm_installer",
+                VALID_CANISTER_ID,
+                500_000_000_000,
+                400_000_000_000,
+            ),
+        ],
+    )
+    funded = CyclesPlan(
+        network="ic",
+        items=[
+            CyclesLineItem("wallet", None, 0, 1_800_000_000_000),
+            CyclesLineItem(
+                "realm_installer",
+                VALID_CANISTER_ID,
+                500_000_000_000,
+                600_000_000_000,
+            ),
+        ],
+    )
+    mock_build.side_effect = [short, funded]
+    report = run_preflight(
+        _descriptor(),
+        "deployer",
+        "ic",
+        console=Console(file=StringIO(), force_terminal=True),
+    )
+    assert report.ok
+    mock_top_up.assert_called_once_with(
+        VALID_CANISTER_ID,
+        100_000_000_000 + TOP_UP_BUFFER_CYCLES,
+        "ic",
+        identity="deployer",
+        check=True,
+    )
+
+
+@patch("gaas.preflight.dfx.identity_exists", return_value=True)
+@patch("gaas.preflight.dfx.get_principal", return_value="aaaaa-aa")
+@patch("gaas.preflight.dfx.top_up_canister")
+@patch("gaas.preflight.build_cycles_plan")
+def test_run_preflight_skips_auto_topup_when_wallet_too_low(
+    mock_build, mock_top_up, _principal, _identity
+) -> None:
+    from gaas.cycles_plan import CyclesLineItem, CyclesPlan
+
+    mock_build.return_value = CyclesPlan(
+        network="ic",
+        items=[
+            CyclesLineItem("wallet", None, 0, 1_000),
+            CyclesLineItem(
+                "casals_backend",
+                VALID_CANISTER_ID,
+                16_500_000_000_000,
+                2_000_000_000_000,
+            ),
+        ],
+        remediations=["dfx cycles top-up ..."],
+    )
+    report = run_preflight(
+        _descriptor(),
+        "deployer",
+        "ic",
+        console=Console(file=StringIO(), force_terminal=True),
+    )
+    assert not report.ok
+    mock_top_up.assert_not_called()

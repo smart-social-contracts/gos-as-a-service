@@ -87,7 +87,7 @@ def merge_casals_ic_assets(
     """Preserve existing asset rules; add Set-Cookie and optional connect-src."""
     text = existing_text if (existing_text or "").strip() else "[]"
     try:
-        config = json.loads(text)
+        config = json.loads(strip_json5_line_comments(text))
     except json.JSONDecodeError:
         if monitor_origin:
             text = _patch_connect_src_in_text(text, monitor_origin)
@@ -110,6 +110,9 @@ def merge_casals_ic_assets(
             if isinstance(csp, str) and csp:
                 headers["Content-Security-Policy"] = merge_connect_src(csp, origin)
 
+    # Catch-all first (certified-assets fills ic_root_key on **/*), then a
+    # last-match HTML rule so index.html still wins if the plugin appends.
+    upsert_set_cookie(config, cookie_header)
     _upsert_html_cookie(config, cookie_header)
     return json.dumps(config, indent=2) + "\n"
 

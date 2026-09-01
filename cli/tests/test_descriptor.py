@@ -118,6 +118,27 @@ def test_services_open_mode_parses() -> None:
     assert desc.services.open_mode is True
 
 
+def test_cycles_create_tc_defaults_to_2() -> None:
+    desc = Descriptor.model_validate(SAMPLE_DESCRIPTOR)
+    assert desc.cycles.create_tc == 2
+    assert desc.create_cycles() == 2_000_000_000_000
+
+
+def test_cycles_create_tc_independent_of_threshold() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["cycles"] = {"threshold_tc": 0.5, "create_tc": 2}
+    desc = Descriptor.model_validate(data)
+    assert desc.threshold_cycles() == 500_000_000_000
+    assert desc.create_cycles() == 2_000_000_000_000
+
+
+def test_cycles_create_tc_rejects_below_floor() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["cycles"] = {"threshold_tc": 0.5, "create_tc": 0.5}
+    with pytest.raises(ValidationError, match="create_tc"):
+        Descriptor.model_validate(data)
+
+
 def test_gos_artifact_defaults() -> None:
     desc = Descriptor.model_validate(SAMPLE_DESCRIPTOR)
     entry = desc.gos[0]

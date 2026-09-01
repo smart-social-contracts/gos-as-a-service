@@ -98,6 +98,34 @@ def test_merge_preserves_casals_csp_and_adds_cookie() -> None:
     assert "https://icp0.io" in csp
     assert config[0]["headers"]["Cache-Control"].startswith("public")
     assert config[1]["headers"]["Permissions-Policy"].startswith("clipboard-read")
+    assert config[0]["headers"]["Set-Cookie"] == cookie
+    html_rule = next(r for r in config if r.get("match") == "**/*.{html,shtml}")
+    assert html_rule["headers"]["Set-Cookie"] == cookie
+
+
+def test_merge_casals_ic_assets_strips_json5_comments() -> None:
+    """Release tarballs ship Casals' commented .ic-assets.json5; inject must not no-op."""
+    cookie = "ic_env=abc; SameSite=Lax"
+    commented = """[
+  {
+    // GET /version — build provenance
+    "match": "version",
+    "headers": { "Content-Type": "application/json" }
+  },
+  {
+    "match": "**/*",
+    "security_policy": "standard",
+    "headers": {
+      "Content-Security-Policy": "default-src 'self'; connect-src 'self' https://icp0.io;"
+    }
+  }
+]
+"""
+    out = merge_casals_ic_assets(commented, cookie)
+    config = json.loads(out)
+    catch_all = next(r for r in config if r.get("match") == "**/*")
+    assert catch_all["headers"]["Set-Cookie"] == cookie
+    assert "default-src 'self'" in catch_all["headers"]["Content-Security-Policy"]
     html_rule = next(r for r in config if r.get("match") == "**/*.{html,shtml}")
     assert html_rule["headers"]["Set-Cookie"] == cookie
 
@@ -119,9 +147,12 @@ def test_merge_empty_monitor_url_does_not_invent_csp() -> None:
     cookie = "ic_env=abc; SameSite=Lax"
     out = merge_casals_ic_assets("[]", cookie, "")
     config = json.loads(out)
-    assert len(config) == 1
-    assert "Content-Security-Policy" not in config[0]["headers"]
-    assert config[0]["headers"]["Set-Cookie"] == cookie
+    assert all("Content-Security-Policy" not in r.get("headers", {}) for r in config)
+    assert any(r.get("match") == "**/*" and r["headers"]["Set-Cookie"] == cookie for r in config)
+    assert any(
+        r.get("match") == "**/*.{html,shtml}" and r["headers"]["Set-Cookie"] == cookie
+        for r in config
+    )
 
 
 def test_merge_connect_src_idempotent() -> None:

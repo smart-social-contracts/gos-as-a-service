@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -12,6 +13,23 @@ from gaas.conductor_seed import orchestration_template_actions, platform_sheet
 from gaas.descriptor import Descriptor
 from gaas.platform import PlatformError, find_local_assetstorage_wasm
 from tests.conftest import SAMPLE_DESCRIPTOR
+
+CASALS_ID = "qthgp-3yaaa-aaaae-agveq-cai"
+
+
+def _stub_frontend_controllers(monkeypatch, *, already_controller: bool = True) -> list:
+    updates: list[tuple[str, list[str]]] = []
+
+    def fake_status(canister_id, *_a, **_k):
+        controllers = (CASALS_ID,) if already_controller else ("deployer-principal",)
+        return SimpleNamespace(controllers=controllers)
+
+    def fake_update(canister_id, controllers, *_a, **_k):
+        updates.append((canister_id, list(controllers)))
+
+    monkeypatch.setattr(conductor_seed.dfx, "canister_status", fake_status)
+    monkeypatch.setattr(conductor_seed.dfx, "update_canister_settings", fake_update)
+    return updates
 
 
 def test_orchestration_template_actions_skips_when_both_match() -> None:
@@ -462,6 +480,7 @@ def test_canister_names_collects_all_registered() -> None:
 
 
 def test_ensure_platform_stand_creates_stand_and_registers(monkeypatch) -> None:
+    _stub_frontend_controllers(monkeypatch)
     calls: list[tuple[str, dict]] = []
     trees = [
         {"sections": [{"name": "Infra", "stands": []}]},
@@ -505,7 +524,7 @@ def test_ensure_platform_stand_creates_stand_and_registers(monkeypatch) -> None:
         ("realm-installer", "ccccc-ccccc-ccccc-ccccc-ccccc-ccc", "backend"),
     ]
     conductor_seed.ensure_platform_stand(
-        "qthgp-3yaaa-aaaae-agveq-cai", platform, "ic"
+        CASALS_ID, platform, "ic"
     )
 
     assert calls[0] == (
@@ -542,6 +561,7 @@ def test_ensure_platform_stand_creates_stand_and_registers(monkeypatch) -> None:
 
 
 def test_ensure_platform_stand_tolerates_existing_stand(monkeypatch) -> None:
+    _stub_frontend_controllers(monkeypatch)
     calls: list[tuple[str, dict]] = []
 
     def fake_casals(_cid, method, payload, _net, **_):
@@ -578,6 +598,7 @@ def test_ensure_platform_stand_tolerates_existing_stand(monkeypatch) -> None:
 
 
 def test_ensure_platform_stand_skips_existing_canisters(monkeypatch) -> None:
+    _stub_frontend_controllers(monkeypatch)
     calls: list[tuple[str, dict]] = []
 
     monkeypatch.setattr(
@@ -619,7 +640,7 @@ def test_ensure_platform_stand_skips_existing_canisters(monkeypatch) -> None:
     )
 
     conductor_seed.ensure_platform_stand(
-        "qthgp-3yaaa-aaaae-agveq-cai",
+        CASALS_ID,
         [
             ("realm-registry-backend", "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa", "backend"),
             ("file-registry-frontend", "eeeee-eeeee-eeeee-eeeee-eeeee-eee", "frontend"),
@@ -636,5 +657,390 @@ def test_ensure_platform_stand_skips_existing_canisters(monkeypatch) -> None:
                 "kind": "frontend",
             },
         ),
+    ]
+
+
+def test_ensure_platform_stand_adds_casals_controller_on_preserved_frontend(
+    monkeypatch,
+) -> None:
+    updates = _stub_frontend_controllers(monkeypatch, already_controller=False)
+    monkeypatch.setattr(
+        conductor_seed,
+        "_casals_call",
+        lambda *_a, **_k: {"ok": True},
+    )
+    monkeypatch.setattr(
+        conductor_seed,
+        "get_tree",
+        lambda *_a, **_k: {
+            "sections": [
+                {"name": "Infra", "stands": [{"name": "platform", "canisters": []}]}
+            ]
+        },
+    )
+    frontend_id = "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb"
+    conductor_seed.ensure_platform_stand(
+        CASALS_ID,
+        [
+            ("realm-registry-frontend", frontend_id, "frontend"),
+            ("realm-installer", "ccccc-ccccc-ccccc-ccccc-ccccc-ccc", "backend"),
+        ],
+        "ic",
+    )
+    assert updates == [(frontend_id, ["deployer-principal", CASALS_ID])]
+
+
+def test_ensure_platform_stand_skips_duplicate_canister_id(monkeypatch) -> None:
+    _stub_frontend_controllers(monkeypatch)
+    calls: list[tuple[str, dict]] = []
+    monkeypatch.setattr(
+        conductor_seed,
+        "_casals_call",
+        lambda _cid, method, payload, _net, **_: (
+            calls.append((method, payload)) or {"ok": True}
+        ),
+    )
+    monkeypatch.setattr(
+        conductor_seed,
+        "get_tree",
+        lambda *_a, **_k: {
+            "sections": [
+                {
+                    "name": "Infra",
+                    "stands": [
+                        {
+                            "name": "platform",
+                            "canisters": [
+                                {
+                                    "name": "file-registry",
+                                    "canister_id": "tqleb-diaaa-aaaah-av3dq-cai",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    conductor_seed.ensure_platform_stand(
+        CASALS_ID,
+        [("casals-file-registry", "tqleb-diaaa-aaaah-av3dq-cai", "backend")],
+        "ic",
+    )
+    assert calls == [
+        (
+            "create_stand",
+            {
+                "section": "Infra",
+                "name": "platform",
+                "description": (
+                    "GaaS platform canisters (registry, installer, file registry)"
+                ),
+            },
+        )
+    ]
+
+
+def test_ensure_platform_stand_moves_system_file_registry_onto_platform(
+    monkeypatch,
+) -> None:
+    _stub_frontend_controllers(monkeypatch)
+    calls: list[tuple[str, dict]] = []
+    file_registry_id = "tqleb-diaaa-aaaah-av3dq-cai"
+    tree_with_system = {
+        "sections": [
+            {
+                "name": "Casals",
+                "stands": [
+                    {
+                        "name": "System",
+                        "canisters": [
+                            {
+                                "name": "file_registry",
+                                "canister_id": file_registry_id,
+                            }
+                        ],
+                    }
+                ],
+            },
+            {"name": "Infra", "stands": [{"name": "platform", "canisters": []}]},
+        ]
+    }
+    tree_after_move = {
+        "sections": [
+            {"name": "Casals", "stands": [{"name": "System", "canisters": []}]},
+            {"name": "Infra", "stands": [{"name": "platform", "canisters": []}]},
+        ]
+    }
+    trees = iter([tree_with_system, tree_after_move])
+    monkeypatch.setattr(
+        conductor_seed,
+        "_casals_call",
+        lambda _cid, method, payload, _net, **_: (
+            calls.append((method, payload)) or {"ok": True}
+            if method != "create_stand"
+            else (_ for _ in ()).throw(
+                RuntimeError("stand platform already exists in section Infra")
+            )
+        ),
+    )
+    monkeypatch.setattr(conductor_seed, "get_tree", lambda *_a, **_k: next(trees))
+    conductor_seed.ensure_platform_stand(
+        CASALS_ID,
+        [("casals-file-registry", file_registry_id, "backend")],
+        "ic",
+    )
+    assert calls == [
+        ("delete_canister", {"canister": "file_registry"}),
+        (
+            "register_canister",
+            {
+                "stand": "platform",
+                "name": "casals-file-registry",
+                "canister_id": file_registry_id,
+                "kind": "backend",
+            },
+        ),
+    ]
+
+
+def test_ensure_platform_stand_prunes_empty_stub_then_moves_system_file_registry(
+    monkeypatch,
+) -> None:
+    _stub_frontend_controllers(monkeypatch)
+    calls: list[tuple[str, dict]] = []
+    file_registry_id = "tqleb-diaaa-aaaah-av3dq-cai"
+    tree_with_stub = {
+        "sections": [
+            {
+                "name": "Casals",
+                "stands": [
+                    {
+                        "name": "System",
+                        "canisters": [
+                            {
+                                "name": "file_registry",
+                                "canister_id": file_registry_id,
+                            }
+                        ],
+                    }
+                ],
+            },
+            {
+                "name": "Infra",
+                "stands": [
+                    {
+                        "name": "platform",
+                        "canisters": [
+                            {
+                                "name": "casals-file-registry",
+                                "canister_id": "",
+                            }
+                        ],
+                    }
+                ],
+            },
+        ]
+    }
+    tree_after_prune = {
+        "sections": [
+            {
+                "name": "Casals",
+                "stands": [
+                    {
+                        "name": "System",
+                        "canisters": [
+                            {
+                                "name": "file_registry",
+                                "canister_id": file_registry_id,
+                            }
+                        ],
+                    }
+                ],
+            },
+            {"name": "Infra", "stands": [{"name": "platform", "canisters": []}]},
+        ]
+    }
+    tree_after_move = {
+        "sections": [
+            {"name": "Casals", "stands": [{"name": "System", "canisters": []}]},
+            {"name": "Infra", "stands": [{"name": "platform", "canisters": []}]},
+        ]
+    }
+    trees = iter([tree_with_stub, tree_after_prune, tree_after_move])
+    monkeypatch.setattr(
+        conductor_seed,
+        "_casals_call",
+        lambda _cid, method, payload, _net, **_: (
+            calls.append((method, payload)) or {"ok": True}
+            if method != "create_stand"
+            else (_ for _ in ()).throw(
+                RuntimeError("stand platform already exists in section Infra")
+            )
+        ),
+    )
+    monkeypatch.setattr(conductor_seed, "get_tree", lambda *_a, **_k: next(trees))
+    conductor_seed.ensure_platform_stand(
+        CASALS_ID,
+        [("casals-file-registry", file_registry_id, "backend")],
+        "ic",
+    )
+    assert calls == [
+        ("delete_canister", {"canister": "casals-file-registry"}),
+        ("delete_canister", {"canister": "file_registry"}),
+        (
+            "register_canister",
+            {
+                "stand": "platform",
+                "name": "casals-file-registry",
+                "canister_id": file_registry_id,
+                "kind": "backend",
+            },
+        ),
+    ]
+
+
+def test_ensure_platform_stand_prunes_empty_stub_then_registers(monkeypatch) -> None:
+    _stub_frontend_controllers(monkeypatch)
+    calls: list[tuple[str, dict]] = []
+    new_id = "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa"
+    tree_with_stub = {
+        "sections": [
+            {
+                "name": "Infra",
+                "stands": [
+                    {
+                        "name": "platform",
+                        "canisters": [
+                            {"name": "casals-file-registry", "canister_id": ""}
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+    tree_after_prune = {
+        "sections": [
+            {"name": "Infra", "stands": [{"name": "platform", "canisters": []}]}
+        ]
+    }
+    trees = iter([tree_with_stub, tree_after_prune])
+    monkeypatch.setattr(
+        conductor_seed,
+        "_casals_call",
+        lambda _cid, method, payload, _net, **_: (
+            calls.append((method, payload)) or {"ok": True}
+            if method != "create_stand"
+            else (_ for _ in ()).throw(
+                RuntimeError("stand platform already exists in section Infra")
+            )
+        ),
+    )
+    monkeypatch.setattr(conductor_seed, "get_tree", lambda *_a, **_k: next(trees))
+    conductor_seed.ensure_platform_stand(
+        CASALS_ID,
+        [("casals-file-registry", new_id, "backend")],
+        "ic",
+    )
+    assert calls == [
+        ("delete_canister", {"canister": "casals-file-registry"}),
+        (
+            "register_canister",
+            {
+                "stand": "platform",
+                "name": "casals-file-registry",
+                "canister_id": new_id,
+                "kind": "backend",
+            },
+        ),
+    ]
+
+
+def test_casals_call_tops_up_and_retries_on_ooc(monkeypatch) -> None:
+    import json
+
+    from gaas.dfx import DfxError
+
+    calls: list[str] = []
+
+    def fake_call(_cid, method, *_a, **_k):
+        calls.append(method)
+        if len(calls) == 1:
+            raise DfxError(
+                "IC0504 out of cycles",
+                command=["dfx", "canister", "call"],
+                stderr="IC0504",
+            )
+        return json.dumps({"ok": True, "created_canisters": ["msig"]})
+
+    topped: list[int] = []
+
+    def fake_ensure(_cid, amount, _net, **_k):
+        topped.append(amount)
+        return amount
+
+    monkeypatch.setattr(conductor_seed.dfx, "canister_call", fake_call)
+    monkeypatch.setattr(conductor_seed.dfx, "ensure_min_cycles", fake_ensure)
+
+    result = conductor_seed._casals_call(
+        "zywou-nqaaa-aaaah-av2za-cai",
+        "deploy_sheet",
+        {"sheet": {}},
+        "ic",
+        identity="deployer",
+    )
+    assert result["ok"] is True
+    assert calls == ["deploy_sheet", "deploy_sheet"]
+    assert topped == [conductor_seed.CASALS_OPERATING_MIN]
+
+
+def test_casals_call_transfers_from_holding_on_ooc(monkeypatch) -> None:
+    import json
+
+    from gaas.dfx import DfxError
+
+    calls: list[str] = []
+
+    def fake_call(_cid, method, *_a, **_k):
+        calls.append(method)
+        if len(calls) == 1:
+            raise DfxError(
+                "IC0504 out of cycles",
+                command=["dfx", "canister", "call"],
+                stderr="IC0504",
+            )
+        return json.dumps({"ok": True, "created_canisters": ["msig"]})
+
+    transfers: list[tuple] = []
+
+    def fake_transfer(from_cid, to_cid, amount, network, *, identity=None):
+        transfers.append((from_cid, to_cid, amount, network, identity))
+
+    monkeypatch.setattr(conductor_seed.dfx, "canister_call", fake_call)
+    monkeypatch.setattr(conductor_seed.dfx, "transfer_cycles", fake_transfer)
+    monkeypatch.setattr(
+        conductor_seed.dfx,
+        "canister_cycles_balance",
+        lambda *_a, **_k: 1_000_000_000_000,
+    )
+
+    result = conductor_seed._casals_call(
+        "zywou-nqaaa-aaaah-av2za-cai",
+        "deploy_sheet",
+        {"sheet": {}},
+        "ic",
+        identity="deployer",
+        holding_id="pd2xr-bqaaa-aaaad-agxrq-cai",
+    )
+    assert result["ok"] is True
+    assert calls == ["deploy_sheet", "deploy_sheet"]
+    assert transfers == [
+        (
+            "pd2xr-bqaaa-aaaad-agxrq-cai",
+            "zywou-nqaaa-aaaah-av2za-cai",
+            conductor_seed.CASALS_OPERATING_MIN - 1_000_000_000_000,
+            "ic",
+            "deployer",
+        )
     ]
 

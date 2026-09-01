@@ -11,18 +11,18 @@ from gaas.known import ADOPT_ONLY_CANISTER_NAMES, KNOWN_CANISTER_NAMES, PLATFORM
 
 def test_wizard_prompts_for_casals_file_registry() -> None:
     assert "casals_file_registry" in KNOWN_CANISTER_NAMES
-    assert "file_registry" in PLATFORM_CANISTER_NAMES
-    assert "file_registry_frontend" in PLATFORM_CANISTER_NAMES
-    assert "marketplace_backend" in PLATFORM_CANISTER_NAMES
-    assert ADOPT_ONLY_CANISTER_NAMES == ("marketplace_frontend",)
+    assert "file_registry" not in PLATFORM_CANISTER_NAMES
+    assert "file_registry_frontend" not in PLATFORM_CANISTER_NAMES
+    assert "marketplace_backend" not in PLATFORM_CANISTER_NAMES
+    assert ADOPT_ONLY_CANISTER_NAMES == ()
 
 
 def test_deploy_confirmation_message_mentions_asset_reinstalls() -> None:
     message = deploy_confirmation_message(network="ic")
     assert "realm_registry_frontend" in message
-    assert "file_registry_frontend" in message
     assert "casals_frontend" in message
-    assert "marketplace_frontend" in message
+    assert "file_registry_frontend" not in message
+    assert "marketplace_frontend" not in message
     assert "wipes existing frontend state" in message
 
 
@@ -44,11 +44,7 @@ def test_wizard_builds_descriptor(tmp_path: Path, monkeypatch) -> None:
             "",
             "",
             "",
-            "",
-            "",
-            "",
-            "",
-            "v0.3.0",
+            "v0.3.1",
             "",
             "2",
             "",
@@ -79,8 +75,9 @@ def test_wizard_builds_descriptor(tmp_path: Path, monkeypatch) -> None:
     assert desc.name == "myenv"
     assert desc.domain == "myenv.gos.earth"
     assert desc.gos[0].version == "v0.3.1"
-    assert desc.casals.version == "v0.3.0"
+    assert desc.casals.version == "v0.3.1"
     assert desc.cycles.threshold_tc == 2
+    assert desc.cycles.create_tc == 2
     assert desc.dns.provider == "manual"
     assert desc.flags.get("can_test_mode") is not True
     assert identity == "deployer"
@@ -102,11 +99,7 @@ def test_wizard_honors_flag_overrides() -> None:
             "",
             "",
             "",
-            "",
-            "",
-            "",
-            "",
-            "v0.3.0",
+            "v0.3.1",
             "",
             "2",
             "",
@@ -157,11 +150,7 @@ def test_wizard_can_test_mode_prompt_sets_flag(tmp_path: Path, monkeypatch) -> N
             "",
             "",
             "",
-            "",
-            "",
-            "",
-            "",
-            "v0.3.0",
+            "v0.3.1",
             "",
             "2",
             "",
@@ -207,11 +196,7 @@ def test_wizard_parses_casals_commanders(tmp_path: Path, monkeypatch) -> None:
             "",
             "",
             "",
-            "",
-            "",
-            "",
-            "",
-            "v0.3.0",
+            "v0.3.1",
             "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa, bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
             "2",
             "",
@@ -259,11 +244,7 @@ def test_wizard_parses_monitor_services(tmp_path: Path, monkeypatch) -> None:
             "",
             "",
             "",
-            "",
-            "",
-            "",
-            "",
-            "v0.3.0",
+            "v0.3.1",
             "",
             "2",
             "",

@@ -10,15 +10,18 @@ import pytest
 
 from gaas.canister_liveness import (
     CanisterNotFoundError,
+    FrontendEnvError,
     assert_canister_exists,
     assert_casals_frontend_live,
     assert_frontend_http_live,
+    assert_frontend_ic_env,
     assert_installer_live_for_network,
     collect_baked_portal_frontends,
     fetch_canister_record,
     fetch_local_canister_record,
     is_known_dead_canister,
     main,
+    parse_ic_env_cookie,
     probe_baked_portal_frontends,
 )
 from gaas.descriptor import Descriptor
@@ -60,6 +63,148 @@ def test_assert_canister_exists_rejects_ic0301_payload():
 
     with pytest.raises(CanisterNotFoundError, match="IC0301"):
         assert_canister_exists(GHOST_INSTALLER, fetch=fetch)
+
+
+class _FakeHeaders:
+    def __init__(self, cookies: list[str]):
+        self._cookies = cookies
+
+    def get_all(self, name: str):
+        return list(self._cookies) if name == "Set-Cookie" else []
+
+
+class _FakeResponse:
+    def __init__(self, cookies: list[str]):
+        self.headers = _FakeHeaders(cookies)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+
+class _FakeOpener:
+    def __init__(self, cookies: list[str]):
+        self._cookies = cookies
+        self.calls = 0
+
+    def open(self, _request, timeout=0):
+        self.calls += 1
+        return _FakeResponse(self._cookies)
+
+
+def _ic_env_cookie(**entries: str) -> str:
+    import urllib.parse
+
+    body = "&".join(f"{k}={v}" for k, v in entries.items())
+    return f"ic_env={urllib.parse.quote(body, safe='')}; SameSite=Lax"
+
+
+def test_parse_ic_env_cookie_decodes_and_ignores_others():
+    cookies = [
+        "session=abc; HttpOnly",
+        _ic_env_cookie(ic_root_key="deadbeef", **{"PUBLIC_CANISTER_ID:casals_backend": "t6jjj-x"}),
+    ]
+    env = parse_ic_env_cookie(cookies)
+    assert env["ic_root_key"] == "deadbeef"
+    assert env["PUBLIC_CANISTER_ID:casals_backend"] == "t6jjj-x"
+    assert "session" not in env
+
+
+def test_parse_ic_env_cookie_empty_without_ic_env():
+    assert parse_ic_env_cookie(["other=1"]) == {}
+    assert parse_ic_env_cookie([]) == {}
+
+
+def test_assert_frontend_ic_env_passes_when_cookie_has_ids():
+    opener = _FakeOpener(
+        [
+            _ic_env_cookie(
+                ic_root_key="3081",
+                **{
+                    "PUBLIC_CANISTER_ID:casals_backend": "t6jjj-yyaaa-aaaah-av3cq-cai",
+                    "PUBLIC_CANISTER_ID:casals_frontend": "txkcv-oqaaa-aaaah-av3da-cai",
+                },
+            )
+        ]
+    )
+    assert_frontend_ic_env(
+        "txkcv-oqaaa-aaaah-av3da-cai",
+        {
+            "PUBLIC_CANISTER_ID:casals_backend": "t6jjj-yyaaa-aaaah-av3cq-cai",
+            "PUBLIC_CANISTER_ID:casals_frontend": "txkcv-oqaaa-aaaah-av3da-cai",
+        },
+        opener=opener,
+    )
+    assert opener.calls == 1
+
+
+def test_assert_frontend_ic_env_fails_when_backend_id_missing():
+    """Regression: gaas new once deployed a Casals UI whose ic_env had only ic_root_key."""
+    opener = _FakeOpener([_ic_env_cookie(ic_root_key="3081")])
+    with pytest.raises(FrontendEnvError, match="casals_backend"):
+        assert_frontend_ic_env(
+            "txkcv-oqaaa-aaaah-av3da-cai",
+            {"PUBLIC_CANISTER_ID:casals_backend": "t6jjj-yyaaa-aaaah-av3cq-cai"},
+            opener=opener,
+            attempts=2,
+            sleep=lambda _s: None,
+        )
+    assert opener.calls == 2
+
+
+def test_assert_frontend_ic_env_retries_until_cookie_propagates():
+    opener = _FakeOpener([_ic_env_cookie(ic_root_key="3081")])
+    original_open = opener.open
+    responses = [
+        _FakeResponse([_ic_env_cookie(ic_root_key="3081")]),
+        _FakeResponse(
+            [_ic_env_cookie(**{"PUBLIC_CANISTER_ID:casals_backend": "t6jjj-yyaaa-aaaah-av3cq-cai"})]
+        ),
+    ]
+
+    def open_sequence(request, timeout=0):
+        opener.calls += 1
+        return responses.pop(0) if responses else original_open(request, timeout)
+
+    opener.open = open_sequence
+    assert_frontend_ic_env(
+        "txkcv-oqaaa-aaaah-av3da-cai",
+        {"PUBLIC_CANISTER_ID:casals_backend": "t6jjj-yyaaa-aaaah-av3cq-cai"},
+        opener=opener,
+        attempts=3,
+        sleep=lambda _s: None,
+    )
+    assert opener.calls == 2
+
+
+def test_assert_frontend_ic_env_rejects_empty_canister_id():
+    with pytest.raises(FrontendEnvError, match="missing canister id"):
+        assert_frontend_ic_env("", {"PUBLIC_CANISTER_ID:casals_backend": "x"})
+
+
+def test_assert_frontend_ic_env_skips_empty_requirements():
+    assert_frontend_ic_env(
+        "txkcv-oqaaa-aaaah-av3da-cai",
+        {"PUBLIC_CANISTER_ID:casals_backend": ""},
+        opener=_FakeOpener([]),
+    )
+
+
+def test_assert_frontend_ic_env_wraps_network_errors():
+    class _BoomOpener:
+        def open(self, _request, timeout=0):
+            raise OSError("connection reset")
+
+    with pytest.raises(FrontendEnvError, match="connection reset"):
+        assert_frontend_ic_env(
+            "txkcv-oqaaa-aaaah-av3da-cai",
+            {"PUBLIC_CANISTER_ID:casals_backend": "t6jjj-yyaaa-aaaah-av3cq-cai"},
+            opener=_BoomOpener(),
+            attempts=2,
+            sleep=lambda _s: None,
+        )
 
 
 def test_assert_installer_live_skips_empty_id_on_local():
@@ -278,7 +423,7 @@ def test_adopt_allows_live_staging_installer(
     mock_status.return_value = MagicMock(
         status="running",
         controllers=("aaaaa-aa",),
-        raw="status: running",
+        raw="Balance: 20_000_000_000_000 cycles\nstatus: running",
     )
     mock_create.side_effect = [
         "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",

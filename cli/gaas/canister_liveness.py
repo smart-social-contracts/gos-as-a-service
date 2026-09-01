@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -45,6 +47,10 @@ LOCAL_NETWORKS: frozenset[str] = frozenset({"", "local", "localhost"})
 
 class CanisterNotFoundError(RuntimeError):
     """The principal is missing on the IC (IC0301 / not found)."""
+
+
+class FrontendEnvError(RuntimeError):
+    """The served ``ic_env`` cookie is missing required canister env vars."""
 
 
 def canister_prefix(canister_id: str) -> str:
@@ -289,6 +295,86 @@ def assert_installer_live_for_network(
     if net == "":
         return
     assert_canister_exists(principal, role="realm_installer", fetch=fetch)
+
+
+def fetch_frontend_set_cookies(
+    canister_id: str,
+    *,
+    opener: urllib.request.OpenerDirector | None = None,
+) -> list[str]:
+    """GET the raw icp0.io frontend; return its ``Set-Cookie`` header values."""
+    url = ICP0_FRONTEND_URL.format(canister_id=canister_id)
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "text/html",
+            "Cache-Control": "no-cache",
+            "User-Agent": "gaas-canister-liveness/1.0",
+        },
+    )
+    open_url = opener.open if opener is not None else urllib.request.urlopen
+    with open_url(request, timeout=_TIMEOUT_S) as response:
+        headers = getattr(response, "headers", None)
+        if headers is None:
+            return []
+        return list(headers.get_all("Set-Cookie") or [])
+
+
+def parse_ic_env_cookie(cookies: list[str]) -> dict[str, str]:
+    """Decode ``ic_env`` Set-Cookie values into a key→value dict (last wins)."""
+    env: dict[str, str] = {}
+    for header in cookies:
+        first = header.split(";", 1)[0].strip()
+        if not first.startswith("ic_env="):
+            continue
+        decoded = urllib.parse.unquote(first[len("ic_env="):])
+        for pair in decoded.split("&"):
+            key, sep, value = pair.partition("=")
+            if sep and key:
+                env[key] = value
+    return env
+
+
+def assert_frontend_ic_env(
+    canister_id: str,
+    required: dict[str, str],
+    *,
+    opener: urllib.request.OpenerDirector | None = None,
+    attempts: int = 3,
+    delay_s: float = 5.0,
+    sleep=time.sleep,
+) -> None:
+    """Fail if the served ``ic_env`` cookie is missing any *required* var.
+
+    The certified-assets WASM builds ``ic_env`` from canister environment
+    variables, which ``dfx deploy`` never sets. The Casals UI cannot build its
+    backend actor without ``PUBLIC_CANISTER_ID:casals_backend`` in that cookie,
+    and the failure only shows up in the browser. Verifying here turns that
+    silent UI breakage into a deploy-time error.
+    """
+    principal = (canister_id or "").strip()
+    if not principal:
+        raise FrontendEnvError("refusing to verify ic_env: missing canister id")
+    want = {k: v for k, v in required.items() if (v or "").strip()}
+    if not want:
+        return
+    last_error = "no ic_env cookie served"
+    for attempt in range(1, max(1, attempts) + 1):
+        try:
+            seen = parse_ic_env_cookie(fetch_frontend_set_cookies(principal, opener=opener))
+            missing = {k: v for k, v in want.items() if seen.get(k) != v}
+            if not missing:
+                return
+            last_error = f"missing {sorted(missing)} (served keys: {sorted(seen)})"
+        except FrontendEnvError:
+            raise
+        except Exception as exc:
+            last_error = str(exc)
+        if attempt < attempts:
+            sleep(delay_s)
+    raise FrontendEnvError(
+        f"frontend {principal} ic_env cookie check failed: {last_error}"
+    )
 
 
 def assert_casals_frontend_live(

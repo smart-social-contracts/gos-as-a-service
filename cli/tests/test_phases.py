@@ -8,7 +8,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from gaas.descriptor import Descriptor, MultisigConfig, PlatformConfig, ServicesConfig
+from gaas.descriptor import (
+    CyclesConfig,
+    Descriptor,
+    MultisigConfig,
+    PlatformConfig,
+    ServicesConfig,
+)
 from gaas.known import KNOWN_CANISTER_NAMES
 from gaas.phases import (
     PHASES,
@@ -19,6 +25,7 @@ from gaas.phases import (
     _opt_text_init_arg,
     _registry_config_json,
     _registry_runtime_config_json,
+    _save_descriptor,
     phase_configure_backends,
     phase_controller_topology,
     phase_create_canisters,
@@ -34,6 +41,21 @@ from gaas.phases import (
 from gaas.gaas_env import build_gaas_env
 from gaas.dfx import detect_install_mode, _parse_candid_string
 from tests.conftest import SAMPLE_DESCRIPTOR, VALID_CANISTER_ID
+
+
+def test_save_descriptor_writes_output_file(tmp_path: Path) -> None:
+    desc = Descriptor.model_validate(SAMPLE_DESCRIPTOR)
+    desc.set_canister_id("realm_registry_backend", VALID_CANISTER_ID)
+    out = tmp_path / "handoff" / "demo-gaas.json"
+    ctx = DeployContext(identity="deployer", network="ic", output_file=out)
+    _save_descriptor(desc, ctx)
+    text = out.read_text(encoding="utf-8")
+    data = json.loads(text)
+    assert data["name"] == "test"
+    assert data["domain"] == "test.gos.earth"
+    assert data["canisters"]["realm_registry_backend"] == VALID_CANISTER_ID
+    assert text.startswith("{\n")
+    assert "  " in text
 
 
 def test_phases_order() -> None:
@@ -93,7 +115,6 @@ def test_phase_destroy_except_frontend_runs_and_saves(
     assert ctx.cycles_evacuated == 200
 
 
-@patch("gaas.phases.seed_codex_catalog")
 @patch("gaas.phases.ensure_version_catalog_entry", return_value="skipped")
 @patch("gaas.phases.namespace_published", return_value=True)
 @patch("gaas.phases.fetch_namespace_hashes")
@@ -101,7 +122,6 @@ def test_phase_seed_file_registry_skips_undeclared_catalog(
     mock_hashes: MagicMock,
     _mock_published: MagicMock,
     _mock_version_catalog: MagicMock,
-    mock_seed_catalog: MagicMock,
     tmp_path: Path,
 ) -> None:
     mock_hashes.return_value = {"monad_backend.wasm.gz": "abc"}
@@ -132,8 +152,6 @@ def test_phase_seed_file_registry_skips_undeclared_catalog(
     )
 
     phase_seed_file_registry(descriptor, ctx)
-
-    mock_seed_catalog.assert_not_called()
 
 
 @patch("gaas.phases.run_preflight")
@@ -185,7 +203,7 @@ def test_create_canisters_adopt_vs_create(
     mock_status.return_value = MagicMock(
         status="running",
         controllers=("aaaaa-aa",),
-        raw="status: running",
+        raw="Balance: 3_000_000_000_000 cycles\nstatus: running",
     )
     mock_create.side_effect = [
         "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
@@ -215,15 +233,15 @@ def test_create_canisters_adopt_vs_create(
 
     mock_create.assert_called()
     assert desc.canisters["realm_registry_backend"] == VALID_CANISTER_ID
-    # 1 adopted + 8 platform created; DNS-mapped marketplace_frontend is skipped.
-    assert len(desc.canisters) == 9
-    assert "marketplace_backend" in desc.canisters
-    assert "file_registry" in desc.canisters
-    assert "file_registry_frontend" in desc.canisters
+    # 1 adopted + 5 remaining platform created (marketplace / file_registry
+    # belong to `realms seed`).
+    assert len(desc.canisters) == 6
+    assert "marketplace_backend" not in desc.canisters
+    assert "file_registry" not in desc.canisters
+    assert "file_registry_frontend" not in desc.canisters
     assert "marketplace_frontend" not in desc.canisters
 
 
-@patch("gaas.phases.dfx.canister_call")
 @patch("gaas.phases.dfx.top_up_canister")
 @patch("gaas.phases.dfx.create_canister_via_ledger")
 @patch("gaas.phases.dfx.create_canister")
@@ -232,7 +250,7 @@ def test_create_canisters_adopt_vs_create(
 @patch("gaas.phases.dfx.use_identity")
 @patch("gaas.phases.run_preflight")
 @patch("gaas.phases._persist_and_guard_portal_frontends")
-def test_phase_create_canisters_restores_evacuated_cycles(
+def test_phase_create_canisters_tops_up_casals_to_operating_min(
     _persist,
     mock_preflight,
     _use_identity,
@@ -241,9 +259,9 @@ def test_phase_create_canisters_restores_evacuated_cycles(
     mock_create,
     _mock_ledger_create,
     mock_top_up,
-    mock_canister_call,
     tmp_path: Path,
 ) -> None:
+    from gaas.cycles_plan import _casals_backend_required
     from gaas.preflight import PreflightCheck, PreflightReport
 
     mock_preflight.return_value = PreflightReport(
@@ -255,7 +273,7 @@ def test_phase_create_canisters_restores_evacuated_cycles(
     mock_status.return_value = MagicMock(
         status="running",
         controllers=("aaaaa-aa",),
-        raw="status: running",
+        raw="Balance: 1_000_000_000_000 cycles\nstatus: running",
     )
     casals_id = "qthgp-3yaaa-aaaae-agveq-cai"
 
@@ -270,23 +288,86 @@ def test_phase_create_canisters_restores_evacuated_cycles(
         identity="deployer",
         network="ic",
         descriptor_path=path,
-        cycles_evacuated=500_000_000_000,
+        cycles_evacuated=7_500_000_000_000,
     )
     phase_create_canisters(desc, ctx)
 
     mock_top_up.assert_called_once_with(
         casals_id,
-        500_000_000_000,
+        _casals_backend_required(desc) - 1_000_000_000_000,
         "ic",
         identity="deployer",
+        check=True,
     )
-    mock_canister_call.assert_called_once_with(
+
+
+@patch("gaas.phases.dfx.refund_canister_to_ledger")
+@patch("gaas.phases.dfx.transfer_cycles")
+@patch("gaas.phases.dfx.top_up_canister")
+@patch("gaas.phases.dfx.create_canister_via_ledger")
+@patch("gaas.phases.dfx.create_canister")
+@patch("gaas.phases.dfx.canister_status")
+@patch("gaas.phases.dfx.get_principal")
+@patch("gaas.phases.dfx.use_identity")
+@patch("gaas.phases.run_preflight")
+@patch("gaas.phases._persist_and_guard_portal_frontends")
+def test_phase_create_canisters_refunds_holding_before_creates(
+    _persist,
+    mock_preflight,
+    _use_identity,
+    mock_principal,
+    mock_status,
+    mock_create,
+    _mock_ledger_create,
+    mock_top_up,
+    mock_transfer,
+    mock_refund,
+    tmp_path: Path,
+) -> None:
+    from gaas.cycles_plan import _casals_backend_required
+    from gaas.preflight import PreflightCheck, PreflightReport
+
+    mock_preflight.return_value = PreflightReport(
+        identity="deployer",
+        network="ic",
+        checks=[PreflightCheck("identity_exists", True, "ok")],
+    )
+    mock_principal.return_value = "aaaaa-aa"
+    mock_status.return_value = MagicMock(
+        status="running",
+        controllers=("aaaaa-aa",),
+        raw="Balance: 1_000_000_000_000 cycles\nstatus: running",
+    )
+    casals_id = "qthgp-3yaaa-aaaae-agveq-cai"
+    holding_id = "pd2xr-bqaaa-aaaad-agxrq-cai"
+
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {name: VALID_CANISTER_ID for name in KNOWN_CANISTER_NAMES}
+    data["canisters"]["casals_backend"] = casals_id
+    data["holding_canister_id"] = holding_id
+    desc = Descriptor.model_validate(data)
+    path = tmp_path / "env.gaas.json"
+    desc.save(path)
+
+    ctx = DeployContext(
+        identity="deployer",
+        network="ic",
+        descriptor_path=path,
+        cycles_evacuated=7_500_000_000_000,
+    )
+    phase_create_canisters(desc, ctx)
+
+    mock_refund.assert_called_once_with(
+        holding_id, "ic", identity="deployer"
+    )
+    assert desc.holding_canister_id is None
+    mock_transfer.assert_not_called()
+    mock_top_up.assert_called_once_with(
         casals_id,
-        "get_cycles",
-        "()",
+        _casals_backend_required(desc) - 1_000_000_000_000,
         "ic",
         identity="deployer",
-        query=False,
+        check=True,
     )
 
 
@@ -320,7 +401,7 @@ def test_phase_create_canisters_skips_treasury_restore_when_zero(
     mock_status.return_value = MagicMock(
         status="running",
         controllers=("aaaaa-aa",),
-        raw="status: running",
+        raw="Balance: 20_000_000_000_000 cycles\nstatus: running",
     )
 
     data = dict(SAMPLE_DESCRIPTOR)
@@ -339,6 +420,77 @@ def test_phase_create_canisters_skips_treasury_restore_when_zero(
     phase_create_canisters(desc, ctx)
 
     mock_top_up.assert_not_called()
+
+
+@patch("gaas.phases.forget_named_canister_ids")
+@patch("gaas.phases.dfx.top_up_canister")
+@patch("gaas.phases.dfx.create_canister_via_ledger")
+@patch("gaas.phases.dfx.create_canister")
+@patch("gaas.phases.dfx.canister_status")
+@patch("gaas.phases.dfx.get_principal")
+@patch("gaas.phases.dfx.use_identity")
+@patch("gaas.phases._persist_and_guard_portal_frontends")
+def test_create_named_canister_remints_when_dfx_reuses_dead_id(
+    _persist,
+    _use_identity,
+    mock_principal,
+    mock_status,
+    mock_create,
+    mock_ledger,
+    mock_top_up,
+    mock_forget,
+    tmp_path: Path,
+) -> None:
+    from gaas.dfx import DfxError
+
+    dead = "5ocwl-eiaaa-aaaah-av2bq-cai"
+    fresh = "qthgp-3yaaa-aaaae-agveq-cai"
+    mock_principal.return_value = "aaaaa-aa"
+
+    def status_side_effect(canister_id, *_args, **_kwargs):
+        if canister_id == dead:
+            raise DfxError(
+                "Canister not found (IC0301)",
+                command=["dfx", "canister", "status"],
+                stderr="IC0301",
+            )
+        return MagicMock(
+            status="running",
+            controllers=("aaaaa-aa",),
+            raw="Balance: 3_000_000_000_000 cycles\nstatus: running",
+        )
+
+    mock_status.side_effect = status_side_effect
+    mock_create.side_effect = [
+        dead,
+        "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+        "ccccc-ccccc-ccccc-ccccc-ccccc-ccc",
+        "ddddd-ddddd-ddddd-ddddd-ddddd-ddd",
+        "eeeee-eeeee-eeeee-eeeee-eeeee-eee",
+        "fffff-fffff-fffff-fffff-fffff-fff",
+        "ggggg-ggggg-ggggg-ggggg-ggggg-ggg",
+        "hhhhh-hhhhh-hhhhh-hhhhh-hhhhh-hhh",
+        "iiiii-iiiii-iiiii-iiiii-iiiii-iii",
+    ]
+    mock_ledger.return_value = fresh
+
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["name"] = "demo"
+    data["domain"] = "demo.gos.earth"
+    data["canisters"] = {}
+    desc = Descriptor.model_validate(data)
+    path = tmp_path / "demo.json"
+    desc.save(path)
+    ctx = DeployContext(identity="deployer", network="ic", descriptor_path=path)
+    with patch("gaas.phases._find_repo_root", return_value=tmp_path):
+        phase_create_canisters(desc, ctx)
+
+    assert desc.canisters["realm_registry_backend"] == fresh
+    mock_ledger.assert_called_once()
+    mock_top_up.assert_called()
+    first = mock_forget.call_args_list[0].args
+    assert first[1] == "realm_registry_backend"
+    assert set(first[2]) == {"ic", "demo"}
 
 
 def test_registry_init_json_can_test_mode() -> None:
@@ -573,7 +725,7 @@ def test_phase_configure_backends_closed_skips_runtime_flags(
     assert runtime_calls == []
 
 
-def test_installer_config_json_includes_ids() -> None:
+def test_installer_config_json_omits_realms_catalog_ids() -> None:
     data = dict(SAMPLE_DESCRIPTOR)
     data["canisters"] = {
         "realm_registry_backend": VALID_CANISTER_ID,
@@ -584,8 +736,8 @@ def test_installer_config_json_includes_ids() -> None:
     desc = Descriptor.model_validate(data)
     payload = json.loads(_installer_config_json(desc))
     assert payload["registry_backend_id"] == VALID_CANISTER_ID
-    assert payload["file_registry_id"] == "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aab"
-    assert payload["marketplace_id"] == "ccccc-ccccc-ccccc-ccccc-ccccc-ccc"
+    assert "file_registry_id" not in payload
+    assert "marketplace_id" not in payload
     assert payload["casals_canister_id"] == "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb"
     assert payload["portal_url"] == "https://test.gos.earth"
     assert payload["provision_via_casals"] is True
@@ -637,6 +789,14 @@ def test_casals_settings_json_defaults_and_test_mode() -> None:
     assert closed["treasury_reserve"] == 2_000_000_000_000
     assert closed["create_cycles"] == 2_000_000_000_000
     assert "extra_controller_principals" not in closed
+
+    cheap = desc.model_copy(
+        update={"cycles": CyclesConfig(threshold_tc=0.5, create_tc=2)}
+    )
+    cheap_payload = json.loads(_casals_settings_json(cheap, "deployer-principal"))
+    assert cheap_payload["default_min_cycles"] == 500_000_000_000
+    assert cheap_payload["treasury_reserve"] == 500_000_000_000
+    assert cheap_payload["create_cycles"] == 2_000_000_000_000
 
     open_desc = desc.model_copy(update={"flags": {"can_test_mode": True}})
     open_payload = json.loads(_casals_settings_json(open_desc, "deployer-principal"))
@@ -694,8 +854,8 @@ def test_infra_canister_names() -> None:
     assert "realm_registry_backend" in names
     assert "realm_registry_frontend" in names
     assert "realm_installer" in names
-    assert "file_registry" in names
-    assert "file_registry_frontend" in names
+    assert "file_registry" not in names
+    assert "file_registry_frontend" not in names
     assert "casals_backend" not in names
 
 
@@ -736,9 +896,9 @@ def test_controller_topology_test_mode(
     desc = Descriptor.model_validate(data)
     ctx = DeployContext(identity="deployer", network="ic")
     phase_controller_topology(desc, ctx)
-    # casals pair + 5 infra (registry/installer/file_registry pair) +
-    # casals_file_registry + marketplace_backend
-    assert mock_update.call_count == 9
+    # casals pair + 3 infra (registry pair + installer) + casals_file_registry
+    # marketplace / file_registry are owned by `realms seed`
+    assert mock_update.call_count == 6
     first_call = mock_update.call_args_list[0]
     assert first_call[0][1] == ["aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aac", "deployer-principal"]
 
@@ -803,7 +963,6 @@ def test_parse_registry_configure_variant_ok() -> None:
     assert parsed["can_test_mode"] is True
 
 
-@patch("gaas.phases.seed_codex_catalog")
 @patch("gaas.phases.ensure_version_catalog_entry", return_value="skipped")
 @patch("gaas.phases.namespace_published", return_value=False)
 @patch("gaas.phases.resolve_gos_artifacts")
@@ -815,7 +974,6 @@ def test_phase_seed_file_registry_gos_binaries_use_casals_file_registry(
     mock_resolve_artifacts,
     _mock_published,
     _mock_version_catalog,
-    _mock_seed_catalog,
     tmp_path: Path,
 ) -> None:
     from gaas.versions import ResolvedDeployVersion
@@ -1074,6 +1232,8 @@ def test_phase_grant_commanders_grant_error_continues(
 
 
 @patch("gaas.phases.dfx.get_principal", return_value="aaaaa-aa")
+@patch("gaas.phases.assert_frontend_ic_env")
+@patch("gaas.phases.dfx.set_canister_environment_variables")
 @patch("gaas.phases.dfx.deploy_assets_canister")
 @patch("gaas.phases.resolve_casals_frontend_dist")
 @patch("gaas.phases.frontend_dist_dir")
@@ -1089,6 +1249,8 @@ def test_phase_install_frontends_no_mid_run_confirm(
     mock_frontend_dist,
     mock_casals_dist,
     mock_deploy_assets,
+    mock_set_env,
+    mock_verify_ic_env,
     _mock_principal,
     tmp_path: Path,
 ) -> None:
@@ -1106,35 +1268,72 @@ def test_phase_install_frontends_no_mid_run_confirm(
     mock_get_run_log.return_value = run_log
 
     data = dict(SAMPLE_DESCRIPTOR)
+    portal_fe = VALID_CANISTER_ID
+    portal_be = "tmp6q-uiaaa-aaaah-av3bq-cai"
+    casals_fe = "txkcv-oqaaa-aaaah-av3da-cai"
+    casals_be = "t6jjj-yyaaa-aaaah-av3cq-cai"
     data["canisters"] = {
-        "realm_registry_frontend": VALID_CANISTER_ID,
+        "realm_registry_frontend": portal_fe,
+        "realm_registry_backend": portal_be,
         "file_registry_frontend": VALID_CANISTER_ID,
-        "casals_frontend": VALID_CANISTER_ID,
-        "casals_backend": VALID_CANISTER_ID,
+        "casals_frontend": casals_fe,
+        "casals_backend": casals_be,
     }
     data["services"] = {"monitor_url": "https://casals.realmsops.dev/v1/realms-test"}
     descriptor = Descriptor.model_validate(data)
     ctx = DeployContext(identity="deployer", network="ic", yes=False, work_dir=tmp_path / "work")
 
+    order: list[str] = []
+    mock_deploy_assets.side_effect = lambda *a, **k: order.append(f"deploy:{a[0]}")
+    mock_set_env.side_effect = lambda *a, **k: order.append("set_env")
+    mock_verify_ic_env.side_effect = lambda *a, **k: order.append("verify_ic_env")
+
     phase_install_frontends(descriptor, ctx)
 
-    # npm install + realm_registry_frontend build; file_registry_frontend uses
-    # committed dist (no extra npm). marketplace_frontend is absent so skipped.
+    # npm install + realm_registry_frontend build. file_registry_frontend and
+    # marketplace_frontend are owned by `realms seed`.
     assert run_log.run_step.call_count == 2
-    assert mock_deploy_assets.call_count == 3
+    assert mock_deploy_assets.call_count == 2
     assert _persist.call_count == 2
     assert _persist.call_args_list[0].kwargs["require_http"] is False
     assert _persist.call_args_list[1].kwargs["require_http"] is True
     for call in mock_deploy_assets.call_args_list:
         assert call.kwargs.get("yes") is True
         assert call.kwargs.get("mode") == "reinstall"
+        assert call.kwargs.get("extra_network_ids") == descriptor.canisters
+    # Env vars must land before each asset sync so the WASM recertifies ic_env,
+    # and the served cookie must be verified before the phase completes.
+    assert order == [
+        "set_env",
+        "deploy:realm_registry_frontend",
+        "verify_ic_env",
+        "set_env",
+        "deploy:casals_frontend",
+        "verify_ic_env",
+    ]
+    assert mock_set_env.call_count == 2
+    assert mock_set_env.call_args_list[0].args[0] == portal_fe
+    assert mock_set_env.call_args_list[1].args[0] == casals_fe
+    env_args, env_kwargs = mock_set_env.call_args_list[1]
+    assert env_args[1]["PUBLIC_CANISTER_ID:casals_backend"] == casals_be
+    assert env_kwargs.get("identity") == "deployer"
+    assert mock_verify_ic_env.call_count == 2
+    portal_verify = mock_verify_ic_env.call_args_list[0].args
+    assert portal_verify[0] == portal_fe
+    assert portal_verify[1]["PUBLIC_CANISTER_ID:realm_registry_backend"] == portal_be
+    assert portal_verify[1]["PUBLIC_CANISTER_ID:realm_registry_frontend"] == portal_fe
+    casals_verify = mock_verify_ic_env.call_args_list[1].args
+    assert casals_verify[0] == casals_fe
+    assert casals_verify[1]["PUBLIC_CANISTER_ID:casals_backend"] == casals_be
+    assert casals_verify[1]["PUBLIC_CANISTER_ID:casals_frontend"] == casals_fe
     assert mock_casals_dist.call_args.kwargs["monitor_url"] == (
         "https://casals.realmsops.dev/v1/realms-test"
     )
 
 
-@patch("gaas.phases.build_marketplace_frontend")
 @patch("gaas.phases.dfx.get_principal", return_value="aaaaa-aa")
+@patch("gaas.phases.assert_frontend_ic_env")
+@patch("gaas.phases.dfx.set_canister_environment_variables")
 @patch("gaas.phases.dfx.deploy_assets_canister")
 @patch("gaas.phases.resolve_casals_frontend_dist")
 @patch("gaas.phases.frontend_dist_dir")
@@ -1142,7 +1341,7 @@ def test_phase_install_frontends_no_mid_run_confirm(
 @patch("gaas.phases._find_repo_root")
 @patch("gaas.phases.get_run_log")
 @patch("gaas.phases._persist_and_guard_portal_frontends")
-def test_phase_install_frontends_reinstalls_marketplace_onto_existing_id(
+def test_phase_install_frontends_skips_marketplace_owned_by_realms_seed(
     _persist,
     mock_get_run_log,
     mock_repo_root,
@@ -1150,8 +1349,9 @@ def test_phase_install_frontends_reinstalls_marketplace_onto_existing_id(
     mock_frontend_dist,
     mock_casals_dist,
     mock_deploy_assets,
+    _mock_set_env,
+    _mock_verify_ic_env,
     _mock_principal,
-    mock_build_marketplace,
     tmp_path: Path,
 ) -> None:
     repo_root = tmp_path / "repo"
@@ -1182,16 +1382,11 @@ def test_phase_install_frontends_reinstalls_marketplace_onto_existing_id(
 
     phase_install_frontends(descriptor, ctx)
 
-    mock_build_marketplace.assert_called_once()
-    assert mock_build_marketplace.call_args.kwargs["marketplace_backend_id"] == (
-        marketplace_backend_id
-    )
-    assert mock_build_marketplace.call_args.kwargs["file_registry_id"] == file_registry_id
-    assert mock_deploy_assets.call_count == 4
-    marketplace_deploy = mock_deploy_assets.call_args_list[-1]
-    assert marketplace_deploy.args[0] == "marketplace_frontend"
-    assert marketplace_deploy.args[1] == marketplace_frontend_id
-    assert marketplace_deploy.kwargs.get("mode") == "reinstall"
+    # registry frontend + casals frontend only
+    assert mock_deploy_assets.call_count == 2
+    deployed = [call.args[0] for call in mock_deploy_assets.call_args_list]
+    assert "marketplace_frontend" not in deployed
+    assert "file_registry_frontend" not in deployed
 
 
 def _install_backends_descriptor() -> Descriptor:
@@ -1261,27 +1456,22 @@ def test_phase_install_backends_reinstall_backends_forces_wipe(
         assert call.args[3] == "reinstall"
 
 
-@patch("gaas.phases.configure_marketplace_backend")
-@patch("gaas.phases.build_marketplace_backend_wasm")
 @patch("gaas.phases.dfx.install_wasm")
 @patch("gaas.phases.dfx.detect_install_mode", return_value="upgrade")
 @patch("gaas.phases.resolve_casals_wasm")
 @patch("gaas.phases.resolve_platform_backend_wasm")
 @patch("gaas.phases._find_repo_root")
-def test_phase_install_backends_installs_file_registry_and_marketplace(
+def test_phase_install_backends_skips_file_registry_and_marketplace(
     mock_repo_root,
     mock_platform_wasm,
     mock_casals_wasm,
     mock_detect,
     mock_install,
-    mock_marketplace_wasm,
-    mock_configure_marketplace,
     tmp_path: Path,
 ) -> None:
     mock_repo_root.return_value = tmp_path / "repo"
     mock_platform_wasm.return_value = tmp_path / "platform.wasm.gz"
     mock_casals_wasm.return_value = tmp_path / "casals.wasm.gz"
-    mock_marketplace_wasm.return_value = tmp_path / "marketplace.wasm.gz"
 
     data = dict(SAMPLE_DESCRIPTOR)
     data["canisters"] = {
@@ -1296,12 +1486,11 @@ def test_phase_install_backends_installs_file_registry_and_marketplace(
 
     phase_install_backends(descriptor, ctx)
 
-    assert mock_install.call_count == 5
-    mock_marketplace_wasm.assert_called_once()
-    mock_configure_marketplace.assert_called_once()
+    # registry, installer, casals — leftover Realms product IDs are skipped
+    assert mock_install.call_count == 3
     installed_ids = [call.args[0] for call in mock_install.call_args_list]
-    assert "aaaaa-aaaaa-aaaaa-aaaaa-aaa" in installed_ids
-    assert "bbbbb-bbbbb-bbbbb-bbbbb-bbb" in installed_ids
+    assert "aaaaa-aaaaa-aaaaa-aaaaa-aaa" not in installed_ids
+    assert "bbbbb-bbbbb-bbbbb-bbbbb-bbb" not in installed_ids
 
 
 @patch("gaas.phases.resolve_casals_file_registry_wasm")
