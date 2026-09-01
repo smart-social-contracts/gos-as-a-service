@@ -36,7 +36,7 @@ function networkTestFlags(network, config = {}) {
     return {};
   }
   const net = (network || 'staging').toLowerCase();
-  if (net === 'ic' || net === 'production') {
+  if (net === 'ic' || net === 'production' || net === 'demo') {
     return {};
   }
   if (net === 'test') {
@@ -53,15 +53,6 @@ function networkTestFlags(network, config = {}) {
       test_mode: true,
       user_self_registration: true,
       demo_data: false,
-      ii_bypass: false,
-      skip_terms: false,
-    };
-  }
-  if (net === 'demo') {
-    return {
-      test_mode: true,
-      user_self_registration: true,
-      demo_data: true,
       ii_bypass: false,
       skip_terms: false,
     };

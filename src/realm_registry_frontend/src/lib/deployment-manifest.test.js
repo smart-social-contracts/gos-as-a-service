@@ -195,6 +195,16 @@ test('production GaaS omits test_flags when can_test_mode is false', () => {
   assert.equal(manifest.test_flags, undefined);
 });
 
+test('demo omits test_flags even when can_test_mode is true', () => {
+  const manifest = buildRealmDeploymentManifest(
+    { name: 'Demo Realm', gos_implementation: 'realms-gos' },
+    'demo',
+    { ...TEST_CONFIG, can_test_mode: true },
+    { useCasals: false },
+  );
+  assert.equal(manifest.test_flags, undefined);
+});
+
 test('test network gets full test flag set when can_test_mode is true', () => {
   const manifest = buildRealmDeploymentManifest(
     { name: 'Test Realm', gos_implementation: 'realms-gos' },
