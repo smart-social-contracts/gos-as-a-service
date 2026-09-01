@@ -5,6 +5,7 @@
   import { _ } from 'svelte-i18n';
   import { requestAssistantOpen, requestAssistantClose } from '$lib/assistant-open.js';
   import { createRegistryTour, registerTourReplay } from '$lib/registry-tour.js';
+  import { applyIntroLinks, INTRO_LINKS } from '$lib/intro-links.js';
 
   /** Bound from parent so the tour can open/close the browse panel. */
   export let panelOpen = false;
@@ -118,24 +119,34 @@
       </button>
 
       <h2 id="registry-tour-intro-title" class="intro-title">{$_('tour.intro_title')}</h2>
-      <p class="intro-lead">{$_('tour.intro_lead')}</p>
-      <p class="intro-body">{$_('tour.intro_body')}</p>
-      <p class="intro-link-wrap">
+      <p class="intro-lead">
+        {@html applyIntroLinks($_('tour.intro_lead'), {
+          ggg: { href: INTRO_LINKS.ggg, label: $_('tour.intro_ggg') },
+        })}
+      </p>
+      <p class="intro-body">
+        {@html applyIntroLinks($_('tour.intro_body'), {
+          realm: { href: INTRO_LINKS.realm, label: $_('tour.intro_realm') },
+        })}
+      </p>
+      <p class="intro-learn">{$_('tour.intro_learn_more')}</p>
+      <p class="intro-sites">
         <a
           class="intro-link"
-          href="https://internetcomputer.org"
+          href={INTRO_LINKS.ssc}
           target="_blank"
           rel="noopener noreferrer"
-        >
-          {$_('tour.intro_ic_link')}
-        </a>
+        >{$_('tour.intro_link_ssc')}</a>
+        <a
+          class="intro-link"
+          href={INTRO_LINKS.ic}
+          target="_blank"
+          rel="noopener noreferrer"
+        >{$_('tour.intro_link_ic')}</a>
       </p>
       <p class="intro-join">{$_('tour.intro_join')}</p>
 
       <div class="intro-actions">
-        <button type="button" class="intro-btn intro-btn-secondary" on:click={closeIntro}>
-          {$_('tour.intro_close')}
-        </button>
         <button type="button" class="intro-btn intro-btn-primary" on:click={continueFromIntro}>
           {$_('tour.intro_continue')}
         </button>
@@ -171,7 +182,7 @@
     position: relative;
     z-index: 1;
     width: 100%;
-    max-width: 30rem;
+    max-width: 36rem;
     background: var(--surface, #fff);
     border: 1px solid var(--border, #e5e5e5);
     border-radius: 0.875rem;
@@ -218,6 +229,7 @@
   }
 
   .intro-body,
+  .intro-learn,
   .intro-join {
     margin: 0 0 0.875rem;
     font-size: 0.9375rem;
@@ -225,48 +237,51 @@
     color: var(--text-secondary);
   }
 
-  .intro-link-wrap {
-    margin: 0 0 0.875rem;
+  .intro-learn {
+    margin-bottom: 0.35rem;
   }
 
-  .intro-link {
+  .intro-sites {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2rem;
+    margin: 0 0 0.875rem;
     font-size: 0.9375rem;
-    line-height: 1.5;
+    line-height: 1.6;
+  }
+
+  .intro-link,
+  .intro-lead :global(.intro-inline-link),
+  .intro-body :global(.intro-inline-link) {
+    font-size: inherit;
+    line-height: inherit;
     color: var(--text-primary);
     text-decoration: underline;
     text-underline-offset: 2px;
   }
 
-  .intro-link:hover {
+  .intro-link:hover,
+  .intro-lead :global(.intro-inline-link:hover),
+  .intro-body :global(.intro-inline-link:hover) {
     color: var(--text-secondary);
   }
 
   .intro-actions {
     display: flex;
-    justify-content: flex-end;
-    flex-wrap: wrap;
-    gap: 0.5rem;
+    justify-content: center;
     margin-top: 1.25rem;
   }
 
   .intro-btn {
-    padding: 0.5rem 1rem;
+    min-width: 8.5rem;
+    padding: 0.5rem 1.5rem;
     border-radius: 0.5rem;
     font-family: var(--font-family);
     font-size: 0.875rem;
     font-weight: 600;
     cursor: pointer;
     border: 1px solid transparent;
-  }
-
-  .intro-btn-secondary {
-    background: var(--surface, #fff);
-    color: var(--text-primary);
-    border-color: var(--border, #d4d4d4);
-  }
-
-  .intro-btn-secondary:hover {
-    background: var(--surface-2, #fafafa);
   }
 
   .intro-btn-primary {
