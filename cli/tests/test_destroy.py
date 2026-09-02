@@ -295,6 +295,40 @@ def test_destroy_except_frontend_orchestra_loop_and_extras(
 @patch("gaas.destroy.dfx.get_wallet")
 @patch("gaas.destroy.dfx.canister_call")
 @patch("gaas.destroy.ensure_casals_controller")
+def test_destroy_except_frontend_deletes_walletized_conductor(
+    _mock_ensure: MagicMock,
+    mock_call: MagicMock,
+    mock_wallet: MagicMock,
+    mock_principal: MagicMock,
+    mock_status: MagicMock,
+    mock_dust_delete: MagicMock,
+    tmp_path: Path,
+) -> None:
+    desc = _full_descriptor(tmp_path)
+    mock_wallet.return_value = WALLET_ID
+    mock_principal.return_value = DEPLOYER_PRINCIPAL
+    mock_call.side_effect = DfxError(
+        "Canister has no update method 'destroy_orchestra'. IC0536",
+        command=["dfx", "canister", "call"],
+        stderr="IC0536",
+    )
+    mock_status.return_value = CanisterStatus(
+        canister_id=CASALS_ID,
+        status="running",
+        raw="Balance: 531_449_609_185 cycles",
+    )
+    result = destroy_except_frontend(desc, network="ic", identity="deployer")
+    assert result["ok"] is True
+    mock_dust_delete.assert_called_once()
+    assert desc.canisters == {FRONTEND_NAME: FRONTEND_ID}
+
+
+@patch("gaas.destroy.dfx.delete_dust_canister")
+@patch("gaas.destroy.dfx.canister_status")
+@patch("gaas.destroy.dfx.get_principal")
+@patch("gaas.destroy.dfx.get_wallet")
+@patch("gaas.destroy.dfx.canister_call")
+@patch("gaas.destroy.ensure_casals_controller")
 def test_destroy_except_frontend_refuses_fat_casals(
     _mock_ensure: MagicMock,
     mock_call: MagicMock,

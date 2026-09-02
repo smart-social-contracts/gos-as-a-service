@@ -81,6 +81,12 @@ def destroy_via_casals(
     return parsed
 
 
+def _is_missing_casals_method(exc: BaseException) -> bool:
+    """True when the conductor WASM was replaced (dfx temp wallet) so Casals APIs are gone."""
+    text = str(exc)
+    return "has no update method" in text or "IC0536" in text
+
+
 def _is_out_of_cycles_error(exc: BaseException) -> bool:
     text = str(exc)
     return "IC0207" in text or "out of cycles" in text.lower()
@@ -429,32 +435,42 @@ def destroy_except_frontend(
             identity=identity,
         )
 
-    orchestra_destroyed, orchestra_reclaimed = run_destroy_orchestra_loop(
-        casals_id,
-        preserve=_orchestra_preserve_ids(descriptor),
-        network=network,
-        identity=identity,
-        deployer_principal=deployer_principal,
-    )
+    orchestra_destroyed: list[dict[str, Any]] = []
+    orchestra_reclaimed = 0
+    extra_destroyed: list[dict[str, Any]] = []
+    extra_reclaimed = 0
+    cycles_evacuated = 0
+    try:
+        orchestra_destroyed, orchestra_reclaimed = run_destroy_orchestra_loop(
+            casals_id,
+            preserve=_orchestra_preserve_ids(descriptor),
+            network=network,
+            identity=identity,
+            deployer_principal=deployer_principal,
+        )
 
-    extra_targets = _also_destroy_targets(
-        descriptor, preserve_ids=preserve_set, casals_id=casals_id
-    )
-    extra_destroyed, extra_reclaimed = also_destroy_descriptor_canisters(
-        casals_id,
-        extra_targets,
-        network=network,
-        identity=identity,
-    )
+        extra_targets = _also_destroy_targets(
+            descriptor, preserve_ids=preserve_set, casals_id=casals_id
+        )
+        extra_destroyed, extra_reclaimed = also_destroy_descriptor_canisters(
+            casals_id,
+            extra_targets,
+            network=network,
+            identity=identity,
+        )
 
-    convert_treasury_icp(casals_id, network=network, identity=identity)
+        convert_treasury_icp(casals_id, network=network, identity=identity)
 
-    cycles_evacuated = evacuate_treasury_to_wallet(
-        casals_id,
-        wallet=wallet,
-        network=network,
-        identity=identity,
-    )
+        cycles_evacuated = evacuate_treasury_to_wallet(
+            casals_id,
+            wallet=wallet,
+            network=network,
+            identity=identity,
+        )
+    except dfx.DfxError as exc:
+        if not _is_missing_casals_method(exc):
+            raise
+        # dfx canister delete previously installed a temporary wallet WASM.
 
     status = dfx.canister_status(casals_id, network, identity=identity)
     leftover = dfx.parse_canister_cycles_balance(status.raw)
