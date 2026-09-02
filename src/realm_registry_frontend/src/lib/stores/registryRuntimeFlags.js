@@ -11,6 +11,7 @@ const initial = {
 	testModeSkipTerms: false,
 	testModeSkipPassportZkproof: false,
 	testModeDisableCardBilling: undefined,
+	testModeAssistantExperimentalNotice: undefined,
 	error: null
 };
 
@@ -39,6 +40,10 @@ function createRegistryRuntimeFlagsStore() {
 					testModeDisableCardBilling:
 						typeof payload.test_mode_disable_card_billing === 'boolean'
 							? payload.test_mode_disable_card_billing
+							: undefined,
+					testModeAssistantExperimentalNotice:
+						typeof payload.test_mode_assistant_experimental_notice === 'boolean'
+							? payload.test_mode_assistant_experimental_notice
 							: undefined,
 					error: null
 				});
@@ -75,6 +80,10 @@ export const testModeSkipPassportZkproof = derived(
 export const testModeDisableCardBilling = derived(
 	registryRuntimeFlags,
 	($f) => $f.testModeDisableCardBilling
+);
+export const testModeAssistantExperimentalNotice = derived(
+	registryRuntimeFlags,
+	($f) => $f.testModeAssistantExperimentalNotice
 );
 
 /** Ensure runtime flags are loaded (idempotent). */

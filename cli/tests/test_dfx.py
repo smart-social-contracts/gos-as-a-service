@@ -192,6 +192,28 @@ def test_update_canister_settings_passes_controllers(monkeypatch) -> None:
     assert "deployer-id" in args
 
 
+def test_add_canister_controller_is_additive(monkeypatch) -> None:
+    from gaas import dfx
+
+    captured: dict = {}
+
+    def fake_run(args, **kwargs):
+        captured["args"] = args
+
+    monkeypatch.setattr(dfx, "_run", fake_run)
+    dfx.add_canister_controller(
+        "yhw3g-fyaaa-aaaas-qgorq-cai",
+        "qthgp-3yaaa-aaaae-agveq-cai",
+        "ic",
+        identity="deployer",
+    )
+    args = captured["args"]
+    assert "update-settings" in args
+    assert "--add-controller" in args
+    assert "--set-controller" not in args
+    assert "qthgp-3yaaa-aaaae-agveq-cai" in args
+
+
 def test_reject_canister_delete_blocks_raw_delete() -> None:
     with pytest.raises(DfxError, match="burns leftover cycles"):
         reject_canister_delete(["dfx", "canister", "delete", "abc", "--yes"])

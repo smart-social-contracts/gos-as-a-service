@@ -21,6 +21,7 @@
     TEST_IDENTITY_MAX_INDEX,
   } from '$lib/test-identities.js';
   import { isCardBillingDisabled } from '$lib/card-billing-flag.js';
+  import { isAssistantExperimentalNoticeEnabled } from '$lib/assistant-experimental-flag.js';
 
   export let open = false;
 
@@ -33,7 +34,8 @@
     { key: 'demo_data', store: 'testModeDemoData', label: 'Demo data', hint: 'Auto-activate the demo data simulator' },
     { key: 'skip_terms', store: 'testModeSkipTerms', label: 'Skip terms', hint: 'Skip the terms & conditions step on join' },
     { key: 'skip_passport_zkproof', store: 'testModeSkipPassportZkproof', label: 'Skip passport ZK-proof', hint: 'Bypass passport zero-knowledge verification' },
-    { key: 'disable_card_billing', store: 'testModeDisableCardBilling', label: 'Disable card billing', hint: 'Keep Top Up Credits visible; Pay with Card cannot charge (Currently not available)' }
+    { key: 'disable_card_billing', store: 'testModeDisableCardBilling', label: 'Disable card billing', hint: 'Keep Top Up Credits visible; Pay with Card cannot charge (Currently not available)' },
+    { key: 'assistant_experimental_notice', store: 'testModeAssistantExperimentalNotice', label: 'Assistant experimental notice', hint: 'Keep the assistant available; show the unofficial / not legal-advice line in chrome' }
   ];
 
   let values = {};
@@ -64,6 +66,11 @@
       if (f.key === 'disable_card_billing') {
         next[f.key] = isCardBillingDisabled({
           disableCardBilling: snapshot.testModeDisableCardBilling,
+          network: snapshot.network,
+        });
+      } else if (f.key === 'assistant_experimental_notice') {
+        next[f.key] = isAssistantExperimentalNoticeEnabled({
+          assistantExperimentalNotice: snapshot.testModeAssistantExperimentalNotice,
           network: snapshot.network,
         });
       } else {

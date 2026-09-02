@@ -132,7 +132,7 @@
 </script>
 
 <svelte:head>
-  <title>{$_('assistant.settings_title', { default: 'Realms Assistant — Settings' })}</title>
+  <title>{$_('assistant.settings_title', { default: 'AI Assistant — Settings' })}</title>
 </svelte:head>
 
 <div class="settings-page">
@@ -144,7 +144,7 @@
         </svg>
         {$_('assistant.back', { default: 'Back' })}
       </a>
-      <h1 class="settings-title">{$_('assistant.settings_title', { default: 'Realms Assistant — Settings' })}</h1>
+      <h1 class="settings-title">{$_('assistant.settings_title', { default: 'AI Assistant — Settings' })}</h1>
     </header>
 
     <section class="settings-section" id="personal-assistants">

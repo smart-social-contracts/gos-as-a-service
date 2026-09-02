@@ -61,13 +61,13 @@ test('first-open offers connect until a provider is connected or dismissed', () 
   assert.equal(shouldOfferPersonalConnect({ connectedProviders: ['cloud'] }), true);
 });
 
-test('registry assistant keeps built-in empty copy, FAB, and personal connect offer', () => {
+test('registry assistant keeps FAB and personal connect offer without empty intro copy', () => {
   const here = dirname(fileURLToPath(import.meta.url));
   const panel = readFileSync(join(here, '../components/RegistryAssistant.svelte'), 'utf8');
   const settings = readFileSync(join(here, '../../routes/assistant/settings/+page.svelte'), 'utf8');
   assert.match(panel, /ConnectPersonalProviders/);
   assert.match(panel, /assistant-fab/);
-  assert.match(panel, /Ask me anything about the realms in the registry/);
+  assert.doesNotMatch(panel, /Ask me anything about the realms in the registry/);
   assert.match(panel, /class="assistant-input"/);
   assert.doesNotMatch(panel, /\bCloud\b/);
   assert.match(settings, /ConnectPersonalProviders/);
@@ -91,5 +91,7 @@ test('English copy names ChatGPT, Claude, and Grok and never says Cloud', () => 
   assert.match(blob, /Claude/);
   assert.match(blob, /Grok/);
   assert.doesNotMatch(blob, /\bCloud\b/);
-  assert.match(assistant.connect_lead, /built-in assistant/);
+  assert.match(assistant.connect_title, /Connect your personal AI assistant/);
+  assert.match(assistant.connect_lead, /built-in helper/);
+  assert.match(assistant.connect_lead, /MCP link/);
 });

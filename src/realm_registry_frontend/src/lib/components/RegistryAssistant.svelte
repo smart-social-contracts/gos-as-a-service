@@ -29,6 +29,13 @@
   import { assistantChrome } from '$lib/assistant-chrome.js';
   import { assistantOpenRequest, assistantToggleRequest, assistantCloseRequest } from '$lib/assistant-open.js';
   import { API_URL, CHAT_REQUEST_TIMEOUT_MS, geisterNetwork } from '$lib/geister/constants.js';
+  import { CONFIG } from '$lib/config.js';
+  import { registryRuntimeFlags } from '$lib/stores/registryRuntimeFlags.js';
+  import {
+    ASSISTANT_EXPERIMENTAL_NOTICE,
+    ASSISTANT_EXPERIMENTAL_PROMPT_RULES,
+    isAssistantExperimentalNoticeEnabled,
+  } from '$lib/assistant-experimental-flag.js';
   import { renderMarkdown } from '$lib/geister/assistant-markdown.js';
   import ConnectPersonalProviders from '$lib/components/ConnectPersonalProviders.svelte';
   import { loadPrefs, loadPanelWidth, savePanelWidth, dismissConnectSuggestion } from '$lib/geister/assistant-prefs.js';
@@ -120,6 +127,11 @@
   let isLoadingSuggestions = false;
   /** @type {number | null} */
   let copiedIndex = null;
+
+  $: experimentalNoticeOn = isAssistantExperimentalNoticeEnabled({
+    assistantExperimentalNotice: $registryRuntimeFlags.testModeAssistantExperimentalNotice,
+    network: $registryRuntimeFlags.network || CONFIG.deploy_queue_network,
+  });
 
   // Resize drag state
   let isResizing = false;
@@ -834,7 +846,19 @@
       if (ctxRealm) {
         payload.context_realm = ctxRealm;
         payload.realm_principal = ctxRealm;
-        if (pageContext) payload.page_context = pageContext;
+      }
+
+      if (experimentalNoticeOn) {
+        payload.page_context = pageContext
+          ? {
+              ...pageContext,
+              description: [pageContext.description, ASSISTANT_EXPERIMENTAL_PROMPT_RULES]
+                .filter(Boolean)
+                .join('\n\n'),
+            }
+          : { description: ASSISTANT_EXPERIMENTAL_PROMPT_RULES };
+      } else if (ctxRealm && pageContext) {
+        payload.page_context = pageContext;
       }
 
       if (focus?.uri) payload.focus = focus;
@@ -1025,7 +1049,7 @@
     class:resizing={isResizing}
     style="width: {docked ? panelWidth + 'px' : 'min(' + panelWidth + 'px, calc(100vw - 48px))'}; {panelViewportStyle}"
     aria-hidden={!open}
-    aria-label={$_('assistant.title', { default: 'Realms AI Assistant' })}
+    aria-label={$_('assistant.title', { default: 'AI Assistant' })}
   >
     {#if docked}
       <button
@@ -1037,7 +1061,7 @@
     {/if}
 
     <header class="assistant-header">
-      <span class="assistant-title">{$_('assistant.title', { default: 'Realms AI Assistant' })}</span>
+      <span class="assistant-title">{$_('assistant.title', { default: 'AI Assistant' })}</span>
       <div class="assistant-header-actions">
         <button
           class="assistant-icon-btn"
@@ -1085,6 +1109,12 @@
         </button>
       </div>
     </header>
+
+    {#if experimentalNoticeOn}
+      <p class="assistant-experimental-notice">
+        {$_('assistant.experimental_notice', { default: ASSISTANT_EXPERIMENTAL_NOTICE })}
+      </p>
+    {/if}
 
     <div class="chat-toolbar">
       <button
@@ -1199,21 +1229,13 @@
 
       <div class="assistant-main">
     <div class="assistant-messages" use:scrollRegion>
-      {#if messages.length === 0}
-        <div class="assistant-empty">
-          {$_('assistant.empty', {
-            default:
-              'Ask me anything about the realms in the registry — which to join, how to create one, or how Realms works.',
-          })}
-        </div>
-        {#if offerPersonalConnect}
+      {#if messages.length === 0 && offerPersonalConnect}
           <ConnectPersonalProviders
             variant="panel"
             showDismiss={true}
             on:dismiss={hideConnectSuggestion}
             on:connected={applyPrefs}
           />
-        {/if}
       {/if}
       {#each messages as m, i (i)}
         <div class="assistant-msg" class:user={m.isUser}>
@@ -1509,6 +1531,17 @@
     color: #111;
   }
 
+  .assistant-experimental-notice {
+    margin: 0;
+    padding: 8px 14px;
+    border-bottom: 1px solid #eee;
+    background: #fafafa;
+    color: #525252;
+    font-size: 0.72rem;
+    line-height: 1.4;
+    flex-shrink: 0;
+  }
+
   .chat-toolbar {
     display: flex;
     gap: 6px;
@@ -1685,14 +1718,6 @@
     flex-direction: column;
     gap: 10px;
     min-height: 0;
-  }
-  .assistant-empty {
-    color: #888;
-    font-size: 0.88rem;
-    line-height: 1.5;
-  }
-  .assistant-empty + :global(.connect-card) {
-    margin-top: 4px;
   }
 
   .assistant-msg {

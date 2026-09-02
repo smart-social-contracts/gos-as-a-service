@@ -52,3 +52,30 @@ SAMPLE_DESCRIPTOR = {
 }
 
 VALID_CANISTER_ID = "yhw3g-fyaaa-aaaas-qgorq-cai"
+
+CASALS_BOOTSTRAP_TEST_IDS = {
+    "casals_backend": "qthgp-3yaaa-aaaae-agveq-cai",
+    "casals_frontend": "qic2k-baaaa-aaaae-agvga-cai",
+    "casals_file_registry": "uq2mu-kaaaa-aaaah-avqcq-cai",
+}
+
+
+def mock_run_casals_new(descriptor, **kwargs):
+    """Patch target for gaas.phases.run_casals_new in create-canister tests."""
+    had = any(
+        (descriptor.canisters.get(name) or "").strip()
+        for name in CASALS_BOOTSTRAP_TEST_IDS
+    )
+    for name, default_id in CASALS_BOOTSTRAP_TEST_IDS.items():
+        existing = (descriptor.canisters.get(name) or "").strip()
+        descriptor.set_canister_id(name, existing or default_id)
+    return {
+        "ok": True,
+        "mode": "upgrade" if had else "create",
+        "canisters": {
+            "casals_backend": descriptor.canisters["casals_backend"],
+            "casals_frontend": descriptor.canisters["casals_frontend"],
+            "ic_file_registry": descriptor.canisters["casals_file_registry"],
+        },
+        "seeded": False,
+    }

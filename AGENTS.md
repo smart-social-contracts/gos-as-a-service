@@ -63,6 +63,8 @@ gaas new environments/staging.json --identity deployer --network ic --yes \
   --destroy-except-realm-registry-frontend
 ```
 
+Casals checkout discovery (no `--casals-src` needed when Casals sits next to this repo): `--casals-src`, then `CASALS_SRC`, then `../Casals` or `./Casals`, then `/srv/dev/Casals`. Validate fails immediately if none resolve. **Conductor bootstrap** (`casals_backend`, `casals_frontend`, `casals_file_registry`) runs `casals new` from that checkout during the create-canisters phase — not per-canister `dfx create`. Resume a failed deploy with `--from-phase 8` / `--from-phase seed_conductor` (validation still runs; destroy does not). Platform stand registration is backends-before-frontends so Casals does not `grant_permission` on an adopted DNS frontend before it is a controller of it. Seed and prime add Casals as a **co-controller** of platform canisters (keep the deployer) before those Casals ICCs; topology still replaces the set last.
+
 Never `dfx canister delete` on these canisters (or any fat canister) — leftover cycles are burned, and you would still have to remap DNS. Wipe assets in place (`reinstall`) or use the flag above. Details: [docs/GAAS_CLI.md](docs/GAAS_CLI.md#rebuild-except-realm-registry-frontend---destroy-except-realm-registry-frontend).
 
 ## gaas deploy — mandatory multisig

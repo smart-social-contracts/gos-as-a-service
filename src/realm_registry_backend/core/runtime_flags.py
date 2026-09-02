@@ -22,10 +22,14 @@ _FLAG_MAP = {
     "skip_authentication": "test_mode_skip_authentication",
     # Portal Stripe checkout stays in code; this flag only disables charging.
     "disable_card_billing": "test_mode_disable_card_billing",
+    # Go-live: keep the assistant; show the experimental notice in chrome.
+    "assistant_experimental_notice": "test_mode_assistant_experimental_notice",
 }
 
-# Unset disable_card_billing defaults ON for dogfood portal networks.
+# Unset disable_card_billing / assistant_experimental_notice default ON for
+# dogfood portal networks (staging/demo).
 _DISABLE_CARD_BILLING_DEFAULT_NETWORKS = frozenset({"staging", "demo"})
+_ASSISTANT_EXPERIMENTAL_NOTICE_DEFAULT_NETWORKS = _DISABLE_CARD_BILLING_DEFAULT_NETWORKS
 
 
 def _config_key(flag_attr: str) -> str:
@@ -67,6 +71,30 @@ def is_card_billing_disabled(network: str | None = None) -> bool:
     return get_flag(
         "test_mode_disable_card_billing",
         default_disable_card_billing(network),
+    )
+
+
+def default_assistant_experimental_notice(network: str | None = None) -> bool:
+    """True when the registry assistant should show the experimental notice."""
+    net = (network if network is not None else get_network() or "").strip().lower()
+    if net in _ASSISTANT_EXPERIMENTAL_NOTICE_DEFAULT_NETWORKS:
+        return True
+    if net:
+        return False
+    try:
+        from core.env_config import _network_from_portal_url, get_portal_url
+
+        portal_net = _network_from_portal_url(get_portal_url())
+        return portal_net in _ASSISTANT_EXPERIMENTAL_NOTICE_DEFAULT_NETWORKS
+    except Exception:
+        return False
+
+
+def is_assistant_experimental_notice_enabled(network: str | None = None) -> bool:
+    """Runtime gate for the gos.earth assistant experimental notice. Assistant stays up."""
+    return get_flag(
+        "test_mode_assistant_experimental_notice",
+        default_assistant_experimental_notice(network),
     )
 
 
@@ -116,6 +144,7 @@ def get_runtime_flags_payload() -> dict:
             "test_mode_skip_passport_zkproof", False
         ),
         "test_mode_disable_card_billing": is_card_billing_disabled(),
+        "test_mode_assistant_experimental_notice": is_assistant_experimental_notice_enabled(),
     }
 
 

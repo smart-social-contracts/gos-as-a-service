@@ -6,8 +6,10 @@ import json
 from core.models import RegistryConfig
 from core.runtime_flags import (
     apply_test_flags,
+    default_assistant_experimental_notice,
     default_disable_card_billing,
     get_runtime_flags_payload,
+    is_assistant_experimental_notice_enabled,
     is_card_billing_disabled,
     set_canister_config_from_json,
 )
@@ -16,6 +18,7 @@ from core.runtime_flags import (
 def _clear_card_billing_flag():
     for key in (
         "flag:test_mode_disable_card_billing",
+        "flag:test_mode_assistant_experimental_notice",
         "flag:network",
         "env:portal_url",
     ):
@@ -125,6 +128,60 @@ def test_set_canister_config_json_persists_disable_card_billing():
     assert payload["test_mode_disable_card_billing"] is True
 
 
+def test_assistant_experimental_notice_defaults_on_for_staging_and_demo():
+    _clear_card_billing_flag()
+    assert default_assistant_experimental_notice("staging") is True
+    assert default_assistant_experimental_notice("demo") is True
+    assert default_assistant_experimental_notice("test") is False
+    assert default_assistant_experimental_notice("ic") is False
+
+    apply_test_flags({"test_mode": True}, network="staging")
+    payload = get_runtime_flags_payload()
+    assert payload["test_mode_assistant_experimental_notice"] is True
+    assert is_assistant_experimental_notice_enabled() is True
+
+    apply_test_flags({"test_mode": True}, network="demo")
+    assert is_assistant_experimental_notice_enabled() is True
+
+    apply_test_flags({"test_mode": True}, network="test")
+    assert is_assistant_experimental_notice_enabled() is False
+
+
+def test_assistant_experimental_notice_explicit_override():
+    _clear_card_billing_flag()
+    apply_test_flags(
+        {"test_mode": True, "assistant_experimental_notice": False},
+        network="staging",
+    )
+    payload = get_runtime_flags_payload()
+    assert payload["test_mode_assistant_experimental_notice"] is False
+    assert is_assistant_experimental_notice_enabled() is False
+
+    apply_test_flags({"assistant_experimental_notice": True}, network="test")
+    payload = get_runtime_flags_payload()
+    assert payload["test_mode_assistant_experimental_notice"] is True
+    assert is_assistant_experimental_notice_enabled() is True
+
+
+def test_set_canister_config_json_persists_assistant_experimental_notice():
+    _clear_card_billing_flag()
+    result = set_canister_config_from_json(
+        json.dumps(
+            {
+                "network": "staging",
+                "test_flags": {
+                    "test_mode": True,
+                    "assistant_experimental_notice": True,
+                },
+            }
+        )
+    )
+    assert result["success"] is True
+    payload = get_runtime_flags_payload()
+    assert payload["network"] == "staging"
+    assert payload["test_mode_assistant_experimental_notice"] is True
+
+
 if __name__ == "__main__":
     test_set_and_read_flags()
     test_set_canister_config_json_wrapper()
@@ -133,4 +190,7 @@ if __name__ == "__main__":
     test_disable_card_billing_explicit_override()
     test_disable_card_billing_defaults_from_portal_host()
     test_set_canister_config_json_persists_disable_card_billing()
+    test_assistant_experimental_notice_defaults_on_for_staging_and_demo()
+    test_assistant_experimental_notice_explicit_override()
+    test_set_canister_config_json_persists_assistant_experimental_notice()
     print("registry runtime_flags tests passed")

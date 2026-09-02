@@ -233,7 +233,9 @@ def test_resolve_casals_wasm_main_clones_and_builds(tmp_path: Path) -> None:
     wasm_path = tmp_path / "casals_backend.wasm"
     wasm_path.write_bytes(b"wasm")
 
-    with patch("gaas.platform.clone_repo") as clone_mock, patch(
+    with patch("gaas.platform.resolve_casals_src", return_value=None), patch(
+        "gaas.platform.clone_repo"
+    ) as clone_mock, patch(
         "gaas.platform.build_casals_wasm", return_value=wasm_path
     ) as build_mock:
         clone_mock.return_value = tmp_path / "clone"

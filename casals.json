@@ -1,0 +1,78 @@
+{
+  "$comment": "GaaS platform sheet for `gaas new` → `casals sheet deploy`. Conductor canisters (casals_backend, casals_frontend, casals_file_registry) are created by `casals new`, not this sheet. Registry vs installer are separate stands (same-stand backend+frontend on a lumped platform stand tripped ManagePermissions). infra-baton is minted here (top_commander $self). Deployments commander (the installer principal) is applied after mint via set_commander — sheet commanders need a concrete principal and $self is not expanded there. realm_registry_frontend is DNS adopt-only (test.gos.earth): register_canister with the same name, then deploy_sheet reconciles by name. Product marketplace / file_registry live in the Realms repo casals.json. Realm stands are created later by the installer into Deployments.",
+  "name": "gaas",
+  "description": "GaaS *.gos.earth platform: governance, infra baton, installer, realm registry. Deployments start empty.",
+  "sections": [
+    {
+      "name": "Infra",
+      "description": "Orchestration governance (multisig + infra baton) and GaaS portal canisters (installer, realm registry).",
+      "stands": [
+        {
+          "name": "governance",
+          "description": "Root multisig for platform and baton IC control. Signers configured post-deploy.",
+          "canisters": [
+            {
+              "name": "multisig",
+              "wasm_key": "orchestration-multisig",
+              "kind": "backend",
+              "wasm_type": "multisig",
+              "teardown_priority": 40
+            }
+          ]
+        },
+        {
+          "name": "orchestration",
+          "description": "Infra baton: managed-upgrade governance for installer and realm-registry. Top commander: this Casals backend.",
+          "canisters": [
+            {
+              "name": "infra-baton",
+              "wasm_key": "orchestration-baton",
+              "kind": "backend",
+              "wasm_type": "baton",
+              "teardown_priority": 40,
+              "install_arg": { "top_commander": "$self" }
+            }
+          ]
+        },
+        {
+          "name": "installer",
+          "description": "Realm installer backend. Granted Deployments section commander after mint.",
+          "canisters": [
+            {
+              "name": "realm-installer",
+              "wasm_key": "installer-backend",
+              "kind": "backend",
+              "wasm_type": "basilisk",
+              "teardown_priority": 30
+            }
+          ]
+        },
+        {
+          "name": "realm-registry",
+          "description": "Realm registry backend and DNS-mapped frontend (test.gos.earth adopt-by-name).",
+          "canisters": [
+            {
+              "name": "realm-registry-backend",
+              "wasm_key": "registry-backend",
+              "kind": "backend",
+              "wasm_type": "basilisk",
+              "teardown_priority": 30
+            },
+            {
+              "name": "realm-registry-frontend",
+              "wasm_key": "registry-assets",
+              "kind": "frontend",
+              "wasm_type": "assets",
+              "teardown_priority": 20
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Deployments",
+      "description": "Realm stands (one per realm; created by realm_installer at provision time). Installer is granted section commander after sheet deploy — the principal is the installer canister ID, unknown when this file is written.",
+      "stands": []
+    }
+  ]
+}

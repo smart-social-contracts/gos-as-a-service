@@ -21,9 +21,10 @@ from gaas import dfx
 from gaas.descriptor import Descriptor
 from gaas.known import KNOWN_CANISTER_NAMES, PLATFORM_CANISTER_NAMES
 
-# Wallet pays dfx canister create (ledger fee) plus initial --with-cycles funding.
+# Wallet pays the IC create fee; initial funding is the canister headroom
+# (``cycles.threshold_tc``, plus Casals realm-provisioning budget).
 WALLET_CREATE_CYCLES: int = 100_000_000_000  # 0.1T — IC canister creation fee
-WALLET_INITIAL_FUNDING: int = 500_000_000_000  # 0.5T — headroom for first install per canister
+WALLET_INITIAL_FUNDING: int = 500_000_000_000  # unused; kept for import compatibility
 
 # Conductor realm-provisioning budget (observed on test.gos.earth: ~2T/create_canister).
 REALM_OPS_MARGIN_CYCLES: int = 1_000_000_000_000  # 1T — wasm pulls, bundle upload, inter-canister calls
@@ -55,7 +56,23 @@ class CyclesPlan:
 
     @property
     def ok(self) -> bool:
-        return all(item.shortfall == 0 for item in self.items)
+        """True when the wallet can fund creates and bring existing canisters to headroom."""
+        wallet = next((item for item in self.items if item.label == "wallet"), None)
+        if wallet is None or wallet.shortfall > 0:
+            return False
+        return not any(
+            item.canister_id and item.available is None
+            for item in self.items
+            if item.label != "wallet"
+        )
+
+    @property
+    def pending_topups(self) -> list[CyclesLineItem]:
+        return [
+            item
+            for item in self.items
+            if item.label != "wallet" and item.canister_id and item.shortfall > 0
+        ]
 
     @property
     def wallet_required(self) -> int:
@@ -85,14 +102,18 @@ def _casals_backend_required(descriptor: Descriptor) -> int:
     return threshold + realm_budget + multisig_extra
 
 
-def _canister_headroom(name: str, descriptor: Descriptor) -> int:
+def canister_headroom(name: str, descriptor: Descriptor) -> int:
     if name == "casals_backend":
         return _casals_backend_required(descriptor)
     return _threshold_cycles(descriptor)
 
 
-def _wallet_required_per_canister() -> int:
-    return WALLET_CREATE_CYCLES + WALLET_INITIAL_FUNDING
+def _canister_headroom(name: str, descriptor: Descriptor) -> int:
+    return canister_headroom(name, descriptor)
+
+
+def _wallet_create_cost(name: str, descriptor: Descriptor) -> int:
+    return WALLET_CREATE_CYCLES + canister_headroom(name, descriptor)
 
 
 def _format_cycles(amount: int) -> str:
@@ -135,14 +156,48 @@ def build_cycles_plan(
     wallet_balance: int | None = None,
     canister_balances: dict[str, int | None] | None = None,
 ) -> CyclesPlan:
-    """Build wallet and canister cycle requirements for a descriptor."""
+    """Build wallet and canister cycle requirements for a descriptor.
+
+    Wallet ``required`` is the IC create fee plus headroom for each missing
+    platform canister, plus the top-up shortfall to bring existing canisters
+    up to headroom. Canister line items still show the floor vs current
+    balance; ``plan.ok`` is wallet-funded (gaas tops those canisters up).
+    """
     plan = CyclesPlan(network=network)
     balances = canister_balances or {}
 
-    wallet_required = 0
+    canister_items: list[CyclesLineItem] = []
+    topup_total = 0
+    unknown_balance = False
+    for name in KNOWN_CANISTER_NAMES:
+        canister_id = descriptor.canisters.get(name)
+        if not canister_id:
+            continue
+        required = canister_headroom(name, descriptor)
+        available = balances.get(name)
+        if available is None and network == "ic" and canister_balances is None:
+            try:
+                available = dfx.canister_cycles_balance(
+                    canister_id, network, identity=identity
+                )
+            except dfx.DfxError:
+                available = None
+        item = CyclesLineItem(
+            label=name,
+            canister_id=canister_id,
+            required=required,
+            available=available,
+        )
+        canister_items.append(item)
+        if available is None:
+            unknown_balance = True
+        else:
+            topup_total += item.shortfall
+
+    wallet_required = topup_total
     for name in PLATFORM_CANISTER_NAMES:
         if name not in descriptor.canisters:
-            wallet_required += _wallet_required_per_canister()
+            wallet_required += _wallet_create_cost(name, descriptor)
 
     if wallet_balance is None and network == "ic":
         try:
@@ -158,37 +213,19 @@ def build_cycles_plan(
             available=wallet_balance,
         )
     )
+    plan.items.extend(canister_items)
 
-    for name in KNOWN_CANISTER_NAMES:
-        canister_id = descriptor.canisters.get(name)
-        if not canister_id:
-            continue
-        required = _canister_headroom(name, descriptor)
-        available = balances.get(name)
-        if available is None and network == "ic":
-            try:
-                available = dfx.canister_cycles_balance(
-                    canister_id, network, identity=identity
-                )
-            except dfx.DfxError:
-                available = None
-        plan.items.append(
-            CyclesLineItem(
-                label=name,
-                canister_id=canister_id,
-                required=required,
-                available=available,
-            )
+    wallet_item = plan.items[0]
+    if wallet_item.shortfall > 0:
+        plan.remediations.append(
+            remediation_wallet_convert(wallet_item.shortfall, network)
         )
-
-    for item in plan.items:
-        if item.shortfall <= 0:
-            continue
-        if item.label == "wallet":
-            plan.remediations.append(
-                remediation_wallet_convert(item.shortfall, network)
-            )
-        elif item.canister_id:
+    if unknown_balance:
+        plan.remediations.append(
+            "could not read one or more canister cycle balances; retry status"
+        )
+    for item in plan.pending_topups:
+        if item.canister_id:
             plan.remediations.append(
                 remediation_canister_top_up(
                     item.canister_id, item.shortfall, network
@@ -228,7 +265,38 @@ def render_cycles_plan_table(plan: CyclesPlan) -> Table:
 def print_cycles_plan(plan: CyclesPlan, console: Console | None = None) -> None:
     console = console or Console()
     console.print(render_cycles_plan_table(plan))
-    if plan.remediations:
+    if plan.ok and plan.pending_topups:
+        console.print("[yellow]Will top up from wallet to reach headroom:[/yellow]")
+        for line in plan.remediations:
+            console.print(f"  {line}")
+    elif plan.remediations:
         console.print("[yellow]Suggested remediation:[/yellow]")
         for line in plan.remediations:
             console.print(f"  {line}")
+
+
+def apply_headroom_topups(
+    plan: CyclesPlan,
+    network: str,
+    *,
+    identity: str | None = None,
+    console: Console | None = None,
+) -> int:
+    """Deposit each pending canister shortfall from the cycles ledger. Return total."""
+    out = console or Console()
+    total = 0
+    for item in plan.pending_topups:
+        if not item.canister_id or item.shortfall <= 0:
+            continue
+        out.print(
+            f"  topping up {item.label} ({item.canister_id}) "
+            f"+{_format_cycles(item.shortfall)}"
+        )
+        dfx.top_up_canister(
+            item.canister_id,
+            item.shortfall,
+            network,
+            identity=identity,
+        )
+        total += item.shortfall
+    return total

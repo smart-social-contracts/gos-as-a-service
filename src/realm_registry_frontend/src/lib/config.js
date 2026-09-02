@@ -10,6 +10,7 @@
 import { getRegistryRuntimeFlagsSnapshot } from '$lib/stores/registryRuntimeFlags.js';
 import { detectNetwork, getCanisterId } from './network.js';
 import { isCardBillingDisabled } from './card-billing-flag.js';
+import { isAssistantExperimentalNoticeEnabled } from './assistant-experimental-flag.js';
 import {
 	resolveBillingServiceUrl,
 	resolveDeployServiceUrl,
@@ -175,6 +176,14 @@ export function getTestModeDisableCardBilling() {
 	});
 }
 
+export function getTestModeAssistantExperimentalNotice() {
+	const flags = getRegistryRuntimeFlagsSnapshot();
+	return isAssistantExperimentalNoticeEnabled({
+		assistantExperimentalNotice: flags.testModeAssistantExperimentalNotice,
+		network: flags.network || CONFIG.deploy_queue_network
+	});
+}
+
 // Legacy constant exports — always false at import time. Use getters above.
 export const TEST_MODE = false;
 export const TEST_MODE_II_BYPASS = false;
@@ -183,3 +192,4 @@ export const TEST_MODE_DEMO_DATA = false;
 export const TEST_MODE_SKIP_TERMS = false;
 export const TEST_MODE_SKIP_PASSPORT_ZKPROOF = false;
 export const TEST_MODE_DISABLE_CARD_BILLING = false;
+export const TEST_MODE_ASSISTANT_EXPERIMENTAL_NOTICE = false;

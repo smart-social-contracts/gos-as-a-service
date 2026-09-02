@@ -21,6 +21,11 @@ from tests.conftest import SAMPLE_DESCRIPTOR, VALID_CANISTER_ID
 CASALS_BACKEND_ID = "fffff-fffff-fffff-fffff-fffff-fff"
 
 
+@pytest.fixture(autouse=True)
+def _stub_casals_co_controller(monkeypatch):
+    monkeypatch.setattr("gaas.phases.ensure_casals_co_controller", lambda *_a, **_k: None)
+
+
 def _refresh_arg_canisters(arg: str) -> list[str]:
     return json.loads(_parse_candid_string(arg))["canisters"]
 
@@ -99,6 +104,26 @@ def test_verify_cycles_snapshot_returns_error_status_names() -> None:
 def test_verify_cycles_snapshot_raises_when_name_missing() -> None:
     with pytest.raises(RuntimeError, match="missing conductor canisters"):
         verify_cycles_snapshot_covers_tree(["a", "b"], _snapshot_for_names(["a"]))
+
+
+def test_verify_cycles_snapshot_matches_duplicate_stand_by_canister_id() -> None:
+    snapshot = {
+        "canisters": [
+            {
+                "name": "file_registry",
+                "canister_id": "3obp5-kaaaa-aaaad-qmddq-cai",
+                "status": "ok",
+            }
+        ]
+    }
+    assert (
+        verify_cycles_snapshot_covers_tree(
+            ["casals-file-registry"],
+            snapshot,
+            name_to_id={"casals-file-registry": "3obp5-kaaaa-aaaad-qmddq-cai"},
+        )
+        == []
+    )
 
 
 @patch("gaas.phases.dfx.canister_call")

@@ -148,6 +148,13 @@ def test_seed_command_missing_canister_ids(mock_run_seed: MagicMock, tmp_path: P
     assert "casals_backend" in result.output
 
 
+def test_new_help_lists_from_phase() -> None:
+    result = runner.invoke(app, ["new", "--help"])
+    assert result.exit_code == 0
+    text = result.output.replace("\x1b[0m", "").replace("\x1b[1m", "")
+    assert "from-phase" in text
+
+
 def test_authorize_gos_entry_skips_already_authorized_backend(monkeypatch) -> None:
     casals_calls: list[tuple[str, dict]] = []
     backend_hash = "a" * 64

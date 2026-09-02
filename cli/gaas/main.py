@@ -21,7 +21,7 @@ from gaas.namespace_approval_seed import (
     refuse_demo_environment,
     seed_namespace_approvals,
 )
-from gaas.phases import DeployContext, PHASES, run_phases, run_seed_phases
+from gaas.phases import DeployContext, PHASES, SEED_PHASES, run_phases, run_seed_phases
 from gaas.preflight import PreflightReport
 from gaas.runlog import print_log_path, start_run_log, stop_run_log
 from gaas.wizard import confirm_deploy, run_wizard
@@ -69,6 +69,21 @@ def _print_dns_table(descriptor: Descriptor) -> None:
     console.print(table)
 
 
+def _resume_command(
+    descriptor_path: Path | None,
+    identity: str,
+    network: str,
+    *,
+    from_phase: str | None = None,
+) -> str | None:
+    if descriptor_path is None:
+        return None
+    cmd = f"gaas new {descriptor_path} --identity {identity} --network {network}"
+    if from_phase:
+        cmd += f" --from-phase {from_phase}"
+    return cmd
+
+
 def _run_deploy_pipeline(
     descriptor: Descriptor,
     identity: str,
@@ -82,6 +97,7 @@ def _run_deploy_pipeline(
     keep_env_file: bool = False,
     reinstall_backends: bool = False,
     destroy_except_frontend: bool = False,
+    from_phase: str | None = None,
 ) -> None:
     ctx = DeployContext(
         identity=identity,
@@ -95,6 +111,7 @@ def _run_deploy_pipeline(
         keep_env_file=keep_env_file,
         reinstall_backends=reinstall_backends,
         destroy_except_frontend=destroy_except_frontend,
+        from_phase=from_phase,
     )
     total = len(PHASES)
     run_log = start_run_log(descriptor.name)
@@ -106,6 +123,11 @@ def _run_deploy_pipeline(
         run_phases(descriptor, ctx, on_phase_start=on_start)
     except RuntimeError as exc:
         console.print(f"[red]Deployment failed:[/red] {exc}")
+        resume = _resume_command(
+            descriptor_path, identity, network, from_phase=ctx.current_phase
+        )
+        if resume:
+            console.print(f"Resume with: {resume}")
         raise typer.Exit(code=1) from exc
     finally:
         print_log_path()
@@ -118,10 +140,12 @@ def _run_deploy_pipeline(
         console.print(
             f"\n[yellow]Pipeline paused after phase {len(ctx.completed_phases)}/{total}.[/yellow]"
         )
-        if descriptor_path:
-            console.print(
-                f"Resume later with: gaas new {descriptor_path} --identity {identity} --network {network}"
-            )
+        paused_at = ctx.completed_phases[-1] if ctx.completed_phases else None
+        resume = _resume_command(
+            descriptor_path, identity, network, from_phase=paused_at
+        )
+        if resume:
+            console.print(f"Resume later with: {resume}")
         raise typer.Exit(code=1)
 
     console.print("\n[green]Deployment complete.[/green]")
@@ -135,6 +159,7 @@ def _run_seed_pipeline(
     descriptor_path: Path | None = None,
     yes: bool = False,
     casals_src: Path | None = None,
+    from_phase: str | None = None,
 ) -> None:
     ctx = DeployContext(
         identity=identity,
@@ -142,8 +167,9 @@ def _run_seed_pipeline(
         descriptor_path=descriptor_path,
         yes=yes,
         casals_src=casals_src,
+        from_phase=from_phase,
     )
-    total = 3
+    total = len(SEED_PHASES)
     start_run_log(descriptor.name)
 
     def on_start(index: int, _phase_id: str, title: str) -> None:
@@ -153,6 +179,11 @@ def _run_seed_pipeline(
         run_seed_phases(descriptor, ctx, on_phase_start=on_start)
     except RuntimeError as exc:
         console.print(f"[red]Seed failed:[/red] {exc}")
+        if descriptor_path and ctx.current_phase:
+            console.print(
+                f"Resume with: gaas seed {descriptor_path} --identity {identity} "
+                f"--network {network} --from-phase {ctx.current_phase}"
+            )
         raise typer.Exit(code=1) from exc
     finally:
         print_log_path()
@@ -233,6 +264,16 @@ def new_command(
         hidden=True,
         help="Deprecated alias for --can-test-mode",
     ),
+    from_phase: Optional[str] = typer.Option(
+        None,
+        "--from-phase",
+        "--from",
+        help=(
+            "Resume from this deploy phase. Accepts the 1-based [N/15] index "
+            "printed during the run, or a phase id (e.g. seed_conductor). "
+            "Validation still runs."
+        ),
+    ),
 ) -> None:
     """Create or deploy a GaaS environment from a descriptor."""
     if network is not None and network not in {"ic", "local"}:
@@ -265,6 +306,7 @@ def new_command(
                 keep_env_file=keep_env_file,
                 reinstall_backends=reinstall_backends,
                 destroy_except_frontend=destroy_except_frontend,
+                from_phase=from_phase,
             )
         else:
             cmd_identity = resolved_identity
@@ -296,6 +338,7 @@ def new_command(
         keep_env_file=keep_env_file,
         reinstall_backends=reinstall_backends,
         destroy_except_frontend=destroy_except_frontend,
+        from_phase=from_phase,
     )
 
 
@@ -314,6 +357,15 @@ def seed_command(
         "--casals-src",
         help="Local Casals checkout for orchestration template WASM",
     ),
+    from_phase: Optional[str] = typer.Option(
+        None,
+        "--from-phase",
+        "--from",
+        help=(
+            "Resume from this seed phase. Accepts a 1-based index or phase id "
+            "(e.g. seed_conductor). seed_validate still runs."
+        ),
+    ),
 ) -> None:
     """Re-seed GOS artifacts and conductor authorization on an existing environment."""
     if network not in {"ic", "local"}:
@@ -328,6 +380,7 @@ def seed_command(
         descriptor_path=descriptor,
         yes=yes,
         casals_src=casals_src,
+        from_phase=from_phase,
     )
 
 

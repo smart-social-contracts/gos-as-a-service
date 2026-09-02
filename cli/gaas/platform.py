@@ -48,6 +48,13 @@ class PlatformError(RuntimeError):
     pass
 
 
+_SRV_CASALS = Path("/srv/dev/Casals")
+CASALS_SRC_HINT = (
+    "--casals-src, CASALS_SRC, a Casals/ checkout next to or inside "
+    "gos-as-a-service, or /srv/dev/Casals"
+)
+
+
 def find_gos_repo_root(start: Path | None = None) -> Path:
     current = (start or Path.cwd()).resolve()
     for candidate in (current, *current.parents):
@@ -61,21 +68,64 @@ def find_gos_repo_root(start: Path | None = None) -> Path:
     )
 
 
+def is_casals_checkout(path: Path) -> bool:
+    try:
+        resolved = path.resolve()
+    except OSError:
+        return False
+    return (resolved / "src" / "main.py").is_file() and (
+        resolved / "casals_backend.did"
+    ).is_file()
+
+
+def _casals_candidates_from(root: Path) -> list[Path]:
+    """Nested ``root/Casals`` (CI) then sibling ``root.parent/Casals`` (laptop)."""
+    resolved = root.resolve()
+    return [resolved / "Casals", resolved.parent / "Casals"]
+
+
 def resolve_casals_src(explicit: Path | None = None) -> Path | None:
     if explicit is not None:
         path = explicit.resolve()
-        if (path / "src" / "main.py").is_file() and (path / "casals_backend.did").is_file():
+        if is_casals_checkout(path):
             return path
         raise PlatformError(f"--casals-src {path} is not a Casals checkout")
     env = os.environ.get("CASALS_SRC", "").strip()
     if env:
         path = Path(env).resolve()
-        if (path / "src" / "main.py").is_file():
+        if is_casals_checkout(path):
             return path
-    sibling = Path("/srv/dev/Casals")
-    if (sibling / "src" / "main.py").is_file():
-        return sibling
+        raise PlatformError(f"CASALS_SRC={path} is not a Casals checkout")
+
+    seen: set[Path] = set()
+    search_roots: list[Path] = []
+    try:
+        search_roots.append(find_gos_repo_root())
+    except PlatformError:
+        pass
+    search_roots.append(Path.cwd())
+    for root in search_roots:
+        for candidate in _casals_candidates_from(root):
+            resolved = candidate.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            if is_casals_checkout(candidate):
+                return resolved
+
+    if is_casals_checkout(_SRV_CASALS):
+        return _SRV_CASALS.resolve()
     return None
+
+
+def require_casals_checkout(explicit: Path | None = None) -> Path:
+    src = resolve_casals_src(explicit)
+    if src is None:
+        raise PlatformError(
+            "a Casals checkout is required for orchestration templates "
+            f"({CASALS_SRC_HINT})"
+        )
+    return src
 
 
 def _basilisk_python(casals_root: Path) -> Path:
@@ -83,8 +133,8 @@ def _basilisk_python(casals_root: Path) -> Path:
     py = venv / "bin" / "python"
     if py.is_file():
         return py
-    alt = Path("/srv/dev/Casals/.venv-basilisk/bin/python")
-    if alt.is_file() and casals_root == Path("/srv/dev/Casals").resolve():
+    alt = _SRV_CASALS / ".venv-basilisk" / "bin" / "python"
+    if alt.is_file() and casals_root == _SRV_CASALS.resolve():
         return alt
     run_subprocess([sys.executable, "-m", "venv", str(venv)], check=True, cwd=casals_root)
     pip = venv / "bin" / "pip"
@@ -332,8 +382,7 @@ def _materialize_casals_frontend_dist(
         if src is None:
             raise PlatformError(
                 f"Casals release {release_repo}@{version} has no "
-                f"{CASALS_FRONTEND_ARCHIVE}; provide --casals-src, set CASALS_SRC, "
-                "or place a checkout at /srv/dev/Casals"
+                f"{CASALS_FRONTEND_ARCHIVE}; provide {CASALS_SRC_HINT}"
             ) from None
         return build_casals_frontend(
             src, dest, conductor_canister_id=conductor_canister_id
@@ -370,7 +419,7 @@ def resolve_casals_wasm(
         if src is None:
             raise PlatformError(
                 f"Casals release {release_repo}@{version} has no {CASALS_BACKEND_WASM_ASSET}; "
-                "provide --casals-src, set CASALS_SRC, or place a checkout at /srv/dev/Casals"
+                f"provide {CASALS_SRC_HINT}"
             ) from None
         return build_casals_wasm(src, dest)
 
@@ -468,8 +517,8 @@ def resolve_casals_file_registry_wasm(
         if src is None:
             raise PlatformError(
                 f"Casals release {release_repo}@{version} has no "
-                f"{CASALS_FILE_REGISTRY_WASM_ASSET}; provide --casals-src, set CASALS_SRC, "
-                "or place a Casals checkout with the file_registry submodule at /srv/dev/Casals"
+                f"{CASALS_FILE_REGISTRY_WASM_ASSET}; provide {CASALS_SRC_HINT} "
+                "(with the file_registry submodule)"
             ) from None
         return build_casals_file_registry_wasm(src, dest)
 

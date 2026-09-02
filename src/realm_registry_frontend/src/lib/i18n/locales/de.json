@@ -156,9 +156,9 @@
     "processing": "Wird verarbeitet..."
   },
   "assistant": {
-    "title": "Realms AI Assistant",
+    "title": "AI Assistant",
     "toggle": "AI Assistant",
-    "empty": "Ask me anything about the realms in the registry — which to join, how to create one, or how Realms works.",
+    "empty": "",
     "placeholder": "Type your message…",
     "send": "Send",
     "thinking": "Thinking…",
@@ -171,7 +171,7 @@
     "history_empty": "No past conversations yet. Start chatting!",
     "history_empty_settings": "No conversations yet.",
     "settings": "Settings",
-    "settings_title": "Realms AI Assistant — Settings",
+    "settings_title": "AI Assistant — Settings",
     "copy": "Copy",
     "copied": "Copied",
     "suggestions_loading": "Loading suggestions…",

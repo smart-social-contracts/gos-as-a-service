@@ -23,7 +23,7 @@ from gaas.canister_liveness import (
 )
 from gaas.descriptor import Descriptor
 from gaas.phases import DeployContext, phase_create_canisters
-from tests.conftest import SAMPLE_DESCRIPTOR, VALID_CANISTER_ID
+from tests.conftest import SAMPLE_DESCRIPTOR, VALID_CANISTER_ID, mock_run_casals_new
 
 LIVE_INSTALLER = "ta6df-miaaa-aaaan-q6n4a-cai"
 GHOST_INSTALLER = "fksuf-niaaa-aaaae-ag22q-cai"
@@ -256,6 +256,7 @@ def test_adopt_rejects_ghost_staging_installer(
     mock_create.assert_not_called()
 
 
+@patch("gaas.phases.run_casals_new", side_effect=mock_run_casals_new)
 @patch("gaas.phases.assert_installer_live_for_network")
 @patch("gaas.phases.dfx.create_canister_via_ledger")
 @patch("gaas.phases.dfx.create_canister")
@@ -271,6 +272,7 @@ def test_adopt_allows_live_staging_installer(
     mock_create,
     _ledger,
     mock_live,
+    _mock_casals_new,
     tmp_path: Path,
 ) -> None:
     from unittest.mock import MagicMock
@@ -285,9 +287,6 @@ def test_adopt_allows_live_staging_installer(
         "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
         "ccccc-ccccc-ccccc-ccccc-ccccc-ccc",
         "ddddd-ddddd-ddddd-ddddd-ddddd-ddd",
-        "eeeee-eeeee-eeeee-eeeee-eeeee-eee",
-        "fffff-fffff-fffff-fffff-fffff-fff",
-        "ggggg-ggggg-ggggg-ggggg-ggggg-ggg",
     ]
     data = dict(SAMPLE_DESCRIPTOR)
     data["name"] = "staging"

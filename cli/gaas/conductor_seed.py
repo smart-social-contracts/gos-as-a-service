@@ -15,7 +15,11 @@ from gaas.runlog import get_run_log, run_subprocess
 from gaas.descriptor import Descriptor
 from gaas.known import GOS_IMPLEMENTATIONS
 from gaas.file_registry_client import fetch_namespace_hashes, upload_file
-from gaas.platform import find_local_assetstorage_wasm, resolve_casals_src
+from gaas.platform import (
+    find_gos_repo_root,
+    find_local_assetstorage_wasm,
+    require_casals_checkout,
+)
 from gaas.versions import resolve_deploy_version
 
 console = Console()
@@ -29,41 +33,18 @@ ORCHESTRATION_TEMPLATES: tuple[tuple[str, str, str], ...] = (
 )
 
 
-def platform_sheet() -> dict[str, Any]:
-    """Minimal sheet: Infra/governance/multisig + empty Deployments section."""
-    return {
-        "name": "gaas-platform",
-        "description": (
-            "GaaS platform orchestra: governance multisig in Infra; "
-            "realm stands created by the installer in Deployments at deploy time."
-        ),
-        "sections": [
-            {
-                "name": "Infra",
-                "description": "Platform orchestration governance (multisig only).",
-                "stands": [
-                    {
-                        "name": "governance",
-                        "description": "Root multisig for platform and baton IC control.",
-                        "canisters": [
-                            {
-                                "name": "multisig",
-                                "wasm_key": "orchestration-multisig",
-                                "kind": "backend",
-                                "wasm_type": "multisig",
-                                "teardown_priority": 40,
-                            }
-                        ],
-                    }
-                ],
-            },
-            {
-                "name": "Deployments",
-                "description": "Realm stands (one per realm; created by realm_installer).",
-                "stands": [],
-            },
-        ],
-    }
+def platform_sheet_path(repo_root: Path | None = None) -> Path:
+    """Repo-root ``casals.json`` used by ``gaas new``."""
+    root = repo_root or find_gos_repo_root()
+    return root / "casals.json"
+
+
+def platform_sheet(repo_root: Path | None = None) -> dict[str, Any]:
+    """Load the GaaS Casals sheet (Infra stands + empty Deployments)."""
+    path = platform_sheet_path(repo_root)
+    if not path.is_file():
+        raise FileNotFoundError(f"GaaS Casals sheet not found: {path}")
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _parse_casals_json(raw: str) -> dict[str, Any]:
@@ -135,6 +116,27 @@ def _canister_names(tree: dict[str, Any]) -> set[str]:
                 if name:
                     names.add(name)
     return names
+
+
+def backends_before_frontends(
+    platform_canisters: list[tuple[str, str, str]],
+) -> list[tuple[str, str, str]]:
+    """Order platform stand registration: backends first, then frontends.
+
+    Casals ``register_canister`` for a backend grants Commit on any frontend
+    already on the same stand. A newly minted Casals is not yet a controller of
+    an adopted DNS frontend, so that grant fails with ManagePermissions. Putting
+    backends first avoids the grant on a first-create. Resume still has to drop
+    an already-registered frontend record before remaining backends (orchestra
+    only — the IC canister is kept).
+    """
+    backends = [
+        item for item in platform_canisters if (item[2] or "").lower() != "frontend"
+    ]
+    frontends = [
+        item for item in platform_canisters if (item[2] or "").lower() == "frontend"
+    ]
+    return backends + frontends
 
 
 def list_authorized_keys(
@@ -234,12 +236,7 @@ def seed_orchestration_templates(
     identity: str | None = None,
     casals_src: Path | None = None,
 ) -> None:
-    casals_root = resolve_casals_src(casals_src)
-    if casals_root is None:
-        raise RuntimeError(
-            "orchestration templates require a Casals checkout "
-            "(--casals-src, CASALS_SRC, or /srv/dev/Casals)"
-        )
+    casals_root = require_casals_checkout(casals_src)
 
     existing = list_authorized_keys(casals_id, network, identity=identity)
     registry_hashes = fetch_namespace_hashes(
@@ -470,6 +467,36 @@ def ensure_sheet_and_deploy_multisig(
         console.print(f"  multisig: adopt {multisig_id}")
 
 
+# Orchestra stand names must match gos-as-a-service/casals.json (and
+# realms/casals.json for the fleet file_registry). A lumped "platform"
+# stand with backend+frontend together tripped ManagePermissions.
+PLATFORM_CANISTER_STAND: dict[str, str] = {
+    "realm-installer": "installer",
+    "realm-registry-backend": "realm-registry",
+    "realm-registry-frontend": "realm-registry",
+    "file-registry": "file-registry",
+    "file-registry-frontend": "file-registry",
+    "casals-file-registry": "casals-file-registry",
+}
+
+PLATFORM_STAND_DESCRIPTIONS: dict[str, str] = {
+    "installer": "Installer backend.",
+    "realm-registry": "Realm registry backend and DNS frontend.",
+    "file-registry": "Fleet file_registry (adopt by name; Realms product sheet).",
+    "casals-file-registry": "Casals-owned file registry from casals new.",
+}
+
+
+def platform_stand_for(canister_name: str) -> str:
+    """Return the Infra stand that should own ``canister_name``."""
+    stand = PLATFORM_CANISTER_STAND.get(canister_name)
+    if not stand:
+        raise RuntimeError(
+            f"no Casals stand mapping for platform canister {canister_name!r}"
+        )
+    return stand
+
+
 def ensure_platform_stand(
     casals_id: str,
     platform_canisters: list[tuple[str, str, str]],
@@ -477,30 +504,58 @@ def ensure_platform_stand(
     *,
     identity: str | None = None,
 ) -> None:
-    """Ensure Infra/platform stand exists and register platform canisters."""
-    try:
-        _casals_call(
-            casals_id,
-            "create_stand",
-            {
-                "section": "Infra",
-                "name": "platform",
-                "description": (
-                    "GaaS platform canisters (registry, installer, file registry)"
-                ),
-            },
-            network,
-            identity=identity,
-        )
-        console.print("  create_stand (Infra/platform)...")
-    except RuntimeError as exc:
-        if "already exists" not in str(exc).lower():
-            raise
-        console.print("  platform stand: already exists")
+    """Ensure Infra stands exist and register platform canisters onto them."""
+    needed_stands: list[str] = []
+    for name, _cid, _kind in platform_canisters:
+        stand = platform_stand_for(name)
+        if stand not in needed_stands:
+            needed_stands.append(stand)
+    for stand_name in needed_stands:
+        try:
+            _casals_call(
+                casals_id,
+                "create_stand",
+                {
+                    "section": "Infra",
+                    "name": stand_name,
+                    "description": PLATFORM_STAND_DESCRIPTIONS.get(
+                        stand_name, stand_name
+                    ),
+                },
+                network,
+                identity=identity,
+            )
+            console.print(f"  create_stand (Infra/{stand_name})...")
+        except RuntimeError as exc:
+            if "already exists" not in str(exc).lower():
+                raise
+            console.print(f"  {stand_name} stand: already exists")
 
     tree = get_tree(casals_id, network, identity=identity)
     existing = _canister_names(tree)
-    for name, canister_id, kind in platform_canisters:
+    ordered = backends_before_frontends(platform_canisters)
+    pending_backends = [
+        name
+        for name, _cid, kind in ordered
+        if (kind or "").lower() != "frontend" and name not in existing
+    ]
+    if pending_backends:
+        for name, _cid, kind in ordered:
+            if (kind or "").lower() != "frontend" or name not in existing:
+                continue
+            console.print(
+                f"  {name}: unregister orchestra record "
+                "(register remaining backends before frontends)"
+            )
+            _casals_call(
+                casals_id,
+                "delete_canister",
+                {"canister": name},
+                network,
+                identity=identity,
+            )
+            existing.discard(name)
+    for name, canister_id, kind in ordered:
         if name in existing:
             console.print(f"  {name}: skip (already registered)")
         else:
@@ -509,7 +564,7 @@ def ensure_platform_stand(
                 casals_id,
                 "register_canister",
                 {
-                    "stand": "platform",
+                    "stand": platform_stand_for(name),
                     "name": name,
                     "canister_id": canister_id,
                     "kind": kind,
@@ -545,10 +600,11 @@ def ensure_deployments_commander(
 ) -> None:
     """Grant the installer section-commander rights on Deployments.
 
-    The sheet format has no commander syntax, so this runs as a separate
-    set_commander call. Section commander permissions cascade to stands, and
-    set_commander adds-or-updates without removing others, so this is safely
-    idempotent.
+    Sheet ``commanders`` need a concrete principal; the installer ID is only
+    known after mint, and ``$self`` is not expanded there. This set_commander
+    call runs after sheet deploy. Section commander permissions cascade to
+    stands, and set_commander adds-or-updates without removing others, so this
+    is safely idempotent.
     """
     _casals_call(
         casals_id,

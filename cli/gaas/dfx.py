@@ -464,6 +464,35 @@ def update_canister_settings(
     _run(args, check=True)
 
 
+def add_canister_controller(
+    canister_id: str,
+    controller: str,
+    network: str,
+    *,
+    identity: str | None = None,
+) -> None:
+    """Add a controller without replacing the existing set."""
+    controller = (controller or "").strip()
+    if not controller:
+        raise DfxError(
+            "add_canister_controller requires a controller principal",
+            command=[],
+            stderr="empty controller",
+        )
+    args = [
+        "dfx",
+        "canister",
+        "--network",
+        network,
+        "update-settings",
+        canister_id,
+    ]
+    if identity:
+        args.extend(["--identity", identity])
+    args.extend(["--add-controller", controller])
+    _run(args, check=True)
+
+
 def install_wasm(
     canister_id: str,
     wasm_path: str,

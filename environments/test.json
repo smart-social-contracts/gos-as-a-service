@@ -15,14 +15,15 @@
     }
   ],
   "canisters": {
-    "realm_registry_backend": "yhw3g-fyaaa-aaaas-qgorq-cai",
+    "realm_registry_backend": "3sfvm-5aaaa-aaaad-qmdbq-cai",
     "realm_registry_frontend": "qtank-3qaaa-aaaaa-qhb6q-cai",
-    "realm_installer": "fltjm-tyaaa-aaaap-qunhq-cai",
-    "file_registry": "uq2mu-kaaaa-aaaah-avqcq-cai",
-    "file_registry_frontend": "2no7h-xqaaa-aaaad-qlxeq-cai",
-    "casals_backend": "qthgp-3yaaa-aaaae-agveq-cai",
-    "casals_frontend": "qic2k-baaaa-aaaae-agvga-cai",
-    "marketplace_backend": "2wldc-niaaa-aaaad-qlxga-cai",
+    "realm_installer": "3hceb-4iaaa-aaaad-qmdca-cai",
+    "file_registry": "2dplt-fiaaa-aaaad-qmdea-cai",
+    "file_registry_frontend": "2eonh-iqaaa-aaaad-qmdeq-cai",
+    "casals_backend": "3adcv-rqaaa-aaaad-qmdcq-cai",
+    "casals_frontend": "3jajj-hyaaa-aaaad-qmdda-cai",
+    "casals_file_registry": "3obp5-kaaaa-aaaad-qmddq-cai",
+    "marketplace_backend": "2nng3-6yaaa-aaaad-qmdfa-cai",
     "marketplace_frontend": "mxyd5-3qaaa-aaaao-ba2xq-cai"
   },
   "casals": {
@@ -32,11 +33,8 @@
       "3itd6-2sx7g-vefdk-xhebm-fucot-llay5-lhqd6-pkjac-m7mkf-vhwqq-fqe"
     ]
   },
-  "marketplace": {
-    "approver_principal": "ah6ac-cc73l-bb2zc-ni7bh-jov4q-roeyj-6k2ob-mkg5j-pequi-vuaa6-2ae"
-  },
   "multisig": {
-    "backend_id": "rvkmh-liaaa-aaaae-agzoq-cai",
+    "backend_id": "ycw7k-baaaa-aaaad-qmdjq-cai",
     "signers": [
       "3itd6-2sx7g-vefdk-xhebm-fucot-llay5-lhqd6-pkjac-m7mkf-vhwqq-fqe"
     ],
@@ -44,15 +42,18 @@
   },
   "services": {
     "billing_url": "https://billing.realmsgos.dev",
-    "billing_service_principal": "ah6ac-cc73l-bb2zc-ni7bh-jov4q-roeyj-6k2ob-mkg5j-pequi-vuaa6-2ae",
     "monitor_url": "https://casals.realmsgos.dev/v1/realms-test",
-    "monitor_principal": "ah6ac-cc73l-bb2zc-ni7bh-jov4q-roeyj-6k2ob-mkg5j-pequi-vuaa6-2ae"
+    "monitor_principal": "ah6ac-cc73l-bb2zc-ni7bh-jov4q-roeyj-6k2ob-mkg5j-pequi-vuaa6-2ae",
+    "billing_service_principal": "ah6ac-cc73l-bb2zc-ni7bh-jov4q-roeyj-6k2ob-mkg5j-pequi-vuaa6-2ae"
+  },
+  "marketplace": {
+    "approver_principal": "ah6ac-cc73l-bb2zc-ni7bh-jov4q-roeyj-6k2ob-mkg5j-pequi-vuaa6-2ae"
   },
   "flags": {
     "can_test_mode": true
   },
   "cycles": {
-    "threshold_tc": 2
+    "threshold_tc": 2.0
   },
   "dns": {
     "provider": "manual"

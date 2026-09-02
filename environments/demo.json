@@ -49,7 +49,14 @@
     "approver_principal": "ah6ac-cc73l-bb2zc-ni7bh-jov4q-roeyj-6k2ob-mkg5j-pequi-vuaa6-2ae"
   },
   "flags": {
-    "can_test_mode": true
+    "can_test_mode": false
+  },
+  "test_flags": {
+    "test_mode": false,
+    "user_self_registration": false,
+    "demo_data": false,
+    "ii_bypass": false,
+    "skip_terms": false
   },
   "cycles": {
     "threshold_tc": 2.0

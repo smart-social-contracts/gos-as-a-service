@@ -21,11 +21,13 @@ from rich.table import Table
 
 from gaas import dfx
 from gaas.artifacts import fetch_release_assets
+from gaas.casals_cli import CASALS_BOOTSTRAP_NAMES, run_casals_new
 from gaas.descriptor import CANISTER_ID_RE, Descriptor
 from gaas.destroy import destroy_except_frontend
 from gaas.dns import render_dns_records, wait_for_dns
 from gaas.domain_reg import attempt_domain_registration
 from gaas.codex_seed import seed_codex_catalog
+from gaas.cycles_plan import apply_headroom_topups, canister_headroom
 from gaas.conductor_seed import (
     authorize_gos_entry,
     configure_multisig_signers,
@@ -67,6 +69,7 @@ from gaas.platform import (
     find_gos_repo_root,
     frontend_dist_dir,
     inject_portal_ic_env_assets,
+    require_casals_checkout,
     resolve_casals_file_registry_wasm,
     resolve_casals_frontend_dist,
     resolve_casals_wasm,
@@ -116,6 +119,8 @@ class DeployContext:
     preflight: PreflightReport | None = None
     stopped: bool = False
     completed_phases: list[str] = field(default_factory=list)
+    current_phase: str | None = None
+    from_phase: str | None = None
     descriptor_path: Path | None = None
     yes: bool = False
     casals_src: Path | None = None
@@ -212,6 +217,7 @@ def _registry_runtime_config_json(descriptor: Descriptor, network: str) -> str |
     }
     if (network or "").strip().lower() in ("staging", "demo"):
         test_flags["disable_card_billing"] = True
+        test_flags["assistant_experimental_notice"] = True
     payload: dict = {
         "test_flags": test_flags,
     }
@@ -356,6 +362,12 @@ def phase_validate(descriptor: Descriptor, ctx: DeployContext) -> None:
     if errors:
         raise RuntimeError("descriptor validation failed:\n  - " + "\n  - ".join(errors))
 
+    try:
+        casals_root = require_casals_checkout(ctx.casals_src)
+    except PlatformError as exc:
+        raise RuntimeError(str(exc)) from exc
+    console.print(f"  Casals checkout: {casals_root}")
+
     report = run_preflight(
         descriptor,
         ctx.identity,
@@ -366,13 +378,18 @@ def phase_validate(descriptor: Descriptor, ctx: DeployContext) -> None:
     if not report.ok:
         failed = [c.detail for c in report.checks if not c.passed]
         raise RuntimeError("preflight failed:\n  - " + "\n  - ".join(failed))
+    if ctx.network == "ic" and report.cycles_plan and report.cycles_plan.pending_topups:
+        apply_headroom_topups(
+            report.cycles_plan,
+            ctx.network,
+            identity=ctx.identity,
+        )
     print_log_path()
 
 
 def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
     dfx.use_identity(ctx.identity)
     principal = dfx.get_principal(ctx.identity)
-    cycles = DEFAULT_CYCLES_PER_CANISTER if ctx.network == "ic" else None
 
     installer_id = descriptor.canisters.get("realm_installer", "")
     if installer_id and (
@@ -384,7 +401,25 @@ def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
         except CanisterNotFoundError as exc:
             raise RuntimeError(str(exc)) from exc
 
+    result = run_casals_new(
+        descriptor,
+        network=ctx.network,
+        identity=ctx.identity,
+        casals_src=ctx.casals_src,
+        yes=True,
+    )
+    _save_descriptor(descriptor, ctx)
+    mode = "adopt" if result.get("mode") == "upgrade" else "created"
+    casals_ids = ", ".join(
+        f"{name}={descriptor.canisters[name]}"
+        for name in CASALS_BOOTSTRAP_NAMES
+        if descriptor.canisters.get(name)
+    )
+    console.print(f"  casals new: {mode} {casals_ids}")
+
     for name in KNOWN_CANISTER_NAMES:
+        if name in CASALS_BOOTSTRAP_NAMES:
+            continue
         existing_id = descriptor.canisters.get(name)
         if existing_id:
             status = dfx.canister_status(existing_id, ctx.network, identity=ctx.identity)
@@ -400,13 +435,14 @@ def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
         if name in ADOPT_ONLY_CANISTER_NAMES:
             continue
 
+        fund = canister_headroom(name, descriptor) if ctx.network == "ic" else None
         dfx_name = DFX_CANISTER_NAMES.get(name)
         if dfx_name:
             canister_id = dfx.create_canister(
                 dfx_name,
                 ctx.network,
                 identity=ctx.identity,
-                with_cycles=cycles,
+                with_cycles=fund,
             )
         else:
             canister_id = dfx.create_canister_via_ledger(
@@ -414,10 +450,10 @@ def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
                 identity=ctx.identity,
                 controller=principal,
             )
-            if cycles and ctx.network == "ic":
+            if fund and ctx.network == "ic":
                 dfx.top_up_canister(
                     canister_id,
-                    cycles,
+                    fund,
                     ctx.network,
                     identity=ctx.identity,
                 )
@@ -1363,14 +1399,15 @@ def phase_seed_conductor(descriptor: Descriptor, ctx: DeployContext) -> None:
     ensure_sheet_and_deploy_multisig(
         casals_id, ctx.network, identity=ctx.identity
     )
+    ensure_casals_co_controller(descriptor, ctx)
     platform_canisters: list[tuple[str, str, str]] = []
     for name, key, kind in (
         ("realm-registry-backend", "realm_registry_backend", "backend"),
-        ("realm-registry-frontend", "realm_registry_frontend", "frontend"),
         ("realm-installer", "realm_installer", "backend"),
         ("file-registry", "file_registry", "backend"),
-        ("file-registry-frontend", "file_registry_frontend", "frontend"),
         ("casals-file-registry", "casals_file_registry", "backend"),
+        ("realm-registry-frontend", "realm_registry_frontend", "frontend"),
+        ("file-registry-frontend", "file_registry_frontend", "frontend"),
     ):
         canister_id = descriptor.canisters.get(key)
         if not canister_id:
@@ -1406,17 +1443,95 @@ def phase_seed_conductor(descriptor: Descriptor, ctx: DeployContext) -> None:
 REFRESH_CANISTERS_BATCH_MAX = 3
 
 
-def collect_tree_canister_names(tree: dict[str, Any]) -> list[str]:
-    """Return orchestra canister names that have a non-empty principal."""
-    names: list[str] = []
+def collect_tree_canisters(tree: dict[str, Any]) -> list[tuple[str, str]]:
+    """Return (name, canister_id) for orchestra canisters with a principal."""
+    found: list[tuple[str, str]] = []
     for sec in tree.get("sections") or []:
         for stand in sec.get("stands") or []:
             for canister in stand.get("canisters") or []:
                 name = (canister.get("name") or "").strip()
                 canister_id = (canister.get("canister_id") or "").strip()
                 if name and canister_id:
-                    names.append(name)
-    return names
+                    found.append((name, canister_id))
+    return found
+
+
+def collect_tree_canister_names(tree: dict[str, Any]) -> list[str]:
+    """Return orchestra canister names that have a non-empty principal."""
+    return [name for name, _cid in collect_tree_canisters(tree)]
+
+
+def _casals_co_controller_targets(
+    descriptor: Descriptor, tree: dict[str, Any] | None = None
+) -> list[tuple[str, str]]:
+    """Canisters Casals must co-control before seed/prime (not Casals itself)."""
+    casals_id = (descriptor.canisters.get("casals_backend") or "").strip()
+    seen: set[str] = {casals_id} if casals_id else set()
+    targets: list[tuple[str, str]] = []
+
+    def _add(label: str, canister_id: str) -> None:
+        cid = (canister_id or "").strip()
+        if not cid or cid in seen:
+            return
+        seen.add(cid)
+        targets.append((label, cid))
+
+    for name in (
+        *_infra_canister_names(),
+        "casals_file_registry",
+        "casals_frontend",
+        "marketplace_backend",
+        "marketplace_frontend",
+    ):
+        _add(name, descriptor.canisters.get(name, ""))
+    _add("multisig", descriptor.multisig.backend_id or "")
+    if tree:
+        _add("multisig", _find_canister_id(tree, "multisig"))
+    return targets
+
+
+def ensure_casals_co_controller(descriptor: Descriptor, ctx: DeployContext) -> None:
+    """Add Casals as a co-controller; keep deployer and any other existing controllers.
+
+    Seed and prime call Casals to grant permissions and read canister_status.
+    Topology (last) still replaces the set. Fresh-minted canisters only have the
+    deployer until this runs.
+    """
+    casals_id = (descriptor.canisters.get("casals_backend") or "").strip()
+    if not casals_id:
+        raise RuntimeError("casals_backend ID required")
+    deployer = dfx.get_principal(ctx.identity)
+    tree: dict[str, Any] | None = None
+    try:
+        tree = get_tree(casals_id, ctx.network, identity=ctx.identity)
+    except Exception:
+        tree = None
+
+    for name, canister_id in _casals_co_controller_targets(descriptor, tree):
+        try:
+            status = dfx.canister_status(
+                canister_id, ctx.network, identity=ctx.identity
+            )
+        except dfx.DfxError as exc:
+            detail = str(exc)
+            if "IC0301" in detail or "not found" in detail.lower():
+                console.print(
+                    f"  {name}: skip add Casals ({canister_id} not found)"
+                )
+                continue
+            raise
+        if casals_id in status.controllers:
+            console.print(f"  {name}: Casals already controller")
+            continue
+        if deployer not in status.controllers:
+            console.print(
+                f"  {name}: skip add Casals (deployer is not a controller)"
+            )
+            continue
+        console.print(f"  {name}: add Casals as co-controller")
+        dfx.add_canister_controller(
+            canister_id, casals_id, ctx.network, identity=ctx.identity
+        )
 
 
 def chunk_canister_names(
@@ -1449,21 +1564,43 @@ def _canister_row_has_error(row: dict[str, Any] | None) -> bool:
 
 
 def verify_cycles_snapshot_covers_tree(
-    tree_names: list[str], snapshot: dict[str, Any]
+    tree_names: list[str],
+    snapshot: dict[str, Any],
+    *,
+    name_to_id: dict[str, str] | None = None,
 ) -> list[str]:
     """Ensure every tree canister appears in the snapshot.
 
-    Returns names whose snapshot row has status ``error``. Raises ``RuntimeError``
-    when a tree canister is missing from the snapshot entirely.
+    Matches by orchestra name, or by canister id when Casals stores the same
+    principal under a different System-stand name. Returns names whose snapshot
+    row has status ``error``. Raises ``RuntimeError`` when a tree canister is
+    missing from the snapshot entirely.
     """
     by_name = _cycles_snapshot_by_name(snapshot)
-    missing = [name for name in tree_names if name not in by_name]
+    by_id = {
+        (row.get("canister_id") or "").strip(): row
+        for row in (snapshot.get("canisters") or [])
+        if (row.get("canister_id") or "").strip()
+    }
+    ids = name_to_id or {}
+    missing: list[str] = []
+    errors: list[str] = []
+    for name in tree_names:
+        row = by_name.get(name)
+        if row is None:
+            cid = (ids.get(name) or "").strip()
+            if cid:
+                row = by_id.get(cid)
+        if row is None:
+            missing.append(name)
+        elif _canister_row_has_error(row):
+            errors.append(name)
     if missing:
         raise RuntimeError(
             "cycles snapshot missing conductor canisters after refresh: "
             + ", ".join(sorted(missing))
         )
-    return [name for name in tree_names if _canister_row_has_error(by_name.get(name))]
+    return errors
 
 
 def _call_refresh_canisters(
@@ -1518,8 +1655,12 @@ def phase_prime_cycles_snapshot(descriptor: Descriptor, ctx: DeployContext) -> N
     if not casals_id:
         raise RuntimeError("casals_backend ID required")
 
+    ensure_casals_co_controller(descriptor, ctx)
+
     tree = get_tree(casals_id, ctx.network, identity=ctx.identity)
-    names = collect_tree_canister_names(tree)
+    pairs = collect_tree_canisters(tree)
+    names = [name for name, _cid in pairs]
+    name_to_id = {name: cid for name, cid in pairs}
     if not names:
         console.print("  skip: no orchestra canisters in tree")
         return
@@ -1550,7 +1691,9 @@ def phase_prime_cycles_snapshot(descriptor: Descriptor, ctx: DeployContext) -> N
         query=True,
     )
     snapshot = json.loads(cached_raw)
-    error_names = verify_cycles_snapshot_covers_tree(names, snapshot)
+    error_names = verify_cycles_snapshot_covers_tree(
+        names, snapshot, name_to_id=name_to_id
+    )
     for name in error_names:
         row = _cycles_snapshot_by_name(snapshot)[name]
         detail = row.get("error") or row.get("status") or "error"
@@ -1779,6 +1922,11 @@ def validate_seed_prerequisites(descriptor: Descriptor) -> None:
 
 def phase_seed_validate(descriptor: Descriptor, ctx: DeployContext) -> None:
     validate_seed_prerequisites(descriptor)
+    try:
+        casals_root = require_casals_checkout(ctx.casals_src)
+    except PlatformError as exc:
+        raise RuntimeError(str(exc)) from exc
+    console.print(f"  Casals checkout: {casals_root}")
 
 
 SEED_PHASES: list[tuple[str, str, PhaseFunc]] = [
@@ -1806,30 +1954,124 @@ def print_seed_summary(ctx: DeployContext) -> None:
     console.print(table)
 
 
+def format_phase_catalog(phases: list[tuple[str, str, PhaseFunc]]) -> str:
+    lines = ["valid --from-phase values:"]
+    for index, (phase_id, title, _func) in enumerate(phases, start=1):
+        lines.append(f"  {index:>2}  {phase_id}  {title}")
+    return "\n".join(lines)
+
+
+def parse_from_phase(
+    from_phase: str | None,
+    phases: list[tuple[str, str, PhaseFunc]],
+) -> int:
+    """Return a 0-based start index. ``from_phase`` is a 1-based index or phase id."""
+    if from_phase is None:
+        return 0
+    raw = str(from_phase).strip()
+    if not raw:
+        return 0
+    ids = [phase_id for phase_id, _title, _func in phases]
+    if raw.isdigit():
+        number = int(raw)
+        if number < 1 or number > len(phases):
+            raise RuntimeError(
+                f"--from-phase {raw} is out of range 1..{len(phases)}\n"
+                + format_phase_catalog(phases)
+            )
+        return number - 1
+    key = raw.replace("-", "_")
+    if key in ids:
+        return ids.index(key)
+    raise RuntimeError(
+        f"unknown --from-phase {raw!r}\n" + format_phase_catalog(phases)
+    )
+
+
+def phase_ids_to_run(
+    phases: list[tuple[str, str, PhaseFunc]],
+    from_phase: str | None,
+    *,
+    validate_phase_id: str,
+) -> set[str]:
+    start = parse_from_phase(from_phase, phases)
+    run_ids = {phase_id for phase_id, _title, _func in phases[start:]}
+    validate_index = next(
+        (i for i, (phase_id, _, _) in enumerate(phases) if phase_id == validate_phase_id),
+        None,
+    )
+    if validate_index is not None and start > validate_index:
+        run_ids.add(validate_phase_id)
+    return run_ids
+
+
+def _bound_phase_func(func: PhaseFunc) -> PhaseFunc:
+    """Honor test patches of ``gaas.phases.<func.__name__>`` after PHASES was built."""
+    current = globals().get(func.__name__)
+    if callable(current):
+        return current  # type: ignore[return-value]
+    return func
+
+
+def _run_phase_table(
+    descriptor: Descriptor,
+    ctx: DeployContext,
+    phases: list[tuple[str, str, PhaseFunc]],
+    *,
+    validate_phase_id: str,
+    on_phase_start: Callable[[int, str, str], None] | None = None,
+) -> DeployContext:
+    total = len(phases)
+    start = parse_from_phase(ctx.from_phase, phases)
+    run_ids = phase_ids_to_run(
+        phases, ctx.from_phase, validate_phase_id=validate_phase_id
+    )
+    if start > 0:
+        skipped = [
+            phase_id
+            for phase_id, _title, _func in phases[:start]
+            if phase_id not in run_ids
+        ]
+        if skipped:
+            console.print(
+                f"  resuming from {phases[start][0]} "
+                f"(skipped: {', '.join(skipped)})"
+            )
+        if ctx.destroy_except_frontend and "destroy_except_frontend" in skipped:
+            console.print(
+                "[yellow]  --from-phase skips destroy-except even though "
+                "--destroy-except-realm-registry-frontend was set[/yellow]"
+            )
+
+    for index, (phase_id, title, func) in enumerate(phases, start=1):
+        if phase_id not in run_ids:
+            continue
+        ctx.current_phase = phase_id
+        if on_phase_start:
+            on_phase_start(index, phase_id, title)
+        else:
+            console.print(f"[{index}/{total}] {title}...")
+        _bound_phase_func(func)(descriptor, ctx)
+        ctx.completed_phases.append(phase_id)
+        ctx.current_phase = None
+        if ctx.stopped:
+            break
+    return ctx
+
+
 def run_seed_phases(
     descriptor: Descriptor,
     ctx: DeployContext,
     *,
     on_phase_start: Callable[[int, str, str], None] | None = None,
 ) -> DeployContext:
-    phases: list[tuple[str, str, PhaseFunc]] = [
-        ("seed_validate", "Validating descriptor for seed", phase_seed_validate),
-        ("seed_file_registry", "Seeding file registry", phase_seed_file_registry),
-        (
-            "seed_namespace_approvals",
-            "Seeding file-registry namespace approvals",
-            phase_seed_namespace_approvals,
-        ),
-        ("seed_conductor", "Seeding conductor orchestra", phase_seed_conductor),
-    ]
-    total = len(phases)
-    for index, (phase_id, title, func) in enumerate(phases, start=1):
-        if on_phase_start:
-            on_phase_start(index, phase_id, title)
-        else:
-            console.print(f"[{index}/{total}] {title}...")
-        func(descriptor, ctx)
-        ctx.completed_phases.append(phase_id)
+    _run_phase_table(
+        descriptor,
+        ctx,
+        SEED_PHASES,
+        validate_phase_id="seed_validate",
+        on_phase_start=on_phase_start,
+    )
     print_seed_summary(ctx)
     return ctx
 
@@ -1871,14 +2113,10 @@ def run_phases(
     *,
     on_phase_start: Callable[[int, str, str], None] | None = None,
 ) -> DeployContext:
-    total = len(PHASES)
-    for index, (phase_id, title, func) in enumerate(PHASES, start=1):
-        if on_phase_start:
-            on_phase_start(index, phase_id, title)
-        else:
-            console.print(f"[{index}/{total}] {title}...")
-        func(descriptor, ctx)
-        ctx.completed_phases.append(phase_id)
-        if ctx.stopped:
-            break
-    return ctx
+    return _run_phase_table(
+        descriptor,
+        ctx,
+        PHASES,
+        validate_phase_id="validate",
+        on_phase_start=on_phase_start,
+    )

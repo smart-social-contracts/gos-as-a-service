@@ -8,7 +8,11 @@ from pathlib import Path
 import pytest
 
 from gaas import conductor_seed
-from gaas.conductor_seed import orchestration_template_actions, platform_sheet
+from gaas.conductor_seed import (
+    backends_before_frontends,
+    orchestration_template_actions,
+    platform_sheet,
+)
 from gaas.descriptor import Descriptor
 from gaas.platform import PlatformError, find_local_assetstorage_wasm
 from tests.conftest import SAMPLE_DESCRIPTOR
@@ -45,10 +49,25 @@ def test_platform_sheet_has_infra_and_deployments() -> None:
     names = [sec["name"] for sec in sheet["sections"]]
     assert names == ["Infra", "Deployments"]
     infra = sheet["sections"][0]
-    assert infra["stands"][0]["name"] == "governance"
+    stand_names = [stand["name"] for stand in infra["stands"]]
+    assert stand_names == [
+        "governance",
+        "orchestration",
+        "installer",
+        "realm-registry",
+    ]
     assert infra["stands"][0]["canisters"][0]["name"] == "multisig"
     assert infra["stands"][0]["canisters"][0]["wasm_type"] == "multisig"
     assert infra["stands"][0]["canisters"][0]["teardown_priority"] == 40
+    baton = infra["stands"][1]["canisters"][0]
+    assert baton["name"] == "infra-baton"
+    assert baton["wasm_type"] == "baton"
+    assert baton["install_arg"] == {"top_commander": "$self"}
+    assert [c["name"] for c in infra["stands"][2]["canisters"]] == ["realm-installer"]
+    assert [c["name"] for c in infra["stands"][3]["canisters"]] == [
+        "realm-registry-backend",
+        "realm-registry-frontend",
+    ]
     assert sheet["sections"][1]["stands"] == []
 
 
@@ -508,35 +527,38 @@ def test_ensure_platform_stand_creates_stand_and_registers(monkeypatch) -> None:
         "qthgp-3yaaa-aaaae-agveq-cai", platform, "ic"
     )
 
-    assert calls[0] == (
-        "create_stand",
+    create_stands = [payload for method, payload in calls if method == "create_stand"]
+    assert create_stands == [
         {
             "section": "Infra",
-            "name": "platform",
-            "description": (
-                "GaaS platform canisters (registry, installer, file registry)"
-            ),
+            "name": "realm-registry",
+            "description": conductor_seed.PLATFORM_STAND_DESCRIPTIONS["realm-registry"],
         },
-    )
+        {
+            "section": "Infra",
+            "name": "installer",
+            "description": conductor_seed.PLATFORM_STAND_DESCRIPTIONS["installer"],
+        },
+    ]
     register_calls = [payload for method, payload in calls if method == "register_canister"]
     assert register_calls == [
         {
-            "stand": "platform",
+            "stand": "realm-registry",
             "name": "realm-registry-backend",
             "canister_id": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
             "kind": "backend",
         },
         {
-            "stand": "platform",
-            "name": "realm-registry-frontend",
-            "canister_id": "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
-            "kind": "frontend",
-        },
-        {
-            "stand": "platform",
+            "stand": "installer",
             "name": "realm-installer",
             "canister_id": "ccccc-ccccc-ccccc-ccccc-ccccc-ccc",
             "kind": "backend",
+        },
+        {
+            "stand": "realm-registry",
+            "name": "realm-registry-frontend",
+            "canister_id": "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+            "kind": "frontend",
         },
     ]
 
@@ -546,7 +568,9 @@ def test_ensure_platform_stand_tolerates_existing_stand(monkeypatch) -> None:
 
     def fake_casals(_cid, method, payload, _net, **_):
         if method == "create_stand":
-            raise RuntimeError("stand platform already exists in section Infra")
+            raise RuntimeError(
+                f"stand {payload.get('name')} already exists in section Infra"
+            )
         calls.append((method, payload))
         return {"ok": True}
 
@@ -555,7 +579,7 @@ def test_ensure_platform_stand_tolerates_existing_stand(monkeypatch) -> None:
         conductor_seed,
         "get_tree",
         lambda *_a, **_k: {
-            "sections": [{"name": "Infra", "stands": [{"name": "platform", "canisters": []}]}]
+            "sections": [{"name": "Infra", "stands": [{"name": "file-registry", "canisters": []}]}]
         },
     )
 
@@ -568,7 +592,7 @@ def test_ensure_platform_stand_tolerates_existing_stand(monkeypatch) -> None:
         (
             "register_canister",
             {
-                "stand": "platform",
+                "stand": "file-registry",
                 "name": "file-registry",
                 "canister_id": "ddddd-ddddd-ddddd-ddddd-ddddd-ddd",
                 "kind": "backend",
@@ -587,7 +611,9 @@ def test_ensure_platform_stand_skips_existing_canisters(monkeypatch) -> None:
             calls.append((method, payload)) or {"ok": True}
             if method != "create_stand"
             else (_ for _ in ()).throw(
-                RuntimeError("stand platform already exists in section Infra")
+                RuntimeError(
+                    f"stand {payload.get('name')} already exists in section Infra"
+                )
             )
         ),
     )
@@ -630,9 +656,104 @@ def test_ensure_platform_stand_skips_existing_canisters(monkeypatch) -> None:
         (
             "register_canister",
             {
-                "stand": "platform",
+                "stand": "file-registry",
                 "name": "file-registry-frontend",
                 "canister_id": "eeeee-eeeee-eeeee-eeeee-eeeee-eee",
+                "kind": "frontend",
+            },
+        ),
+    ]
+
+
+def test_backends_before_frontends_keeps_relative_order() -> None:
+    mixed = [
+        ("realm-registry-backend", "a", "backend"),
+        ("realm-registry-frontend", "b", "frontend"),
+        ("realm-installer", "c", "backend"),
+        ("file-registry-frontend", "d", "frontend"),
+    ]
+    assert backends_before_frontends(mixed) == [
+        ("realm-registry-backend", "a", "backend"),
+        ("realm-installer", "c", "backend"),
+        ("realm-registry-frontend", "b", "frontend"),
+        ("file-registry-frontend", "d", "frontend"),
+    ]
+
+
+def test_ensure_platform_stand_unregisters_frontend_before_pending_backends(
+    monkeypatch,
+) -> None:
+    calls: list[tuple[str, dict]] = []
+
+    monkeypatch.setattr(
+        conductor_seed,
+        "_casals_call",
+        lambda _cid, method, payload, _net, **_: (
+            calls.append((method, payload)) or {"ok": True}
+            if method != "create_stand"
+            else (_ for _ in ()).throw(
+                RuntimeError(
+                    f"stand {payload.get('name')} already exists in section Infra"
+                )
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        conductor_seed,
+        "get_tree",
+        lambda *_a, **_k: {
+            "sections": [
+                {
+                    "name": "Infra",
+                    "stands": [
+                        {
+                            "name": "platform",
+                            "canisters": [
+                                {
+                                    "name": "realm-registry-backend",
+                                    "canister_id": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
+                                },
+                                {
+                                    "name": "realm-registry-frontend",
+                                    "canister_id": "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+
+    conductor_seed.ensure_platform_stand(
+        "qthgp-3yaaa-aaaae-agveq-cai",
+        [
+            ("realm-registry-backend", "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa", "backend"),
+            ("realm-registry-frontend", "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb", "frontend"),
+            ("realm-installer", "ccccc-ccccc-ccccc-ccccc-ccccc-ccc", "backend"),
+        ],
+        "ic",
+    )
+    assert calls == [
+        (
+            "delete_canister",
+            {"canister": "realm-registry-frontend"},
+        ),
+        (
+            "register_canister",
+            {
+                "stand": "installer",
+                "name": "realm-installer",
+                "canister_id": "ccccc-ccccc-ccccc-ccccc-ccccc-ccc",
+                "kind": "backend",
+            },
+        ),
+        (
+            "register_canister",
+            {
+                "stand": "realm-registry",
+                "name": "realm-registry-frontend",
+                "canister_id": "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
                 "kind": "frontend",
             },
         ),

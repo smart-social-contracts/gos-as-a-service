@@ -110,11 +110,18 @@ def run_preflight(
             print_cycles_plan(plan, out)
 
             if plan.ok:
+                if plan.pending_topups:
+                    detail = (
+                        f"wallet can fund headroom top-ups for: "
+                        f"{', '.join(item.label for item in plan.pending_topups)}"
+                    )
+                else:
+                    detail = "wallet and canister cycles sufficient for deploy estimate"
                 report.checks.append(
                     PreflightCheck(
                         name="cycles_plan",
                         passed=True,
-                        detail="wallet and canister cycles sufficient for deploy estimate",
+                        detail=detail,
                     )
                 )
             else:

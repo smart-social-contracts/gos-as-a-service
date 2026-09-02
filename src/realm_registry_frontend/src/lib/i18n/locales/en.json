@@ -99,7 +99,7 @@
     "panel_title": "Realm browser",
     "panel_body": "Search by name or ID, filter by lifecycle stage, sort by users, and pick a realm card to focus it on the map.",
     "assistant_title": "Open the AI assistant",
-    "assistant_body": "Use this tab to open the Realms AI Assistant — your guide to realms, deployments, and governance.",
+    "assistant_body": "Use this tab to open the AI Assistant — your guide to realms, deployments, and governance.",
     "assistant_compose_title": "Ask the assistant",
     "assistant_compose_body": "Type a question in the box and press Send, or tap one of the suggested prompts to get started quickly.",
     "stats_title": "Live registry stats",
@@ -178,9 +178,9 @@
     "processing": "Processing..."
   },
   "assistant": {
-    "title": "Realms AI Assistant",
+    "title": "AI Assistant",
     "toggle": "AI Assistant",
-    "empty": "Ask me anything about the realms in the registry — which to join, how to create one, or how Realms works.",
+    "empty": "",
     "placeholder": "Type your message…",
     "send": "Send",
     "thinking": "Thinking…",
@@ -198,7 +198,7 @@
     "current_chat": "Current chat",
     "history_sign_in_save": "Sign in to save this conversation to your history.",
     "settings": "Settings",
-    "settings_title": "Realms AI Assistant — Settings",
+    "settings_title": "AI Assistant — Settings",
     "copy": "Copy",
     "copied": "Copied",
     "suggestions_loading": "Loading suggestions…",
@@ -231,8 +231,8 @@
     "offline_status": "Offline",
     "checking": "Checking…",
     "check_again": "Check again",
-    "connect_title": "Connect a more powerful assistant",
-    "connect_lead": "ChatGPT, Claude, and Grok are stronger than this built-in helper. Connect one with the same Realms MCP link — or keep using the built-in assistant with nothing connected.",
+    "connect_title": "Connect your personal AI assistant",
+    "connect_lead": "Your personal AI assistant (ChatGPT, Claude, Grok, etc.) is generally smarter and knows more about you than this built-in helper. To connect your personal AI assistant with Realms GOS, set the following MCP link in your assistant's settings.",
     "connect_section": "Personal assistants",
     "connect_section_desc": "Connect ChatGPT, Claude, or Grok with the Realms MCP connector. The built-in assistant keeps working if you skip this.",
     "connect_detail": "Add this Realms MCP URL as a custom connector in {name}. {name} opens a browser, you sign in with Internet Identity, and approve access.",
@@ -250,6 +250,7 @@
     "connect_claude_step3": "Sign in with Internet Identity and choose read-only or full access.",
     "connect_grok_step1": "In Grok: Settings → Connectors → add a custom MCP server.",
     "connect_grok_step2": "Paste the Realms MCP URL and continue.",
-    "connect_grok_step3": "Sign in with Internet Identity and choose read-only or full access."
+    "connect_grok_step3": "Sign in with Internet Identity and choose read-only or full access.",
+    "experimental_notice": "Experimental. Not official. Not legal advice. Do not enter personal data. Chats may be stored."
   }
 }

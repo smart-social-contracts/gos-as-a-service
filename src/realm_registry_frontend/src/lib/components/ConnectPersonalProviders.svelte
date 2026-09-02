@@ -79,85 +79,96 @@
   <div class="connect-head">
     {#if variant === 'panel'}
       <h3 class="connect-title">
-        {$_('assistant.connect_title', { default: 'Connect a more powerful assistant' })}
+        {$_('assistant.connect_title', { default: 'Connect your personal AI assistant' })}
       </h3>
     {/if}
     <p class="connect-lead">
       {$_('assistant.connect_lead', {
         default:
-          'ChatGPT, Claude, and Grok are stronger than this built-in helper. Connect one with the same Realms MCP link — or keep using the built-in assistant with nothing connected.',
+          "Your personal AI assistant (ChatGPT, Claude, Grok, etc.) is generally smarter and knows more about you than this built-in helper. To connect your personal AI assistant with Realms GOS, set the following MCP link in your assistant's settings.",
       })}
     </p>
   </div>
 
-  <div class="provider-row" role="group" aria-label={$_('assistant.connect_title', { default: 'Connect a more powerful assistant' })}>
-    {#each PERSONAL_PROVIDERS as provider (provider.id)}
-      <button
-        type="button"
-        class="provider-btn"
-        class:active={selectedId === provider.id}
-        class:connected={isConnected(provider.id)}
-        on:click={() => selectProvider(provider.id)}
-      >
-        <span class="provider-name">{provider.label}</span>
-        {#if isConnected(provider.id)}
-          <span class="provider-state">{$_('assistant.connect_connected', { default: 'Connected' })}</span>
-        {/if}
+  {#if variant === 'panel'}
+    <div class="url-row">
+      <code class="url-value">{MCP_URL}</code>
+      <button type="button" class="copy-btn" on:click={copyUrl}>
+        {copiedUrl
+          ? $_('assistant.copied', { default: 'Copied' })
+          : $_('assistant.copy', { default: 'Copy' })}
       </button>
-    {/each}
-  </div>
-
-  {#if selected}
-    <div class="connect-detail">
-      <p class="connect-detail-lead">
-        {$_('assistant.connect_detail', {
-          values: { name: selected.label },
-          default: `Add this Realms MCP URL as a custom connector in ${selected.label}. ${selected.label} opens a browser, you sign in with Internet Identity, and approve access.`,
-        })}
-      </p>
-      <div class="url-row">
-        <code class="url-value">{MCP_URL}</code>
-        <button type="button" class="copy-btn" on:click={copyUrl}>
-          {copiedUrl
-            ? $_('assistant.copied', { default: 'Copied' })
-            : $_('assistant.copy', { default: 'Copy' })}
-        </button>
-      </div>
-      <ol class="steps">
-        {#each selected.stepDefaults as step, i (i)}
-          <li>
-            {$_(`assistant.connect_${selected.id}_step${i + 1}`, { default: step })}
-          </li>
-        {/each}
-      </ol>
-      <div class="detail-actions">
-        {#if isConnected(selected.id)}
-          <button type="button" class="text-btn" on:click={() => toggleConnected(selected.id)}>
-            {$_('assistant.connect_unmark', {
-              values: { name: selected.label },
-              default: `Unmark ${selected.label}`,
-            })}
-          </button>
-        {:else}
-          <button type="button" class="primary-btn" on:click={markConnected}>
-            {$_('assistant.connect_mark', {
-              values: { name: selected.label },
-              default: `I've connected ${selected.label}`,
-            })}
-          </button>
-        {/if}
-        <a class="text-link" href="/my-dashboard?tab=connect">
-          {$_('assistant.connect_tokens', { default: 'Pairing tokens (advanced)' })}
-        </a>
-      </div>
     </div>
-  {/if}
+  {:else}
+    <div class="provider-row" role="group" aria-label={$_('assistant.connect_title', { default: 'Connect your personal AI assistant' })}>
+      {#each PERSONAL_PROVIDERS as provider (provider.id)}
+        <button
+          type="button"
+          class="provider-btn"
+          class:active={selectedId === provider.id}
+          class:connected={isConnected(provider.id)}
+          on:click={() => selectProvider(provider.id)}
+        >
+          <span class="provider-name">{provider.label}</span>
+          {#if isConnected(provider.id)}
+            <span class="provider-state">{$_('assistant.connect_connected', { default: 'Connected' })}</span>
+          {/if}
+        </button>
+      {/each}
+    </div>
 
-  <p class="connect-footnote">
-    {$_('assistant.connect_footnote', {
-      default: 'The built-in assistant stays available here without connecting anything.',
-    })}
-  </p>
+    {#if selected}
+      <div class="connect-detail">
+        <p class="connect-detail-lead">
+          {$_('assistant.connect_detail', {
+            values: { name: selected.label },
+            default: `Add this Realms MCP URL as a custom connector in ${selected.label}. ${selected.label} opens a browser, you sign in with Internet Identity, and approve access.`,
+          })}
+        </p>
+        <div class="url-row">
+          <code class="url-value">{MCP_URL}</code>
+          <button type="button" class="copy-btn" on:click={copyUrl}>
+            {copiedUrl
+              ? $_('assistant.copied', { default: 'Copied' })
+              : $_('assistant.copy', { default: 'Copy' })}
+          </button>
+        </div>
+        <ol class="steps">
+          {#each selected.stepDefaults as step, i (i)}
+            <li>
+              {$_(`assistant.connect_${selected.id}_step${i + 1}`, { default: step })}
+            </li>
+          {/each}
+        </ol>
+        <div class="detail-actions">
+          {#if isConnected(selected.id)}
+            <button type="button" class="text-btn" on:click={() => toggleConnected(selected.id)}>
+              {$_('assistant.connect_unmark', {
+                values: { name: selected.label },
+                default: `Unmark ${selected.label}`,
+              })}
+            </button>
+          {:else}
+            <button type="button" class="primary-btn" on:click={markConnected}>
+              {$_('assistant.connect_mark', {
+                values: { name: selected.label },
+                default: `I've connected ${selected.label}`,
+              })}
+            </button>
+          {/if}
+          <a class="text-link" href="/my-dashboard?tab=connect">
+            {$_('assistant.connect_tokens', { default: 'Pairing tokens (advanced)' })}
+          </a>
+        </div>
+      </div>
+    {/if}
+
+    <p class="connect-footnote">
+      {$_('assistant.connect_footnote', {
+        default: 'The built-in assistant stays available here without connecting anything.',
+      })}
+    </p>
+  {/if}
 
   {#if showDismiss}
     <button type="button" class="dismiss-btn" on:click={dismiss}>

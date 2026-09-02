@@ -12,10 +12,12 @@ from gaas.cycles_plan import (
     REALM_OPS_MARGIN_CYCLES,
     REALMS_PER_DEPLOY_ASSUMPTION,
     WALLET_CREATE_CYCLES,
-    WALLET_INITIAL_FUNDING,
     _casals_backend_required,
     _realm_provisioning_budget,
+    _wallet_create_cost,
+    apply_headroom_topups,
     build_cycles_plan,
+    canister_headroom,
     print_cycles_plan,
     remediation_canister_top_up,
     remediation_wallet_convert,
@@ -36,15 +38,19 @@ def _descriptor(**overrides) -> Descriptor:
 
 
 def test_wallet_required_all_canisters_missing() -> None:
+    desc = _descriptor(canisters={})
     plan = build_cycles_plan(
-        _descriptor(canisters={}),
+        desc,
         "ic",
         wallet_balance=10_000_000_000_000,
         canister_balances={},
     )
     wallet = next(item for item in plan.items if item.label == "wallet")
-    per = WALLET_CREATE_CYCLES + WALLET_INITIAL_FUNDING
-    assert wallet.required == per * len(PLATFORM_CANISTER_NAMES)
+    expected = sum(
+        WALLET_CREATE_CYCLES + canister_headroom(name, desc)
+        for name in PLATFORM_CANISTER_NAMES
+    )
+    assert wallet.required == expected
     assert len(plan.items) == 1
 
 
@@ -53,26 +59,26 @@ def test_wallet_required_partial_create_mix() -> None:
         "file_registry": VALID_CANISTER_ID,
         "casals_backend": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
     }
+    desc = _descriptor(canisters=canisters)
+    casals_required = _casals_backend_required(desc)
     plan = build_cycles_plan(
-        _descriptor(canisters=canisters),
+        desc,
         "ic",
-        wallet_balance=5_000_000_000_000,
+        wallet_balance=50_000_000_000_000,
         canister_balances={
             "file_registry": DEFAULT_THRESHOLD,
-            "casals_backend": _casals_backend_required(
-                _descriptor(
-                    canisters=canisters,
-                    multisig=MultisigConfig(backend_id=None),
-                )
-            ),
+            "casals_backend": casals_required,
         },
     )
     wallet = next(item for item in plan.items if item.label == "wallet")
-    # file_registry is already in the descriptor, so it is not missing. Other
-    # platform canisters still count toward wallet creation budget.
-    missing = len([n for n in PLATFORM_CANISTER_NAMES if n not in canisters])
-    assert wallet.required == missing * (WALLET_CREATE_CYCLES + WALLET_INITIAL_FUNDING)
+    expected = sum(
+        _wallet_create_cost(name, desc)
+        for name in PLATFORM_CANISTER_NAMES
+        if name not in canisters
+    )
+    assert wallet.required == expected
     assert len(plan.items) == 1 + len(canisters)
+    assert plan.ok
 
 
 def test_canister_headrooms_and_multisig_extra() -> None:
@@ -160,6 +166,52 @@ def test_shortfall_detection_wallet_and_canister() -> None:
     file_reg = next(item for item in plan.items if item.label == "file_registry")
     assert wallet.shortfall > 0
     assert file_reg.shortfall == DEFAULT_THRESHOLD - 100_000_000_000
+    assert wallet.required == file_reg.shortfall + sum(
+        _wallet_create_cost(name, _descriptor(canisters=canisters))
+        for name in PLATFORM_CANISTER_NAMES
+        if name not in canisters
+    )
+
+
+def test_plan_ok_when_wallet_covers_canister_shortfall() -> None:
+    desc = _descriptor(
+        canisters={name: VALID_CANISTER_ID for name in PLATFORM_CANISTER_NAMES},
+        multisig=MultisigConfig(backend_id="aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa"),
+    )
+    balances = {
+        name: canister_headroom(name, desc) for name in PLATFORM_CANISTER_NAMES
+    }
+    balances["file_registry"] = 100_000_000_000
+    shortfall = canister_headroom("file_registry", desc) - 100_000_000_000
+    plan = build_cycles_plan(
+        desc,
+        "ic",
+        wallet_balance=10_000_000_000_000,
+        canister_balances=balances,
+    )
+    assert plan.ok
+    wallet = next(item for item in plan.items if item.label == "wallet")
+    assert wallet.required == shortfall
+    assert [item.label for item in plan.pending_topups] == ["file_registry"]
+
+
+def test_apply_headroom_topups_deposits_shortfalls() -> None:
+    desc = _descriptor(canisters={"file_registry": VALID_CANISTER_ID})
+    plan = build_cycles_plan(
+        desc,
+        "ic",
+        wallet_balance=10_000_000_000_000,
+        canister_balances={"file_registry": 100_000_000_000},
+    )
+    with patch("gaas.cycles_plan.dfx.top_up_canister") as mock_top_up:
+        total = apply_headroom_topups(plan, "ic", identity="deployer")
+    assert total == DEFAULT_THRESHOLD - 100_000_000_000
+    mock_top_up.assert_called_once_with(
+        VALID_CANISTER_ID,
+        DEFAULT_THRESHOLD - 100_000_000_000,
+        "ic",
+        identity="deployer",
+    )
 
 
 def test_remediation_commands() -> None:
