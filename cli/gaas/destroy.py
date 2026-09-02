@@ -241,7 +241,18 @@ def run_destroy_orchestra_loop(
                 continue
             raise
         if parsed.get("ok") is False:
-            raise RuntimeError(parsed.get("error") or "destroy_orchestra failed")
+            err = str(parsed.get("error") or "")
+            if (
+                not dropped_unknown_preserve
+                and len(preserve) > 1
+                and "unknown preserve" in err.lower()
+            ):
+                # Marketplace frontend is DNS keep-ID but may not be an orchestra
+                # canister (test/product-owned). Retry with registry frontend only.
+                preserve = preserve[:1]
+                dropped_unknown_preserve = True
+                continue
+            raise RuntimeError(err or "destroy_orchestra failed")
         errors = parsed.get("errors") or []
         if errors:
             fixed = 0

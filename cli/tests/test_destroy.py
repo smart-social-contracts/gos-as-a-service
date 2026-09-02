@@ -465,6 +465,27 @@ def test_run_destroy_orchestra_loop_drops_unknown_preserve() -> None:
     assert second_preserve == [FRONTEND_ID]
 
 
+def test_run_destroy_orchestra_loop_drops_unknown_preserve_ok_false() -> None:
+    with patch("gaas.destroy._casals_call") as mock_casals:
+        mock_casals.side_effect = [
+            {
+                "ok": False,
+                "error": "unknown preserve entries: mxyd5-3qaaa-aaaao-ba2xq-cai",
+            },
+            {"ok": True, "destroyed": [], "remaining": 0, "done": True, "cycles_reclaimed": 0},
+        ]
+        destroyed, reclaimed = run_destroy_orchestra_loop(
+            CASALS_ID,
+            preserve=[FRONTEND_ID, MARKETPLACE_FRONTEND_ID],
+            network="ic",
+            identity="deployer",
+        )
+    assert destroyed == []
+    assert reclaimed == 0
+    second_preserve = mock_casals.call_args_list[1][0][2]["preserve"]
+    assert second_preserve == [FRONTEND_ID]
+
+
 def test_evac_min_reserve_matches_conductor_delete_max() -> None:
     assert EVAC_MIN_RESERVE == CONDUCTOR_DELETE_MAX
 
