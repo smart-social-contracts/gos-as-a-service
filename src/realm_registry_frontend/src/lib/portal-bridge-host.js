@@ -1,6 +1,6 @@
 import { createScopedDelegation, resolveRealmDelegationTargets } from '$lib/delegation.js';
 import { getIdentity } from '$lib/auth.js';
-import { portalPath } from '$lib/federation.js';
+import { embeddedPathFromPortalPathname, portalHistoryHref } from '$lib/federation-path.js';
 
 const BRIDGE_VERSION = '1';
 
@@ -51,13 +51,13 @@ export function attachPortalBridge(iframe, realm, opts = {}) {
 				break;
 			case 'nav:push': {
 				const path = msg.payload?.path || '/';
-				const full = portalPath(realm.slug, path);
+				const href = portalHistoryHref(realm.slug, path, window.location.href);
 				// replace=true for auth redirects / initial sync so the back
 				// button doesn't trap users on /join after they land elsewhere.
 				if (msg.payload?.replace) {
-					window.history.replaceState({}, '', full);
+					window.history.replaceState({}, '', href);
 				} else {
-					window.history.pushState({}, '', full);
+					window.history.pushState({}, '', href);
 				}
 				break;
 			}
@@ -161,7 +161,8 @@ export function attachPortalBridge(iframe, realm, opts = {}) {
 				slug: realm.slug,
 				backendCanisterId: realm.backendCanisterId,
 				frontendCanisterId: realm.frontendCanisterId,
-				env: realm.env || ''
+				env: realm.env || '',
+				path: embeddedPathFromPortalPathname(window.location.pathname, realm.slug)
 			}
 		});
 		iframe.contentWindow.postMessage(

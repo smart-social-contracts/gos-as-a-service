@@ -53,7 +53,8 @@ export function realmIframeUrl(frontendCanisterId, slug, subPath = '') {
 	return `${base}${path}?${q.toString()}`;
 }
 
-export function portalPath(slug, subPath = '') {
-	const p = subPath.startsWith('/') ? subPath : subPath ? `/${subPath}` : '';
-	return `/r/${encodeURIComponent(slug)}${p}`;
-}
+export {
+	embeddedPathFromPortalPathname,
+	portalHistoryHref,
+	portalPath,
+} from './federation-path.js';
