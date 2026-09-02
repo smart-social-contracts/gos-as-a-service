@@ -1,26 +1,35 @@
 {
   "casals_backend": {
-    "demo": "oia4k-baaaa-aaaae-ag3ha-cai",
+    "ic": "t6jjj-yyaaa-aaaah-av3cq-cai",
     "staging": "th7fr-bqaaa-aaaan-q6n4q-cai",
-    "test": "qthgp-3yaaa-aaaae-agveq-cai"
+    "test": "qthgp-3yaaa-aaaae-agveq-cai",
+    "demo": "t6jjj-yyaaa-aaaah-av3cq-cai"
+  },
+  "casals_file_registry": {
+    "ic": "tqleb-diaaa-aaaah-av3dq-cai",
+    "demo": "tqleb-diaaa-aaaah-av3dq-cai"
   },
   "casals_frontend": {
-    "demo": "opb26-myaaa-aaaae-ag3hq-cai",
+    "ic": "txkcv-oqaaa-aaaah-av3da-cai",
     "staging": "to4on-xyaaa-aaaan-q6n5a-cai",
-    "test": "qic2k-baaaa-aaaae-agvga-cai"
+    "test": "qic2k-baaaa-aaaae-agvga-cai",
+    "demo": "txkcv-oqaaa-aaaah-av3da-cai"
   },
   "file_registry": {
-    "demo": "mv5sc-siaaa-aaaae-ag3iq-cai",
+    "demo": "y32hs-ziaaa-aaaah-av27q-cai",
+    "ic": "y32hs-ziaaa-aaaah-av27q-cai",
     "staging": "feqzn-wyaaa-aaaae-ag23q-cai",
     "test": "uq2mu-kaaaa-aaaah-avqcq-cai"
   },
   "file_registry_frontend": {
-    "demo": "m46z6-eaaaa-aaaae-ag3ja-cai",
+    "demo": "tfmvm-caaaa-aaaah-av3aa-cai",
+    "ic": "tfmvm-caaaa-aaaah-av3aa-cai",
     "staging": "m4td3-eaaaa-aaaao-qqbva-cai",
     "test": "2no7h-xqaaa-aaaad-qlxeq-cai"
   },
   "marketplace_backend": {
-    "demo": "m377k-jyaaa-aaaae-ag3jq-cai",
+    "demo": "tcnty-pyaaa-aaaah-av3aq-cai",
+    "ic": "tcnty-pyaaa-aaaah-av3aq-cai",
     "staging": "l5qpy-wqaaa-aaaah-qu2mq-cai",
     "test": "2wldc-niaaa-aaaad-qlxga-cai"
   },
@@ -29,21 +38,20 @@
     "test": "mxyd5-3qaaa-aaaao-ba2xq-cai"
   },
   "realm_installer": {
-    "demo": "moqmm-caaaa-aaaah-qu27q-cai",
+    "ic": "tzip5-vaaaa-aaaah-av3ca-cai",
     "staging": "ta6df-miaaa-aaaan-q6n4a-cai",
-    "test": "fltjm-tyaaa-aaaap-qunhq-cai"
+    "test": "fltjm-tyaaa-aaaap-qunhq-cai",
+    "demo": "tzip5-vaaaa-aaaah-av3ca-cai"
   },
   "realm_registry_backend": {
-    "demo": "rhw4p-gqaaa-aaaac-qbw7q-cai",
+    "ic": "tmp6q-uiaaa-aaaah-av3bq-cai",
     "staging": "snqhl-daaaa-aaaan-q6n3q-cai",
-    "test": "yhw3g-fyaaa-aaaas-qgorq-cai"
+    "test": "yhw3g-fyaaa-aaaas-qgorq-cai",
+    "demo": "tmp6q-uiaaa-aaaah-av3bq-cai"
   },
   "realm_registry_frontend": {
     "demo": "2zaor-5yaaa-aaaac-qbxaa-cai",
     "staging": "77243-aqaaa-aaaau-aggza-cai",
     "test": "qtank-3qaaa-aaaaa-qhb6q-cai"
-  },
-  "casals_file_registry": {
-    "demo": "ms4uw-7qaaa-aaaae-ag3ia-cai"
   }
 }

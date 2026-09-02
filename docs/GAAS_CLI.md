@@ -152,7 +152,7 @@ Never run raw `dfx canister delete` — it burns leftover cycles.
     "casals_frontend": "qic2k-baaaa-aaaae-agvga-cai"
   },
   "casals": {
-    "version": "v0.3.0",
+    "version": "v0.3.1",
     "release_repo": "smart-social-contracts/Casals"
   },
   "services": {
@@ -234,7 +234,7 @@ Leave a key out (or omit the entire `canisters` object) to create that canister 
 
 | Field | Required | Default | Description |
 |---|---|---|---|
-| `version` | **yes** | — | Casals release tag `vX.Y.Z`, `latest`, or `main` (same semantics as `gos[].version`). Default pin: `v0.3.0`. |
+| `version` | **yes** | — | Casals release tag `vX.Y.Z`, `latest`, or `main` (same semantics as `gos[].version`). Default pin: `v0.3.1`. |
 | `release_repo` | no | `smart-social-contracts/Casals` | GitHub repo for Casals release artifacts. |
 | `commanders` | no | `[]` | IC principals granted all-permissions section-commander rights on every orchestra section during conductor seeding (non-interactive). This unlocks the Casals web UI for those principals (the UI requires section- or stand-level commander access). You can also grant commanders interactively at the end of deploy — see [Granting Casals commanders (interactive)](#granting-casals-commanders-interactive). |
 
@@ -242,7 +242,7 @@ Example with extra UI admins:
 
 ```json
 "casals": {
-  "version": "v0.3.0",
+  "version": "v0.3.1",
   "commanders": [
     "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
     "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb"
@@ -252,17 +252,19 @@ Example with extra UI admins:
 
 ### `cycles`
 
-Unified cycle threshold for all platform canisters. When omitted, defaults to **2 TC** (2 trillion cycles).
+Unified cycle policy for platform canisters. When omitted, both knobs default to **2 TC**.
 
 | Field | Required | Default | Description |
 |---|---|---|---|
-| `threshold_tc` | no | `2` | Minimum/top-up threshold in teracycles (TC) for every platform canister. GaaS writes this into Casals via `set_settings` (`default_min_cycles`, `default_topup_cycles`, `treasury_reserve`, `create_cycles`) and into the realm installer via `configure` (`cycle_threshold_cycles`). |
+| `threshold_tc` | no | `2` | Running-canister autopilot floor in teracycles. GaaS writes this into Casals via `set_settings` (`default_min_cycles`, `default_topup_cycles`, `treasury_reserve`) and into the realm installer via `configure` (`cycle_threshold_cycles`). Demo may set this to `0.5` to keep live canisters cheap. |
+| `create_tc` | no | `2` | Birth endowment Casals attaches when minting a canister (`set_settings.create_cycles`). Must be **≥ 2**. Independent of `threshold_tc`: a 0.5 TC running floor is not enough to install WASM under the replica's 30-day freeze. |
 
 Example:
 
 ```json
 "cycles": {
-  "threshold_tc": 2
+  "threshold_tc": 0.5,
+  "create_tc": 2
 }
 ```
 
@@ -383,7 +385,7 @@ Suggested remediation:
   dfx cycles convert --amount=1.5 --network ic
 ```
 
-Default wallet estimate per missing canister: **0.6 TC** (0.1T creation + 0.5T initial funding). Nine platform canisters are budgeted by default (`realm_registry_*`, `realm_installer`, `casals_backend`, `casals_frontend`, `casals_file_registry`, `file_registry`, `file_registry_frontend`, `marketplace_backend`). DNS-mapped `marketplace_frontend` is never cycle-budgeted for creation. Canister headrooms use the descriptor `cycles.threshold_tc` (default **2 TC**) for every platform canister. `casals_backend` additionally includes realm-provisioning budget and, when `multisig.backend_id` is unset, one extra threshold for multisig creation.
+Default wallet estimate per missing canister: **0.6 TC** (0.1T creation + 0.5T initial funding). Nine platform canisters are budgeted by default (`realm_registry_*`, `realm_installer`, `casals_backend`, `casals_frontend`, `casals_file_registry`, `file_registry`, `file_registry_frontend`, `marketplace_backend`). DNS-mapped `marketplace_frontend` is never cycle-budgeted for creation. Running-canister headrooms use `cycles.threshold_tc` (default **2 TC**). Casals birth endowment uses `cycles.create_tc` (default **2 TC**, floor 2). `casals_backend` additionally includes realm-provisioning budget priced at `create_tc` per create and, when `multisig.backend_id` is unset, one extra create for the governance multisig.
 
 ## Prerequisites
 
@@ -527,7 +529,7 @@ gaas new [DESCRIPTOR] [OPTIONS]
 
    For each GOS entry, the conductor authorizes the **backend realm WASM** from `wasm/<backend_wasm_key>/<version>/` and the **frontend certified-assets canister WASM** (`realms-assetstorage.wasm.gz` under `wasm/realm-assetstorage/<version>/`). The frontend dist bundle remains in `frontend/<frontend_wasm_key>/<version>/` for the realm installer to sync after canister install; it is not registered as an installable WASM module.
 
-   After the sheet and governance multisig are in place, gaas registers the platform canisters (realm registry, realm installer, GaaS file registry, Casals file registry when present — backends and frontends) under **Infra/platform** in the conductor orchestra. Only canisters tracked in the orchestra tree are monitored by the conductor's cycles autopilot; this registration ensures those platform canisters receive automatic cycle monitoring and top-ups. Cycle thresholds come from `set_settings` using `descriptor.cycles.threshold_tc` (default 2 TC) — one floor for every canister.
+   After the sheet and governance multisig are in place, gaas registers the platform canisters (realm registry, realm installer, GaaS file registry, Casals file registry when present — backends and frontends) under **Infra/platform** in the conductor orchestra. Only canisters tracked in the orchestra tree are monitored by the conductor's cycles autopilot; this registration ensures those platform canisters receive automatic cycle monitoring and top-ups. Autopilot floors come from `set_settings` using `descriptor.cycles.threshold_tc`. Birth endowment is `cycles.create_tc` (default 2 TC), not the running floor.
 
    Immediately afterward, gaas **primes the conductor cycles snapshot**: it reads `get_tree`, calls `refresh_canisters` in batches of up to three names, then verifies via `get_cycles_cached` that every orchestra canister appears in the persisted snapshot. Missing rows fail the deploy loudly; per-canister refresh errors produce warnings. This prevents a fresh deploy from leaving the Casals Orchestra dashboard at "Canisters: 0".
 8. **Configuring multisig signers (mandatory)** — reconcile `multisig.backend_id` with the live Casals tree, then call Motoko `configure` with `multisig.signers` and `threshold` (default 1-of-N). Must complete before controller topology; without it the multisig shows 1-of-0 and UI users are not signers. Empty `signers` falls back to deployer-only 1-of-1 (legacy).

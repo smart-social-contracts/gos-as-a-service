@@ -65,18 +65,8 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-      - name: Install dfx
-        run: |
-          curl -fsSL "https://github.com/dfinity/sdk/releases/download/${DFX_VERSION}/dfx-${DFX_VERSION}-x86_64-linux.tar.gz" -o /tmp/dfx.tar.gz
-          tar -xzf /tmp/dfx.tar.gz -C /usr/local/bin
-          rm /tmp/dfx.tar.gz
-          dfx --version
       - name: Install npm deps
         run: npm ci --legacy-peer-deps
-      - name: Generate candid declarations
-        run: |
-          dfx generate realm_registry_backend
-          dfx generate realm_installer
       - name: Frontend unit tests
         run: npm run test:unit --workspace=realm_registry_frontend
       - name: Frontend build

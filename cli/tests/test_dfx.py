@@ -79,6 +79,81 @@ def test_parse_canister_cycles_balance_from_status():
     assert parse_canister_cycles_balance(raw_cycles) == 3_072_815_616
 
 
+def test_ensure_min_cycles_tops_up_shortfall(monkeypatch) -> None:
+    from gaas.dfx import CanisterStatus, ensure_min_cycles
+
+    monkeypatch.setattr(
+        "gaas.dfx.canister_status",
+        lambda *_a, **_k: CanisterStatus(
+            canister_id="aaaaa-aa",
+            status="running",
+            raw="Balance: 1_000_000_000_000 cycles",
+        ),
+    )
+    added: list[tuple] = []
+
+    def fake_top_up(cid, amount, network, *, identity=None, check=False):
+        added.append((cid, amount, network, identity, check))
+
+    monkeypatch.setattr("gaas.dfx.top_up_canister", fake_top_up)
+    result = ensure_min_cycles(
+        "aaaaa-aa", 2_500_000_000_000, "ic", identity="deployer"
+    )
+    assert result == 1_500_000_000_000
+    assert added == [("aaaaa-aa", 1_500_000_000_000, "ic", "deployer", True)]
+
+
+def test_ensure_min_cycles_noop_when_funded(monkeypatch) -> None:
+    from gaas.dfx import CanisterStatus, ensure_min_cycles
+
+    monkeypatch.setattr(
+        "gaas.dfx.canister_status",
+        lambda *_a, **_k: CanisterStatus(
+            canister_id="aaaaa-aa",
+            status="running",
+            raw="Balance: 3_000_000_000_000 cycles",
+        ),
+    )
+    monkeypatch.setattr(
+        "gaas.dfx.top_up_canister",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("should not top up")),
+    )
+    assert ensure_min_cycles("aaaaa-aa", 2_500_000_000_000, "ic") == 0
+
+
+def test_transfer_cycles_calls_deposit(monkeypatch) -> None:
+    from gaas import dfx
+    from gaas.dfx import transfer_cycles
+
+    calls: list[tuple] = []
+
+    def fake_call(canister_id, method, arg, network, *, identity=None, query=False):
+        calls.append((canister_id, method, arg, network, identity, query))
+        return "()"
+
+    monkeypatch.setattr("gaas.dfx.canister_call", fake_call)
+    transfer_cycles(
+        "from-cai",
+        "to-cai",
+        1_500_000_000_000,
+        "ic",
+        identity="deployer",
+    )
+    expected_arg = dfx.candid_text_arg(
+        json.dumps({"canister_id": "to-cai", "amount": 1_500_000_000_000})
+    )
+    assert calls == [
+        (
+            "from-cai",
+            "deposit_cycles",
+            expected_arg,
+            "ic",
+            "deployer",
+            False,
+        )
+    ]
+
+
 def test_deploy_assets_maps_extra_network_ids(tmp_path, monkeypatch):
     from gaas import dfx
 
@@ -185,11 +260,76 @@ def test_update_canister_settings_passes_controllers(monkeypatch) -> None:
         "ic",
         identity="deployer",
     )
+    assert "--set-controller" in captured["args"]
     args = captured["args"]
     assert "update-settings" in args
     assert args.count("--set-controller") == 2
     assert "multisig-id" in args
     assert "deployer-id" in args
+
+
+def test_public_canister_id_env_vars_skips_empty() -> None:
+    from gaas.dfx import public_canister_id_env_vars
+
+    assert public_canister_id_env_vars(
+        {"casals_backend": "t6jjj-yyaaa-aaaah-av3cq-cai", "skip": "", "": "x"}
+    ) == {"PUBLIC_CANISTER_ID:casals_backend": "t6jjj-yyaaa-aaaah-av3cq-cai"}
+
+
+def test_set_canister_environment_variables_uses_icp(monkeypatch) -> None:
+    from gaas import dfx
+
+    captured: dict = {}
+
+    def fake_run(args, **kwargs):
+        captured["args"] = args
+
+    monkeypatch.setattr(dfx, "_run", fake_run)
+    dfx.set_canister_environment_variables(
+        "txkcv-oqaaa-aaaah-av3da-cai",
+        {
+            "PUBLIC_CANISTER_ID:casals_backend": "t6jjj-yyaaa-aaaah-av3cq-cai",
+            "PUBLIC_CANISTER_ID:casals_frontend": "txkcv-oqaaa-aaaah-av3da-cai",
+        },
+        "ic",
+        identity="deployer",
+    )
+    args = captured["args"]
+    assert args[:5] == ["icp", "canister", "settings", "update", "txkcv-oqaaa-aaaah-av3da-cai"]
+    assert "--add-environment-variable" in args
+    assert "PUBLIC_CANISTER_ID:casals_backend=t6jjj-yyaaa-aaaah-av3cq-cai" in args
+    assert args.count("-n") == 1
+    assert "https://icp0.io" in args
+    assert "--identity" in args and "deployer" in args
+    assert "-f" in args
+
+
+def test_set_canister_environment_variables_retries_without_missing_icp_identity(
+    monkeypatch,
+) -> None:
+    from gaas import dfx
+
+    calls: list[list[str]] = []
+
+    def fake_run(args, **kwargs):
+        calls.append(list(args))
+        if "--identity" in args:
+            raise dfx.DfxError(
+                "failed to load identity",
+                command=args,
+                stderr="no identity found with name `deployer`",
+            )
+
+    monkeypatch.setattr(dfx, "_run", fake_run)
+    dfx.set_canister_environment_variables(
+        "txkcv-oqaaa-aaaah-av3da-cai",
+        {"PUBLIC_CANISTER_ID:casals_backend": "t6jjj-yyaaa-aaaah-av3cq-cai"},
+        "ic",
+        identity="deployer",
+    )
+    assert len(calls) == 2
+    assert "--identity" in calls[0]
+    assert "--identity" not in calls[1]
 
 
 def test_reject_canister_delete_blocks_raw_delete() -> None:
@@ -226,11 +366,10 @@ def test_delete_dust_canister_refuses_when_fat(monkeypatch) -> None:
 def test_delete_dust_canister_allows_dust(monkeypatch) -> None:
     from gaas import dfx
 
-    captured: dict = {}
+    captured: list[dict] = []
 
     def fake_run(args, **kwargs):
-        captured["args"] = args
-        captured["allow"] = kwargs.get("allow_canister_delete")
+        captured.append({"args": args, "allow": kwargs.get("allow_canister_delete")})
 
     monkeypatch.setattr(
         dfx,
@@ -243,8 +382,35 @@ def test_delete_dust_canister_allows_dust(monkeypatch) -> None:
     )
     monkeypatch.setattr(dfx, "_run", fake_run)
     delete_dust_canister("abc", "ic", identity="deployer", max_cycles=500_000_000_000)
-    assert captured["allow"] is True
-    assert "delete" in captured["args"]
+    assert len(captured) == 2
+    assert "stop" in captured[0]["args"]
+    assert captured[1]["allow"] is True
+    assert "delete" in captured[1]["args"]
+    assert "--no-withdrawal" in captured[1]["args"]
+
+
+def test_delete_dust_canister_skips_stop_when_already_stopped(monkeypatch) -> None:
+    from gaas import dfx
+
+    captured: list[list[str]] = []
+
+    def fake_run(args, **kwargs):
+        captured.append(list(args))
+
+    monkeypatch.setattr(
+        dfx,
+        "canister_status",
+        lambda *_a, **_k: dfx.CanisterStatus(
+            canister_id="abc",
+            status="stopped",
+            raw="Balance: 100_000_000_000 cycles",
+        ),
+    )
+    monkeypatch.setattr(dfx, "_run", fake_run)
+    delete_dust_canister("abc", "ic", identity="deployer", max_cycles=500_000_000_000)
+    assert len(captured) == 1
+    assert "delete" in captured[0]
+    assert "stop" not in captured[0]
 
 
 def test_get_wallet(monkeypatch) -> None:
@@ -331,3 +497,96 @@ def test_parse_candid_string_plain_json_roundtrip():
     candid = payload.replace("\\", "\\\\").replace('"', '\\"')
     decoded = _parse_candid_string(f'(\n  "{candid}"\n)')
     assert json.loads(decoded) == json.loads(payload)
+
+
+def test_is_transient_replica_error_matches_http_glitch():
+    from gaas.dfx import DfxError, is_transient_replica_error
+
+    exc = DfxError(
+        "dfx command failed",
+        command=["dfx", "canister", "call"],
+        stderr=(
+            "Error: Failed update call.\n"
+            "Caused by: An error happened during communication with the replica: "
+            "error sending request for url "
+            "(https://icp0.io/api/v4/canister/7gyjo-wiaaa-aaaah-av2nq-cai/call)"
+        ),
+    )
+    assert is_transient_replica_error(exc)
+    assert is_transient_replica_error("502 Bad Gateway")
+    assert not is_transient_replica_error(
+        DfxError(
+            "dfx command failed",
+            command=["dfx"],
+            stderr='Requested canister has no wasm module, error code Some("IC0537")',
+        )
+    )
+
+
+def test_canister_call_retries_transient_replica_error(monkeypatch, capsys):
+    from unittest.mock import MagicMock
+
+    from gaas import dfx
+
+    calls = {"n": 0}
+
+    def fake_run(args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise dfx.DfxError(
+                "dfx command failed",
+                command=args,
+                stderr=(
+                    "Error: Failed update call.\n"
+                    "Caused by: An error happened during communication with the replica: "
+                    "error sending request for url "
+                    "(https://icp0.io/api/v4/canister/abc/call)"
+                ),
+            )
+        return MagicMock(returncode=0, stdout='("ok")\n', stderr="")
+
+    monkeypatch.setattr(dfx, "_run", fake_run)
+    monkeypatch.setattr(dfx.time, "sleep", lambda *_a, **_k: None)
+    assert dfx.canister_call("abc", "store_file_chunk", '("x")', "ic") == "ok"
+    assert calls["n"] == 3
+    captured = capsys.readouterr().out
+    assert "transient replica error" in captured
+    assert "retrying" in captured
+
+
+def test_canister_call_does_not_retry_permanent_errors(monkeypatch):
+    from gaas import dfx
+
+    calls = {"n": 0}
+
+    def fake_run(args, **kwargs):
+        calls["n"] += 1
+        raise dfx.DfxError(
+            "dfx command failed",
+            command=args,
+            stderr='Requested canister has no wasm module, error code Some("IC0537")',
+        )
+
+    monkeypatch.setattr(dfx, "_run", fake_run)
+    with pytest.raises(dfx.DfxError):
+        dfx.canister_call("abc", "get_cycles", '("x")', "ic")
+    assert calls["n"] == 1
+
+
+def test_canister_call_large_arg_uses_argument_file(monkeypatch):
+    from unittest.mock import MagicMock
+
+    from gaas import dfx
+
+    captured: dict = {}
+
+    def fake_run(args, **kwargs):
+        captured["args"] = list(args)
+        return MagicMock(returncode=0, stdout='("ok")\n', stderr="")
+
+    monkeypatch.setattr(dfx, "_run", fake_run)
+    big = "x" * (9 * 1024)
+    assert dfx.canister_call("abc", "store_file_chunk", f'("{big}")', "ic") == "ok"
+    assert "--argument-file" in captured["args"]
+    joined = " ".join(captured["args"])
+    assert big not in joined

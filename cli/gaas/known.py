@@ -12,22 +12,25 @@ PLATFORM_CANISTER_NAMES: Final[tuple[str, ...]] = (
     "casals_backend",
     "casals_frontend",
     "casals_file_registry",
+)
+
+# Realms product stack (marketplace + package catalog) is owned by
+# ``realms seed``, not ``gaas new``. Names remain valid in old descriptors
+# so destroy / skip-install can still see leftover IDs.
+LEGACY_CANISTER_NAMES: Final[tuple[str, ...]] = (
     "file_registry",
     "file_registry_frontend",
     "marketplace_backend",
-)
-
-# DNS-mapped marketplace SPA: adopt the existing canister ID, never mint a new
-# one. Recreate + reinstall assets onto that ID after destroy-except-frontend.
-ADOPT_ONLY_CANISTER_NAMES: Final[tuple[str, ...]] = (
     "marketplace_frontend",
 )
 
+ADOPT_ONLY_CANISTER_NAMES: Final[tuple[str, ...]] = ()
+
 KNOWN_CANISTER_NAMES: Final[tuple[str, ...]] = (
-    PLATFORM_CANISTER_NAMES + ADOPT_ONLY_CANISTER_NAMES
+    PLATFORM_CANISTER_NAMES + ADOPT_ONLY_CANISTER_NAMES + LEGACY_CANISTER_NAMES
 )
 
-DEFAULT_CASALS_VERSION: Final[str] = "v0.3.0"
+DEFAULT_CASALS_VERSION: Final[str] = "v0.3.1"
 DEFAULT_CASALS_RELEASE_REPO: Final[str] = "smart-social-contracts/Casals"
 DEFAULT_PLATFORM_VERSION: Final[str] = "v0.3.1"
 DEFAULT_PLATFORM_RELEASE_REPO: Final[str] = "smart-social-contracts/gos-as-a-service"

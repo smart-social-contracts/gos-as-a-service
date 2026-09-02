@@ -110,8 +110,6 @@ def test_phase_seed_file_registry_main_namespace_and_catalog(
         "gaas.phases.resolve_gos_artifacts",
         return_value=(backend_file, frontend_file),
     ), patch("gaas.phases.seed_gos_entry") as seed_mock, patch(
-        "gaas.phases.seed_codex_catalog"
-    ) as codex_mock, patch(
         "gaas.phases.ensure_version_catalog_entry", return_value="published"
     ) as catalog_mock, patch(
         "gaas.phases.sha256_file", return_value="abc123"
@@ -126,7 +124,6 @@ def test_phase_seed_file_registry_main_namespace_and_catalog(
 
     catalog_args = catalog_mock.call_args[0]
     assert catalog_args[2] == "main"
-    codex_mock.assert_called_once()
 
 
 def test_phase_seed_file_registry_main_reseeds_when_already_published(
@@ -153,8 +150,6 @@ def test_phase_seed_file_registry_main_reseeds_when_already_published(
     ) as resolve_mock, patch(
         "gaas.phases.seed_gos_entry"
     ) as seed_mock, patch(
-        "gaas.phases.seed_codex_catalog"
-    ), patch(
         "gaas.phases.ensure_version_catalog_entry", return_value="skipped"
     ), patch(
         "gaas.phases.sha256_file", return_value="fresh-hash"
@@ -187,8 +182,6 @@ def test_phase_seed_file_registry_pinned_skips_when_already_published(
     ), patch("gaas.phases.resolve_gos_artifacts") as resolve_mock, patch(
         "gaas.phases.seed_gos_entry"
     ) as seed_mock, patch(
-        "gaas.phases.seed_codex_catalog"
-    ), patch(
         "gaas.phases.ensure_version_catalog_entry", return_value="skipped"
     ):
         phase_seed_file_registry(descriptor, ctx)
@@ -233,7 +226,11 @@ def test_resolve_casals_wasm_main_clones_and_builds(tmp_path: Path) -> None:
     wasm_path = tmp_path / "casals_backend.wasm"
     wasm_path.write_bytes(b"wasm")
 
-    with patch("gaas.platform.clone_repo") as clone_mock, patch(
+    # No ambient Casals checkout: force the clone path regardless of whether
+    # the host happens to have one next to the repo (as operator machines do).
+    with patch("gaas.platform.resolve_casals_src", return_value=None), patch(
+        "gaas.platform.clone_repo"
+    ) as clone_mock, patch(
         "gaas.platform.build_casals_wasm", return_value=wasm_path
     ) as build_mock:
         clone_mock.return_value = tmp_path / "clone"

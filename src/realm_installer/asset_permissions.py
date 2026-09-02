@@ -67,8 +67,9 @@ def missing_commit_grant_error(backend_id: str, frontend_id: str, denial: str = 
         f"{frontend_id}, and the installer cannot grant it: it holds no "
         "ManagePermissions there (by design — the asset canister is controlled by "
         "the platform provisioner and the governance multisig). Casals must grant "
-        "Commit to the paired stand backend when it provisions the frontend, or "
-        "grant the installer ManagePermissions at create time. Retrying this "
+        "Commit to the paired stand backend when it provisions the frontend "
+        "(or via grant_stand_backend_commit), or grant the installer "
+        "ManagePermissions at create time. Retrying this "
         "deployment cannot change the outcome."
     )
     detail = (denial or "").strip()

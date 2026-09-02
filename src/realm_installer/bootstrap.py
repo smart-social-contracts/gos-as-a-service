@@ -217,3 +217,17 @@ def resolve_legacy_install_lists(realm_info: dict) -> tuple[list, list]:
             )
 
     return ext_list, codex_list
+
+
+def realm_backend_install_arg(installer_principal: str) -> str:
+    """Candid ``opt text`` init for realm_backend: the GOS installer principal.
+
+    Casals ``create_canister`` is signed as Casals, so ``ic.caller()`` at
+    realm ``@init`` is not the installer. Pass this canister's id as
+    ``install_arg``.
+    """
+    pid = (installer_principal or "").strip()
+    if not pid:
+        raise ValueError("installer principal required for realm backend init")
+    escaped = pid.replace("\\", "\\\\").replace('"', '\\"')
+    return f'(opt "{escaped}")'

@@ -20,6 +20,8 @@ import test from 'node:test';
 const here = dirname(fileURLToPath(import.meta.url));
 const banner = readFileSync(join(here, 'components/TestModeBanner.svelte'), 'utf8');
 const header = readFileSync(join(here, 'components/RegistryHeader.svelte'), 'utf8');
+const panel = readFileSync(join(here, 'components/RealmPanel.svelte'), 'utf8');
+const assistant = readFileSync(join(here, 'components/RegistryAssistant.svelte'), 'utf8');
 
 test('dismiss is a native button wired to dismissBanner', () => {
 	assert.match(banner, /<button[^>]*type="button"/);
@@ -42,4 +44,20 @@ test('banner stays above the header strip without covering hub/auth zones', () =
 	assert.match(header, /header-right/);
 	assert.match(header, /toggleHub/);
 	assert.match(header, /showAuthMenu/);
+});
+
+test('browse panel and docked assistant sit below the test-mode banner', () => {
+	assert.match(panel, /\.realm-panel \{[\s\S]*top:\s*var\(--test-mode-banner-height/);
+	assert.match(assistant, /\.assistant-panel\.docked \{[\s\S]*top:\s*var\(--test-mode-banner-height/);
+	assert.match(
+		assistant,
+		/height:\s*calc\(100dvh\s*-\s*var\(--test-mode-banner-height/,
+	);
+	assert.match(assistant, /readTestModeBannerHeightPx/);
+	assert.match(assistant, /bannerHeight:\s*readTestModeBannerHeightPx\(\)/);
+});
+
+test('banner offset uses the rendered height, not a guessed rem', () => {
+	assert.match(banner, /getBoundingClientRect\(\)\.height/);
+	assert.match(banner, /bind:this=\{bannerEl\}/);
 });

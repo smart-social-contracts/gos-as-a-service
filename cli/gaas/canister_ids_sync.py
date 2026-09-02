@@ -87,3 +87,53 @@ def persist_descriptor_canister_ids(repo_root: Path, descriptor: Any) -> Path:
                 _write_json(dfx_path, dfx_data)
 
     return ids_path
+
+
+def forget_named_canister_ids(
+    repo_root: Path,
+    dfx_name: str,
+    network_keys: list[str] | tuple[str, ...] | set[str],
+) -> None:
+    """Drop stale named IDs so ``dfx canister create`` mints a new canister.
+
+    After a drain-destroy, ``canister_ids.json`` / ``dfx.json`` still map
+    ``--network ic`` (and the env name) to the deleted principal. dfx then
+    prints "was already created" and returns that dead ID (IC0301).
+    """
+    keys = {str(k).strip() for k in network_keys if str(k).strip()}
+    if not keys or not dfx_name:
+        return
+    root = Path(repo_root)
+    ids_path = root / "canister_ids.json"
+    ids_data = _read_json(ids_path)
+    entry = ids_data.get(dfx_name)
+    if isinstance(entry, dict):
+        changed = False
+        for key in keys:
+            if key in entry:
+                del entry[key]
+                changed = True
+        if changed:
+            _write_json(ids_path, ids_data)
+
+    dfx_path = root / "dfx.json"
+    dfx_data = _read_json(dfx_path)
+    canisters = dfx_data.get("canisters")
+    if not isinstance(canisters, dict):
+        return
+    spec = canisters.get(dfx_name)
+    if not isinstance(spec, dict):
+        return
+    remote = spec.get("remote")
+    if not isinstance(remote, dict):
+        return
+    remote_ids = remote.get("id")
+    if not isinstance(remote_ids, dict):
+        return
+    changed = False
+    for key in keys:
+        if key in remote_ids:
+            del remote_ids[key]
+            changed = True
+    if changed:
+        _write_json(dfx_path, dfx_data)

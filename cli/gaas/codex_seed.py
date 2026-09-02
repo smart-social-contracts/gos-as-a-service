@@ -19,6 +19,7 @@ from gaas.file_registry_client import (
     publish_namespace,
     upload_file,
 )
+from gaas.progress import ByteProgress
 from gaas.runlog import CommandError, get_run_log, run_subprocess
 from gaas.source_build import clone_repo, clone_repo_at_ref
 from gaas.versions import resolve_deploy_version
@@ -88,6 +89,26 @@ def resolve_extensions_root(extensions_repo: Path) -> Path:
         f"  {nested}  (nested realms+submodule layout)\n"
         f"  {flat}  (standalone realms-extensions checkout layout)"
     )
+
+
+def find_host_extensions_repo(start: Path | None = None) -> Path | None:
+    """Prefer a populated extensions tree on the operator's disk.
+
+    ``gaas new`` from nested ``gos-as-a-service`` otherwise clones
+    ``realms-extensions@main`` (empty Realms submodules) and seeds that,
+    skipping local fixes.
+    """
+    current = (start or Path.cwd()).resolve()
+    for candidate in (current, *current.parents):
+        path = candidate / "extensions"
+        if not path.is_dir():
+            continue
+        try:
+            resolve_extensions_root(path)
+        except CodexSeedError:
+            continue
+        return path
+    return None
 
 
 def resolve_codices_root(realms_root: Path) -> Path | None:
@@ -368,6 +389,15 @@ def _upload_specs(
     skipped = 0
     failed = 0
     temp_paths: list[Path] = []
+    sized: list[int] = []
+    for spec in uploads:
+        if spec.content is not None:
+            sized.append(len(spec.content))
+        elif spec.local_path is not None and spec.local_path.is_file():
+            sized.append(spec.local_path.stat().st_size)
+        else:
+            sized.append(0)
+    progress = ByteProgress(f"uploading {namespace}", sum(sized))
 
     try:
         for spec in uploads:
@@ -392,6 +422,7 @@ def _upload_specs(
                 network,
                 identity=identity,
                 existing_hashes=existing,
+                on_bytes=progress.add,
             )
             if result == "failed":
                 failed += 1
@@ -400,6 +431,8 @@ def _upload_specs(
             else:
                 skipped += 1
     finally:
+        if failed == 0:
+            progress.finish()
         for path in temp_paths:
             path.unlink(missing_ok=True)
 
@@ -573,6 +606,12 @@ def _try_seed_extensions(
             extensions_repo_root = None
 
     if extensions_repo_root is None:
+        host = find_host_extensions_repo()
+        if host is not None:
+            console.print(f"  using host Realms extensions at {host}")
+            extensions_repo_root = host
+
+    if extensions_repo_root is None:
         org = _org_from_release_repo(release_repo)
         ext_repo = f"{org}/{catalog.extensions_repo_suffix}"
         slug = ext_repo.replace("/", "_")
@@ -602,15 +641,13 @@ def _try_seed_extensions(
 
     console.print(f"  seeding {len(ext_dirs)} extensions from {extensions_root}")
     failures: list[str] = []
-    build_failures: list[str] = []
     namespaces: list[str] = []
     for ext_dir in ext_dirs:
         build_err = ensure_extension_frontend_built(ext_dir, ext_dir.name)
         if build_err:
-            console.print(
-                f"  [yellow]warning:[/yellow] extension {ext_dir.name}: {build_err}"
+            raise CodexSeedError(
+                f"extension {ext_dir.name} frontend build failed: {build_err}"
             )
-            build_failures.append(ext_dir.name)
         try:
             namespaces.append(
                 publish_extension_dir(
@@ -623,15 +660,9 @@ def _try_seed_extensions(
             )
         except CodexSeedError:
             failures.append(ext_dir.name)
-    if build_failures:
-        console.print(
-            f"  [yellow]warning:[/yellow] extension frontend builds failed: "
-            f"{', '.join(build_failures)}"
-        )
     if failures:
-        console.print(
-            f"  [yellow]warning:[/yellow] extension publish failed for: "
-            f"{', '.join(failures)}"
+        raise CodexSeedError(
+            f"extension publish failed for: {', '.join(failures)}"
         )
     return namespaces
 

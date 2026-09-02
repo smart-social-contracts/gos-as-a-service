@@ -1,15 +1,33 @@
 <script>
   import { browser } from '$app/environment';
+  import { onMount, tick } from 'svelte';
   import { page } from '$app/stores';
   import { testMode } from '$lib/stores/registryRuntimeFlags.js';
   import { _ } from 'svelte-i18n';
 
   const STORAGE_KEY = 'gos_test_mode_banner_dismissed';
+  const FALLBACK_HEIGHT = '2.75rem';
   let dismissed = false;
+  /** @type {HTMLElement | undefined} */
+  let bannerEl;
+  /** @type {ResizeObserver | undefined} */
+  let observer;
 
   function dismissBanner() {
     dismissed = true;
     if (browser) localStorage.setItem(STORAGE_KEY, 'true');
+  }
+
+  function publishHeight() {
+    if (!browser) return;
+    let height = '0px';
+    if (showBanner && bannerEl) {
+      height = `${Math.round(bannerEl.getBoundingClientRect().height)}px`;
+    } else if (showBanner) {
+      height = FALLBACK_HEIGHT;
+    }
+    document.documentElement.style.setProperty('--test-mode-banner-height', height);
+    document.documentElement.classList.toggle('test-mode-banner-on', !!showBanner);
   }
 
   if (browser) {
@@ -20,14 +38,25 @@
   $: showBanner = browser && $testMode && !dismissed && !viewingRealm;
 
   $: if (browser) {
-    const height = showBanner ? '2.75rem' : '0px';
-    document.documentElement.style.setProperty('--test-mode-banner-height', height);
-    document.documentElement.classList.toggle('test-mode-banner-on', showBanner);
+    void tick().then(publishHeight);
+    showBanner;
+    bannerEl;
   }
+
+  $: if (observer && bannerEl) observer.observe(bannerEl);
+
+  onMount(() => {
+    observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(publishHeight) : undefined;
+    return () => {
+      observer?.disconnect();
+      document.documentElement.style.setProperty('--test-mode-banner-height', '0px');
+      document.documentElement.classList.remove('test-mode-banner-on');
+    };
+  });
 </script>
 
 {#if showBanner}
-  <div class="test-mode-banner" role="status">
+  <div class="test-mode-banner" bind:this={bannerEl} role="status">
     <p class="banner-text">
       <span class="title">{$_('demo_banner.title')}</span> {$_('demo_banner.description')}
     </p>

@@ -14,6 +14,7 @@ from gaas.codex_seed import (
     collect_codex_uploads,
     collect_extension_uploads,
     ensure_extension_frontend_built,
+    find_host_extensions_repo,
     list_codices,
     package_namespace,
     publish_codex_dir,
@@ -264,12 +265,12 @@ def test_ensure_extension_frontend_build_failure_returns_error(
 
 @patch("gaas.codex_seed.publish_extension_dir")
 @patch("gaas.codex_seed.ensure_extension_frontend_built")
-def test_try_seed_extensions_continues_after_build_failure(
+def test_try_seed_extensions_stops_on_build_failure(
     mock_build: MagicMock,
     mock_publish: MagicMock,
     tmp_path: Path,
 ) -> None:
-    from gaas.codex_seed import _try_seed_extensions
+    from gaas.codex_seed import CodexSeedError, _try_seed_extensions
 
     realms = tmp_path / "realms"
     extensions_root = realms / "extensions" / "extensions"
@@ -277,23 +278,32 @@ def test_try_seed_extensions_continues_after_build_failure(
     _write_extension(extensions_root, "good_ext", "1.0.0")
     _write_extension(extensions_root, "bad_ext", "1.0.0")
 
-    mock_build.side_effect = [None, "npm build failed (exit 1)"]
+    mock_build.side_effect = ["npm build failed (exit 1)"]
     mock_publish.return_value = "ext/good_ext/1.0.0"
 
-    namespaces = _try_seed_extensions(
-        VALID_CANISTER_ID,
-        realms,
-        "smart-social-contracts/realms",
-        tmp_path / "work",
-        "main",
-        "local",
-        identity="deployer",
-        catalog=REALMS_CATALOG,
-    )
+    with pytest.raises(CodexSeedError, match="frontend build failed"):
+        _try_seed_extensions(
+            VALID_CANISTER_ID,
+            realms,
+            "smart-social-contracts/realms",
+            tmp_path / "work",
+            "main",
+            "local",
+            identity="deployer",
+            catalog=REALMS_CATALOG,
+        )
 
-    assert mock_build.call_count == 2
-    assert mock_publish.call_count == 2
-    assert namespaces == ["ext/good_ext/1.0.0", "ext/good_ext/1.0.0"]
+    mock_publish.assert_not_called()
+
+
+def test_find_host_extensions_repo_walks_to_populated_tree(tmp_path: Path) -> None:
+    nested = tmp_path / "realms" / "extensions" / "extensions"
+    nested.mkdir(parents=True)
+    _write_extension(nested, "realm_settings", "1.0.0")
+    start = tmp_path / "realms" / "gos-as-a-service" / "cli"
+    start.mkdir(parents=True)
+    found = find_host_extensions_repo(start=start)
+    assert found == tmp_path / "realms" / "extensions"
 
 
 def test_list_codices_skips_common_dirs(tmp_path: Path) -> None:
@@ -461,15 +471,13 @@ def test_seed_codex_catalog_hard_fails_on_codex_error(
         )
 
 
-@patch("gaas.phases.seed_codex_catalog")
 @patch("gaas.phases.ensure_version_catalog_entry", return_value="skipped")
 @patch("gaas.phases.namespace_published", return_value=True)
 @patch("gaas.phases.fetch_namespace_hashes")
-def test_phase_seed_file_registry_wires_codex_catalog(
+def test_phase_seed_file_registry_skips_codex_catalog(
     mock_hashes: MagicMock,
     _mock_published: MagicMock,
     _mock_catalog: MagicMock,
-    mock_seed_catalog: MagicMock,
     tmp_path: Path,
 ) -> None:
     mock_hashes.return_value = {"realm_backend.wasm.gz": "abc"}
@@ -490,16 +498,7 @@ def test_phase_seed_file_registry_wires_codex_catalog(
 
     phase_seed_file_registry(descriptor, ctx)
 
-    mock_seed_catalog.assert_called_once()
-    args = mock_seed_catalog.call_args[0]
-    kwargs = mock_seed_catalog.call_args.kwargs
-    assert args[0] == VALID_CANISTER_ID
-    assert args[1] == "smart-social-contracts/realms"
-    assert kwargs["catalog"] == REALMS_CATALOG
-    assert kwargs["marketplace_id"] == "mmmmm-mmmmm-mmmmm-mmmmm-mmmmm-mmm"
 
-
-@patch("gaas.phases.seed_codex_catalog")
 @patch("gaas.phases.ensure_version_catalog_entry", return_value="skipped")
 @patch("gaas.phases.namespace_published", return_value=True)
 @patch("gaas.phases.fetch_namespace_hashes")
@@ -507,7 +506,6 @@ def test_phase_seed_file_registry_skips_without_catalog(
     mock_hashes: MagicMock,
     _mock_published: MagicMock,
     _mock_version_catalog: MagicMock,
-    mock_seed_catalog: MagicMock,
     tmp_path: Path,
 ) -> None:
     mock_hashes.return_value = {"realm_backend.wasm.gz": "abc"}
@@ -528,10 +526,7 @@ def test_phase_seed_file_registry_skips_without_catalog(
 
     phase_seed_file_registry(descriptor, ctx)
 
-    mock_seed_catalog.assert_not_called()
 
-
-@patch("gaas.phases.seed_codex_catalog")
 @patch("gaas.phases.ensure_version_catalog_entry", return_value="skipped")
 @patch("gaas.phases.namespace_published", return_value=True)
 @patch("gaas.phases.fetch_namespace_hashes")
@@ -539,7 +534,6 @@ def test_phase_seed_file_registry_honors_catalog_override(
     mock_hashes: MagicMock,
     _mock_published: MagicMock,
     _mock_version_catalog: MagicMock,
-    mock_seed_catalog: MagicMock,
     tmp_path: Path,
 ) -> None:
     mock_hashes.return_value = {"realm_backend.wasm.gz": "abc"}
@@ -563,11 +557,6 @@ def test_phase_seed_file_registry_honors_catalog_override(
     )
 
     phase_seed_file_registry(descriptor, ctx)
-
-    mock_seed_catalog.assert_called_once()
-    catalog = mock_seed_catalog.call_args.kwargs["catalog"]
-    assert catalog.codices_repo_suffix == "custom-codices"
-    assert catalog.extensions_repo_suffix == "custom-extensions"
 
 
 @patch("gaas.codex_seed.clone_repo_at_ref")

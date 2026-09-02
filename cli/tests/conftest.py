@@ -26,6 +26,15 @@ def _no_real_dfx_calls(monkeypatch):
 
     monkeypatch.setattr(_dfx, "_run", _blocked)
 
+
+@pytest.fixture(autouse=True)
+def _noop_forget_named_canister_ids(monkeypatch):
+    """Do not rewrite the real checkout's canister_ids.json during tests."""
+    monkeypatch.setattr(
+        "gaas.phases.forget_named_canister_ids",
+        lambda *_args, **_kwargs: None,
+    )
+
 SAMPLE_DESCRIPTOR = {
     "version": 1,
     "name": "test",
@@ -44,7 +53,7 @@ SAMPLE_DESCRIPTOR = {
     ],
     "canisters": {},
     "casals": {
-        "version": "v0.3.0",
+        "version": "v0.3.1",
         "release_repo": "smart-social-contracts/Casals",
     },
     "services": {},

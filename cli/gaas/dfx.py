@@ -13,10 +13,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from gaas.runlog import get_run_log
+from rich.console import Console
 
 from gaas.known import DEFAULT_CYCLES_PER_CANISTER
-from gaas.runlog import get_run_log
+from gaas.runlog import format_cmd_for_log, get_run_log
 
 InstallMode = Literal["install", "reinstall", "upgrade"]
 
@@ -41,6 +41,23 @@ _CERTIFIED_ASSETS_WASM_URL = (
 _ASSET_DEPLOY_ATTEMPTS = 3
 _ASSET_DEPLOY_RETRY_DELAY_S = 5
 _TRANSIENT_ASSET_SYNC_RE = re.compile(r"IC0536|Failed to list assets", re.I)
+_CANISTER_CALL_ATTEMPTS = 5
+_CANISTER_CALL_RETRY_BASE_S = 2
+_ARG_FILE_THRESHOLD = 8 * 1024
+_TRANSIENT_REPLICA_RE = re.compile(
+    r"error sending request|"
+    r"502 Bad Gateway|"
+    r"503 Service|"
+    r"connection reset|"
+    r"timed out|"
+    r"timeout|"
+    r"temporarily unavailable|"
+    r"http2 error|"
+    r"error trying to connect|"
+    r"Failed to connect",
+    re.I,
+)
+_console = Console()
 
 
 class DfxError(RuntimeError):
@@ -108,15 +125,22 @@ def _run(
         injected = True
 
     def _invoke(command: list[str]) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            env=env,
-            cwd=str(cwd) if cwd else None,
-            check=False,
-            timeout=timeout,
-        )
+        try:
+            return subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                env=env,
+                cwd=str(cwd) if cwd else None,
+                check=False,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise DfxError(
+                f"dfx command timed out after {timeout}s: {format_cmd_for_log(command)}",
+                command=command,
+                stderr=str(exc),
+            ) from exc
 
     try:
         result = _invoke(args)
@@ -150,7 +174,10 @@ def _run(
             run_log.log_output(result.stderr)
 
     if check and result.returncode != 0:
-        message = f"dfx command failed (exit {result.returncode}): {' '.join(args)}"
+        message = (
+            f"dfx command failed (exit {result.returncode}): "
+            f"{format_cmd_for_log(args)}"
+        )
         detail = result.stderr.strip() or result.stdout.strip()
         if detail:
             message += f"\n{detail[-1500:]}"
@@ -464,6 +491,64 @@ def update_canister_settings(
     _run(args, check=True)
 
 
+def public_canister_id_env_vars(canisters: dict[str, str]) -> dict[str, str]:
+    """Map canister names to the ``PUBLIC_CANISTER_ID:*`` keys the asset WASM bakes into ``ic_env``."""
+    out: dict[str, str] = {}
+    for name, canister_id in canisters.items():
+        cid = (canister_id or "").strip()
+        key = (name or "").strip()
+        if not key or not cid:
+            continue
+        out[f"PUBLIC_CANISTER_ID:{key}"] = cid
+    return out
+
+
+def set_canister_environment_variables(
+    canister_id: str,
+    variables: dict[str, str],
+    network: str,
+    *,
+    identity: str | None = None,
+) -> None:
+    """Write canister env vars (icp-cli). Certified-assets reads these for ``ic_env``.
+
+    ``dfx deploy`` does not inject ``PUBLIC_CANISTER_ID:*``. Must run *before*
+    the asset sync so ``post_upgrade`` / ``start_sync`` recertifies the cookie.
+    icp and dfx identity stores are separate — if ``identity`` is missing from
+    icp, retry with icp's default identity.
+    """
+    if not variables:
+        return
+    args = ["icp", "canister", "settings", "update", canister_id]
+    for name, value in variables.items():
+        args.extend(["--add-environment-variable", f"{name}={value}"])
+    if network == "local":
+        args.extend(["-e", "local"])
+    else:
+        args.extend(["-n", "https://icp0.io", "--root-key", "mainnet"])
+    args.append("-f")
+
+    def _call(with_identity: bool) -> None:
+        cmd = list(args)
+        if with_identity and identity:
+            cmd.extend(["--identity", identity])
+        _run(cmd, check=True)
+
+    try:
+        _call(True)
+    except DfxError as exc:
+        missing = "no identity found" in f"{exc.stderr}\n{exc}".lower()
+        if identity and missing:
+            _console.print(
+                f"  [yellow]warning:[/yellow] icp has no identity {identity!r}; "
+                "retrying canister env-var update with icp default",
+                highlight=False,
+            )
+            _call(False)
+        else:
+            raise
+
+
 def install_wasm(
     canister_id: str,
     wasm_path: str,
@@ -512,7 +597,7 @@ def canister_call(
         cmd.append("--query")
 
     arg_file = None
-    if len(arg.encode("utf-8")) >= 100 * 1024:
+    if len(arg.encode("utf-8")) >= _ARG_FILE_THRESHOLD:
         fd, arg_file = tempfile.mkstemp(prefix="gaas-dfx-arg-", suffix=".did")
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
@@ -525,9 +610,29 @@ def canister_call(
     else:
         cmd.extend([canister_id, method, arg])
 
+    last_error: DfxError | None = None
     try:
-        result = _run(cmd, check=True, timeout=timeout)
-        return _parse_candid_string(result.stdout)
+        for attempt in range(1, _CANISTER_CALL_ATTEMPTS + 1):
+            try:
+                result = _run(cmd, check=True, timeout=timeout)
+                return _parse_candid_string(result.stdout)
+            except DfxError as exc:
+                last_error = exc
+                if attempt == _CANISTER_CALL_ATTEMPTS or not is_transient_replica_error(exc):
+                    raise
+                delay = _CANISTER_CALL_RETRY_BASE_S * (2 ** (attempt - 1))
+                _console.print(
+                    f"  [yellow]warning:[/yellow] transient replica error calling "
+                    f"{method} on {canister_id}; retrying in {delay}s "
+                    f"({attempt}/{_CANISTER_CALL_ATTEMPTS})",
+                    highlight=False,
+                    overflow="ignore",
+                    crop=False,
+                    no_wrap=True,
+                )
+                time.sleep(delay)
+        assert last_error is not None
+        raise last_error
     finally:
         if arg_file:
             try:
@@ -645,6 +750,7 @@ def top_up_canister(
     network: str,
     *,
     identity: str | None = None,
+    check: bool = False,
 ) -> None:
     args = [
         "dfx",
@@ -657,7 +763,58 @@ def top_up_canister(
     ]
     if identity:
         args.extend(["--identity", identity])
-    _run(args, check=False)
+    _run(args, check=check)
+
+
+def ensure_min_cycles(
+    canister_id: str,
+    min_cycles: int,
+    network: str,
+    *,
+    identity: str | None = None,
+) -> int:
+    """Top up so ``canister_id`` holds at least ``min_cycles``.
+
+    Returns cycles added (0 if already funded). The top-up is fail-closed
+    (``check=True``); callers must not print success unless this returns.
+    """
+    balance = canister_cycles_balance(canister_id, network, identity=identity)
+    if balance is None:
+        raise DfxError(
+            f"could not read cycles balance for {canister_id}",
+            command=["dfx", "canister", "status", canister_id],
+            stderr="",
+        )
+    if balance >= min_cycles:
+        return 0
+    amount = min_cycles - balance
+    top_up_canister(
+        canister_id, amount, network, identity=identity, check=True
+    )
+    return amount
+
+
+def transfer_cycles(
+    from_canister: str,
+    to_canister: str,
+    amount: int,
+    network: str,
+    *,
+    identity: str | None = None,
+) -> None:
+    """Move ``amount`` cycles from one canister to another (both must accept).
+
+    Used to spend a reserved holding canister without touching the shared
+    cycles ledger. Fails closed: a rejected transfer raises ``DfxError``.
+    """
+    payload = json.dumps({"canister_id": to_canister, "amount": amount})
+    canister_call(
+        from_canister,
+        "deposit_cycles",
+        candid_text_arg(payload),
+        network,
+        identity=identity,
+    )
 
 
 def detect_install_mode(canister_id: str, network: str, *, identity: str | None = None) -> InstallMode:
@@ -665,6 +822,15 @@ def detect_install_mode(canister_id: str, network: str, *, identity: str | None 
     if status.module_hash_missing:
         return "install"
     return "upgrade"
+
+
+def is_transient_replica_error(exc: BaseException | str) -> bool:
+    """True for boundary-node / HTTP transport failures that are worth retrying."""
+    if isinstance(exc, DfxError):
+        text = f"{exc.stderr}\n{exc.stdout}\n{exc}"
+    else:
+        text = str(exc)
+    return bool(_TRANSIENT_REPLICA_RE.search(text))
 
 
 def is_canister_not_found_error(exc: BaseException | str) -> bool:
@@ -680,6 +846,25 @@ def delete_canister(*_args: object, **_kwargs: object) -> None:
     )
 
 
+def stop_canister(
+    canister_id: str,
+    network: str,
+    *,
+    identity: str | None = None,
+) -> None:
+    args = [
+        "dfx",
+        "canister",
+        "--network",
+        network,
+        "stop",
+        canister_id,
+    ]
+    if identity:
+        args.extend(["--identity", identity])
+    _run(args)
+
+
 def delete_dust_canister(
     canister_id: str,
     network: str,
@@ -687,7 +872,12 @@ def delete_dust_canister(
     identity: str | None = None,
     max_cycles: int = 500_000_000_000,
 ) -> None:
-    """Delete a canister only when its balance is at or below ``max_cycles``."""
+    """Stop+delete a canister only when its balance is at or below ``max_cycles``.
+
+    ``--no-withdrawal`` burns the remainder instead of requiring a cycles wallet.
+    The replica refuses ``delete_canister`` unless the canister is stopped
+    (IC0510); ``--yes`` only skips the dfx confirmation prompt.
+    """
     status = canister_status(canister_id, network, identity=identity)
     balance = parse_canister_cycles_balance(status.raw)
     if balance is None or balance > max_cycles:
@@ -696,6 +886,8 @@ def delete_dust_canister(
             command=["dfx", "canister", "delete", canister_id],
             stderr=f"balance {balance}",
         )
+    if status.status != "stopped":
+        stop_canister(canister_id, network, identity=identity)
     args = [
         "dfx",
         "canister",
@@ -704,6 +896,7 @@ def delete_dust_canister(
         "delete",
         canister_id,
         "--yes",
+        "--no-withdrawal",
     ]
     if identity:
         args.extend(["--identity", identity])

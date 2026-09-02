@@ -6,6 +6,7 @@ import {
   MIN_PANEL_HEIGHT,
   assistantPanelBoxStyle,
   computeAssistantPanelBox,
+  cssLengthToPx,
 } from './assistant-viewport.js';
 
 test('desktop floating panel keeps CSS defaults when chrome does not overlap', () => {
@@ -87,4 +88,29 @@ test('docked height never collapses below the minimum usable panel', () => {
   });
   assert.ok(box);
   assert.equal(box.heightPx, MIN_PANEL_HEIGHT);
+});
+
+test('cssLengthToPx understands rem and px banner offsets', () => {
+  assert.equal(cssLengthToPx('2.75rem', 16), 44);
+  assert.equal(cssLengthToPx('44px'), 44);
+  assert.equal(cssLengthToPx('0px'), 0);
+  assert.equal(cssLengthToPx(''), 0);
+});
+
+test('docked panel sits below the test-mode banner instead of under it', () => {
+  const box = computeAssistantPanelBox({
+    docked: true,
+    visualHeight: 900,
+    visualOffsetTop: 0,
+    layoutHeight: 900,
+    layoutWidth: 1280,
+    bannerHeight: 44,
+  });
+  assert.ok(box);
+  assert.equal(box.topPx, 44);
+  assert.equal(box.heightPx, 856);
+  assert.equal(
+    assistantPanelBoxStyle(box),
+    'height: 856px; top: 44px; bottom: auto',
+  );
 });

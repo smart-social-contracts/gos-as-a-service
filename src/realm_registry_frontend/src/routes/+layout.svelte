@@ -87,6 +87,9 @@
     transition: padding-right 0.25s ease;
   }
   .app-shell.full-viewport {
+    /* Globe/portal pages use position:fixed chrome. Do not drop the banner
+       offset here — those panels read --test-mode-banner-height themselves.
+       Zeroing padding avoids a double-gap under the globe canvas. */
     padding-top: 0;
   }
   .app-shell.assistant-docked {

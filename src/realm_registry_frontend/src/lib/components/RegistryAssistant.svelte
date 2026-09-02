@@ -34,7 +34,7 @@
   import { loadPrefs, loadPanelWidth, savePanelWidth, dismissConnectSuggestion } from '$lib/geister/assistant-prefs.js';
   import { shouldOfferPersonalConnect } from '$lib/geister/assistant-providers.js';
   import { clampPanelWidth, defaultPanelWidth } from '$lib/panel-width.js';
-  import { assistantPanelBoxStyle, computeAssistantPanelBox } from '$lib/assistant-viewport.js';
+  import { assistantPanelBoxStyle, computeAssistantPanelBox, readTestModeBannerHeightPx } from '$lib/assistant-viewport.js';
   import {
     fetchConversations,
     createConversation,
@@ -342,6 +342,7 @@
       visualOffsetTop: vv?.offsetTop ?? 0,
       layoutHeight: window.innerHeight,
       layoutWidth: window.innerWidth,
+      bannerHeight: readTestModeBannerHeightPx(),
     });
     panelViewportStyle = assistantPanelBoxStyle(box);
   }
@@ -1385,11 +1386,11 @@
   }
 
   .assistant-panel.docked {
-    top: 0;
+    top: var(--test-mode-banner-height, 0px);
     right: 0;
     bottom: auto;
-    height: 100dvh;
-    max-height: 100dvh;
+    height: calc(100dvh - var(--test-mode-banner-height, 0px));
+    max-height: calc(100dvh - var(--test-mode-banner-height, 0px));
     border-radius: 0;
     border: none;
     border-left: 1px solid #e5e5e5;

@@ -14,6 +14,7 @@ from gaas import dfx
 from gaas.runlog import get_run_log, run_subprocess
 from gaas.descriptor import Descriptor
 from gaas.known import GOS_IMPLEMENTATIONS
+from gaas.cycles_plan import CASALS_OPERATING_MIN
 from gaas.file_registry_client import fetch_namespace_hashes, upload_file
 from gaas.platform import find_local_assetstorage_wasm, resolve_casals_src
 from gaas.versions import resolve_deploy_version
@@ -75,6 +76,11 @@ def _parse_casals_json(raw: str) -> dict[str, Any]:
     return data
 
 
+def _casals_out_of_cycles(exc: BaseException) -> bool:
+    text = str(exc).lower()
+    return "ic0504" in text or "out of cycles" in text
+
+
 def _casals_call(
     casals_id: str,
     method: str,
@@ -83,16 +89,57 @@ def _casals_call(
     *,
     identity: str | None = None,
     query: bool = False,
+    holding_id: str | None = None,
 ) -> dict[str, Any]:
     text = payload if isinstance(payload, str) else json.dumps(payload)
-    raw = dfx.canister_call(
-        casals_id,
-        method,
-        dfx.candid_text_arg(text),
-        network,
-        identity=identity,
-        query=query,
-    )
+    arg = dfx.candid_text_arg(text)
+    try:
+        raw = dfx.canister_call(
+            casals_id,
+            method,
+            arg,
+            network,
+            identity=identity,
+            query=query,
+        )
+    except dfx.DfxError as exc:
+        if query or not _casals_out_of_cycles(exc):
+            raise
+        console.print(
+            f"  warning: Casals out of cycles on {method}; topping up and retrying"
+        )
+        if holding_id:
+            balance = dfx.canister_cycles_balance(
+                casals_id, network, identity=identity
+            )
+            if balance is None:
+                raise RuntimeError(
+                    f"could not read casals_backend balance for {casals_id}"
+                ) from exc
+            amount = CASALS_OPERATING_MIN - balance
+            if amount > 0:
+                dfx.transfer_cycles(
+                    holding_id,
+                    casals_id,
+                    amount,
+                    network,
+                    identity=identity,
+                )
+        else:
+            dfx.ensure_min_cycles(
+                casals_id,
+                CASALS_OPERATING_MIN,
+                network,
+                identity=identity,
+            )
+        raw = dfx.canister_call(
+            casals_id,
+            method,
+            arg,
+            network,
+            identity=identity,
+            query=query,
+        )
     return _parse_casals_json(raw)
 
 
@@ -135,6 +182,62 @@ def _canister_names(tree: dict[str, Any]) -> set[str]:
                 if name:
                     names.add(name)
     return names
+
+
+def _canister_ids(tree: dict[str, Any]) -> set[str]:
+    ids: set[str] = set()
+    for sec in tree.get("sections") or []:
+        for stand in sec.get("stands") or []:
+            for canister in stand.get("canisters") or []:
+                cid = (canister.get("canister_id") or "").strip()
+                if cid:
+                    ids.add(cid)
+    return ids
+
+
+def _find_canister_row(tree: dict[str, Any], canister_id: str) -> tuple[str, str]:
+    """Return ``(name, stand)`` for a physical canister ID, or empty strings."""
+    want = (canister_id or "").strip()
+    if not want:
+        return "", ""
+    for sec in tree.get("sections") or []:
+        for stand in sec.get("stands") or []:
+            stand_name = (stand.get("name") or "").strip()
+            for canister in stand.get("canisters") or []:
+                cid = (canister.get("canister_id") or "").strip()
+                if cid == want:
+                    return (canister.get("name") or "").strip(), stand_name
+    return "", ""
+
+
+def _prune_empty_named_canister(
+    casals_id: str,
+    name: str,
+    tree: dict[str, Any],
+    network: str,
+    *,
+    identity: str | None = None,
+) -> dict[str, Any]:
+    """Drop an orchestra row that has a name but no canister_id.
+
+    Casals ``create_canister`` / a failed ``register_canister`` can leave a
+    CREATED/REGISTERED stub. ``ensure_platform_stand`` used to treat that name
+    as "already registered" and skip forever (live demo: empty
+    ``casals-file-registry`` next to System ``file_registry``).
+    """
+    if _find_canister_id(tree, name):
+        return tree
+    if name not in _canister_names(tree):
+        return tree
+    console.print(f"  {name}: deleting empty orchestra stub")
+    _casals_call(
+        casals_id,
+        "delete_canister",
+        {"canister": name},
+        network,
+        identity=identity,
+    )
+    return get_tree(casals_id, network, identity=identity)
 
 
 def list_authorized_keys(
@@ -436,6 +539,7 @@ def ensure_sheet_and_deploy_multisig(
     network: str,
     *,
     identity: str | None = None,
+    holding_id: str | None = None,
 ) -> None:
     tree = get_tree(casals_id, network, identity=identity)
     sections = _section_names(tree)
@@ -445,7 +549,14 @@ def ensure_sheet_and_deploy_multisig(
     if need_sheet:
         sheet = platform_sheet()
         console.print("  set_sheet (Infra + Deployments)...")
-        _casals_call(casals_id, "set_sheet", sheet, network, identity=identity)
+        _casals_call(
+            casals_id,
+            "set_sheet",
+            sheet,
+            network,
+            identity=identity,
+            holding_id=holding_id,
+        )
 
     if not multisig_id:
         console.print("  deploy_sheet (governance/multisig)...")
@@ -455,6 +566,7 @@ def ensure_sheet_and_deploy_multisig(
             {"sheet": platform_sheet()},
             network,
             identity=identity,
+            holding_id=holding_id,
         )
         created = result.get("created_canisters") or []
         if created:
@@ -498,13 +610,44 @@ def ensure_platform_stand(
             raise
         console.print("  platform stand: already exists")
 
+    _ensure_casals_controls_frontends(
+        casals_id, platform_canisters, network, identity=identity
+    )
+
     tree = get_tree(casals_id, network, identity=identity)
-    existing = _canister_names(tree)
     for name, canister_id, kind in platform_canisters:
-        if name in existing:
+        tree = _prune_empty_named_canister(
+            casals_id, name, tree, network, identity=identity
+        )
+        existing_names = _canister_names(tree)
+        existing_ids = _canister_ids(tree)
+        if name in existing_names:
             console.print(f"  {name}: skip (already registered)")
-        else:
-            console.print(f"  {name}: register {canister_id} ({kind})")
+            continue
+        if canister_id in existing_ids:
+            owner, stand = _find_canister_row(tree, canister_id)
+            # Casals ``set_settings`` parks this canister as System/file_registry.
+            # ``deploy_sheet`` is supposed to retire that row; a partial seed
+            # leaves it in place and the old skip never registered platform.
+            if owner == "file_registry" and name == "casals-file-registry":
+                console.print(
+                    f"  {name}: moving {stand or 'System'}/file_registry onto platform"
+                )
+                _casals_call(
+                    casals_id,
+                    "delete_canister",
+                    {"canister": "file_registry"},
+                    network,
+                    identity=identity,
+                )
+                tree = get_tree(casals_id, network, identity=identity)
+            else:
+                console.print(
+                    f"  {name}: skip (canister_id {canister_id} already in tree)"
+                )
+                continue
+        console.print(f"  {name}: register {canister_id} ({kind})")
+        try:
             _casals_call(
                 casals_id,
                 "register_canister",
@@ -517,6 +660,37 @@ def ensure_platform_stand(
                 network,
                 identity=identity,
             )
+        except RuntimeError as exc:
+            if "already registered" not in str(exc).lower():
+                raise
+            console.print(f"  {name}: skip ({exc})")
+
+
+def _ensure_casals_controls_frontends(
+    casals_id: str,
+    platform_canisters: list[tuple[str, str, str]],
+    network: str,
+    *,
+    identity: str | None = None,
+) -> None:
+    """Add Casals as an IC controller of preserved frontends before register.
+
+    ``register_canister`` of a backend grants that backend ``Commit`` on every
+    frontend in the same stand. Casals must already be a controller (or hold
+    ``ManagePermissions``) of those asset canisters. A DNS-preserved portal
+    frontend still lists the *previous* Casals id.
+    """
+    for name, canister_id, kind in platform_canisters:
+        if kind != "frontend":
+            continue
+        status = dfx.canister_status(canister_id, network, identity=identity)
+        if casals_id in status.controllers:
+            continue
+        controllers = list(dict.fromkeys([*status.controllers, casals_id]))
+        dfx.update_canister_settings(
+            canister_id, controllers, network, identity=identity
+        )
+        console.print(f"  {name}: added Casals as controller ({casals_id})")
 
 
 DEPLOYMENTS_COMMANDER_PERMISSIONS = [

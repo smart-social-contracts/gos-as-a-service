@@ -27,16 +27,14 @@ from gaas.known import (
     DEFAULT_PLATFORM_RELEASE_REPO,
     DEFAULT_PLATFORM_VERSION,
     GOS_IMPLEMENTATIONS,
-    KNOWN_CANISTER_NAMES,
+    PLATFORM_CANISTER_NAMES,
 )
 
 console = Console()
 
 ASSET_FRONTEND_CANISTERS = (
     "realm_registry_frontend",
-    "file_registry_frontend",
     "casals_frontend",
-    "marketplace_frontend",
 )
 
 
@@ -344,10 +342,10 @@ def run_wizard(
 
     canisters: dict[str, str] = {}
     console.print(
-        "\nExisting canister IDs (leave blank to create new; marketplace_frontend "
-        "is DNS-mapped and adopted when an ID is present, never newly created):"
+        "\nExisting canister IDs (leave blank to create new). "
+        "Marketplace and the Realms package catalog belong to `realms seed`:"
     )
-    for canister_name in KNOWN_CANISTER_NAMES:
+    for canister_name in PLATFORM_CANISTER_NAMES + ADOPT_ONLY_CANISTER_NAMES:
         hint = ""
         if canister_name in ADOPT_ONLY_CANISTER_NAMES:
             hint = " [DNS-mapped, optional]"
@@ -376,7 +374,7 @@ def run_wizard(
         raise SystemExit(0)
 
     threshold_raw = prompt.text(
-        "Cycle threshold (TC) for all canisters:",
+        "Cycle threshold (TC) for running canisters (autopilot floor):",
         default="2",
         validate=_validate_threshold_tc,
     ).ask()
@@ -462,7 +460,10 @@ def run_wizard(
             monitor_url=monitor_url.strip() or None,
             monitor_principal=monitor_principal,
         ),
-        cycles=CyclesConfig(threshold_tc=float(threshold_raw.strip() or "2")),
+        cycles=CyclesConfig(
+            threshold_tc=float(threshold_raw.strip() or "2"),
+            create_tc=2,
+        ),
         flags=flags,
         dns=DnsConfig(provider="manual"),
     )

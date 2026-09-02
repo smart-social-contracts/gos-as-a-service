@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from gaas.canister_ids_sync import persist_descriptor_canister_ids
+from gaas.canister_ids_sync import forget_named_canister_ids, persist_descriptor_canister_ids
 from gaas.descriptor import Descriptor
 from tests.conftest import SAMPLE_DESCRIPTOR
 
@@ -114,3 +114,54 @@ def test_persist_local_does_not_write_dfx_remote_id(tmp_path: Path) -> None:
     remote_ids = dfx["canisters"]["realm_registry_backend"]["remote"]["id"]
     assert "local" not in remote_ids
     assert remote_ids["staging"] == "snqhl-daaaa-aaaan-q6n3q-cai"
+
+
+def test_forget_named_canister_ids_drops_ic_and_env_keys(tmp_path: Path) -> None:
+    dead = "5ocwl-eiaaa-aaaah-av2bq-cai"
+    keep = "yhw3g-fyaaa-aaaas-qgorq-cai"
+    (tmp_path / "canister_ids.json").write_text(
+        json.dumps(
+            {
+                "realm_registry_backend": {
+                    "demo": dead,
+                    "ic": dead,
+                    "test": keep,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "dfx.json").write_text(
+        json.dumps(
+            {
+                "canisters": {
+                    "realm_registry_backend": {
+                        "type": "custom",
+                        "remote": {
+                            "id": {
+                                "demo": dead,
+                                "ic": dead,
+                                "test": keep,
+                            }
+                        },
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    forget_named_canister_ids(
+        tmp_path, "realm_registry_backend", ["ic", "demo"]
+    )
+
+    ids = json.loads((tmp_path / "canister_ids.json").read_text(encoding="utf-8"))
+    assert "demo" not in ids["realm_registry_backend"]
+    assert "ic" not in ids["realm_registry_backend"]
+    assert ids["realm_registry_backend"]["test"] == keep
+
+    dfx = json.loads((tmp_path / "dfx.json").read_text(encoding="utf-8"))
+    remote_ids = dfx["canisters"]["realm_registry_backend"]["remote"]["id"]
+    assert "demo" not in remote_ids
+    assert "ic" not in remote_ids
+    assert remote_ids["test"] == keep

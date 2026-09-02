@@ -87,8 +87,6 @@ jobs:
       - name: Build frontend
         run: |
           npm ci --legacy-peer-deps
-          dfx generate realm_registry_backend
-          dfx generate realm_installer
           npm run build --workspace=realm_registry_frontend
           tar czf realm_registry_frontend.tar.gz -C src/realm_registry_frontend/dist .
           echo "Frontend tarball: $(stat -c%s realm_registry_frontend.tar.gz) bytes"

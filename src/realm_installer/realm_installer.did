@@ -104,6 +104,9 @@ type ReportFrontendOk = record { job_id : text; status : text; actual_assets_has
 type PublicLogEntry = record { timestamp : nat; level : text; logger_name : text; message : text; id : nat };
 type HealthView = record { ok : bool; canister : text };
 type StatusRecord = record { version : text; commit : text; commit_datetime : text; status : text };
+type Header = record { 0 : text; 1 : text };
+type HttpRequest = record { method : text; url : text; headers : vec Header; body : blob };
+type HttpResponseIncoming = record { status_code : nat16; headers : vec Header; body : blob; streaming_strategy : opt text; upgrade : opt bool };
 type TakeSnapshotOk = record { job_id : text; snapshot_id : text; skipped : bool };
 type ProvisionOk = record { job_id : text; status : text; stand : text; backend_canister_id : text; frontend_canister_id : text };
 type CasalsConfigView = record { provision_via_casals : bool; casals_canister_id : text; casals_section : text; registry_principal : text; create_stand_baton : bool; baton_wasm_key : text };
@@ -115,9 +118,6 @@ type CreditTransactionRecord = record { id : text; principal_id : text; amount :
 type RealmRecord = record { id : text; name : text; url : text; backend_url : text; logo : text; users_count : nat64; created_at : float64; frontend_canister_id : text; listing_status : text };
 type BillingStatusRecord = record { users_count : nat64; total_balance : nat64; total_purchased : nat64; total_spent : nat64 };
 type VersionInfoRecord = record { version : text; backend_wasm_url : text; frontend_tar_url : text; backend_wasm_hash : text; frontend_tar_hash : text; published_at : float64 };
-type Header = record { 0 : text; 1 : text };
-type HttpRequest = record { method : text; url : text; headers : vec Header; body : blob };
-type HttpResponseIncoming = record { status_code : nat16; headers : vec Header; body : blob; streaming_strategy : opt text; upgrade : opt bool };
 type ResultDeployTaskStatus = variant { Ok : DeployTaskView; Err : InstallerError };
 type ResultPendingJobs = variant { Ok : PendingJobsOk; Err : InstallerError };
 type ResultJobsList = variant { Ok : JobsListOk; Err : InstallerError };
@@ -146,12 +146,14 @@ type GenericResult = variant { Ok : text; Err : text };
 type RealmTargetService = service { install_extension_from_registry : (text) -> (text); install_codex_from_registry : (text) -> (text); resync_extension_frontends : (text) -> (text) };
 type RealmRegistryService = service { register_realm : (text, text, text, text, text) -> (text); remove_realm : (text) -> (text); deployment_failed : (text, text, text) -> (text); deployment_succeeded : (text, text) -> (text) };
 type FileRegistryService = service { get_extension_manifest : (text) -> (text) query };
-type CasalsService = service { get_tree : () -> (text) query; get_cycles_cached : () -> (text) query; create_stand : (text) -> (text); create_canister : (text) -> (text); set_commander : (text) -> (text); upgrade_to : (text) -> (text); orchestration_hand_to_baton : (text) -> (text); orchestration_configure_baton : (text) -> (text); destroy_stand : (text) -> (text) };
+type CasalsService = service { get_tree : () -> (text) query; get_cycles_cached : () -> (text) query; create_stand : (text) -> (text); create_canister : (text) -> (text); set_commander : (text) -> (text); upgrade_to : (text) -> (text); orchestration_hand_to_baton : (text) -> (text); orchestration_configure_baton : (text) -> (text); destroy_stand : (text) -> (text); grant_stand_backend_commit : (text) -> (text) };
 type RealmInstallerService = service { enqueue_deployment : (text) -> (RResultEnqueue); cancel_deployment : (text) -> (text); provision_via_casals : (text) -> (RResultProvision) };
 
 service : (text) -> {
   "backfill_job_refs_batch" : () -> (text);
   "status" : () -> (GetStatusResult) query;
+  "http_request" : (HttpRequest) -> (HttpResponseIncoming) query;
+  "http_request_update" : (HttpRequest) -> (HttpResponseIncoming);
   "health" : () -> (HealthView) query;
   "enqueue_deployment" : (text) -> (ResultEnqueue);
   "take_pre_upgrade_snapshot" : (text) -> (ResultTakeSnapshot);
@@ -169,13 +171,13 @@ service : (text) -> {
   "get_installer_config" : () -> (text) query;
   "set_casals_config" : (text) -> (ResultCasalsConfig);
   "get_casals_config" : () -> (ResultCasalsConfig) query;
-  "provision_via_casals" : (text) -> (ResultProvision);
   "retry_deployment" : (text) -> (ResultProvision);
+  "provision_via_casals" : (text) -> (ResultProvision);
   "provision_quarter" : (text) -> (text);
   "report_canister_ready" : (text) -> (ResultReportReady);
   "report_frontend_verified" : (text) -> (ResultReportFrontend);
   "get_canister_logs" : (opt nat, opt nat, opt text, opt text) -> (vec PublicLogEntry) query;
-  "http_request" : (HttpRequest) -> (HttpResponseIncoming) query;
-  "http_request_update" : (HttpRequest) -> (HttpResponseIncoming);
+  "__shell__" : (text) -> (text);
+  "__browse__" : (text) -> (text) query;
   "__get_candid_interface_tmp_hack" : () -> (text) query;
 }

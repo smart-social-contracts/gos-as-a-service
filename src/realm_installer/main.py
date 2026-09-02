@@ -40,6 +40,7 @@ from provision_kick import (
 from asset_permissions import (
     grant_frontend_access_outcome,
     grant_permission_candid,
+    is_permission_denied,
     list_permitted_candid,
     principal_in_candid_vec,
 )
@@ -69,6 +70,7 @@ from bootstrap import (
     resolve_founder,
     manifest_has_codex_block,
     needs_enter_setup_step,
+    realm_backend_install_arg,
     resync_extension_frontends_args,
     resolve_legacy_install_lists,
     has_extension_installs,
@@ -164,6 +166,8 @@ class CasalsService(Service):
     def orchestration_configure_baton(self, args: text) -> text: ...
     @service_update
     def destroy_stand(self, args: text) -> text: ...
+    @service_update
+    def grant_stand_backend_commit(self, args: text) -> text: ...
 
 # ── Entities ───────────────────────────────────────────────────────────
 
@@ -1403,6 +1407,24 @@ def _execute_grant_frontend_access(task, step, args):
             permitted_after = yield from _frontend_commit_permitted(
                 frontend_id, backend_id, task.name
             )
+            if (
+                not permitted_after
+                and is_permission_denied(grant_error)
+            ):
+                casals_id = (_config().casals_canister_id or "").strip()
+                if casals_id:
+                    jlog(task.name).info(
+                        f"asking Casals {casals_id} to grant_stand_backend_commit "
+                        f"on frontend {frontend_id}"
+                    )
+                    casals = CasalsService(Principal.from_str(casals_id))
+                    repair: CallResult = yield casals.grant_stand_backend_commit(
+                        json.dumps({"canister": frontend_id})
+                    )
+                    jlog(task.name).info(f"grant_stand_backend_commit → {repair}")
+                    permitted_after = yield from _frontend_commit_permitted(
+                        frontend_id, backend_id, task.name
+                    )
 
     status, note, error = grant_frontend_access_outcome(
         permitted_before=permitted_before,
@@ -3177,6 +3199,7 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
     if want_backend and not backend_id:
         backend_id = yield from _casals_create_or_reuse_canister(
             casals, job_id, stand, f"{stand}-backend", "backend", backend_wasm_key,
+            install_arg=realm_backend_install_arg(str(ic.id())),
         )
         job.backend_canister_id = backend_id
         job.wasm_verified = 1

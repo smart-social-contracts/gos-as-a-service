@@ -1,6 +1,6 @@
 import { createScopedDelegation, resolveRealmDelegationTargets } from '$lib/delegation.js';
 import { getIdentity } from '$lib/auth.js';
-import { portalPath } from '$lib/federation.js';
+import { embeddedPathFromPortalPathname, portalHistoryHref } from '$lib/federation-path.js';
 
 const BRIDGE_VERSION = '1';
 
@@ -8,7 +8,7 @@ const BRIDGE_VERSION = '1';
  * Host-side portal bridge: MessageChannel handshake + scoped delegation to iframe.
  * @param {HTMLIFrameElement} iframe
  * @param {{ slug: string, backendCanisterId: string, frontendCanisterId: string, env?: string }} realm
- * @param {{ onAuthState?: (needsLogin: boolean) => void, onFocus?: (focus: { source: string, uri: string, label?: string } | null) => void, onAssistantOpen?: () => void, onUiReady?: () => void }} [opts]
+ * @param {{ onAuthState?: (needsLogin: boolean) => void, onFocus?: (focus: { source: string, uri: string, label?: string } | null) => void, onAssistantOpen?: () => void, onUiReady?: () => void, onNavPush?: (path: string, opts: { replace: boolean }) => void }} [opts]
  *   `onAuthState(true)` fires when the iframe asks for a delegation but the
  *   portal has no session (the page should offer II sign-in on this origin);
  *   `onAuthState(false)` fires once a delegation is delivered.
@@ -51,13 +51,19 @@ export function attachPortalBridge(iframe, realm, opts = {}) {
 				break;
 			case 'nav:push': {
 				const path = msg.payload?.path || '/';
-				const full = portalPath(realm.slug, path);
-				// replace=true for auth redirects / initial sync so the back
-				// button doesn't trap users on /join after they land elsewhere.
-				if (msg.payload?.replace) {
-					window.history.replaceState({}, '', full);
+				const replace = !!msg.payload?.replace;
+				// Prefer the page callback: SvelteKit reverts raw
+				// history.replaceState back to `$page.url`, which left the
+				// bar stuck on Account while Messages was on screen.
+				if (typeof opts.onNavPush === 'function') {
+					opts.onNavPush(path, { replace });
+					break;
+				}
+				const href = portalHistoryHref(realm.slug, path, window.location.href);
+				if (replace) {
+					window.history.replaceState({}, '', href);
 				} else {
-					window.history.pushState({}, '', full);
+					window.history.pushState({}, '', href);
 				}
 				break;
 			}
@@ -161,7 +167,8 @@ export function attachPortalBridge(iframe, realm, opts = {}) {
 				slug: realm.slug,
 				backendCanisterId: realm.backendCanisterId,
 				frontendCanisterId: realm.frontendCanisterId,
-				env: realm.env || ''
+				env: realm.env || '',
+				path: embeddedPathFromPortalPathname(window.location.pathname, realm.slug)
 			}
 		});
 		iframe.contentWindow.postMessage(
