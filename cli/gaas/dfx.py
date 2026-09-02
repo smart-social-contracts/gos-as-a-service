@@ -733,6 +733,7 @@ def delete_dust_canister(
         "delete",
         canister_id,
         "--yes",
+        "--no-withdrawal",
     ]
     if identity:
         args.extend(["--identity", identity])

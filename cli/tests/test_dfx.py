@@ -267,6 +267,7 @@ def test_delete_dust_canister_allows_dust(monkeypatch) -> None:
     delete_dust_canister("abc", "ic", identity="deployer", max_cycles=500_000_000_000)
     assert captured["allow"] is True
     assert "delete" in captured["args"]
+    assert "--no-withdrawal" in captured["args"]
 
 
 def test_get_wallet(monkeypatch) -> None:
