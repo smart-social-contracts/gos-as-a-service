@@ -579,21 +579,21 @@ def test_ensure_platform_stand_tolerates_existing_stand(monkeypatch) -> None:
         conductor_seed,
         "get_tree",
         lambda *_a, **_k: {
-            "sections": [{"name": "Infra", "stands": [{"name": "file-registry", "canisters": []}]}]
+            "sections": [{"name": "Infra", "stands": [{"name": "casals-file-registry", "canisters": []}]}]
         },
     )
 
     conductor_seed.ensure_platform_stand(
         "qthgp-3yaaa-aaaae-agveq-cai",
-        [("file-registry", "ddddd-ddddd-ddddd-ddddd-ddddd-ddd", "backend")],
+        [("casals-file-registry", "ddddd-ddddd-ddddd-ddddd-ddddd-ddd", "backend")],
         "ic",
     )
     assert calls == [
         (
             "register_canister",
             {
-                "stand": "file-registry",
-                "name": "file-registry",
+                "stand": "casals-file-registry",
+                "name": "casals-file-registry",
                 "canister_id": "ddddd-ddddd-ddddd-ddddd-ddddd-ddd",
                 "kind": "backend",
             },
@@ -648,7 +648,7 @@ def test_ensure_platform_stand_skips_existing_canisters(monkeypatch) -> None:
         "qthgp-3yaaa-aaaae-agveq-cai",
         [
             ("realm-registry-backend", "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa", "backend"),
-            ("file-registry-frontend", "eeeee-eeeee-eeeee-eeeee-eeeee-eee", "frontend"),
+            ("realm-registry-frontend", "eeeee-eeeee-eeeee-eeeee-eeeee-eee", "frontend"),
         ],
         "ic",
     )
@@ -656,8 +656,8 @@ def test_ensure_platform_stand_skips_existing_canisters(monkeypatch) -> None:
         (
             "register_canister",
             {
-                "stand": "file-registry",
-                "name": "file-registry-frontend",
+                "stand": "realm-registry",
+                "name": "realm-registry-frontend",
                 "canister_id": "eeeee-eeeee-eeeee-eeeee-eeeee-eee",
                 "kind": "frontend",
             },

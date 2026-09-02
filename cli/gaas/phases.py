@@ -218,6 +218,8 @@ def _registry_runtime_config_json(descriptor: Descriptor, network: str) -> str |
     if (network or "").strip().lower() in ("staging", "demo"):
         test_flags["disable_card_billing"] = True
         test_flags["assistant_experimental_notice"] = True
+    if descriptor.test_flags:
+        test_flags.update(descriptor.test_flags)
     payload: dict = {
         "test_flags": test_flags,
     }
@@ -1404,15 +1406,13 @@ def phase_seed_conductor(descriptor: Descriptor, ctx: DeployContext) -> None:
     for name, key, kind in (
         ("realm-registry-backend", "realm_registry_backend", "backend"),
         ("realm-installer", "realm_installer", "backend"),
-        ("file-registry", "file_registry", "backend"),
         ("casals-file-registry", "casals_file_registry", "backend"),
         ("realm-registry-frontend", "realm_registry_frontend", "frontend"),
-        ("file-registry-frontend", "file_registry_frontend", "frontend"),
     ):
         canister_id = descriptor.canisters.get(key)
         if not canister_id:
-            # Adopt-only / optional canisters are registered only when present.
-            if key in ("casals_file_registry", "file_registry", "file_registry_frontend"):
+            # Casals' own file-registry is optional until casals new writes it.
+            if key == "casals_file_registry":
                 continue
             raise RuntimeError(f"{key} ID required for platform stand registration")
         platform_canisters.append((name, canister_id, kind))

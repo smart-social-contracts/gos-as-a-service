@@ -580,6 +580,16 @@ def test_registry_runtime_config_json_can_test_mode() -> None:
     assert "disable_card_billing" not in test_payload["test_flags"]
     assert "assistant_experimental_notice" not in test_payload["test_flags"]
 
+    explicit = desc.model_copy(
+        update={
+            "flags": {"can_test_mode": True},
+            "test_flags": {"test_mode": True, "ii_bypass": False},
+        }
+    )
+    explicit_payload = json.loads(_registry_runtime_config_json(explicit, "test"))
+    assert explicit_payload["test_flags"]["test_mode"] is True
+    assert explicit_payload["test_flags"]["ii_bypass"] is False
+
 
 @patch("gaas.phases.dfx.get_principal")
 @patch("gaas.phases.dfx.canister_call")
@@ -1065,10 +1075,8 @@ def test_phase_seed_conductor_registers_platform_canisters(
     assert args[1] == [
         ("realm-registry-backend", "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa", "backend"),
         ("realm-installer", "ccccc-ccccc-ccccc-ccccc-ccccc-ccc", "backend"),
-        ("file-registry", "ddddd-ddddd-ddddd-ddddd-ddddd-ddd", "backend"),
         ("casals-file-registry", "ggggg-ggggg-ggggg-ggggg-ggggg-ggg", "backend"),
         ("realm-registry-frontend", "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb", "frontend"),
-        ("file-registry-frontend", "eeeee-eeeee-eeeee-eeeee-eeeee-eee", "frontend"),
     ]
 
 

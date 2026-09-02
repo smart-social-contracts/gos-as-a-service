@@ -276,6 +276,7 @@ class Descriptor(BaseModel):
     services: ServicesConfig = Field(default_factory=ServicesConfig)
     marketplace: MarketplaceConfig | None = None
     flags: dict[str, bool] = Field(default_factory=dict)  # can_test_mode: skip billing credit checks
+    test_flags: dict[str, bool] = Field(default_factory=dict)
     cycles: CyclesConfig = Field(default_factory=CyclesConfig)
     dns: DnsConfig = Field(default_factory=DnsConfig)
 
@@ -305,6 +306,18 @@ class Descriptor(BaseModel):
                 f"unknown canister name(s): {', '.join(sorted(unknown))}; "
                 f"known: {', '.join(KNOWN_CANISTER_NAMES)}"
             )
+        return value
+
+    @field_validator("test_flags", mode="before")
+    @classmethod
+    def validate_test_flags(cls, value: object) -> dict[str, bool]:
+        if value is None:
+            return {}
+        if not isinstance(value, dict):
+            raise ValueError("test_flags must be an object")
+        for key, flag in value.items():
+            if not isinstance(flag, bool):
+                raise ValueError(f"test_flags.{key} must be a boolean")
         return value
 
     @model_validator(mode="after")

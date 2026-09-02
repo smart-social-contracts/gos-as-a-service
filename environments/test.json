@@ -52,6 +52,10 @@
   "flags": {
     "can_test_mode": true
   },
+  "test_flags": {
+    "test_mode": true,
+    "ii_bypass": true
+  },
   "cycles": {
     "threshold_tc": 2.0
   },

@@ -467,22 +467,19 @@ def ensure_sheet_and_deploy_multisig(
         console.print(f"  multisig: adopt {multisig_id}")
 
 
-# Orchestra stand names must match gos-as-a-service/casals.json (and
-# realms/casals.json for the fleet file_registry). A lumped "platform"
-# stand with backend+frontend together tripped ManagePermissions.
+# Orchestra stand names must match gos-as-a-service/casals.json.
+# Fleet file-registry is Product-owned (realms/casals.json) — do not map it here.
+# A lumped "platform" stand with backend+frontend together tripped ManagePermissions.
 PLATFORM_CANISTER_STAND: dict[str, str] = {
     "realm-installer": "installer",
     "realm-registry-backend": "realm-registry",
     "realm-registry-frontend": "realm-registry",
-    "file-registry": "file-registry",
-    "file-registry-frontend": "file-registry",
     "casals-file-registry": "casals-file-registry",
 }
 
 PLATFORM_STAND_DESCRIPTIONS: dict[str, str] = {
     "installer": "Installer backend.",
-    "realm-registry": "Realm registry backend and DNS frontend.",
-    "file-registry": "Fleet file_registry (adopt by name; Realms product sheet).",
+    "realm-registry": "Realm registry backend and DNS frontend (keep-ID reinstall).",
     "casals-file-registry": "Casals-owned file registry from casals new.",
 }
 
