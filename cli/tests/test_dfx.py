@@ -8,6 +8,7 @@ from gaas.dfx import (
     CANISTER_DELETE_FORBIDDEN,
     DfxError,
     canister_status,
+    canister_call,
     delete_canister,
     delete_dust_canister,
     get_wallet,
@@ -292,6 +293,27 @@ def test_canister_status_retries_502(monkeypatch) -> None:
     status = canister_status("abc", "ic", identity="deployer")
     assert calls["n"] == 3
     assert status.status == "running"
+
+
+def test_canister_call_retries_502(monkeypatch) -> None:
+    from gaas import dfx
+
+    calls = {"n": 0}
+
+    def fake_run(args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise DfxError("Http Error: status 502 Bad Gateway", command=args, stderr="502")
+        class R:
+            stdout = '("ok")\n'
+            stderr = ""
+        return R()
+
+    monkeypatch.setattr(dfx, "_run", fake_run)
+    monkeypatch.setattr(dfx.time, "sleep", lambda *_a, **_k: None)
+    monkeypatch.setattr(dfx, "_parse_candid_string", lambda stdout: "ok")
+    assert canister_call("abc", "ping", '("x")', "ic", identity="deployer") == "ok"
+    assert calls["n"] == 3
 
 
 def test_get_wallet(monkeypatch) -> None:

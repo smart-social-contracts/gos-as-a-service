@@ -569,8 +569,20 @@ def canister_call(
         cmd.extend([canister_id, method, arg])
 
     try:
-        result = _run(cmd, check=True, timeout=timeout)
-        return _parse_candid_string(result.stdout)
+        last_exc: DfxError | None = None
+        for attempt in range(5):
+            try:
+                result = _run(cmd, check=True, timeout=timeout)
+                return _parse_candid_string(result.stdout)
+            except DfxError as exc:
+                last_exc = exc
+                text = str(exc).lower()
+                if "502" in text or "http error" in text:
+                    time.sleep(2 * (attempt + 1))
+                    continue
+                raise
+        assert last_exc is not None
+        raise last_exc
     finally:
         if arg_file:
             try:
