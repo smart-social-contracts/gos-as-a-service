@@ -106,6 +106,7 @@ def test_run_casals_new_fresh_create(mock_run: MagicMock, tmp_path: Path) -> Non
     assert "--no-seed" in argv
     assert "--identity" in argv
     assert argv[argv.index("--identity") + 1] == "deployer"
+    assert argv.index("--identity") < argv.index("new")
     assert not any(str(arg).endswith(".ids.json") for arg in argv)
     assert mock_run.call_args.kwargs["cwd"] == casals
 
@@ -277,7 +278,7 @@ def test_run_casals_sheet_deploy_argv_and_canister(mock_run: MagicMock, tmp_path
     assert argv[argv.index("--canister") + 1] == "qthgp-3yaaa-aaaae-agveq-cai"
     assert "--identity" in argv
     assert argv[argv.index("--identity") + 1] == "deployer"
-    assert "sheet" in argv
+    assert argv.index("--identity") < argv.index("sheet")
     assert "deploy" in argv
     assert str(sheet) in argv
     assert mock_run.call_args.kwargs["cwd"] == casals

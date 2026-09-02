@@ -66,18 +66,19 @@ def run_casals_new(
     checkout = require_casals_checkout(casals_src)
     env = casals_env(network)
 
+    # Global flags (--identity, --canister) must precede the subcommand.
     argv: list[str] = [
         sys.executable,
         str(checkout / "scripts" / "casals.py"),
         "-e",
         env,
-        "new",
     ]
+    if identity:
+        argv.extend(["--identity", identity])
+    argv.append("new")
     if yes:
         argv.append("-y")
     argv.append("--no-seed")
-    if identity:
-        argv.extend(["--identity", identity])
 
     existing = {} if force_create else ids_file_payload(descriptor)
     ids_path: Path | None = None
@@ -167,12 +168,10 @@ def run_casals_sheet_deploy(
         env,
         "--canister",
         canister,
-        "sheet",
-        "deploy",
-        str(sheet_path),
     ]
     if identity:
         argv.extend(["--identity", identity])
+    argv.extend(["sheet", "deploy", str(sheet_path)])
 
     try:
         result = subprocess.run(
