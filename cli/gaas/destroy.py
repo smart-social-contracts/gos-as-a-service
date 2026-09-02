@@ -15,8 +15,8 @@ MARKETPLACE_FRONTEND_NAME = "marketplace_frontend"
 PRESERVED_FRONTEND_NAMES = (FRONTEND_NAME, MARKETPLACE_FRONTEND_NAME)
 ORCHESTRA_BATCH = 1
 EVAC_CHUNK = 10_000_000_000_000  # 10T
-EVAC_MIN_RESERVE = 500_000_000_000  # 500B — last chunk must stay above freeze + delete max
-CONDUCTOR_DELETE_MAX = 500_000_000_000  # 500B
+EVAC_MIN_RESERVE = 500_000_000_000  # 500B treasury floor for evacuate_treasury
+CONDUCTOR_DELETE_MAX = 1_000_000_000_000  # 1T — freeze buffer sits on top of treasury
 CASALS_DESTROY_TOPUP = 300_000_000_000  # 300B — enough to leave the 30-day freeze
 HOLDING_ENV = "GAAS_CYCLES_HOLDING"
 

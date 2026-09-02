@@ -487,7 +487,7 @@ def test_run_destroy_orchestra_loop_drops_unknown_preserve_ok_false() -> None:
 
 
 def test_evac_min_reserve_matches_conductor_delete_max() -> None:
-    assert EVAC_MIN_RESERVE == CONDUCTOR_DELETE_MAX
+    assert CONDUCTOR_DELETE_MAX >= EVAC_MIN_RESERVE
 
 
 @patch("gaas.destroy._casals_call")
