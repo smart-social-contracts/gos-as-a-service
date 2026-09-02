@@ -8,7 +8,7 @@ const BRIDGE_VERSION = '1';
  * Host-side portal bridge: MessageChannel handshake + scoped delegation to iframe.
  * @param {HTMLIFrameElement} iframe
  * @param {{ slug: string, backendCanisterId: string, frontendCanisterId: string, env?: string }} realm
- * @param {{ onAuthState?: (needsLogin: boolean) => void, onFocus?: (focus: { source: string, uri: string, label?: string } | null) => void, onAssistantOpen?: () => void, onUiReady?: () => void }} [opts]
+ * @param {{ onAuthState?: (needsLogin: boolean) => void, onFocus?: (focus: { source: string, uri: string, label?: string } | null) => void, onAssistantOpen?: () => void, onUiReady?: () => void, onNavPush?: (path: string, opts: { replace: boolean }) => void }} [opts]
  *   `onAuthState(true)` fires when the iframe asks for a delegation but the
  *   portal has no session (the page should offer II sign-in on this origin);
  *   `onAuthState(false)` fires once a delegation is delivered.
@@ -51,10 +51,16 @@ export function attachPortalBridge(iframe, realm, opts = {}) {
 				break;
 			case 'nav:push': {
 				const path = msg.payload?.path || '/';
+				const replace = !!msg.payload?.replace;
+				// Prefer the page callback: SvelteKit reverts raw
+				// history.replaceState back to `$page.url`, which left the
+				// bar stuck on Account while Messages was on screen.
+				if (typeof opts.onNavPush === 'function') {
+					opts.onNavPush(path, { replace });
+					break;
+				}
 				const href = portalHistoryHref(realm.slug, path, window.location.href);
-				// replace=true for auth redirects / initial sync so the back
-				// button doesn't trap users on /join after they land elsewhere.
-				if (msg.payload?.replace) {
+				if (replace) {
 					window.history.replaceState({}, '', href);
 				} else {
 					window.history.pushState({}, '', href);

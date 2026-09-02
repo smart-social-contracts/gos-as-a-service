@@ -2,9 +2,11 @@
   import { onMount, onDestroy } from 'svelte';
   import { fade } from 'svelte/transition';
   import { browser } from '$app/environment';
+  import { afterNavigate, pushState, replaceState } from '$app/navigation';
   import { page } from '$app/stores';
   import { resolveSlug } from '$lib/slug-resolver.js';
   import { realmIframeUrl } from '$lib/federation.js';
+  import { embeddedPathFromPortalPathname, portalHistoryHref } from '$lib/federation-path.js';
   import { attachPortalBridge } from '$lib/portal-bridge-host.js';
   import { portalDocumentFocus } from '$lib/portal-focus.js';
   import { requestAssistantOpen } from '$lib/assistant-open.js';
@@ -46,6 +48,12 @@
 
   $: slug = $page.params.slug;
   $: subPath = $page.url.pathname.replace(new RegExp(`^/r/${slug}`), '') || '/';
+
+  afterNavigate((nav) => {
+    if (!browser || nav.type !== 'popstate' || !bridge) return;
+    const path = embeddedPathFromPortalPathname(nav.to?.url?.pathname || '', slug);
+    bridge.syncPath(path);
+  });
 
   let unsubAuth = () => {};
 
@@ -238,6 +246,11 @@
       },
       onUiReady: () => {
         markIframeReady();
+      },
+      onNavPush: (path, { replace }) => {
+        const href = portalHistoryHref(realm.slug, path, window.location.href);
+        if (replace) replaceState(href, {});
+        else pushState(href, {});
       }
     });
     // Do not syncPath here. The iframe already loaded `iframeSrc` (including
@@ -247,10 +260,20 @@
 
   $: iframePath = subPath === '/' ? rootIframePath : subPath;
 
-  $: iframeSrc =
+  $: computedIframeSrc =
     realm && browser
       ? realmIframeUrl(realm.frontendCanisterId, realm.slug, iframePath)
       : '';
+
+  // Pin src to the first URL for this frontend canister. iframe `nav:push`
+  // updates `$page` (address bar) without rewriting `src` — changing `src`
+  // would reload the frame and snap the bar back to the stale route.
+  let liveIframeSrc = '';
+  let liveIframeCanister = '';
+  $: if (realm && computedIframeSrc && liveIframeCanister !== realm.frontendCanisterId) {
+    liveIframeCanister = realm.frontendCanisterId;
+    liveIframeSrc = computedIframeSrc;
+  }
 </script>
 
 <svelte:head>
@@ -287,7 +310,7 @@
         <iframe
           bind:this={iframeEl}
           title="Realm {slug}"
-          src={iframeSrc}
+          src={liveIframeSrc}
           sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
           referrerpolicy="no-referrer"
           on:load={onIframeLoad}
