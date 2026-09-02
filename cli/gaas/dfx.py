@@ -737,6 +737,17 @@ def delete_dust_canister(
     ]
     if identity:
         args.extend(["--identity", identity])
+    stop = [
+        "dfx",
+        "canister",
+        "--network",
+        network,
+        "stop",
+        canister_id,
+    ]
+    if identity:
+        stop.extend(["--identity", identity])
+    _run(stop)
     _run(args, allow_canister_delete=True)
 
 

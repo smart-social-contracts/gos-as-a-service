@@ -248,9 +248,10 @@ def test_delete_dust_canister_refuses_when_fat(monkeypatch) -> None:
 def test_delete_dust_canister_allows_dust(monkeypatch) -> None:
     from gaas import dfx
 
-    captured: dict = {}
+    captured: dict = {"calls": []}
 
     def fake_run(args, **kwargs):
+        captured["calls"].append(args)
         captured["args"] = args
         captured["allow"] = kwargs.get("allow_canister_delete")
 
@@ -265,6 +266,7 @@ def test_delete_dust_canister_allows_dust(monkeypatch) -> None:
     )
     monkeypatch.setattr(dfx, "_run", fake_run)
     delete_dust_canister("abc", "ic", identity="deployer", max_cycles=500_000_000_000)
+    assert any("stop" in c for c in captured["calls"])
     assert captured["allow"] is True
     assert "delete" in captured["args"]
     assert "--no-withdrawal" in captured["args"]
