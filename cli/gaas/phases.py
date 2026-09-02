@@ -409,6 +409,7 @@ def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
         identity=ctx.identity,
         casals_src=ctx.casals_src,
         yes=True,
+        force_create=ctx.destroy_except_frontend,
     )
     _save_descriptor(descriptor, ctx)
     mode = "adopt" if result.get("mode") == "upgrade" else "created"

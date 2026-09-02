@@ -31,9 +31,9 @@ _CASALS_TO_GOS_ID_KEYS: dict[str, str] = {
 
 
 def casals_env(network: str) -> str:
-    if network in ("ic", "mainnet"):
-        return "ic"
-    return "local"
+    if (network or "").strip().lower() in ("local", "localhost"):
+        return "local"
+    return "ic"
 
 
 def ids_file_payload(descriptor: Descriptor) -> dict[str, str]:
@@ -61,6 +61,7 @@ def run_casals_new(
     identity: str | None,
     casals_src: Path | None,
     yes: bool = True,
+    force_create: bool = False,
 ) -> dict:
     checkout = require_casals_checkout(casals_src)
     env = casals_env(network)
@@ -74,10 +75,11 @@ def run_casals_new(
     ]
     if yes:
         argv.append("-y")
+    argv.append("--no-seed")
     if identity:
         argv.extend(["--identity", identity])
 
-    existing = ids_file_payload(descriptor)
+    existing = {} if force_create else ids_file_payload(descriptor)
     ids_path: Path | None = None
     if existing:
         tmp = tempfile.NamedTemporaryFile(
@@ -113,6 +115,11 @@ def run_casals_new(
         if not parsed.get("ok"):
             raise RuntimeError(
                 f"casals new returned ok=false: {parsed.get('error', parsed)}"
+            )
+        if force_create and parsed.get("mode") == "upgrade":
+            raise RuntimeError(
+                "casals new upgraded an existing conductor; "
+                "destroy-rebuild requires a fresh create"
             )
 
         canisters = parsed.get("canisters") or {}

@@ -28,8 +28,10 @@ def test_casals_env_ic_and_mainnet() -> None:
 
 def test_casals_env_local_variants() -> None:
     assert casals_env("local") == "local"
-    assert casals_env("staging") == "local"
     assert casals_env("localhost") == "local"
+    assert casals_env("test") == "ic"
+    assert casals_env("demo") == "ic"
+    assert casals_env("staging") == "ic"
 
 
 def test_ids_file_payload_maps_casals_file_registry() -> None:
@@ -101,6 +103,7 @@ def test_run_casals_new_fresh_create(mock_run: MagicMock, tmp_path: Path) -> Non
 
     argv = mock_run.call_args.args[0]
     assert "-y" in argv
+    assert "--no-seed" in argv
     assert "--identity" in argv
     assert argv[argv.index("--identity") + 1] == "deployer"
     assert not any(str(arg).endswith(".ids.json") for arg in argv)
@@ -154,6 +157,73 @@ def test_run_casals_new_adopt_passes_ids_file(mock_run: MagicMock, tmp_path: Pat
     assert captured["payload"] == {
         "casals_backend": CASALS_BOOTSTRAP_TEST_IDS["casals_backend"],
     }
+    argv = mock_run.call_args.args[0]
+    assert "--no-seed" in argv
+
+
+@patch("gaas.casals_cli.subprocess.run")
+def test_run_casals_new_force_create_skips_ids_file(mock_run: MagicMock, tmp_path: Path) -> None:
+    casals = _make_casals_checkout(tmp_path)
+    stdout = json.dumps(
+        {
+            "ok": True,
+            "mode": "create",
+            "canisters": {
+                "casals_backend": CASALS_BOOTSTRAP_TEST_IDS["casals_backend"],
+                "casals_frontend": CASALS_BOOTSTRAP_TEST_IDS["casals_frontend"],
+                "ic_file_registry": CASALS_BOOTSTRAP_TEST_IDS["casals_file_registry"],
+            },
+            "seeded": False,
+        }
+    )
+    mock_run.return_value = subprocess.CompletedProcess(
+        args=[],
+        returncode=0,
+        stdout=stdout,
+        stderr="",
+    )
+
+    desc = Descriptor.model_validate(
+        {
+            **SAMPLE_DESCRIPTOR,
+            "canisters": {"casals_backend": CASALS_BOOTSTRAP_TEST_IDS["casals_backend"]},
+        }
+    )
+    result = run_casals_new(
+        desc,
+        network="test",
+        identity="deployer",
+        casals_src=casals,
+        force_create=True,
+    )
+
+    assert result["mode"] == "create"
+    argv = mock_run.call_args.args[0]
+    assert "--no-seed" in argv
+    assert argv[argv.index("-e") + 1] == "ic"
+    assert not any(str(arg).endswith(".ids.json") for arg in argv)
+
+
+@patch("gaas.casals_cli.subprocess.run")
+def test_run_casals_new_force_create_rejects_upgrade(
+    mock_run: MagicMock, tmp_path: Path
+) -> None:
+    casals = _make_casals_checkout(tmp_path)
+    mock_run.return_value = subprocess.CompletedProcess(
+        args=[],
+        returncode=0,
+        stdout=json.dumps({"ok": True, "mode": "upgrade", "canisters": {}}),
+        stderr="",
+    )
+    desc = Descriptor.model_validate(SAMPLE_DESCRIPTOR)
+    with pytest.raises(RuntimeError, match="fresh create"):
+        run_casals_new(
+            desc,
+            network="ic",
+            identity=None,
+            casals_src=casals,
+            force_create=True,
+        )
 
 
 @patch("gaas.casals_cli.subprocess.run")
@@ -202,7 +272,7 @@ def test_run_casals_sheet_deploy_argv_and_canister(mock_run: MagicMock, tmp_path
     assert argv[0] == sys.executable
     assert str(casals / "scripts" / "casals.py") in argv
     assert "-e" in argv
-    assert argv[argv.index("-e") + 1] == "local"
+    assert argv[argv.index("-e") + 1] == "ic"
     assert "--canister" in argv
     assert argv[argv.index("--canister") + 1] == "qthgp-3yaaa-aaaae-agveq-cai"
     assert "--identity" in argv
