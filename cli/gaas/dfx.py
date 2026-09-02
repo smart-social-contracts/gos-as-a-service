@@ -278,7 +278,21 @@ def canister_status(canister_id: str, network: str, *, identity: str | None = No
     ]
     if identity:
         args.extend(["--identity", identity])
-    result = _run(args, check=True)
+    last_exc: DfxError | None = None
+    for attempt in range(5):
+        try:
+            result = _run(args, check=True)
+            break
+        except DfxError as exc:
+            last_exc = exc
+            text = str(exc).lower()
+            if "502" in text or "http error" in text:
+                time.sleep(2 * (attempt + 1))
+                continue
+            raise
+    else:
+        assert last_exc is not None
+        raise last_exc
     raw = result.stdout.strip()
     status = "unknown"
     for line in raw.splitlines():

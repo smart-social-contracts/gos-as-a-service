@@ -7,6 +7,7 @@ import pytest
 from gaas.dfx import (
     CANISTER_DELETE_FORBIDDEN,
     DfxError,
+    canister_status,
     delete_canister,
     delete_dust_canister,
     get_wallet,
@@ -270,6 +271,27 @@ def test_delete_dust_canister_allows_dust(monkeypatch) -> None:
     assert captured["allow"] is True
     assert "delete" in captured["args"]
     assert "--no-withdrawal" in captured["args"]
+
+
+def test_canister_status_retries_502(monkeypatch) -> None:
+    from gaas import dfx
+
+    calls = {"n": 0}
+
+    def fake_run(args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise DfxError("Http Error: status 502 Bad Gateway", command=args, stderr="502")
+        class R:
+            stdout = "Status: Running\nBalance: 1 cycles\n"
+            stderr = ""
+        return R()
+
+    monkeypatch.setattr(dfx, "_run", fake_run)
+    monkeypatch.setattr(dfx.time, "sleep", lambda *_a, **_k: None)
+    status = canister_status("abc", "ic", identity="deployer")
+    assert calls["n"] == 3
+    assert status.status == "running"
 
 
 def test_get_wallet(monkeypatch) -> None:
