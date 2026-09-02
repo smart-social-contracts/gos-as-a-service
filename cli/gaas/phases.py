@@ -1013,7 +1013,11 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
         )
         console.print(f"  wrote {gaas_env_path}")
 
-        env = {**os.environ, "DFX_NETWORK": ctx.network}
+        env = {
+            **os.environ,
+            "DFX_NETWORK": ctx.network,
+            "GAAS_ENV": descriptor.name,
+        }
         run_log = get_run_log()
         if run_log is None:
             raise RuntimeError("run log not initialized for frontend build phase")

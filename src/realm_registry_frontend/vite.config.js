@@ -92,9 +92,10 @@ function getCanisterIdsDefine() {
 
   try {
     const allIds = JSON.parse(readFileSync(idsPath, 'utf-8'));
-    // Runtime wizard polls __CANISTER_IDS__.realm_installer.staging on
-    // staging.gos.earth even when DFX_NETWORK is ic (gaas new --network ic).
-    if (process.env.DFX_NETWORK === 'staging' || process.env.npm_lifecycle_event === 'build') {
+    // Only the staging SPA bake must refuse a dead staging installer id.
+    // test/demo `gaas new --network ic` still writes the full map into
+    // __CANISTER_IDS__, but must not require staging.gos.earth to be live.
+    if (process.env.GAAS_ENV === 'staging' || process.env.DFX_NETWORK === 'staging') {
       assertInstallerLiveForBake(allIds.realm_installer?.staging || '', 'staging', {
         repoRoot,
       });
