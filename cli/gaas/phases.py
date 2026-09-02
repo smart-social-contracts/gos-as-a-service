@@ -171,14 +171,15 @@ def _portal_url(descriptor: Descriptor) -> str:
 
 def _resolve_can_test_mode(descriptor: Descriptor) -> bool:
     """Precedence: explicit flags.can_test_mode > deprecated flags.open_mode >
-    deprecated services.open_mode > derived (true when no billing_url)."""
+    deprecated services.open_mode. Missing config is off — never inferred from
+    billing_url or --network."""
     if "can_test_mode" in descriptor.flags:
         return descriptor.flags["can_test_mode"]
     if "open_mode" in descriptor.flags:
         return descriptor.flags["open_mode"]
     if descriptor.services.open_mode is not None:
         return descriptor.services.open_mode
-    return descriptor.services.billing_url is None
+    return False
 
 
 def _registry_config_json(descriptor: Descriptor) -> str:
@@ -199,19 +200,34 @@ def _registry_config_json(descriptor: Descriptor) -> str:
     return json.dumps(payload)
 
 
-def _registry_runtime_config_json(descriptor: Descriptor, network: str) -> str | None:
-    """Runtime test flags for can_test_mode portal auth (set_canister_config_json).
+_RUNTIME_FLAG_ATTRS = {
+    "test_mode": "test_mode",
+    "ii_bypass": "test_mode_ii_bypass",
+    "user_self_registration": "test_mode_user_self_registration",
+    "demo_data": "test_mode_demo_data",
+    "skip_terms": "test_mode_skip_terms",
+    "skip_passport_zkproof": "test_mode_skip_passport_zkproof",
+    "skip_authentication": "test_mode_skip_authentication",
+    "disable_card_billing": "test_mode_disable_card_billing",
+}
 
-    Returns None when can_test_mode is false so production registries stay secure.
-  """
+
+def _descriptor_test_flags(descriptor: Descriptor) -> dict[str, bool]:
+    return {str(k): bool(v) for k, v in (descriptor.test_flags or {}).items()}
+
+
+def _registry_runtime_config_json(descriptor: Descriptor, network: str) -> str | None:
+    """Runtime test flags from descriptor.test_flags (set_canister_config_json).
+
+    Returns None when can_test_mode is off or test_flags is empty. Explicit
+    ``false`` values are sent so an upgrade-in-place clears stale flags. Never
+    invents flags from --network or from can_test_mode alone.
+    """
     if not _resolve_can_test_mode(descriptor):
         return None
-    test_flags = {
-        "test_mode": True,
-        "ii_bypass": True,
-    }
-    if (network or "").strip().lower() in ("staging", "demo"):
-        test_flags["disable_card_billing"] = True
+    test_flags = _descriptor_test_flags(descriptor)
+    if not test_flags:
+        return None
     payload: dict = {
         "test_flags": test_flags,
     }
@@ -729,10 +745,18 @@ def phase_configure_backends(descriptor: Descriptor, ctx: DeployContext) -> None
             query=True,
         )
         flags = json.loads(flags_raw)
-        if not flags.get("test_mode") or not flags.get("test_mode_ii_bypass"):
+        requested = _descriptor_test_flags(descriptor)
+        missing: list[str] = []
+        for json_key, wanted in requested.items():
+            if not wanted:
+                continue
+            attr = _RUNTIME_FLAG_ATTRS.get(json_key, json_key)
+            if not flags.get(attr) and not flags.get(json_key):
+                missing.append(json_key)
+        if missing:
             raise RuntimeError(
                 "registry runtime flags mismatch after set_canister_config_json: "
-                f"{flags!r}"
+                f"missing {missing} in {flags!r}"
             )
         console.print("  registry runtime test flags verified")
 

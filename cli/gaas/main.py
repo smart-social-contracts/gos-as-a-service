@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from typing import Optional
@@ -32,6 +33,29 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 console = Console()
+
+
+def _apply_flag_config(
+    desc: Descriptor,
+    *,
+    can_test_mode: bool,
+    open_mode: bool,
+    test_flags_json: str | None,
+) -> None:
+    """Apply explicit CLI flag config. Never invents flags from --network."""
+    if can_test_mode or open_mode:
+        desc.flags["can_test_mode"] = True
+    if not test_flags_json:
+        return
+    try:
+        parsed = json.loads(test_flags_json)
+    except json.JSONDecodeError as exc:
+        console.print(f"[red]--test-flags is not valid JSON: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    if not isinstance(parsed, dict):
+        console.print("[red]--test-flags must be a JSON object[/red]")
+        raise typer.Exit(code=1)
+    desc.test_flags = {str(k): bool(v) for k, v in parsed.items()}
 
 
 def _print_preflight(report: PreflightReport) -> None:
@@ -225,13 +249,21 @@ def new_command(
     can_test_mode: bool = typer.Option(
         False,
         "--can-test-mode",
-        help="Enable registry can_test_mode (skip billing credit checks)",
+        help="Set flags.can_test_mode true (overrides descriptor). Does not invent test_flags.",
     ),
     open_mode: bool = typer.Option(
         False,
         "--open-mode",
         hidden=True,
         help="Deprecated alias for --can-test-mode",
+    ),
+    test_flags_json: Optional[str] = typer.Option(
+        None,
+        "--test-flags",
+        help=(
+            "JSON object of runtime test flags (test_mode, ii_bypass, demo_data, …). "
+            "Overrides descriptor.test_flags. Prefer putting them in the env JSON."
+        ),
     ),
 ) -> None:
     """Create or deploy a GaaS environment from a descriptor."""
@@ -246,8 +278,12 @@ def new_command(
             identity=identity,
             network=network,
         )
-        if can_test_mode or open_mode:
-            desc.flags["can_test_mode"] = True
+        _apply_flag_config(
+            desc,
+            can_test_mode=can_test_mode,
+            open_mode=open_mode,
+            test_flags_json=test_flags_json,
+        )
         desc.save(output_path)
         console.print(f"\n[green]Wrote descriptor:[/green] {output_path}\n")
         console.print(Syntax(desc.to_pretty_json(), "json", theme="monokai"))
@@ -276,8 +312,12 @@ def new_command(
         return
 
     desc = Descriptor.load(descriptor_path)
-    if can_test_mode or open_mode:
-        desc.flags["can_test_mode"] = True
+    _apply_flag_config(
+        desc,
+        can_test_mode=can_test_mode,
+        open_mode=open_mode,
+        test_flags_json=test_flags_json,
+    )
     resolved_identity = identity or "default"
     resolved_network = network or "ic"
     if not yes and sys.stdin.isatty():

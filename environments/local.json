@@ -20,6 +20,13 @@
     "release_repo": "smart-social-contracts/Casals"
   },
   "services": {},
+  "flags": {
+    "can_test_mode": true
+  },
+  "test_flags": {
+    "test_mode": true,
+    "ii_bypass": true
+  },
   "dns": {
     "provider": "manual"
   }

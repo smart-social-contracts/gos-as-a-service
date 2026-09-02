@@ -139,7 +139,8 @@ class CasalsConfig(BaseModel):
 
 
 class ServicesConfig(BaseModel):
-    # Public HTTPS URL for credits / Stripe billing; default unset (open mode when absent).
+    # Public HTTPS URL for credits / Stripe billing; informational for frontends
+    # and external integrations. Unset does NOT imply can_test_mode.
     billing_url: str | None = None
     deploy_url: str | None = None
     # Public HTTPS URL for the off-chain Casals cycles/health monitor; default unset.
@@ -276,6 +277,9 @@ class Descriptor(BaseModel):
     services: ServicesConfig = Field(default_factory=ServicesConfig)
     marketplace: MarketplaceConfig | None = None
     flags: dict[str, bool] = Field(default_factory=dict)  # can_test_mode: skip billing credit checks
+    # Realm/registry runtime test flags. Explicit config — never inferred from
+    # --network or from flags.can_test_mode. Empty means all off.
+    test_flags: dict[str, bool] = Field(default_factory=dict)
     cycles: CyclesConfig = Field(default_factory=CyclesConfig)
     dns: DnsConfig = Field(default_factory=DnsConfig)
 
@@ -295,6 +299,21 @@ class Descriptor(BaseModel):
         if not HOSTNAME_RE.match(normalized):
             raise ValueError(f"domain must be a valid hostname (got {value!r})")
         return normalized
+
+    @field_validator("test_flags", mode="before")
+    @classmethod
+    def validate_test_flags(cls, value: dict[str, bool]) -> dict[str, bool]:
+        cleaned: dict[str, bool] = {}
+        for key, raw in (value or {}).items():
+            name = str(key).strip()
+            if not name:
+                raise ValueError("test_flags keys must be non-empty")
+            if not isinstance(raw, bool):
+                raise ValueError(
+                    f"test_flags.{name} must be a JSON boolean (got {raw!r})"
+                )
+            cleaned[name] = raw
+        return cleaned
 
     @field_validator("canisters")
     @classmethod

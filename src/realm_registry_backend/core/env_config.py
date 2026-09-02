@@ -220,8 +220,6 @@ def _inherited_test_flags_from_registry() -> dict:
     for json_key, attr in _TEST_FLAG_ATTRS.items():
         if get_flag(attr, False):
             inherited[json_key] = True
-    if not inherited:
-        inherited = {"test_mode": True, "ii_bypass": True}
     return inherited
 
 
@@ -231,6 +229,9 @@ def apply_env_inheritance(manifest: dict) -> dict:
     Mutates and returns *manifest* so realms inherit ``can_test_mode`` and test
     flags from the registry — not from hardcoded network tables or stale realm
     network values (e.g. ``ic`` on test.gos.earth).
+
+    Stored registry runtime flags are copied as-is. ``can_test_mode`` does not
+    invent test_mode / ii_bypass.
     """
     manifest["can_test_mode"] = is_can_test_mode()
 
@@ -242,8 +243,6 @@ def apply_env_inheritance(manifest: dict) -> dict:
         merged = dict(inherited)
         if isinstance(incoming, dict):
             merged.update(incoming)
-        if not merged.get("test_mode"):
-            merged["test_mode"] = True
         manifest["test_flags"] = merged
     else:
         manifest.pop("test_flags", None)

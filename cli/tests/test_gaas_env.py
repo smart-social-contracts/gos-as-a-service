@@ -61,3 +61,10 @@ def test_flags_included_when_set():
     desc.flags["can_test_mode"] = True
     env = build_gaas_env(desc, "ic")
     assert env["flags"] == {"can_test_mode": True}
+
+
+def test_test_flags_included_when_set():
+    desc = _descriptor()
+    desc.test_flags = {"test_mode": True, "ii_bypass": False}
+    env = build_gaas_env(desc, "ic")
+    assert env["test_flags"] == {"test_mode": True, "ii_bypass": False}

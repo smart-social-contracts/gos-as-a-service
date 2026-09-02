@@ -68,6 +68,8 @@ def build_gaas_env(
         del payload["services"]
     if descriptor.flags:
         payload["flags"] = descriptor.flags
+    if descriptor.test_flags:
+        payload["test_flags"] = descriptor.test_flags
     return payload
 
 

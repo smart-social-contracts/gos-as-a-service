@@ -154,12 +154,25 @@ def test_save_and_load_round_trip(tmp_path: Path) -> None:
 def test_flags_default_empty_and_round_trip(tmp_path: Path) -> None:
     desc = Descriptor.model_validate(SAMPLE_DESCRIPTOR)
     assert desc.flags == {}
+    assert desc.test_flags == {}
     desc.flags["can_test_mode"] = True
+    desc.test_flags = {"test_mode": True, "ii_bypass": False}
     path = tmp_path / "flags.gaas.json"
     desc.save(path)
     loaded = Descriptor.load(path)
     assert loaded.flags == {"can_test_mode": True}
-    assert "flags" in json.loads(path.read_text())
+    assert loaded.test_flags == {"test_mode": True, "ii_bypass": False}
+    saved = json.loads(path.read_text())
+    assert saved["flags"]["can_test_mode"] is True
+    assert saved["test_flags"]["test_mode"] is True
+    assert saved["test_flags"]["ii_bypass"] is False
+
+
+def test_test_flags_reject_non_boolean() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["test_flags"] = {"test_mode": "false"}
+    with pytest.raises(ValidationError, match="boolean"):
+        Descriptor.model_validate(data)
 
 
 def test_atomic_save_replaces_existing(tmp_path: Path) -> None:

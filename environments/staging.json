@@ -50,6 +50,14 @@
   "flags": {
     "can_test_mode": true
   },
+  "test_flags": {
+    "test_mode": true,
+    "user_self_registration": true,
+    "demo_data": true,
+    "ii_bypass": true,
+    "skip_terms": true,
+    "disable_card_billing": true
+  },
   "cycles": {
     "threshold_tc": 2.0
   },

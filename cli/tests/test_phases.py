@@ -344,8 +344,8 @@ def test_phase_create_canisters_skips_treasury_restore_when_zero(
 def test_registry_init_json_can_test_mode() -> None:
     desc = Descriptor.model_validate(SAMPLE_DESCRIPTOR)
     default_json = json.loads(_registry_config_json(desc))
-    # No billing_url in SAMPLE_DESCRIPTOR → derived can test mode, always explicit.
-    assert default_json["can_test_mode"] is True
+    # Missing flags.can_test_mode is off — not derived from billing_url.
+    assert default_json["can_test_mode"] is False
     assert default_json["portal_url"] == "https://test.gos.earth"
 
     open_desc = desc.model_copy(update={"flags": {"can_test_mode": True}})
@@ -420,20 +420,33 @@ def test_registry_config_json_installer_id_and_flags() -> None:
     assert payload["can_test_mode"] is True
 
 
-def test_registry_runtime_config_json_can_test_mode() -> None:
+def test_registry_runtime_config_json_from_descriptor() -> None:
     desc = Descriptor.model_validate(SAMPLE_DESCRIPTOR)
-    # No billing_url → derived can test mode.
-    ic_payload = json.loads(_registry_runtime_config_json(desc, "ic"))
+    # No test_flags and can_test_mode off → nothing to apply.
+    assert _registry_runtime_config_json(desc, "ic") is None
+
+    open_desc = desc.model_copy(
+        update={
+            "flags": {"can_test_mode": True},
+            "test_flags": {
+                "test_mode": True,
+                "ii_bypass": True,
+                "demo_data": True,
+            },
+        }
+    )
+    ic_payload = json.loads(_registry_runtime_config_json(open_desc, "ic"))
     assert ic_payload == {
-        "test_flags": {"test_mode": True, "ii_bypass": True},
+        "test_flags": {
+            "test_mode": True,
+            "ii_bypass": True,
+            "demo_data": True,
+        },
     }
 
-    open_desc = desc.model_copy(update={"flags": {"can_test_mode": True}})
     local_payload = json.loads(_registry_runtime_config_json(open_desc, "local"))
-    assert local_payload == {
-        "test_flags": {"test_mode": True, "ii_bypass": True},
-        "network": "local",
-    }
+    assert local_payload["network"] == "local"
+    assert local_payload["test_flags"]["demo_data"] is True
 
     billed_closed = desc.model_copy(
         update={
@@ -441,16 +454,43 @@ def test_registry_runtime_config_json_can_test_mode() -> None:
                 billing_url="https://billing.example.com",
                 deploy_url=None,
             ),
+            "test_flags": {"test_mode": True, "ii_bypass": True},
         }
     )
     assert _registry_runtime_config_json(billed_closed, "ic") is None
 
-    staging_desc = desc.model_copy(update={"flags": {"can_test_mode": True}})
+    can_test_no_flags = desc.model_copy(update={"flags": {"can_test_mode": True}})
+    assert _registry_runtime_config_json(can_test_no_flags, "staging") is None
+
+    explicit_off = desc.model_copy(
+        update={
+            "flags": {"can_test_mode": True},
+            "test_flags": {"test_mode": False, "ii_bypass": False},
+        }
+    )
+    off_payload = json.loads(_registry_runtime_config_json(explicit_off, "staging"))
+    assert off_payload["test_flags"] == {"test_mode": False, "ii_bypass": False}
+    assert off_payload["network"] == "staging"
+
+    staging_desc = desc.model_copy(
+        update={
+            "flags": {"can_test_mode": True},
+            "test_flags": {
+                "test_mode": True,
+                "ii_bypass": True,
+                "disable_card_billing": True,
+            },
+        }
+    )
     staging_payload = json.loads(_registry_runtime_config_json(staging_desc, "staging"))
     assert staging_payload["test_flags"]["disable_card_billing"] is True
-    demo_payload = json.loads(_registry_runtime_config_json(staging_desc, "demo"))
-    assert demo_payload["test_flags"]["disable_card_billing"] is True
-    test_payload = json.loads(_registry_runtime_config_json(staging_desc, "test"))
+    test_only = desc.model_copy(
+        update={
+            "flags": {"can_test_mode": True},
+            "test_flags": {"test_mode": True, "ii_bypass": True},
+        }
+    )
+    test_payload = json.loads(_registry_runtime_config_json(test_only, "test"))
     assert "disable_card_billing" not in test_payload["test_flags"]
 
 
@@ -481,11 +521,20 @@ def test_phase_configure_backends_can_test_mode_sets_runtime_flags(
             return json.dumps({"portal_url": "https://test.gos.earth"})
         if canister_id == registry_id and method == "set_canister_config_json":
             payload = json.loads(_parse_candid_string(arg))
-            assert payload["test_flags"] == {"test_mode": True, "ii_bypass": True}
+            assert payload["test_flags"] == {
+                "test_mode": True,
+                "ii_bypass": True,
+                "demo_data": True,
+            }
             return json.dumps({"success": True})
         if canister_id == registry_id and method == "get_runtime_flags":
             return json.dumps(
-                {"success": True, "test_mode": True, "test_mode_ii_bypass": True}
+                {
+                    "success": True,
+                    "test_mode": True,
+                    "test_mode_ii_bypass": True,
+                    "test_mode_demo_data": True,
+                }
             )
         if canister_id == installer_id and method == "configure":
             return json.dumps({"success": True})
@@ -499,6 +548,11 @@ def test_phase_configure_backends_can_test_mode_sets_runtime_flags(
 
     data = dict(SAMPLE_DESCRIPTOR)
     data["flags"] = {"can_test_mode": True}
+    data["test_flags"] = {
+        "test_mode": True,
+        "ii_bypass": True,
+        "demo_data": True,
+    }
     data["canisters"] = {
         "realm_registry_backend": registry_id,
         "realm_installer": installer_id,
