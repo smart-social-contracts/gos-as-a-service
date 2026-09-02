@@ -335,8 +335,9 @@ def test_create_canisters_adopt_vs_create(
         logical = logical_by_dfx[call.args[0]]
         assert call.kwargs["with_cycles"] == _headroom(logical, desc)
     assert desc.canisters["realm_registry_backend"] == VALID_CANISTER_ID
-    # 1 adopted + 8 platform created; DNS-mapped marketplace_frontend is skipped.
-    assert len(desc.canisters) == 9
+    # 1 adopted + 4 Casals bootstrap + 5 other platform created;
+    # DNS-mapped marketplace_frontend is skipped.
+    assert len(desc.canisters) == 10
     assert "marketplace_backend" in desc.canisters
     assert "file_registry" in desc.canisters
     assert "file_registry_frontend" in desc.canisters

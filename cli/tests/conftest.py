@@ -57,6 +57,7 @@ CASALS_BOOTSTRAP_TEST_IDS = {
     "casals_backend": "qthgp-3yaaa-aaaae-agveq-cai",
     "casals_frontend": "qic2k-baaaa-aaaae-agvga-cai",
     "casals_file_registry": "uq2mu-kaaaa-aaaah-avqcq-cai",
+    "casals_file_registry_frontend": "qbbef-6qaaa-aaaap-quwoa-cai",
 }
 
 
@@ -76,6 +77,9 @@ def mock_run_casals_new(descriptor, **kwargs):
             "casals_backend": descriptor.canisters["casals_backend"],
             "casals_frontend": descriptor.canisters["casals_frontend"],
             "ic_file_registry": descriptor.canisters["casals_file_registry"],
+            "ic_file_registry_frontend": descriptor.canisters[
+                "casals_file_registry_frontend"
+            ],
         },
         "seeded": False,
     }

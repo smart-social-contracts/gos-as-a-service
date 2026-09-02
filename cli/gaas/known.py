@@ -12,6 +12,7 @@ PLATFORM_CANISTER_NAMES: Final[tuple[str, ...]] = (
     "casals_backend",
     "casals_frontend",
     "casals_file_registry",
+    "casals_file_registry_frontend",
     "file_registry",
     "file_registry_frontend",
     "marketplace_backend",

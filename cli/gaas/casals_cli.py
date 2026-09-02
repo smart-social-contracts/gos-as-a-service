@@ -15,18 +15,21 @@ CASALS_BOOTSTRAP_NAMES: tuple[str, ...] = (
     "casals_backend",
     "casals_frontend",
     "casals_file_registry",
+    "casals_file_registry_frontend",
 )
 
 _GOS_TO_CASALS_ID_KEYS: dict[str, str] = {
     "casals_backend": "casals_backend",
     "casals_frontend": "casals_frontend",
     "casals_file_registry": "ic_file_registry",
+    "casals_file_registry_frontend": "ic_file_registry_frontend",
 }
 
 _CASALS_TO_GOS_ID_KEYS: dict[str, str] = {
     "casals_backend": "casals_backend",
     "casals_frontend": "casals_frontend",
     "ic_file_registry": "casals_file_registry",
+    "ic_file_registry_frontend": "casals_file_registry_frontend",
 }
 
 

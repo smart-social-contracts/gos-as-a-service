@@ -41,12 +41,18 @@ def test_ids_file_payload_maps_casals_file_registry() -> None:
             "canisters": {
                 "casals_backend": CASALS_BOOTSTRAP_TEST_IDS["casals_backend"],
                 "casals_file_registry": CASALS_BOOTSTRAP_TEST_IDS["casals_file_registry"],
+                "casals_file_registry_frontend": CASALS_BOOTSTRAP_TEST_IDS[
+                    "casals_file_registry_frontend"
+                ],
             },
         }
     )
     assert ids_file_payload(desc) == {
         "casals_backend": CASALS_BOOTSTRAP_TEST_IDS["casals_backend"],
         "ic_file_registry": CASALS_BOOTSTRAP_TEST_IDS["casals_file_registry"],
+        "ic_file_registry_frontend": CASALS_BOOTSTRAP_TEST_IDS[
+            "casals_file_registry_frontend"
+        ],
     }
 
 
@@ -77,6 +83,9 @@ def test_run_casals_new_fresh_create(mock_run: MagicMock, tmp_path: Path) -> Non
                 "casals_backend": CASALS_BOOTSTRAP_TEST_IDS["casals_backend"],
                 "casals_frontend": CASALS_BOOTSTRAP_TEST_IDS["casals_frontend"],
                 "ic_file_registry": CASALS_BOOTSTRAP_TEST_IDS["casals_file_registry"],
+                "ic_file_registry_frontend": CASALS_BOOTSTRAP_TEST_IDS[
+                    "casals_file_registry_frontend"
+                ],
             },
             "seeded": True,
         }
@@ -122,6 +131,9 @@ def test_run_casals_new_adopt_passes_ids_file(mock_run: MagicMock, tmp_path: Pat
                 "casals_backend": CASALS_BOOTSTRAP_TEST_IDS["casals_backend"],
                 "casals_frontend": CASALS_BOOTSTRAP_TEST_IDS["casals_frontend"],
                 "ic_file_registry": CASALS_BOOTSTRAP_TEST_IDS["casals_file_registry"],
+                "ic_file_registry_frontend": CASALS_BOOTSTRAP_TEST_IDS[
+                    "casals_file_registry_frontend"
+                ],
             },
             "seeded": False,
         }
@@ -173,6 +185,9 @@ def test_run_casals_new_force_create_skips_ids_file(mock_run: MagicMock, tmp_pat
                 "casals_backend": CASALS_BOOTSTRAP_TEST_IDS["casals_backend"],
                 "casals_frontend": CASALS_BOOTSTRAP_TEST_IDS["casals_frontend"],
                 "ic_file_registry": CASALS_BOOTSTRAP_TEST_IDS["casals_file_registry"],
+                "ic_file_registry_frontend": CASALS_BOOTSTRAP_TEST_IDS[
+                    "casals_file_registry_frontend"
+                ],
             },
             "seeded": False,
         }
