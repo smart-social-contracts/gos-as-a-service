@@ -15,16 +15,17 @@
     }
   ],
   "canisters": {
-    "realm_registry_backend": "3sfvm-5aaaa-aaaad-qmdbq-cai",
+    "casals_file_registry_frontend": "nmrv7-eiaaa-aaaae-qkjzq-cai",
     "realm_registry_frontend": "qtank-3qaaa-aaaaa-qhb6q-cai",
-    "realm_installer": "3hceb-4iaaa-aaaad-qmdca-cai",
-    "file_registry": "2dplt-fiaaa-aaaad-qmdea-cai",
-    "file_registry_frontend": "2eonh-iqaaa-aaaad-qmdeq-cai",
-    "casals_backend": "3adcv-rqaaa-aaaad-qmdcq-cai",
-    "casals_frontend": "3jajj-hyaaa-aaaad-qmdda-cai",
-    "casals_file_registry": "3obp5-kaaaa-aaaad-qmddq-cai",
-    "marketplace_backend": "2nng3-6yaaa-aaaad-qmdfa-cai",
-    "marketplace_frontend": "mxyd5-3qaaa-aaaao-ba2xq-cai"
+    "marketplace_frontend": "mxyd5-3qaaa-aaaao-ba2xq-cai",
+    "realm_registry_backend": "5ubo6-miaaa-aaaau-ag6nq-cai",
+    "realm_installer": "5bg7t-naaaa-aaaau-ag6oa-cai",
+    "file_registry": "a66l7-syaaa-aaaas-amxbq-cai",
+    "file_registry_frontend": "alz2s-tqaaa-aaaas-amxca-cai",
+    "marketplace_backend": "amy4g-6iaaa-aaaas-amxcq-cai",
+    "casals_backend": "nlqtl-jqaaa-aaaae-qkjza-cai",
+    "casals_frontend": "nfs6d-saaaa-aaaae-qkjya-cai",
+    "casals_file_registry": "nctyx-7yaaa-aaaae-qkjyq-cai"
   },
   "casals": {
     "version": "main",
@@ -34,7 +35,7 @@
     ]
   },
   "multisig": {
-    "backend_id": "ycw7k-baaaa-aaaad-qmdjq-cai",
+    "backend_id": null,
     "signers": [
       "3itd6-2sx7g-vefdk-xhebm-fucot-llay5-lhqd6-pkjac-m7mkf-vhwqq-fqe"
     ],
