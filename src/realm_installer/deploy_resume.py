@@ -20,7 +20,13 @@ STALE_RUNNING_S = 15 * 60
 ONE_SHOT_STEP_KINDS = ("enter_setup", "configure_canister_ids")
 
 # Steps the realm cannot live without, whatever happens to extensions.
-BOOTSTRAP_STEP_KINDS = ("enter_setup", "configure_canister_ids", "grant_frontend_access")
+BOOTSTRAP_STEP_KINDS = (
+    "enter_setup",
+    "configure_canister_ids",
+    "grant_frontend_access",
+    "codex",
+    "codex_init",
+)
 
 # Task statuses the step runner will not pick up again (mirrors
 # main._TERMINAL_TASK_STATUSES).
@@ -334,6 +340,16 @@ def coerce_realm_json(raw):
     return s
 
 
+def install_step_in_progress(parsed) -> bool:
+    """True when a realm install call advanced but needs another update."""
+    parsed = coerce_realm_json(parsed)
+    return (
+        isinstance(parsed, dict)
+        and parsed.get("success") is True
+        and parsed.get("status") == "in_progress"
+    )
+
+
 def realm_json_response_failed(parsed) -> tuple[bool, str]:
     """Return ``(is_failure, error_message)`` for realm JSON text endpoints.
 
@@ -342,6 +358,8 @@ def realm_json_response_failed(parsed) -> tuple[bool, str]:
     """
     parsed = coerce_realm_json(parsed)
     if not isinstance(parsed, dict):
+        return False, ""
+    if parsed.get("status") == "in_progress":
         return False, ""
     if parsed.get("ok") is False or parsed.get("success") is False:
         return True, str(parsed.get("error") or parsed.get("err") or parsed.get("Err") or "realm call rejected")

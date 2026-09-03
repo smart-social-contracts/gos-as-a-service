@@ -54,6 +54,7 @@ from deploy_resume import (
     realm_json_response_failed,
     extensions_stall_reason,
     failed_bootstrap_step_kinds,
+    install_step_in_progress,
     plan_resume,
     steps_satisfied_by_prior_task,
     task_belongs_to_job,
@@ -1243,6 +1244,17 @@ def _execute_step(task, step):
             parsed = json.loads(raw) if isinstance(raw, str) else raw
         except Exception:
             parsed = None
+        if step.kind == "codex" and install_step_in_progress(parsed):
+            step.result_json = (raw if isinstance(raw, str) else json.dumps(raw))[:1990]
+            step.status = "pending"
+            step.error = ""
+            step.completed_at = now_s()
+            jlog(task.name).info(
+                f"step {step.idx} ({step.label}) in progress — rescheduling "
+                f"(phase={parsed.get('phase') if isinstance(parsed, dict) else '?'})"
+            )
+            _schedule_step_runner(task.name, delay_s=1)
+            return True
         failed, err = _install_step_failed(parsed)
         if failed:
             step.error = err[:1990]
@@ -1256,6 +1268,7 @@ def _execute_step(task, step):
         step.status = "failed"
         jlog(task.name).error(f"step {step.idx} ({step.label}) exception: {step.error[:300]}")
     step.completed_at = now_s()
+    return False
 
 
 def _execute_configure_canister_ids(task, step, args):
@@ -1538,7 +1551,9 @@ def _schedule_step_runner(task_id: str, delay_s: int = 0):
                 if step is None:
                     _finalize_task(task)
                     return
-                yield from _execute_step(task, step)
+                stop = yield from _execute_step(task, step)
+                if stop:
+                    return
                 if step.status == "failed" and any(p in (step.error or "") for p in _RETRYABLE_PATTERNS):
                     rk = f"{task_id}_{step.idx}"
                     count = _retry_counts.get(rk, 0)

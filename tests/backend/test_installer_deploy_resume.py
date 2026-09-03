@@ -27,6 +27,7 @@ from deploy_resume import (  # noqa: E402
     describe_resume,
     enter_setup_already_satisfied,
     extensions_stall_reason,
+    install_step_in_progress,
     realm_json_response_failed,
     failed_bootstrap_step_kinds,
     plan_resume,
@@ -200,11 +201,13 @@ def test_a_failed_extension_is_not_a_bootstrap_failure():
     assert failed_bootstrap_step_kinds(steps) == []
 
 
-def test_bootstrap_kinds_cover_the_three_one_shot_steps():
+def test_bootstrap_kinds_cover_one_shot_and_requested_codex_steps():
     assert BOOTSTRAP_STEP_KINDS == (
         "enter_setup",
         "configure_canister_ids",
         "grant_frontend_access",
+        "codex",
+        "codex_init",
     )
 
 
@@ -490,3 +493,43 @@ def test_grant_step_verifies_before_it_grants():
     )[0]
     assert "_frontend_commit_permitted" in grant
     assert "grant_frontend_access_outcome" in grant
+
+
+def test_codex_steps_are_bootstrap_fatal_kinds():
+    assert "codex" in BOOTSTRAP_STEP_KINDS
+    assert "codex_init" in BOOTSTRAP_STEP_KINDS
+
+
+def test_failed_codex_is_bootstrap_fatal():
+    steps = [
+        _FakeStep(0, "enter_setup", "completed"),
+        _FakeStep(1, "configure_canister_ids", "completed"),
+        _FakeStep(2, "grant_frontend_access", "completed"),
+        _FakeStep(3, "codex", "failed"),
+        _FakeStep(4, "extension", "completed"),
+    ]
+    assert failed_bootstrap_step_kinds(steps) == ["codex"]
+
+
+def test_failed_codex_init_is_bootstrap_fatal():
+    steps = [
+        _FakeStep(0, "codex", "completed"),
+        _FakeStep(1, "codex_init", "failed"),
+    ]
+    assert failed_bootstrap_step_kinds(steps) == ["codex_init"]
+
+
+def test_install_step_in_progress():
+    assert install_step_in_progress(
+        {"success": True, "status": "in_progress", "phase": "pull_backend"}
+    )
+    assert not install_step_in_progress({"success": True, "status": "complete"})
+    assert not install_step_in_progress({"success": False, "error": "nope"})
+
+
+def test_codex_in_progress_reschedules_runner():
+    execute = _installer_source().split("def _execute_step", 1)[1].split(
+        "def _execute_configure_canister_ids", 1
+    )[0]
+    assert "install_step_in_progress" in execute
+    assert "_schedule_step_runner(task.name" in execute
