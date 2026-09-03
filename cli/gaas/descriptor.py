@@ -302,10 +302,8 @@ class Descriptor(BaseModel):
     def validate_canister_keys(cls, value: dict[str, str]) -> dict[str, str]:
         unknown = set(value) - set(KNOWN_CANISTER_NAMES)
         if unknown:
-            raise ValueError(
-                f"unknown canister name(s): {', '.join(sorted(unknown))}; "
-                f"known: {', '.join(KNOWN_CANISTER_NAMES)}"
-            )
+            # Leftover Realms GOS product keys in old descriptors are ignored.
+            return {k: v for k, v in value.items() if k in KNOWN_CANISTER_NAMES}
         return value
 
     @field_validator("test_flags", mode="before")

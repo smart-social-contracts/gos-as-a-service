@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { architectureHref } from './architecture-link.js';
+import { architectureHref, casalsFrontendUrl } from './architecture-link.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const headerSource = readFileSync(
@@ -18,6 +18,15 @@ test('architectureHref returns the provided Casals URL', () => {
 		architectureHref('https://qic2k-baaaa-aaaae-agvga-cai.icp0.io'),
 		'https://qic2k-baaaa-aaaae-agvga-cai.icp0.io'
 	);
+});
+
+test('casalsFrontendUrl is live-registry only', () => {
+	assert.equal(
+		casalsFrontendUrl('nfs6d-saaaa-aaaae-qkjya-cai'),
+		'https://nfs6d-saaaa-aaaae-qkjya-cai.icp0.io'
+	);
+	assert.equal(casalsFrontendUrl(''), '');
+	assert.equal(casalsFrontendUrl(undefined), '');
 });
 
 test('empty casalsUrl does not navigate to a canister URL', () => {
@@ -52,7 +61,13 @@ test('portal source and canister_ids no longer mention fdr7z', () => {
 	assert.equal(pageSource.includes('fdr7z'), false);
 	assert.equal(idsSource.includes('fdr7z'), false);
 	assert.match(idsSource, /to4on-xyaaa-aaaan-q6n5a-cai/);
-	assert.match(idsSource, /qic2k-baaaa-aaaae-agvga-cai/);
+});
+
+test('Infrastructure link uses only the live registry Casals principal', () => {
+	assert.match(pageSource, /casalsFrontendUrl\(/);
+	assert.match(pageSource, /registryRuntimeFlags/);
+	assert.equal(pageSource.includes('CANISTER_ID_CASALS_FRONTEND'), false);
+	assert.equal(pageSource.includes("getCanisterId('casals_frontend')"), false);
 });
 
 test('frontend prebuild does not generate casals_backend', () => {

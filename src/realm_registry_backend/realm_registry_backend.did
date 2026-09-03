@@ -151,6 +151,8 @@ type CasalsService = service { get_tree : () -> (text) query; get_cycles_cached 
 
 service : (text) -> {
   "status" : () -> (GetStatusResult) query;
+  "http_request" : (HttpRequest) -> (HttpResponseIncoming) query;
+  "http_request_update" : (HttpRequest) -> (HttpResponseIncoming);
   "list_realms" : () -> (vec RealmRecord) query;
   "register_realm" : (text, text, text, text, text) -> (AddRealmResult);
   "get_realm" : (text) -> (GetRealmResult) query;
@@ -187,7 +189,7 @@ service : (text) -> {
   "get_runtime_flags" : () -> (text) query;
   "set_canister_config_json" : (text) -> (text);
   "set_test_flags_json" : (text) -> (text);
-  "http_request" : (HttpRequest) -> (HttpResponseIncoming) query;
-  "http_request_update" : (HttpRequest) -> (HttpResponseIncoming);
+  "__shell__" : (text) -> (text);
+  "__browse__" : (text) -> (text) query;
   "__get_candid_interface_tmp_hack" : () -> (text) query;
 }

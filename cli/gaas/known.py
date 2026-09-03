@@ -13,20 +13,9 @@ PLATFORM_CANISTER_NAMES: Final[tuple[str, ...]] = (
     "casals_frontend",
     "casals_file_registry",
     "casals_file_registry_frontend",
-    "file_registry",
-    "file_registry_frontend",
-    "marketplace_backend",
 )
 
-# DNS-mapped marketplace SPA: adopt the existing canister ID, never mint a new
-# one. Recreate + reinstall assets onto that ID after destroy-except-frontend.
-ADOPT_ONLY_CANISTER_NAMES: Final[tuple[str, ...]] = (
-    "marketplace_frontend",
-)
-
-KNOWN_CANISTER_NAMES: Final[tuple[str, ...]] = (
-    PLATFORM_CANISTER_NAMES + ADOPT_ONLY_CANISTER_NAMES
-)
+KNOWN_CANISTER_NAMES: Final[tuple[str, ...]] = PLATFORM_CANISTER_NAMES
 
 DEFAULT_CASALS_VERSION: Final[str] = "v0.3.0"
 DEFAULT_CASALS_RELEASE_REPO: Final[str] = "smart-social-contracts/Casals"
@@ -42,21 +31,20 @@ DFX_CANISTER_NAMES: Final[dict[str, str | None]] = {
     "casals_backend": "casals_backend",
     "casals_frontend": "casals_frontend",
     "casals_file_registry": "casals_file_registry",
+    # Build mapping only: this repo's file_registry WASM is installed onto
+    # casals_file_registry. Not a GaaS platform canister and not Realms GOS fleet.
     "file_registry": "file_registry",
-    "file_registry_frontend": "file_registry_frontend",
-    "marketplace_backend": "marketplace_backend",
-    "marketplace_frontend": "marketplace_frontend",
 }
 
 PLATFORM_BACKEND_WASMS: Final[dict[str, str]] = {
     "realm_registry_backend": "realm_registry_backend.wasm.gz",
     "realm_installer": "realm_installer.wasm.gz",
+    # Artifact only — installed onto casals_file_registry, not a GaaS platform canister.
     "file_registry": "file_registry.wasm.gz",
 }
 
 PLATFORM_FRONTEND_ARCHIVES: Final[dict[str, str]] = {
     "realm_registry_frontend": "realm_registry_frontend.tar.gz",
-    "file_registry_frontend": "file_registry_frontend.tar.gz",
 }
 
 CASALS_BACKEND_WASM_ASSET: Final[str] = "casals_backend.wasm.gz"

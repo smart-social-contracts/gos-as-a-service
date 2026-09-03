@@ -50,6 +50,8 @@ from deploy_resume import (
     deploy_task_id,
     describe_resume,
     enter_setup_already_satisfied,
+    coerce_realm_json,
+    realm_json_response_failed,
     extensions_stall_reason,
     failed_bootstrap_step_kinds,
     plan_resume,
@@ -118,12 +120,15 @@ class RealmTargetService(Service):
     _arg_types = {
         "install_extension_from_registry": "text",
         "install_codex_from_registry": "text",
+        "run_codex_init": "text",
         "resync_extension_frontends": "text",
     }
     @service_update
     def install_extension_from_registry(self, args: text) -> text: ...
     @service_update
     def install_codex_from_registry(self, args: text) -> text: ...
+    @service_update
+    def run_codex_init(self, args: text) -> text: ...
     @service_update
     def resync_extension_frontends(self, args: text) -> text: ...
 
@@ -1100,7 +1105,7 @@ def _count_expected_steps(manifest: dict, backend_id: str = "", frontend_id: str
             count += 1
         elif isinstance(ext, dict) and (ext.get("id") or "").strip():
             count += 1
-    count += 1  # codex install step
+    count += 2  # codex install + run_codex_init
     if has_extension_installs({"extensions": realm_info.get("extensions") or []}):
         count += 1  # resync_extension_frontends after extension installs
     return count
@@ -1162,8 +1167,16 @@ def _build_steps(task, manifest: dict) -> list:
             task=task, idx=idx, kind="codex", label=cdx_id,
             args_json=json.dumps({"registry_canister_id": task.registry_canister_id,
                                    "codex_id": cdx_id, "version": cdx.get("version"),
-                                   "run_init": bool(cdx.get("run_init", True)),
+                                   "run_init": False,
+                                   "install_dependencies": False,
                                    "frontend_canister_id": frontend_id}),
+            status="pending",
+        ))
+        idx += 1
+        _log.info(f"[{task.name}] step {idx}: codex_init '{cdx_id}'")
+        steps.append(DeployStep(
+            task=task, idx=idx, kind="codex_init", label=f"{cdx_id}_init",
+            args_json=json.dumps({"codex_id": cdx_id}),
             status="pending",
         ))
         idx += 1
@@ -1212,6 +1225,9 @@ def _execute_step(task, step):
         elif step.kind == "codex":
             jlog(task.name).info(f"step {step.idx} calling install_codex_from_registry")
             call_result: CallResult = yield target.install_codex_from_registry(json.dumps(args))
+        elif step.kind == "codex_init":
+            jlog(task.name).info(f"step {step.idx} calling run_codex_init")
+            call_result: CallResult = yield target.run_codex_init(json.dumps(args))
         elif step.kind == "resync_extension_frontends":
             jlog(task.name).info(f"step {step.idx} calling resync_extension_frontends")
             call_result: CallResult = yield target.resync_extension_frontends(json.dumps(args))
@@ -1289,10 +1305,35 @@ def _execute_configure_canister_ids(task, step, args):
         step.completed_at = now_s()
         return
 
+    yield from _relax_marketplace_approval(task, backend_id)
+
     step.status = "completed"
     step.result_json = json.dumps({"frontend_canister_id": frontend_id})[:1990]
     jlog(task.name).info(f"step {step.idx} frontend canister id configured on backend")
     step.completed_at = now_s()
+
+
+def _relax_marketplace_approval(task, backend_id: str):
+    """GOS file_registry has no get_namespace_approval_icc; founding install cannot pass the gate."""
+    backend_id = (backend_id or "").strip()
+    if not backend_id:
+        return
+    payload = json.dumps({"require_marketplace_approval": False}).replace("\\", "\\\\").replace('"', '\\"')
+    arg = '("' + payload + '")'
+    try:
+        result: CallResult = yield ic.call_raw(
+            Principal.from_str(backend_id), "update_realm_config",
+            ic.candid_encode(arg), 0,
+        )
+        raw = unwrap_call_result(result)
+        parsed = coerce_realm_json(raw)
+        failed, message = realm_json_response_failed(parsed)
+        if failed:
+            jlog(task.name).warning(f"require_marketplace_approval=false failed: {message[:200]}")
+        else:
+            jlog(task.name).info("require_marketplace_approval=false (GOS file_registry has no approval API)")
+    except Exception as exc:
+        jlog(task.name).warning(f"require_marketplace_approval=false error: {exc}")
 
 
 def _record_enter_setup_failure(task, step, message: str):
@@ -1350,17 +1391,24 @@ def _execute_enter_setup(task, step, args):
     try:
         raw = unwrap_call_result(setup_result)
         if isinstance(raw, (bytes, bytearray)):
-            raw = ic.candid_decode(raw)
-        if isinstance(raw, dict):
-            err = raw.get("err")
-            if err is None and raw.get("Err") is not None:
-                err = raw["Err"]
-            if err is not None:
-                _record_enter_setup_failure(task, step, str(err))
-                return
+            try:
+                raw = ic.candid_decode(raw)
+            except Exception:
+                raw = raw.decode("utf-8", errors="replace")
+        parsed = coerce_realm_json(raw)
+        failed, message = realm_json_response_failed(parsed)
+        if failed:
+            _record_enter_setup_failure(task, step, message)
+            if step.status == "completed":
+                yield from _relax_marketplace_approval(task, backend_id)
+            return
     except Exception as exc:
         _record_enter_setup_failure(task, step, str(exc))
+        if step.status == "completed":
+            yield from _relax_marketplace_approval(task, backend_id)
         return
+
+    yield from _relax_marketplace_approval(task, backend_id)
 
     step.status = "completed"
     step.result_json = json.dumps(

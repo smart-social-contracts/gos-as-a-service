@@ -25,6 +25,8 @@ def _clear_env_config():
         "env:billing_service_principal",
         "env:can_test_mode",
         "env:open_mode",
+        "env:installer_id",
+        "env:casals_frontend",
         "portal_base_url",
         "portal_network",
     ):
@@ -52,6 +54,16 @@ def test_configure_persists_fields():
     assert payload["billing_service_principal"] == "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa"
     assert payload["can_test_mode"] is True
     assert "open_mode" not in payload
+
+
+def test_configure_persists_casals_frontend():
+    _clear_env_config()
+    result = apply_env_config_from_json(
+        json.dumps({"casals_frontend_canister_id": "nfs6d-saaaa-aaaae-qkjya-cai"})
+    )
+    assert result["success"] is True
+    payload = get_env_config_payload()
+    assert payload["casals_frontend_canister_id"] == "nfs6d-saaaa-aaaae-qkjya-cai"
 
 
 def test_configure_accepts_deprecated_open_mode_alias():

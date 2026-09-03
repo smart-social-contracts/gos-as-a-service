@@ -6,23 +6,23 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from gaas.wizard import deploy_confirmation_message, run_wizard
-from gaas.known import ADOPT_ONLY_CANISTER_NAMES, KNOWN_CANISTER_NAMES, PLATFORM_CANISTER_NAMES
+from gaas.known import KNOWN_CANISTER_NAMES, PLATFORM_CANISTER_NAMES
 
 
 def test_wizard_prompts_for_casals_file_registry() -> None:
     assert "casals_file_registry" in KNOWN_CANISTER_NAMES
-    assert "file_registry" in PLATFORM_CANISTER_NAMES
-    assert "file_registry_frontend" in PLATFORM_CANISTER_NAMES
-    assert "marketplace_backend" in PLATFORM_CANISTER_NAMES
-    assert ADOPT_ONLY_CANISTER_NAMES == ("marketplace_frontend",)
+    assert "file_registry" not in PLATFORM_CANISTER_NAMES
+    assert "file_registry_frontend" not in PLATFORM_CANISTER_NAMES
+    assert "marketplace_backend" not in PLATFORM_CANISTER_NAMES
+    assert "marketplace_frontend" not in KNOWN_CANISTER_NAMES
 
 
 def test_deploy_confirmation_message_mentions_asset_reinstalls() -> None:
     message = deploy_confirmation_message(network="ic")
     assert "realm_registry_frontend" in message
-    assert "file_registry_frontend" in message
     assert "casals_frontend" in message
-    assert "marketplace_frontend" in message
+    assert "file_registry_frontend" not in message
+    assert "marketplace_frontend" not in message
     assert "wipes existing frontend state" in message
 
 
@@ -38,9 +38,6 @@ def test_wizard_builds_descriptor(tmp_path: Path, monkeypatch) -> None:
             "Build from local gos-as-a-service checkout",
             ["realms-gos"],
             "v0.3.1",
-            "",
-            "",
-            "",
             "",
             "",
             "",
@@ -103,9 +100,6 @@ def test_wizard_honors_flag_overrides() -> None:
             "",
             "",
             "",
-            "",
-            "",
-            "",
             "v0.3.0",
             "",
             "2",
@@ -151,9 +145,6 @@ def test_wizard_can_test_mode_prompt_sets_flag(tmp_path: Path, monkeypatch) -> N
             "Build from local gos-as-a-service checkout",
             ["realms-gos"],
             "v0.3.1",
-            "",
-            "",
-            "",
             "",
             "",
             "",
@@ -208,9 +199,6 @@ def test_wizard_parses_casals_commanders(tmp_path: Path, monkeypatch) -> None:
             "",
             "",
             "",
-            "",
-            "",
-            "",
             "v0.3.0",
             "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa, bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
             "2",
@@ -253,9 +241,6 @@ def test_wizard_parses_monitor_services(tmp_path: Path, monkeypatch) -> None:
             "Build from local gos-as-a-service checkout",
             ["realms-gos"],
             "v0.3.1",
-            "",
-            "",
-            "",
             "",
             "",
             "",

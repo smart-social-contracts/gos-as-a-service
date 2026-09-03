@@ -1,6 +1,6 @@
-import type { Principal } from '@dfinity/principal';
-import type { ActorMethod } from '@dfinity/agent';
-import type { IDL } from '@dfinity/candid';
+import type { Principal } from '@icp-sdk/core/principal';
+import type { ActorMethod } from '@icp-sdk/core/agent';
+import type { IDL } from '@icp-sdk/core/candid';
 
 export interface AccountBalanceArgs { 'account' : Uint8Array | number[] }
 export type AccountIdentifier = Uint8Array | number[];
@@ -203,7 +203,7 @@ export interface HttpResponseIncoming {
   'status_code' : number,
 }
 export interface HttpTransform {
-  'function' : HttpTransformFunc,
+  'function' : [Principal, string],
   'context' : Uint8Array | number[],
 }
 export interface HttpTransformArgs {
@@ -324,7 +324,7 @@ export interface QueryBlocksResponse {
   'archived_blocks' : Array<QueryBlocksResponse_archived_blocks>,
 }
 export interface QueryBlocksResponse_archived_blocks {
-  'callback' : QueryArchiveFn,
+  'callback' : [Principal, string],
   'start' : bigint,
   'length' : bigint,
 }
@@ -522,13 +522,16 @@ export interface VersionInfoRecord {
   'frontend_tar_hash' : string,
 }
 export interface _SERVICE {
+  '__browse__' : ActorMethod<[string], string>,
   '__get_candid_interface_tmp_hack' : ActorMethod<[], string>,
+  '__shell__' : ActorMethod<[string], string>,
   'backfill_job_refs_batch' : ActorMethod<[], string>,
   'cancel_deployment' : ActorMethod<[string], ResultJobCancel>,
   'configure' : ActorMethod<[string], string>,
   'delete_deployment_job' : ActorMethod<[string], ResultJobCancel>,
   'destroy_realm_job' : ActorMethod<[string], ResultJobCancel>,
   'enqueue_deployment' : ActorMethod<[string], ResultEnqueue>,
+  'finalize_deployment' : ActorMethod<[string], ResultJobCancel>,
   'get_canister_logs' : ActorMethod<
     [[] | [bigint], [] | [bigint], [] | [string], [] | [string]],
     Array<PublicLogEntry>
@@ -540,16 +543,18 @@ export interface _SERVICE {
   'get_installer_config' : ActorMethod<[], string>,
   'get_pending_deployments' : ActorMethod<[], ResultPendingJobs>,
   'health' : ActorMethod<[], HealthView>,
+  'http_request' : ActorMethod<[HttpRequest], HttpResponseIncoming>,
+  'http_request_update' : ActorMethod<[HttpRequest], HttpResponseIncoming>,
   'list_deployment_jobs' : ActorMethod<
     [[] | [number], [] | [number]],
     ResultJobsList
   >,
   'provision_quarter' : ActorMethod<[string], string>,
   'provision_via_casals' : ActorMethod<[string], ResultProvision>,
-  'retry_deployment' : ActorMethod<[string], ResultProvision>,
   'report_canister_ready' : ActorMethod<[string], ResultReportReady>,
   'report_deployment_failure' : ActorMethod<[string], ResultReportFailure>,
   'report_frontend_verified' : ActorMethod<[string], ResultReportFrontend>,
+  'retry_deployment' : ActorMethod<[string], ResultProvision>,
   'set_casals_config' : ActorMethod<[string], ResultCasalsConfig>,
   'status' : ActorMethod<[], GetStatusResult>,
   'take_pre_upgrade_snapshot' : ActorMethod<[string], ResultTakeSnapshot>,

@@ -11,8 +11,7 @@ from gaas.descriptor import Descriptor
 from gaas.known import KNOWN_CANISTER_NAMES, PLATFORM_CANISTER_NAMES
 
 FRONTEND_NAME = "realm_registry_frontend"
-MARKETPLACE_FRONTEND_NAME = "marketplace_frontend"
-PRESERVED_FRONTEND_NAMES = (FRONTEND_NAME, MARKETPLACE_FRONTEND_NAME)
+PRESERVED_FRONTEND_NAMES = (FRONTEND_NAME,)
 ORCHESTRA_BATCH = 1
 EVAC_CHUNK = 10_000_000_000_000  # 10T
 EVAC_MIN_RESERVE = 500_000_000_000  # 500B treasury floor for evacuate_treasury
@@ -142,22 +141,11 @@ def _preserved_frontend_ids(descriptor: Descriptor) -> list[str]:
     frontend_id = (descriptor.canisters.get(FRONTEND_NAME) or "").strip()
     if not frontend_id:
         raise RuntimeError(f"descriptor.canisters.{FRONTEND_NAME} is required")
-
-    preserved = [frontend_id]
-    marketplace_id = (descriptor.canisters.get(MARKETPLACE_FRONTEND_NAME) or "").strip()
-    if marketplace_id:
-        preserved.append(marketplace_id)
-    return preserved
+    return [frontend_id]
 
 
 def _orchestra_preserve_ids(descriptor: Descriptor) -> list[str]:
-    """IDs passed to Casals ``destroy_orchestra``.
-
-    Include every DNS-mapped frontend. On demo the marketplace frontend is a
-    registered orchestra canister — omitting it lets ``destroy_orchestra``
-    drain-delete it and burn ``demo.realmsgos.org``. Casals rejects unknown
-    preserve entries; the destroy loop retries without extras if that happens.
-    """
+    """IDs passed to Casals ``destroy_orchestra`` — GaaS DNS frontend only."""
     return list(_preserved_frontend_ids(descriptor))
 
 

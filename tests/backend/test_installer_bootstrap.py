@@ -114,6 +114,7 @@ def test_deploy_steps_with_legacy_codex_includes_installs():
     ]
     assert "extension" in kinds
     assert "codex" in kinds
+    assert "codex_init" in kinds
     assert kinds[-1] == "resync_extension_frontends"
 
 

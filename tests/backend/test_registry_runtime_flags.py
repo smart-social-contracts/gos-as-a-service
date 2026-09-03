@@ -21,6 +21,7 @@ def _clear_card_billing_flag():
         "flag:test_mode_assistant_experimental_notice",
         "flag:network",
         "env:portal_url",
+        "env:casals_frontend",
     ):
         cfg = RegistryConfig[key]
         if cfg:
@@ -182,6 +183,16 @@ def test_set_canister_config_json_persists_assistant_experimental_notice():
     assert payload["test_mode_assistant_experimental_notice"] is True
 
 
+def test_set_canister_config_json_persists_casals_frontend():
+    _clear_card_billing_flag()
+    result = set_canister_config_from_json(
+        json.dumps({"casals_frontend_canister_id": "nfs6d-saaaa-aaaae-qkjya-cai"})
+    )
+    assert result["success"] is True
+    payload = get_runtime_flags_payload()
+    assert payload["casals_frontend_canister_id"] == "nfs6d-saaaa-aaaae-qkjya-cai"
+
+
 if __name__ == "__main__":
     test_set_and_read_flags()
     test_set_canister_config_json_wrapper()
@@ -193,4 +204,5 @@ if __name__ == "__main__":
     test_assistant_experimental_notice_defaults_on_for_staging_and_demo()
     test_assistant_experimental_notice_explicit_override()
     test_set_canister_config_json_persists_assistant_experimental_notice()
+    test_set_canister_config_json_persists_casals_frontend()
     print("registry runtime_flags tests passed")

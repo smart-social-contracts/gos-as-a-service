@@ -4,7 +4,8 @@
   import { browser } from '$app/environment';
   import { _ } from 'svelte-i18n';
   import MapView from '$lib/components/MapView.svelte';
-  import { getCanisterId } from '$lib/network.js';
+  import { casalsFrontendUrl } from '$lib/architecture-link.js';
+  import { registryRuntimeFlags } from '$lib/stores/registryRuntimeFlags.js';
   import RegistryHeader from '$lib/components/RegistryHeader.svelte';
   import RegistryEdgeTabs from '$lib/components/RegistryEdgeTabs.svelte';
   import RegistryKpiLine from '$lib/components/RegistryKpiLine.svelte';
@@ -73,10 +74,7 @@
     }, 420);
   }
 
-  const casalsCanisterId =
-    getCanisterId('casals_frontend') || import.meta.env.CANISTER_ID_CASALS_FRONTEND || '';
-
-  $: casalsUrl = casalsCanisterId ? `https://${casalsCanisterId}.icp0.io` : '';
+  $: casalsUrl = casalsFrontendUrl($registryRuntimeFlags.casalsFrontendCanisterId);
 
   function isLocalDevelopment() {
     return (

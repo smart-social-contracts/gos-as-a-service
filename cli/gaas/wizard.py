@@ -21,7 +21,6 @@ from gaas.descriptor import (
 )
 from gaas.versions import validate_descriptor_version
 from gaas.known import (
-    ADOPT_ONLY_CANISTER_NAMES,
     DEFAULT_CASALS_RELEASE_REPO,
     DEFAULT_CASALS_VERSION,
     DEFAULT_PLATFORM_RELEASE_REPO,
@@ -34,9 +33,7 @@ console = Console()
 
 ASSET_FRONTEND_CANISTERS = (
     "realm_registry_frontend",
-    "file_registry_frontend",
     "casals_frontend",
-    "marketplace_frontend",
 )
 
 
@@ -343,16 +340,10 @@ def run_wizard(
         )
 
     canisters: dict[str, str] = {}
-    console.print(
-        "\nExisting canister IDs (leave blank to create new; marketplace_frontend "
-        "is DNS-mapped and adopted when an ID is present, never newly created):"
-    )
+    console.print("\nExisting GaaS canister IDs (leave blank to create new):")
     for canister_name in KNOWN_CANISTER_NAMES:
-        hint = ""
-        if canister_name in ADOPT_ONLY_CANISTER_NAMES:
-            hint = " [DNS-mapped, optional]"
         value = prompt.text(
-            f"  {canister_name}{hint}:",
+            f"  {canister_name}:",
             validate=_validate_canister_id,
         ).ask()
         if value is None:

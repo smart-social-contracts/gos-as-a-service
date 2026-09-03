@@ -1172,10 +1172,13 @@ def get_runtime_flags() -> text:
 def set_canister_config_json(args: text) -> text:
     """JSON text-in / text-out runtime config (mirrors realm ``set_canister_config_json``).
 
-    Args (JSON, all optional): {network, test_flags_json (string), test_flags (object)}.
+    Args (JSON, all optional): {network, test_flags_json (string), test_flags (object),
+    casals_frontend_canister_id}.
     test_flags keys: test_mode, ii_bypass, user_self_registration, demo_data,
     skip_terms, skip_passport_zkproof, skip_authentication, disable_card_billing,
     assistant_experimental_notice.
+    casals_frontend_canister_id is the live Casals UI principal (Infrastructure
+    link); ``realms seed`` updates it after ``casals new`` without a portal rebuild.
 
     Controller-only. Returns: {"success": bool, "message"?: str, "error"?: str}.
     """

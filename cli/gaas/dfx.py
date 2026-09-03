@@ -11,7 +11,7 @@ import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Callable, Literal
 
 from gaas.runlog import get_run_log
 
@@ -377,6 +377,132 @@ def _parse_created_canister_id(result: subprocess.CompletedProcess[str]) -> str:
     return match.group(1)
 
 
+def _load_json_object(path: Path) -> dict:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _write_json_object(path: Path, data: dict) -> None:
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
+def _collect_mapped_canister_ids(root: Path, name: str, network: str) -> list[str]:
+    """IDs ``dfx canister create --network <network>`` would reuse for ``name``.
+
+    Only the replica-network key is a candidate. Other env rows (staging/demo)
+    stay untouched unless they hold that same principal.
+    """
+    found: list[str] = []
+
+    def _add_network_id(mapping: object) -> None:
+        if not isinstance(mapping, dict):
+            return
+        cid = mapping.get(network)
+        if isinstance(cid, str) and cid.strip():
+            found.append(cid.strip())
+
+    ids_data = _load_json_object(root / "canister_ids.json")
+    _add_network_id(ids_data.get(name))
+
+    dfx_data = _load_json_object(root / "dfx.json")
+    spec = (dfx_data.get("canisters") or {}).get(name) if isinstance(
+        dfx_data.get("canisters"), dict
+    ) else None
+    remote_ids = ((spec.get("remote") or {}).get("id") if isinstance(spec, dict) else None)
+    _add_network_id(remote_ids)
+
+    local_path = root / ".dfx" / network / "canister_ids.json"
+    local_data = _load_json_object(local_path)
+    _add_network_id(local_data.get(name))
+    return found
+
+
+def _drop_ids_from_named_entry(data: dict, name: str, dead_ids: set[str]) -> bool:
+    entry = data.get(name)
+    if not isinstance(entry, dict):
+        return False
+    kept = {
+        key: cid
+        for key, cid in entry.items()
+        if not (isinstance(cid, str) and cid.strip() in dead_ids)
+    }
+    if kept == entry:
+        return False
+    if kept:
+        data[name] = kept
+    else:
+        del data[name]
+    return True
+
+
+def forget_dead_named_canister_mappings(
+    name: str,
+    network: str,
+    *,
+    identity: str | None = None,
+    cwd: str | Path | None = None,
+    is_dead: Callable[[str], bool] | None = None,
+) -> list[str]:
+    """Drop ``canister_ids.json`` / ``dfx.json`` rows that point at a dead canister.
+
+    ``dfx canister create --network ic <name>`` reuses ``canister_ids.json``
+    ``<name>.ic`` (and ``dfx.json`` ``remote.id``) instead of minting. After
+    ``gaas new --destroy-except-…`` those keys still hold the destroyed
+    principal, so create "succeeds" with a corpse. Remove every mapping for
+    ``name`` whose principal is not found, then create can mint.
+    """
+    root = Path(cwd) if cwd is not None else Path.cwd()
+
+    def _dead(cid: str) -> bool:
+        if is_dead is not None:
+            return bool(is_dead(cid))
+        try:
+            canister_status(cid, network, identity=identity)
+        except DfxError as exc:
+            return is_canister_not_found_error(exc)
+        return False
+
+    candidates = list(dict.fromkeys(_collect_mapped_canister_ids(root, name, network)))
+    dead_ids = {cid for cid in candidates if _dead(cid)}
+    if not dead_ids:
+        return []
+
+    ids_path = root / "canister_ids.json"
+    if ids_path.is_file():
+        data = _load_json_object(ids_path)
+        if _drop_ids_from_named_entry(data, name, dead_ids):
+            _write_json_object(ids_path, data)
+
+    dfx_path = root / "dfx.json"
+    if dfx_path.is_file():
+        dfx_data = _load_json_object(dfx_path)
+        spec = (dfx_data.get("canisters") or {}).get(name) if isinstance(
+            dfx_data.get("canisters"), dict
+        ) else None
+        remote_ids = (
+            ((spec.get("remote") or {}).get("id") if isinstance(spec, dict) else None)
+        )
+        if isinstance(remote_ids, dict):
+            changed = False
+            for key, cid in list(remote_ids.items()):
+                if isinstance(cid, str) and cid.strip() in dead_ids:
+                    del remote_ids[key]
+                    changed = True
+            if changed:
+                _write_json_object(dfx_path, dfx_data)
+
+    local_path = root / ".dfx" / network / "canister_ids.json"
+    if local_path.is_file():
+        local_data = _load_json_object(local_path)
+        if _drop_ids_from_named_entry(local_data, name, dead_ids):
+            _write_json_object(local_path, local_data)
+
+    return sorted(dead_ids)
+
+
 def create_canister(
     name: str,
     network: str,
@@ -385,6 +511,9 @@ def create_canister(
     with_cycles: int | None = None,
     cwd: str | Path | None = None,
 ) -> str:
+    forget_dead_named_canister_mappings(
+        name, network, identity=identity, cwd=cwd
+    )
     args = [
         "dfx",
         "canister",
@@ -399,7 +528,21 @@ def create_canister(
     if with_cycles is not None:
         args.extend(["--with-cycles", str(with_cycles)])
     result = _run(args, check=True, cwd=cwd)
-    return _parse_created_canister_id(result)
+    canister_id = _parse_created_canister_id(result)
+    try:
+        canister_status(canister_id, network, identity=identity)
+    except DfxError as exc:
+        if not is_canister_not_found_error(exc):
+            raise
+        forget_dead_named_canister_mappings(
+            name,
+            network,
+            identity=identity,
+            cwd=cwd,
+            is_dead=lambda cid, _dead=canister_id: cid == _dead,
+        )
+        return create_canister_via_ledger(network, identity=identity)
+    return canister_id
 
 
 def create_canister_via_ledger(

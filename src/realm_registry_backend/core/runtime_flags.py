@@ -130,6 +130,8 @@ def apply_test_flags(flags: dict, network: str | None = None) -> None:
 
 def get_runtime_flags_payload() -> dict:
     """Lightweight runtime flags for the registry frontend auth/join flows."""
+    from core.env_config import get_casals_frontend_canister_id
+
     return {
         "success": True,
         "network": get_network(),
@@ -145,11 +147,14 @@ def get_runtime_flags_payload() -> dict:
         ),
         "test_mode_disable_card_billing": is_card_billing_disabled(),
         "test_mode_assistant_experimental_notice": is_assistant_experimental_notice_enabled(),
+        "casals_frontend_canister_id": get_casals_frontend_canister_id(),
     }
 
 
 def set_canister_config_from_json(args: str) -> dict:
     """Apply ``set_canister_config_json`` payload. Returns {success, message?, error?}."""
+    from core.env_config import apply_env_config
+
     params = json.loads(args) if args else {}
     flags_raw = params.get("test_flags_json")
     if flags_raw is None and isinstance(params.get("test_flags"), dict):
@@ -162,5 +167,14 @@ def set_canister_config_from_json(args: str) -> dict:
         apply_test_flags(flags_raw, network=network)
     elif network is not None:
         apply_test_flags({}, network=network)
+
+    if "casals_frontend_canister_id" in params or "casals_frontend" in params:
+        apply_env_config(
+            {
+                "casals_frontend_canister_id": params.get("casals_frontend_canister_id")
+                or params.get("casals_frontend")
+                or "",
+            }
+        )
 
     return {"success": True, "message": "Registry config updated"}

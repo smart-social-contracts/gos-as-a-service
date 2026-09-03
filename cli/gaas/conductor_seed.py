@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import gzip
 import hashlib
 import json
@@ -45,6 +46,28 @@ def platform_sheet(repo_root: Path | None = None) -> dict[str, Any]:
     if not path.is_file():
         raise FileNotFoundError(f"GaaS Casals sheet not found: {path}")
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+_GOVERNANCE_STANDS = frozenset({"governance", "orchestration"})
+
+
+def governance_deploy_sheet(repo_root: Path | None = None) -> dict[str, Any]:
+    """Sheet fragment Casals may mint: multisig + infra-baton only.
+
+    Installer and realm-registry canisters are created by ``gaas new`` (dfx)
+    and registered afterwards. Passing them to ``deploy_sheet`` tries to mint
+    duplicates and fails unless those WASM keys are already authorized.
+    """
+    sheet = copy.deepcopy(platform_sheet(repo_root))
+    for sec in sheet.get("sections") or []:
+        if sec.get("name") != "Infra":
+            continue
+        sec["stands"] = [
+            stand
+            for stand in (sec.get("stands") or [])
+            if stand.get("name") in _GOVERNANCE_STANDS
+        ]
+    return sheet
 
 
 def _parse_casals_json(raw: str) -> dict[str, Any]:
@@ -449,7 +472,7 @@ def ensure_sheet_and_deploy_multisig(
         result = _casals_call(
             casals_id,
             "deploy_sheet",
-            {"sheet": platform_sheet()},
+            {"sheet": governance_deploy_sheet()},
             network,
             identity=identity,
         )

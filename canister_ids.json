@@ -2,12 +2,19 @@
   "casals_backend": {
     "demo": "oia4k-baaaa-aaaae-ag3ha-cai",
     "staging": "th7fr-bqaaa-aaaan-q6n4q-cai",
-    "test": "3adcv-rqaaa-aaaad-qmdcq-cai"
+    "test": "2bzyp-7yaaa-aaaao-bbi6a-cai"
+  },
+  "casals_file_registry": {
+    "demo": "ms4uw-7qaaa-aaaae-ag3ia-cai",
+    "test": "2gy63-saaaa-aaaao-bbi6q-cai"
+  },
+  "casals_file_registry_frontend": {
+    "test": "2p3vh-eiaaa-aaaao-bbi7a-cai"
   },
   "casals_frontend": {
     "demo": "opb26-myaaa-aaaae-ag3hq-cai",
     "staging": "to4on-xyaaa-aaaan-q6n5a-cai",
-    "test": "3jajj-hyaaa-aaaad-qmdda-cai"
+    "test": "2i2tt-jqaaa-aaaao-bbi7q-cai"
   },
   "file_registry": {
     "demo": "mv5sc-siaaa-aaaae-ag3iq-cai",
@@ -29,22 +36,16 @@
     "test": "mxyd5-3qaaa-aaaao-ba2xq-cai"
   },
   "realm_installer": {
-    "demo": "moqmm-caaaa-aaaah-qu27q-cai",
-    "staging": "ta6df-miaaa-aaaan-q6n4a-cai",
-    "test": "3hceb-4iaaa-aaaad-qmdca-cai"
+    "ic": "jmgc7-2aaaa-aaaai-ax5qa-cai",
+    "test": "jmgc7-2aaaa-aaaai-ax5qa-cai"
   },
   "realm_registry_backend": {
-    "demo": "rhw4p-gqaaa-aaaac-qbw7q-cai",
-    "staging": "snqhl-daaaa-aaaan-q6n3q-cai",
-    "test": "3sfvm-5aaaa-aaaad-qmdbq-cai"
+    "ic": "mq5y2-riaaa-aaaai-ax5pq-cai",
+    "test": "mq5y2-riaaa-aaaai-ax5pq-cai"
   },
   "realm_registry_frontend": {
     "demo": "2zaor-5yaaa-aaaac-qbxaa-cai",
     "staging": "77243-aqaaa-aaaau-aggza-cai",
     "test": "qtank-3qaaa-aaaaa-qhb6q-cai"
-  },
-  "casals_file_registry": {
-    "demo": "ms4uw-7qaaa-aaaae-ag3ia-cai",
-    "test": "3obp5-kaaaa-aaaad-qmddq-cai"
   }
 }

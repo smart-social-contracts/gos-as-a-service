@@ -9,6 +9,7 @@ existing task from its first unfinished step and leaves completed steps alone.
 """
 
 import hashlib
+import json
 
 # A step left ``running`` for longer than this lost its runner (a trap, a
 # canister upgrade, or a dropped timer) and may be re-driven.
@@ -299,6 +300,57 @@ def extensions_stall_reason(
     if status in ("queued", "waiting") and not _completed_count(task):
         return f"deploy task {recorded} never started"
     return ""
+
+
+def coerce_realm_json(raw):
+    """Unwrap candid ``text`` / one-element tuples into a JSON object when possible."""
+    if raw is None:
+        return None
+    if isinstance(raw, (bytes, bytearray)):
+        try:
+            raw = raw.decode("utf-8")
+        except Exception:
+            return raw
+    while isinstance(raw, (list, tuple)) and len(raw) == 1:
+        raw = raw[0]
+    if isinstance(raw, dict):
+        return raw
+    if not isinstance(raw, str):
+        return raw
+    s = raw.strip()
+    if not s:
+        return None
+    if s[0] in "{[":
+        try:
+            return json.loads(s)
+        except Exception:
+            return s
+    start, end = s.find("{"), s.rfind("}")
+    if start >= 0 and end > start:
+        try:
+            return json.loads(s[start : end + 1])
+        except Exception:
+            return s
+    return s
+
+
+def realm_json_response_failed(parsed) -> tuple[bool, str]:
+    """Return ``(is_failure, error_message)`` for realm JSON text endpoints.
+
+    Fail only on an explicit rejection (``ok``/``success`` false, or ``error``).
+    Unparseable candid leftovers are not treated as failure.
+    """
+    parsed = coerce_realm_json(parsed)
+    if not isinstance(parsed, dict):
+        return False, ""
+    if parsed.get("ok") is False or parsed.get("success") is False:
+        return True, str(parsed.get("error") or parsed.get("err") or parsed.get("Err") or "realm call rejected")
+    err = parsed.get("error") or parsed.get("err")
+    if err is None and parsed.get("Err") is not None:
+        err = parsed["Err"]
+    if err:
+        return True, str(err)
+    return False, ""
 
 
 def enter_setup_already_satisfied(error_text: str) -> bool:

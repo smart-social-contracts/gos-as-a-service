@@ -13,6 +13,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterator, Protocol
+from urllib.parse import urlparse, urlunparse
 
 import requests
 import typer
@@ -49,18 +50,12 @@ from gaas.file_registry_client import (
 )
 from gaas.gaas_env import frontend_ic_origin, remove_gaas_env, write_gaas_env
 from gaas.known import (
-    ADOPT_ONLY_CANISTER_NAMES,
     DEFAULT_CANISTER_COUNT,
     DEFAULT_CASALS_SECTION,
     DEFAULT_CYCLES_PER_CANISTER,
     DEFAULT_PLATFORM_RELEASE_REPO,
     DFX_CANISTER_NAMES,
     KNOWN_CANISTER_NAMES,
-)
-from gaas.marketplace import (
-    build_marketplace_backend_wasm,
-    build_marketplace_frontend,
-    configure_marketplace_backend,
 )
 from gaas.namespace_approval_seed import seed_namespace_approvals
 from gaas.platform import (
@@ -198,6 +193,9 @@ def _registry_config_json(descriptor: Descriptor) -> str:
     installer_id = descriptor.canisters.get("realm_installer", "")
     if installer_id:
         payload["installer_id"] = installer_id
+    casals_frontend = descriptor.canisters.get("casals_frontend", "")
+    if casals_frontend:
+        payload["casals_frontend_canister_id"] = casals_frontend
     for key, value in descriptor.flags.items():
         if key not in ("open_mode", "can_test_mode"):
             payload[key] = value
@@ -205,27 +203,34 @@ def _registry_config_json(descriptor: Descriptor) -> str:
 
 
 def _registry_runtime_config_json(descriptor: Descriptor, network: str) -> str | None:
-    """Runtime test flags for can_test_mode portal auth (set_canister_config_json).
+    """Runtime config for the portal (test flags + live Casals frontend principal).
 
-    Returns None when can_test_mode is false so production registries stay secure.
-  """
-    if not _resolve_can_test_mode(descriptor):
+    ``casals_frontend_canister_id`` is always included when present so
+    ``realms seed`` can refresh the Infrastructure link without a portal
+    rebuild. Test flags are omitted when can_test_mode is false.
+    """
+    payload: dict = {}
+    casals_frontend = (descriptor.canisters.get("casals_frontend") or "").strip()
+    if casals_frontend:
+        payload["casals_frontend_canister_id"] = casals_frontend
+
+    if _resolve_can_test_mode(descriptor):
+        test_flags = {
+            "test_mode": True,
+            "ii_bypass": True,
+        }
+        if (network or "").strip().lower() in ("staging", "demo"):
+            test_flags["disable_card_billing"] = True
+            test_flags["assistant_experimental_notice"] = True
+        if descriptor.test_flags:
+            test_flags.update(descriptor.test_flags)
+        payload["test_flags"] = test_flags
+        # Registry runtime_flags rejects test flags when network=ic; omit on mainnet.
+        if network != "ic":
+            payload["network"] = network
+
+    if not payload:
         return None
-    test_flags = {
-        "test_mode": True,
-        "ii_bypass": True,
-    }
-    if (network or "").strip().lower() in ("staging", "demo"):
-        test_flags["disable_card_billing"] = True
-        test_flags["assistant_experimental_notice"] = True
-    if descriptor.test_flags:
-        test_flags.update(descriptor.test_flags)
-    payload: dict = {
-        "test_flags": test_flags,
-    }
-    # Registry runtime_flags rejects test flags when network=ic; omit on mainnet.
-    if network != "ic":
-        payload["network"] = network
     return json.dumps(payload)
 
 
@@ -244,6 +249,24 @@ def _installer_config_json(descriptor: Descriptor) -> str:
         "cycle_threshold_cycles": descriptor.threshold_cycles(),
     }
     return json.dumps(payload)
+
+
+def _resolve_monitor_service_url(descriptor: Descriptor) -> str | None:
+    """Derive ``monitor_service_url`` from descriptor host + Casals backend id.
+
+    ``services.monitor_url`` may be a bare origin (``https://casals.realmsgos.dev``)
+    or a legacy slug path (``…/v1/realms-test``). When ``casals_backend`` is known,
+    the path is always ``/v1/<casals_backend>``.
+    """
+    base = descriptor.services.monitor_url
+    if not base:
+        return None
+    casals_backend = descriptor.canisters.get("casals_backend", "")
+    if not casals_backend:
+        return base.rstrip("/")
+    parsed = urlparse(base.rstrip("/"))
+    origin = urlunparse((parsed.scheme, parsed.netloc, "", "", "", ""))
+    return f"{origin}/v1/{casals_backend}"
 
 
 def _casals_settings_json(descriptor: Descriptor, deployer_principal: str) -> str:
@@ -267,11 +290,14 @@ def _casals_settings_json(descriptor: Descriptor, deployer_principal: str) -> st
         payload["file_registry_frontend_canister_id"] = file_registry_frontend_id
     if descriptor.services.monitor_url:
         payload["monitor_enabled"] = True
-        payload["monitor_service_url"] = descriptor.services.monitor_url
+        payload["monitor_service_url"] = _resolve_monitor_service_url(descriptor)
     if descriptor.services.monitor_principal:
         payload["monitor_principal"] = descriptor.services.monitor_principal
-    if _resolve_can_test_mode(descriptor):
-        payload["extra_controller_principals"] = [deployer_principal]
+    extras: list[str] = []
+    if _resolve_can_test_mode(descriptor) and deployer_principal:
+        extras.append(deployer_principal)
+    if extras:
+        payload["extra_controller_principals"] = extras
     return json.dumps(payload)
 
 
@@ -284,8 +310,6 @@ def _infra_canister_names() -> tuple[str, ...]:
         "realm_registry_backend",
         "realm_registry_frontend",
         "realm_installer",
-        "file_registry",
-        "file_registry_frontend",
     )
 
 
@@ -330,16 +354,10 @@ def phase_destroy_except_frontend(descriptor: Descriptor, ctx: DeployContext) ->
 
     if not ctx.yes:
         confirmed = typer.confirm(
-            "Destroy ALL platform canisters except DNS-mapped frontends "
-            f"(realm_registry_frontend {descriptor.canisters.get('realm_registry_frontend', '?')}"
-            + (
-                f", marketplace_frontend {descriptor.canisters.get('marketplace_frontend', '?')}"
-                if (descriptor.canisters.get("marketplace_frontend") or "").strip()
-                else ""
-            )
-            + ")? "
-            "Other frontends are destroyed. Cycles go to your cycles wallet; "
-            "DNS-mapped frontend IDs are kept. This cannot be undone.",
+            "Destroy ALL GaaS platform canisters except DNS-mapped "
+            f"realm_registry_frontend {descriptor.canisters.get('realm_registry_frontend', '?')}? "
+            "Other GaaS frontends are destroyed. Cycles go to your cycles wallet; "
+            "the portal DNS frontend ID is kept. This cannot be undone.",
             default=False,
         )
         if not confirmed:
@@ -435,9 +453,6 @@ def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
             console.print(f"  {name}: adopt {existing_id} ({status.status})")
             continue
 
-        if name in ADOPT_ONLY_CANISTER_NAMES:
-            continue
-
         fund = canister_headroom(name, descriptor) if ctx.network == "ic" else None
         dfx_name = DFX_CANISTER_NAMES.get(name)
         if dfx_name:
@@ -467,10 +482,39 @@ def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
                 canister_id, ctx.network, identity=ctx.identity
             )
         except dfx.DfxError as exc:
-            raise RuntimeError(
-                f"refusing to use {name} {canister_id}: create did not leave a "
-                f"live canister on {ctx.network} ({exc})"
-            ) from exc
+            if not dfx.is_canister_not_found_error(exc):
+                raise RuntimeError(
+                    f"refusing to use {name} {canister_id}: create did not leave a "
+                    f"live canister on {ctx.network} ({exc})"
+                ) from exc
+            # Named ``dfx canister create`` reused a dead canister_ids.json row.
+            dead_id = canister_id
+            console.print(
+                f"  {name}: named create reused dead {dead_id}; minting via ledger"
+            )
+            if dfx_name:
+                dfx.forget_dead_named_canister_mappings(
+                    dfx_name,
+                    ctx.network,
+                    identity=ctx.identity,
+                    is_dead=lambda cid, _dead=dead_id: cid == _dead,
+                )
+            canister_id = dfx.create_canister_via_ledger(
+                ctx.network,
+                identity=ctx.identity,
+                controller=principal,
+            )
+            if fund and ctx.network == "ic":
+                dfx.top_up_canister(
+                    canister_id,
+                    fund,
+                    ctx.network,
+                    identity=ctx.identity,
+                )
+            descriptor.set_canister_id(name, canister_id)
+            created = dfx.canister_status(
+                canister_id, ctx.network, identity=ctx.identity
+            )
         _save_descriptor(descriptor, ctx)
         console.print(f"  {name}: created {canister_id} ({created.status})")
 
@@ -618,57 +662,6 @@ def phase_install_backends(descriptor: Descriptor, ctx: DeployContext) -> None:
             yes=True,
         )
 
-    file_registry_id = descriptor.canisters.get("file_registry")
-    if file_registry_id:
-        wasm = resolve_platform_backend_wasm(
-            "file_registry",
-            platform_version=platform_version,
-            release_repo=release_repo,
-            work_dir=work,
-            repo_root=repo_root,
-            session=ctx.http,
-        )
-        mode = _backend_install_mode(file_registry_id, ctx)
-        console.print(f"  file_registry: {mode} ({wasm.name})")
-        dfx.install_wasm(
-            file_registry_id,
-            str(wasm),
-            ctx.network,
-            mode,
-            "(null)",
-            identity=ctx.identity,
-            yes=True,
-        )
-
-    marketplace_id = descriptor.canisters.get("marketplace_backend")
-    if marketplace_id:
-        if repo_root is None:
-            try:
-                repo_root = _find_repo_root(ctx)
-            except PlatformError:
-                repo_root = work
-        wasm = build_marketplace_backend_wasm(
-            descriptor,
-            gos_repo_root=repo_root,
-            work_dir=work,
-        )
-        mode = _backend_install_mode(marketplace_id, ctx)
-        console.print(f"  marketplace_backend: {mode} ({wasm.name})")
-        dfx.install_wasm(
-            marketplace_id,
-            str(wasm),
-            ctx.network,
-            mode,
-            "(null)",
-            identity=ctx.identity,
-            yes=True,
-        )
-        configure_marketplace_backend(
-            descriptor,
-            network=ctx.network,
-            identity=ctx.identity,
-        )
-
 
 def _parse_registry_configure(raw: str) -> dict:
     raw = raw.strip()
@@ -768,12 +761,22 @@ def phase_configure_backends(descriptor: Descriptor, ctx: DeployContext) -> None
             query=True,
         )
         flags = json.loads(flags_raw)
-        if not flags.get("test_mode") or not flags.get("test_mode_ii_bypass"):
+        expected_casals = (descriptor.canisters.get("casals_frontend") or "").strip()
+        if expected_casals and flags.get("casals_frontend_canister_id") != expected_casals:
             raise RuntimeError(
-                "registry runtime flags mismatch after set_canister_config_json: "
-                f"{flags!r}"
+                "registry casals_frontend_canister_id mismatch after "
+                f"set_canister_config_json: {flags!r}"
             )
-        console.print("  registry runtime test flags verified")
+        runtime_payload = json.loads(runtime_json)
+        if runtime_payload.get("test_flags"):
+            if not flags.get("test_mode") or not flags.get("test_mode_ii_bypass"):
+                raise RuntimeError(
+                    "registry runtime flags mismatch after set_canister_config_json: "
+                    f"{flags!r}"
+                )
+            console.print("  registry runtime test flags verified")
+        if expected_casals:
+            console.print("  registry casals_frontend verified")
 
     casals_id = descriptor.canisters.get("casals_backend")
     if not casals_id:
@@ -1094,55 +1097,6 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
                 f"({format_duration(time.monotonic() - start)})"
             )
 
-        file_registry_frontend_id = descriptor.canisters.get("file_registry_frontend")
-        if file_registry_frontend_id:
-            canister = "file_registry_frontend"
-            dist = frontend_dist_dir(
-                canister,
-                platform_version=platform_version,
-                release_repo=release_repo,
-                work_dir=work,
-                repo_root=repo_root,
-                session=ctx.http,
-            )
-            if not dist.is_dir() or not any(dist.iterdir()):
-                if platform_version:
-                    archive = fetch_platform_frontend_archive(
-                        canister,
-                        platform_version,
-                        release_repo,
-                        work / "frontends" / canister,
-                        session=ctx.http,
-                    )
-                    extract_dir = work / "frontends" / canister / "dist"
-                    extract_dir.mkdir(parents=True, exist_ok=True)
-                    with tarfile.open(archive, "r:gz") as tar:
-                        tar.extractall(extract_dir)
-                    dist = extract_dir
-                else:
-                    raise RuntimeError(f"frontend build produced empty dist for {canister}")
-
-            dfx_name = DFX_CANISTER_NAMES[canister]
-            if not dfx_name:
-                raise RuntimeError(f"no dfx mapping for {canister}")
-            file_registry_id = descriptor.canisters.get("file_registry") or ""
-            console.print(f"  {canister}: reinstall assets to {file_registry_frontend_id}")
-            start = time.monotonic()
-            with _injected_file_registry_id(dist / "index.html", file_registry_id):
-                dfx.deploy_assets_canister(
-                    dfx_name,
-                    file_registry_frontend_id,
-                    ctx.network,
-                    repo_root=repo_root,
-                    identity=ctx.identity,
-                    mode="reinstall",
-                    yes=True,
-                )
-            console.print(
-                f"  {canister}: reinstall assets done "
-                f"({format_duration(time.monotonic() - start)})"
-            )
-
         casals_frontend_id = descriptor.canisters.get("casals_frontend")
         if not casals_frontend_id:
             raise RuntimeError("missing canister ID for casals_frontend")
@@ -1155,7 +1109,7 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
             session=ctx.http,
             conductor_canister_id=descriptor.canisters.get("casals_backend", ""),
             frontend_canister_id=casals_frontend_id,
-            monitor_url=descriptor.services.monitor_url or "",
+            monitor_url=_resolve_monitor_service_url(descriptor) or "",
         )
         if casals_staging.exists():
             shutil.rmtree(casals_staging)
@@ -1177,38 +1131,6 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
         )
         _persist_and_guard_portal_frontends(descriptor, ctx, require_http=True)
 
-        marketplace_frontend_id = descriptor.canisters.get("marketplace_frontend")
-        if marketplace_frontend_id:
-            marketplace_backend_id = descriptor.canisters.get("marketplace_backend") or ""
-            file_registry_id = descriptor.canisters.get("file_registry") or ""
-            if not marketplace_backend_id:
-                raise RuntimeError(
-                    "marketplace_backend ID required to rebuild marketplace_frontend"
-                )
-            console.print(
-                f"  marketplace_frontend: build + reinstall assets to {marketplace_frontend_id}"
-            )
-            start = time.monotonic()
-            build_marketplace_frontend(
-                descriptor,
-                gos_repo_root=repo_root,
-                work_dir=work,
-                marketplace_backend_id=marketplace_backend_id,
-                file_registry_id=file_registry_id,
-            )
-            dfx.deploy_assets_canister(
-                "marketplace_frontend",
-                marketplace_frontend_id,
-                ctx.network,
-                repo_root=repo_root,
-                identity=ctx.identity,
-                mode="reinstall",
-                yes=True,
-            )
-            console.print(
-                f"  marketplace_frontend: reinstall assets done "
-                f"({format_duration(time.monotonic() - start)})"
-            )
     finally:
         if gaas_env_path and not ctx.keep_env_file:
             remove_gaas_env(repo_root)
@@ -1265,6 +1187,9 @@ def _http_get(url: str, timeout: float = 30.0) -> tuple[int, str]:
             return response.status, body
     except urllib.error.HTTPError as exc:
         return exc.code, exc.read(256).decode("utf-8", errors="replace")
+    except urllib.error.URLError as exc:
+        reason = getattr(exc, "reason", exc)
+        return 0, str(reason)
 
 
 def phase_smoke_checks(descriptor: Descriptor, ctx: DeployContext) -> None:
@@ -1304,18 +1229,31 @@ def phase_smoke_checks(descriptor: Descriptor, ctx: DeployContext) -> None:
             )
 
     if ctx.network == "ic":
+        frontend_id = descriptor.canisters.get("realm_registry_frontend") or ""
+        if ctx.skip_dns_wait and frontend_id:
+            portal_url = f"https://{frontend_id}.icp0.io/"
+            well_known_url = f"https://{frontend_id}.icp0.io/.well-known/ic-domains"
+            console.print(
+                f"  --skip-dns-wait: HTTP smoke via {portal_url} "
+                f"(not https://{descriptor.domain}/)"
+            )
+        else:
+            portal_url = f"https://{descriptor.domain}/"
+            well_known_url = f"https://{descriptor.domain}/.well-known/ic-domains"
         deadline = time.monotonic() + 90.0
         last_status = 0
+        last_body = ""
         while time.monotonic() < deadline:
-            status, body = _http_get(f"https://{descriptor.domain}/")
-            last_status = status
-            if status == 200:
+            last_status, last_body = _http_get(portal_url)
+            if last_status == 200:
                 break
             time.sleep(5)
         if last_status != 200:
-            raise RuntimeError(f"https://{descriptor.domain}/ returned {last_status}, expected 200")
+            raise RuntimeError(
+                f"{portal_url} returned {last_status}, expected 200 ({last_body[:200]})"
+            )
 
-        ic_status, ic_body = _http_get(f"https://{descriptor.domain}/.well-known/ic-domains")
+        ic_status, ic_body = _http_get(well_known_url)
         if ic_status != 200 or descriptor.domain not in ic_body:
             raise RuntimeError("ic-domains well-known check failed")
     else:
@@ -1485,8 +1423,6 @@ def _casals_co_controller_targets(
         *_infra_canister_names(),
         "casals_file_registry",
         "casals_frontend",
-        "marketplace_backend",
-        "marketplace_frontend",
     ):
         _add(name, descriptor.canisters.get(name, ""))
     _add("multisig", descriptor.multisig.backend_id or "")
@@ -1824,10 +1760,6 @@ def phase_controller_topology(descriptor: Descriptor, ctx: DeployContext) -> Non
     infra_names = list(_infra_canister_names())
     if descriptor.canisters.get("casals_file_registry"):
         infra_names.append("casals_file_registry")
-    if descriptor.canisters.get("marketplace_backend"):
-        infra_names.append("marketplace_backend")
-    if descriptor.canisters.get("marketplace_frontend"):
-        infra_names.append("marketplace_frontend")
     for name in infra_names:
         canister_id = descriptor.canisters.get(name)
         if not canister_id:

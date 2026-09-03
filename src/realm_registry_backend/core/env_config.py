@@ -18,6 +18,7 @@ _BILLING_SERVICE_PRINCIPAL_KEY = "env:billing_service_principal"
 _CAN_TEST_MODE_KEY = "env:can_test_mode"
 _OPEN_MODE_KEY = "env:open_mode"
 _INSTALLER_ID_KEY = "env:installer_id"
+_CASALS_FRONTEND_KEY = "env:casals_frontend"
 
 
 def _truthy(val: str) -> bool:
@@ -73,6 +74,16 @@ def get_installer_id() -> str:
     return (cfg.value if cfg else "").strip()
 
 
+def get_casals_frontend_canister_id() -> str:
+    """Casals frontend principal for the portal Infrastructure link.
+
+    Survives ``realms seed`` (registry backend is not destroyed). Seed writes
+    the new ID after ``casals new`` so the SPA does not need a WASM rebuild.
+    """
+    cfg = RegistryConfig[_CASALS_FRONTEND_KEY]
+    return (cfg.value if cfg else "").strip()
+
+
 def apply_env_config(params: dict) -> None:
     """Persist env config fields present in *params* (all optional)."""
     if "portal_url" in params:
@@ -101,6 +112,13 @@ def apply_env_config(params: dict) -> None:
     if "installer_id" in params:
         val = (params.get("installer_id") or "").strip()
         _set_key(_INSTALLER_ID_KEY, val)
+    if "casals_frontend_canister_id" in params or "casals_frontend" in params:
+        val = (
+            params.get("casals_frontend_canister_id")
+            or params.get("casals_frontend")
+            or ""
+        ).strip()
+        _set_key(_CASALS_FRONTEND_KEY, val)
 
 
 def apply_env_config_from_json(args: str) -> dict:
@@ -119,6 +137,7 @@ def get_env_config_payload() -> dict:
         "billing_service_principal": get_billing_service_principal(),
         "can_test_mode": is_can_test_mode(),
         "installer_id": get_installer_id(),
+        "casals_frontend_canister_id": get_casals_frontend_canister_id(),
     }
 
 

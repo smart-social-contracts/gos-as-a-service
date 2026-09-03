@@ -15,9 +15,7 @@
       ],
       "remote": {
         "id": {
-          "demo": "moqmm-caaaa-aaaah-qu27q-cai",
-          "staging": "ta6df-miaaa-aaaan-q6n4a-cai",
-          "test": "3hceb-4iaaa-aaaad-qmdca-cai"
+          "test": "jmgc7-2aaaa-aaaai-ax5qa-cai"
         }
       },
       "tech_stack": {
@@ -89,9 +87,7 @@
       ],
       "remote": {
         "id": {
-          "demo": "rhw4p-gqaaa-aaaac-qbw7q-cai",
-          "staging": "snqhl-daaaa-aaaan-q6n3q-cai",
-          "test": "3sfvm-5aaaa-aaaad-qmdbq-cai"
+          "test": "mq5y2-riaaa-aaaai-ax5pq-cai"
         }
       },
       "tech_stack": {
@@ -127,7 +123,7 @@
         "id": {
           "demo": "oia4k-baaaa-aaaae-ag3ha-cai",
           "staging": "th7fr-bqaaa-aaaan-q6n4q-cai",
-          "test": "3adcv-rqaaa-aaaad-qmdcq-cai"
+          "test": "2bzyp-7yaaa-aaaao-bbi6a-cai"
         }
       }
     },
@@ -150,7 +146,7 @@
         "id": {
           "demo": "opb26-myaaa-aaaae-ag3hq-cai",
           "staging": "to4on-xyaaa-aaaan-q6n5a-cai",
-          "test": "3jajj-hyaaa-aaaad-qmdda-cai"
+          "test": "2i2tt-jqaaa-aaaao-bbi7q-cai"
         }
       }
     },

@@ -9,8 +9,10 @@ from gaas.dfx import (
     DfxError,
     canister_status,
     canister_call,
+    create_canister,
     delete_canister,
     delete_dust_canister,
+    forget_dead_named_canister_mappings,
     get_wallet,
     parse_controllers,
     parse_cycles_balance,
@@ -389,6 +391,147 @@ def test_parse_candid_string_preserves_json_escaped_backslash_before_n():
     raw = f'("{candid}")'
     decoded = _parse_candid_string(raw)
     assert json.loads(decoded) == {"path": "C:\\new", "quote": 'say "hi"'}
+
+
+DEAD_REGISTRY = "el7rp-xiaaa-aaaai-ax43q-cai"
+LIVE_STAGING_REGISTRY = "snqhl-daaaa-aaaan-q6n3q-cai"
+NEW_REGISTRY = "uayfg-bqaaa-aaaac-bfygq-cai"
+
+
+def test_forget_dead_named_canister_mappings_drops_dead_keeps_live(tmp_path):
+    (tmp_path / "canister_ids.json").write_text(
+        json.dumps(
+            {
+                "realm_registry_backend": {
+                    "ic": DEAD_REGISTRY,
+                    "test": DEAD_REGISTRY,
+                    "staging": LIVE_STAGING_REGISTRY,
+                    "demo": "rhw4p-gqaaa-aaaac-qbw7q-cai",
+                }
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "dfx.json").write_text(
+        json.dumps(
+            {
+                "canisters": {
+                    "realm_registry_backend": {
+                        "remote": {
+                            "id": {
+                                "test": DEAD_REGISTRY,
+                                "staging": LIVE_STAGING_REGISTRY,
+                            }
+                        }
+                    }
+                }
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    local_dir = tmp_path / ".dfx" / "ic"
+    local_dir.mkdir(parents=True)
+    (local_dir / "canister_ids.json").write_text(
+        json.dumps({"realm_registry_backend": {"ic": DEAD_REGISTRY}}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    probed: list[str] = []
+
+    def is_dead(cid: str) -> bool:
+        probed.append(cid)
+        return cid == DEAD_REGISTRY
+
+    dropped = forget_dead_named_canister_mappings(
+        "realm_registry_backend",
+        "ic",
+        cwd=tmp_path,
+        is_dead=is_dead,
+    )
+    assert dropped == [DEAD_REGISTRY]
+    assert LIVE_STAGING_REGISTRY not in probed
+
+    ids = json.loads((tmp_path / "canister_ids.json").read_text(encoding="utf-8"))
+    assert "ic" not in ids["realm_registry_backend"]
+    assert "test" not in ids["realm_registry_backend"]
+    assert ids["realm_registry_backend"]["staging"] == LIVE_STAGING_REGISTRY
+    dfx_data = json.loads((tmp_path / "dfx.json").read_text(encoding="utf-8"))
+    remote = dfx_data["canisters"]["realm_registry_backend"]["remote"]["id"]
+    assert "test" not in remote
+    assert remote["staging"] == LIVE_STAGING_REGISTRY
+    local = json.loads((local_dir / "canister_ids.json").read_text(encoding="utf-8"))
+    assert "realm_registry_backend" not in local
+
+
+def test_create_canister_forgets_dead_ic_mapping_before_dfx(tmp_path, monkeypatch):
+    from gaas import dfx
+
+    (tmp_path / "canister_ids.json").write_text(
+        json.dumps(
+            {"realm_registry_backend": {"ic": DEAD_REGISTRY, "test": DEAD_REGISTRY}},
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    def fake_status(cid, network, **kwargs):
+        if cid == DEAD_REGISTRY:
+            raise DfxError(
+                "Canister not found",
+                command=["dfx", "canister", "status", cid],
+                stderr="IC0301",
+            )
+        return dfx.CanisterStatus(canister_id=cid, status="running", raw="Status: Running")
+
+    def fake_run(command, **kwargs):
+        written = json.loads((tmp_path / "canister_ids.json").read_text(encoding="utf-8"))
+        assert DEAD_REGISTRY not in json.dumps(written)
+        class R:
+            stdout = f"Created canister with id {NEW_REGISTRY}\n"
+            stderr = ""
+            args = command
+        return R()
+
+    monkeypatch.setattr(dfx, "canister_status", fake_status)
+    monkeypatch.setattr(dfx, "_run", fake_run)
+    assert create_canister("realm_registry_backend", "ic", cwd=tmp_path) == NEW_REGISTRY
+
+
+def test_create_canister_mints_via_ledger_if_named_create_returns_corpse(
+    tmp_path, monkeypatch
+):
+    from gaas import dfx
+
+    (tmp_path / "canister_ids.json").write_text(
+        json.dumps({"realm_registry_backend": {"ic": DEAD_REGISTRY}}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    def fake_status(cid, network, **kwargs):
+        if cid == DEAD_REGISTRY:
+            raise DfxError(
+                "Canister not found",
+                command=["dfx", "canister", "status", cid],
+                stderr="The Replica returned an error: ... IC0301",
+            )
+        return dfx.CanisterStatus(canister_id=cid, status="running", raw="Status: Running")
+
+    def fake_run(command, **kwargs):
+        class R:
+            stdout = f"{DEAD_REGISTRY}\n"
+            stderr = ""
+            args = command
+        return R()
+
+    monkeypatch.setattr(dfx, "canister_status", fake_status)
+    monkeypatch.setattr(dfx, "_run", fake_run)
+    monkeypatch.setattr(dfx, "create_canister_via_ledger", lambda *a, **k: NEW_REGISTRY)
+    assert create_canister("realm_registry_backend", "ic", cwd=tmp_path) == NEW_REGISTRY
 
 
 def test_parse_candid_string_plain_json_roundtrip():

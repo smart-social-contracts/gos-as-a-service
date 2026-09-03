@@ -71,6 +71,24 @@ def test_platform_sheet_has_infra_and_deployments() -> None:
     assert sheet["sections"][1]["stands"] == []
 
 
+def test_governance_deploy_sheet_omits_installer_and_registry() -> None:
+    from gaas.conductor_seed import governance_deploy_sheet
+
+    sheet = governance_deploy_sheet()
+    infra = sheet["sections"][0]
+    assert [stand["name"] for stand in infra["stands"]] == [
+        "governance",
+        "orchestration",
+    ]
+    full = platform_sheet()
+    assert [stand["name"] for stand in full["sections"][0]["stands"]] == [
+        "governance",
+        "orchestration",
+        "installer",
+        "realm-registry",
+    ]
+
+
 def test_ensure_deployments_commander_grants_installer(monkeypatch) -> None:
     calls: list[tuple[str, dict]] = []
     monkeypatch.setattr(

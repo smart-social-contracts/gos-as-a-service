@@ -15,17 +15,13 @@
     }
   ],
   "canisters": {
-    "casals_file_registry_frontend": "nmrv7-eiaaa-aaaae-qkjzq-cai",
     "realm_registry_frontend": "qtank-3qaaa-aaaaa-qhb6q-cai",
-    "marketplace_frontend": "mxyd5-3qaaa-aaaao-ba2xq-cai",
-    "realm_registry_backend": "5ubo6-miaaa-aaaau-ag6nq-cai",
-    "realm_installer": "5bg7t-naaaa-aaaau-ag6oa-cai",
-    "file_registry": "a66l7-syaaa-aaaas-amxbq-cai",
-    "file_registry_frontend": "alz2s-tqaaa-aaaas-amxca-cai",
-    "marketplace_backend": "amy4g-6iaaa-aaaas-amxcq-cai",
-    "casals_backend": "nlqtl-jqaaa-aaaae-qkjza-cai",
-    "casals_frontend": "nfs6d-saaaa-aaaae-qkjya-cai",
-    "casals_file_registry": "nctyx-7yaaa-aaaae-qkjyq-cai"
+    "casals_backend": "2bzyp-7yaaa-aaaao-bbi6a-cai",
+    "casals_frontend": "2i2tt-jqaaa-aaaao-bbi7q-cai",
+    "casals_file_registry": "2gy63-saaaa-aaaao-bbi6q-cai",
+    "casals_file_registry_frontend": "2p3vh-eiaaa-aaaao-bbi7a-cai",
+    "realm_registry_backend": "mq5y2-riaaa-aaaai-ax5pq-cai",
+    "realm_installer": "jmgc7-2aaaa-aaaai-ax5qa-cai"
   },
   "casals": {
     "version": "main",
@@ -35,7 +31,7 @@
     ]
   },
   "multisig": {
-    "backend_id": null,
+    "backend_id": "rwmbn-syaaa-aaaao-bbjaa-cai",
     "signers": [
       "3itd6-2sx7g-vefdk-xhebm-fucot-llay5-lhqd6-pkjac-m7mkf-vhwqq-fqe"
     ],
@@ -43,7 +39,7 @@
   },
   "services": {
     "billing_url": "https://billing.realmsgos.dev",
-    "monitor_url": "https://casals.realmsgos.dev/v1/realms-test",
+    "monitor_url": "https://casals.realmsgos.dev",
     "monitor_principal": "ah6ac-cc73l-bb2zc-ni7bh-jov4q-roeyj-6k2ob-mkg5j-pequi-vuaa6-2ae",
     "billing_service_principal": "ah6ac-cc73l-bb2zc-ni7bh-jov4q-roeyj-6k2ob-mkg5j-pequi-vuaa6-2ae"
   },

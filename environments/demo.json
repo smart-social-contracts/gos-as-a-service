@@ -19,9 +19,6 @@
     "casals_backend": "oia4k-baaaa-aaaae-ag3ha-cai",
     "casals_frontend": "opb26-myaaa-aaaae-ag3hq-cai",
     "casals_file_registry": "ms4uw-7qaaa-aaaae-ag3ia-cai",
-    "file_registry": "mv5sc-siaaa-aaaae-ag3iq-cai",
-    "file_registry_frontend": "m46z6-eaaaa-aaaae-ag3ja-cai",
-    "marketplace_backend": "m377k-jyaaa-aaaae-ag3jq-cai",
     "realm_registry_backend": "rhw4p-gqaaa-aaaac-qbw7q-cai",
     "realm_installer": "moqmm-caaaa-aaaah-qu27q-cai"
   },
@@ -41,7 +38,7 @@
   },
   "services": {
     "billing_url": "https://billing.realmsgos.dev",
-    "monitor_url": "https://casals.realmsgos.dev/v1/realms-demo",
+    "monitor_url": "https://casals.realmsgos.dev",
     "monitor_principal": "ah6ac-cc73l-bb2zc-ni7bh-jov4q-roeyj-6k2ob-mkg5j-pequi-vuaa6-2ae",
     "billing_service_principal": "ah6ac-cc73l-bb2zc-ni7bh-jov4q-roeyj-6k2ob-mkg5j-pequi-vuaa6-2ae"
   },

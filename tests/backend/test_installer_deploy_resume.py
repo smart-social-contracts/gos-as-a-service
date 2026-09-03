@@ -27,6 +27,7 @@ from deploy_resume import (  # noqa: E402
     describe_resume,
     enter_setup_already_satisfied,
     extensions_stall_reason,
+    realm_json_response_failed,
     failed_bootstrap_step_kinds,
     plan_resume,
     steps_satisfied_by_prior_task,
@@ -219,6 +220,44 @@ def test_other_enter_setup_rejections_stay_failures():
     assert enter_setup_already_satisfied("") is False
     assert enter_setup_already_satisfied("Rejection code 4, caller is not permitted") is False
     assert enter_setup_already_satisfied("Couldn't send message") is False
+
+
+def test_realm_json_response_failed_on_unauthorized_text():
+    failed, message = realm_json_response_failed({"ok": False, "error": "unauthorized"})
+    assert failed is True
+    assert message == "unauthorized"
+    assert enter_setup_already_satisfied(message) is False
+
+
+def test_realm_json_response_failed_accepts_ok_true():
+    failed, message = realm_json_response_failed({"ok": True})
+    assert failed is False
+    assert message == ""
+
+
+def test_realm_json_response_failed_parses_json_string_shape():
+    import json
+
+    raw = json.dumps({"ok": False, "error": "unauthorized"})
+    failed, message = realm_json_response_failed(json.loads(raw))
+    assert failed is True
+    assert message == "unauthorized"
+
+
+def test_realm_json_response_failed_unwraps_candid_text_wrapper():
+    from deploy_resume import coerce_realm_json
+
+    parsed = coerce_realm_json('({"ok": true})')
+    assert parsed == {"ok": True}
+    failed, message = realm_json_response_failed('({"ok": true})')
+    assert failed is False
+    assert message == ""
+
+
+def test_realm_json_response_failed_ignores_unparseable():
+    failed, message = realm_json_response_failed("not-json")
+    assert failed is False
+    assert message == ""
 
 
 # ── One task name, two realms (the live collision) ────────────────────

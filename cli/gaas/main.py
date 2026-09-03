@@ -246,11 +246,11 @@ def new_command(
         False,
         "--destroy-except-realm-registry-frontend",
         help=(
-            "Drain-destroy all canisters except DNS-mapped frontends "
-            "(realm_registry_frontend for *.gos.earth; marketplace_frontend for "
-            "*.realmsgos.org when present). Other frontends are destroyed. "
-            "Evacuates the Casals treasury to the cycles wallet, then recreates "
-            "the rest of the platform"
+            "Drain-destroy all GaaS canisters except the DNS-mapped "
+            "realm_registry_frontend (*.gos.earth). Other GaaS frontends are "
+            "destroyed. Evacuates the Casals treasury to the cycles wallet, then "
+            "recreates the GaaS platform. Does not own or preserve Realms GOS "
+            "product canisters (*.realmsgos.org)."
         ),
     ),
     can_test_mode: bool = typer.Option(

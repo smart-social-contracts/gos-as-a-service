@@ -12,6 +12,7 @@ const initial = {
 	testModeSkipPassportZkproof: false,
 	testModeDisableCardBilling: undefined,
 	testModeAssistantExperimentalNotice: undefined,
+	casalsFrontendCanisterId: '',
 	error: null
 };
 
@@ -45,6 +46,9 @@ function createRegistryRuntimeFlagsStore() {
 						typeof payload.test_mode_assistant_experimental_notice === 'boolean'
 							? payload.test_mode_assistant_experimental_notice
 							: undefined,
+					casalsFrontendCanisterId: payload.casals_frontend_canister_id
+						? String(payload.casals_frontend_canister_id).trim()
+						: '',
 					error: null
 				});
 				if (typeof sessionStorage !== 'undefined' && !payload.test_mode_ii_bypass) {

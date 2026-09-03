@@ -596,7 +596,7 @@ MARKETPLACE_FRONTEND_ID = "h4gmt-waaaa-aaaac-bfxoq-cai"
 @patch("gaas.destroy.dfx.get_wallet")
 @patch("gaas.destroy.dfx.canister_call")
 @patch("gaas.destroy.ensure_casals_controller")
-def test_destroy_except_frontend_preserves_marketplace_when_present(
+def test_destroy_except_frontend_does_not_preserve_marketplace(
     mock_ensure: MagicMock,
     mock_call: MagicMock,
     mock_wallet: MagicMock,
@@ -645,15 +645,12 @@ def test_destroy_except_frontend_preserves_marketplace_when_present(
 
     result = destroy_except_frontend(desc, network="ic", identity="deployer")
 
-    assert result["preserved_frontend_ids"] == [FRONTEND_ID, MARKETPLACE_FRONTEND_ID]
+    assert result["preserved_frontend_ids"] == [FRONTEND_ID]
     orchestra_preserve = json.loads(
         _parse_candid_string(mock_call.call_args_list[0][0][2])
     )["preserve"]
-    assert orchestra_preserve == [FRONTEND_ID, MARKETPLACE_FRONTEND_ID]
-    assert desc.canisters == {
-        FRONTEND_NAME: FRONTEND_ID,
-        "marketplace_frontend": MARKETPLACE_FRONTEND_ID,
-    }
+    assert orchestra_preserve == [FRONTEND_ID]
+    assert desc.canisters == {FRONTEND_NAME: FRONTEND_ID}
     mock_dust_delete.assert_called_once()
 
 
@@ -810,7 +807,7 @@ def test_casals_call_tops_up_once_on_ic0207(
     assert mock_call.call_count == 2
 
 
-def test_clear_destroyed_descriptor_ids_keeps_both_dns_frontends() -> None:
+def test_clear_destroyed_descriptor_ids_keeps_only_registry_frontend() -> None:
     desc = Descriptor.model_validate(
         {
             **SAMPLE_DESCRIPTOR,
@@ -826,12 +823,9 @@ def test_clear_destroyed_descriptor_ids_keeps_both_dns_frontends() -> None:
     clear_destroyed_descriptor_ids(
         desc,
         destroyed_ids={REGISTRY_ID, CASALS_ID},
-        preserved_frontend_ids={FRONTEND_ID, MARKETPLACE_FRONTEND_ID},
+        preserved_frontend_ids={FRONTEND_ID},
     )
-    assert desc.canisters == {
-        FRONTEND_NAME: FRONTEND_ID,
-        "marketplace_frontend": MARKETPLACE_FRONTEND_ID,
-    }
+    assert desc.canisters == {FRONTEND_NAME: FRONTEND_ID}
     assert desc.multisig.backend_id is None
 
 

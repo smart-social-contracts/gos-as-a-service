@@ -189,6 +189,7 @@ def deploy_step_kinds(manifest: dict) -> list[str]:
         cdx_id = cdx.get("id") if isinstance(cdx, dict) else None
         if cdx_id:
             kinds.append("codex")
+            kinds.append("codex_init")
 
     if has_extension_installs(manifest):
         kinds.append("resync_extension_frontends")

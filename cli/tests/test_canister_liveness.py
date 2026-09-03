@@ -28,7 +28,7 @@ from tests.conftest import SAMPLE_DESCRIPTOR, VALID_CANISTER_ID, mock_run_casals
 LIVE_INSTALLER = "ta6df-miaaa-aaaan-q6n4a-cai"
 GHOST_INSTALLER = "fksuf-niaaa-aaaae-ag22q-cai"
 LIVE_CASALS_FRONTEND = "to4on-xyaaa-aaaan-q6n5a-cai"
-LIVE_TEST_CASALS_FRONTEND = "qic2k-baaaa-aaaae-agvga-cai"
+LIVE_TEST_CASALS_FRONTEND = "3jajj-hyaaa-aaaad-qmdda-cai"
 DEAD_CASALS_FRONTEND = "fdr7z-3aaaa-aaaae-ag23a-cai"
 
 
@@ -212,11 +212,11 @@ def test_staging_json_adopts_live_stand():
     assert desc.canisters["realm_installer"] == LIVE_INSTALLER
     assert desc.canisters["realm_registry_backend"] == "snqhl-daaaa-aaaan-q6n3q-cai"
     assert desc.canisters["casals_backend"] == "th7fr-bqaaa-aaaan-q6n4q-cai"
-    assert desc.canisters["file_registry"] == "t42zu-3iaaa-aaaan-q6n6a-cai"
-    assert desc.canisters["marketplace_backend"] == "tsyu4-ayaaa-aaaan-q6n7a-cai"
     assert desc.canisters["realm_registry_frontend"] == "77243-aqaaa-aaaau-aggza-cai"
-    assert desc.canisters["marketplace_frontend"] == "h4gmt-waaaa-aaaac-bfxoq-cai"
     assert desc.canisters["casals_frontend"] == LIVE_CASALS_FRONTEND
+    assert "file_registry" not in desc.canisters
+    assert "marketplace_backend" not in desc.canisters
+    assert "marketplace_frontend" not in desc.canisters
     assert GHOST_INSTALLER not in desc.canisters.values()
     assert "hznxf-fqaaa-aaaae-ag2ua-cai" not in desc.canisters.values()
     assert DEAD_CASALS_FRONTEND not in desc.canisters.values()
