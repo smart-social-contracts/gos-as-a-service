@@ -1,26 +1,23 @@
 {
   "casals_backend": {
-    "demo": "oia4k-baaaa-aaaae-ag3ha-cai",
+    "demo": "cjkrm-ayaaa-aaaab-ag3kq-cai",
     "staging": "7rdqw-oqaaa-aaaae-qkk3a-cai",
-    "test": "jlmdu-7yaaa-aaaak-qzesa-cai",
-    "ic": "7rdqw-oqaaa-aaaae-qkk3a-cai"
+    "test": "jlmdu-7yaaa-aaaak-qzesa-cai"
   },
   "casals_file_registry": {
-    "demo": "ms4uw-7qaaa-aaaae-ag3ia-cai",
+    "demo": "colxy-naaaa-aaaab-ag3ka-cai",
     "staging": "7kgmt-uiaaa-aaaae-qkkzq-cai",
-    "test": "jmnfa-saaaa-aaaak-qzesq-cai",
-    "ic": "7kgmt-uiaaa-aaaae-qkkzq-cai"
+    "test": "jmnfa-saaaa-aaaak-qzesq-cai"
   },
   "casals_file_registry_frontend": {
     "staging": "7ya3k-yyaaa-aaaae-qkk2q-cai",
     "test": "j6lsz-6qaaa-aaaak-qzerq-cai",
-    "ic": "7ya3k-yyaaa-aaaae-qkk2q-cai"
+    "demo": "chi4e-3iaaa-aaaab-ag3lq-cai"
   },
   "casals_frontend": {
-    "demo": "opb26-myaaa-aaaae-ag3hq-cai",
+    "demo": "caj2q-wqaaa-aaaab-ag3la-cai",
     "staging": "77b56-vaaaa-aaaae-qkk2a-cai",
-    "test": "jzkun-tiaaa-aaaak-qzera-cai",
-    "ic": "77b56-vaaaa-aaaae-qkk2a-cai"
+    "test": "jzkun-tiaaa-aaaak-qzera-cai"
   },
   "file_registry": {
     "demo": "mv5sc-siaaa-aaaae-ag3iq-cai",
@@ -42,19 +39,18 @@
     "test": "mxyd5-3qaaa-aaaao-ba2xq-cai"
   },
   "realm_installer": {
-    "test": "iupx4-uaaaa-aaaai-ax5ua-cai",
     "staging": "64nuy-byaaa-aaaae-qkk4q-cai",
-    "ic": "64nuy-byaaa-aaaae-qkk4q-cai"
+    "test": "iupx4-uaaaa-aaaai-ax5ua-cai",
+    "demo": "hr2s2-riaaa-aaaas-amxqq-cai"
   },
   "realm_registry_backend": {
-    "test": "j6avg-wqaaa-aaaai-ax5ta-cai",
     "staging": "7wcwc-diaaa-aaaae-qkk3q-cai",
-    "ic": "7wcwc-diaaa-aaaae-qkk3q-cai"
+    "test": "j6avg-wqaaa-aaaai-ax5ta-cai",
+    "demo": "ckaol-xyaaa-aaaas-amxpq-cai"
   },
   "realm_registry_frontend": {
-    "demo": "2zaor-5yaaa-aaaac-qbxaa-cai",
-    "test": "jzbts-3iaaa-aaaai-ax5tq-cai",
     "staging": "63msm-maaaa-aaaae-qkk4a-cai",
-    "ic": "63msm-maaaa-aaaae-qkk4a-cai"
+    "test": "jzbts-3iaaa-aaaai-ax5tq-cai",
+    "demo": "hw3uo-4qaaa-aaaas-amxqa-cai"
   }
 }

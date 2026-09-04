@@ -15,12 +15,13 @@
     }
   ],
   "canisters": {
-    "realm_registry_frontend": "2zaor-5yaaa-aaaac-qbxaa-cai",
-    "casals_backend": "oia4k-baaaa-aaaae-ag3ha-cai",
-    "casals_frontend": "opb26-myaaa-aaaae-ag3hq-cai",
-    "casals_file_registry": "ms4uw-7qaaa-aaaae-ag3ia-cai",
-    "realm_registry_backend": "rhw4p-gqaaa-aaaac-qbw7q-cai",
-    "realm_installer": "moqmm-caaaa-aaaah-qu27q-cai"
+    "casals_backend": "cjkrm-ayaaa-aaaab-ag3kq-cai",
+    "casals_frontend": "caj2q-wqaaa-aaaab-ag3la-cai",
+    "casals_file_registry": "colxy-naaaa-aaaab-ag3ka-cai",
+    "casals_file_registry_frontend": "chi4e-3iaaa-aaaab-ag3lq-cai",
+    "realm_registry_backend": "ckaol-xyaaa-aaaas-amxpq-cai",
+    "realm_registry_frontend": "hw3uo-4qaaa-aaaas-amxqa-cai",
+    "realm_installer": "hr2s2-riaaa-aaaas-amxqq-cai"
   },
   "casals": {
     "version": "main",
