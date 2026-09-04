@@ -523,6 +523,15 @@ def create_canister(
         name,
         "--no-wallet",
     ]
+    if network not in ("local", "localhost"):
+        # dfx only auto-picks a subnet while the caller's existing canisters
+        # leave it no choice; once the deploy identity holds canisters on more
+        # than one subnet it refuses with "Cannot automatically decide which
+        # subnet to target". That makes the flag load-bearing for the second
+        # environment this identity ever deploys, not for the first. `european`
+        # matches the type the Realms CLI mints realm canisters with, so a
+        # platform and the realms it provisions stay co-located.
+        args.extend(["--subnet-type", "european"])
     if identity:
         args.extend(["--identity", identity])
     if with_cycles is not None:

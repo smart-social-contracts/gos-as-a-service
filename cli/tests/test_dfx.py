@@ -574,3 +574,42 @@ def test_parse_candid_string_plain_json_roundtrip():
     candid = payload.replace("\\", "\\\\").replace('"', '\\"')
     decoded = _parse_candid_string(f'(\n  "{candid}"\n)')
     assert json.loads(decoded) == json.loads(payload)
+
+
+def test_create_canister_names_a_subnet_on_ic(monkeypatch) -> None:
+    """dfx refuses to guess once the identity spans subnets.
+
+    The first environment an identity deploys leaves dfx no choice and so
+    succeeds without the flag; the next one fails with "Cannot automatically
+    decide which subnet to target" partway through creating the platform.
+    """
+    from gaas import dfx
+
+    captured: dict = {}
+    monkeypatch.setattr(dfx, "forget_dead_named_canister_mappings", lambda *a, **k: None)
+    monkeypatch.setattr(dfx, "canister_status", lambda *a, **k: None)
+    monkeypatch.setattr(dfx, "_parse_created_canister_id", lambda r: "aaaaa-aa")
+    monkeypatch.setattr(
+        dfx, "_run", lambda args, **kw: captured.update(args=args) or None
+    )
+
+    dfx.create_canister("realm_registry_backend", "ic", identity="deployer")
+
+    args = captured["args"]
+    assert args[args.index("--subnet-type") + 1] == "european"
+
+
+def test_create_canister_omits_subnet_locally(monkeypatch) -> None:
+    from gaas import dfx
+
+    captured: dict = {}
+    monkeypatch.setattr(dfx, "forget_dead_named_canister_mappings", lambda *a, **k: None)
+    monkeypatch.setattr(dfx, "canister_status", lambda *a, **k: None)
+    monkeypatch.setattr(dfx, "_parse_created_canister_id", lambda r: "aaaaa-aa")
+    monkeypatch.setattr(
+        dfx, "_run", lambda args, **kw: captured.update(args=args) or None
+    )
+
+    dfx.create_canister("realm_registry_backend", "local", identity="deployer")
+
+    assert "--subnet-type" not in captured["args"]
