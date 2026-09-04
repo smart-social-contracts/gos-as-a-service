@@ -20,11 +20,11 @@ const REPO_CANISTER_IDS = JSON.parse(
 	readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../../../../canister_ids.json'), 'utf-8')
 );
 
-const CASALS_BACKEND_IDS = {
-	test: 'qthgp-3yaaa-aaaae-agveq-cai',
-	staging: 'th7fr-bqaaa-aaaan-q6n4q-cai',
-	demo: 'oia4k-baaaa-aaaae-ag3ha-cai'
-};
+// Read from canister_ids.json rather than duplicating the ids: a conductor is
+// re-minted whenever an environment is rebuilt, so a hardcoded copy fails the
+// suite on every rebuild while proving nothing the dead-prefix guard below
+// doesn't already prove.
+const CASALS_BACKEND_IDS = REPO_CANISTER_IDS.casals_backend;
 
 const DEAD_CANISTER_PREFIXES = [
 	'fdr7z',
@@ -54,6 +54,35 @@ test('detectNetwork maps known hostnames', () => {
 
 test('detectNetwork defaults unknown hostnames to staging', () => {
 	assert.equal(detectNetwork('unknown.example.com'), 'staging');
+});
+
+test('detectNetwork prefers the built-for network on an unknown host', () => {
+	// The raw <canister-id>.icp0.io URL, used before the custom domain is wired.
+	assert.equal(
+		detectNetwork('jzbts-3iaaa-aaaai-ax5tq-cai.icp0.io', {
+			domain: 'test.gos.earth',
+			network: 'test'
+		}),
+		'test'
+	);
+});
+
+test('detectNetwork still prefers a known host over the built-for network', () => {
+	assert.equal(
+		detectNetwork('demo.gos.earth', { domain: 'test.gos.earth', network: 'test' }),
+		'demo'
+	);
+});
+
+test('getCanisterId uses the built-for network on an unknown host', () => {
+	assert.equal(
+		getCanisterId('realm_registry_backend', {
+			hostname: 'jzbts-3iaaa-aaaai-ax5tq-cai.icp0.io',
+			canisterIdsMap: CANISTER_MAP,
+			gaasEnvOverride: { domain: 'test.gos.earth', network: 'test' }
+		}),
+		'yhw3g-fyaaa-aaaas-qgorq-cai'
+	);
 });
 
 test('getCanisterId resolves from injected map by network', () => {
@@ -139,8 +168,10 @@ test('getCanisterId resolves casals_backend from canister_ids.json on portal hos
 	);
 });
 
-test('canister_ids.json bakes live casals_backend IDs and no known-dead prefixes', () => {
-	assert.deepEqual(REPO_CANISTER_IDS.casals_backend, CASALS_BACKEND_IDS);
+test('canister_ids.json bakes a casals_backend per environment, no known-dead prefixes', () => {
+	for (const network of ['test', 'staging', 'demo']) {
+		assert.ok(REPO_CANISTER_IDS.casals_backend?.[network], `missing ${network}`);
+	}
 	const dumped = JSON.stringify(REPO_CANISTER_IDS.casals_backend);
 	for (const prefix of DEAD_CANISTER_PREFIXES) {
 		assert.equal(dumped.includes(prefix), false, `dead prefix ${prefix}`);

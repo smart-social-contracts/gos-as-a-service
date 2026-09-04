@@ -303,3 +303,103 @@ def test_run_preflight_passes_when_plan_ok(mock_build, _principal, _identity) ->
     )
     assert report.ok
     assert any(c.name == "cycles_plan" and c.passed for c in report.checks)
+
+
+def test_dead_pin_budgets_create_not_topup() -> None:
+    dead_id = "mq5y2-riaaa-aaaai-ax5pq-cai"
+    live_id = VALID_CANISTER_ID
+    desc = _descriptor(
+        canisters={
+            "realm_registry_backend": dead_id,
+            "realm_registry_frontend": live_id,
+        }
+    )
+    plan = build_cycles_plan(
+        desc,
+        "ic",
+        wallet_balance=177_423_000_000_000_000,
+        canister_balances={"realm_registry_frontend": DEFAULT_THRESHOLD},
+        pins_missing_on_ic={"realm_registry_backend"},
+    )
+    wallet = next(item for item in plan.items if item.label == "wallet")
+    create_cost = _wallet_create_cost("realm_registry_backend", desc)
+    missing_cost = sum(
+        _wallet_create_cost(name, desc)
+        for name in PLATFORM_CANISTER_NAMES
+        if name not in desc.canisters
+    )
+    assert wallet.required == missing_cost + create_cost
+    assert plan.dead_pins == [("realm_registry_backend", dead_id)]
+    assert not any(item.label == "realm_registry_backend" for item in plan.items)
+    assert not any(
+        dead_id in rem for rem in plan.remediations
+    )
+    assert plan.ok
+
+
+def test_live_pinned_canister_still_topups_when_under_headroom() -> None:
+    desc = _descriptor(canisters={"realm_registry_backend": VALID_CANISTER_ID})
+    shortfall = DEFAULT_THRESHOLD - 100_000_000_000
+    plan = build_cycles_plan(
+        desc,
+        "ic",
+        wallet_balance=10_000_000_000_000,
+        canister_balances={"realm_registry_backend": 100_000_000_000},
+    )
+    backend = next(item for item in plan.items if item.label == "realm_registry_backend")
+    wallet = next(item for item in plan.items if item.label == "wallet")
+    assert backend.shortfall == shortfall
+    assert wallet.required == shortfall + sum(
+        _wallet_create_cost(name, desc)
+        for name in PLATFORM_CANISTER_NAMES
+        if name not in desc.canisters
+    )
+    assert remediation_canister_top_up(VALID_CANISTER_ID, shortfall, "ic") in plan.remediations
+
+
+def test_unreadable_existing_canister_keeps_unknown_balance_remediation() -> None:
+    desc = _descriptor(canisters={"realm_registry_backend": VALID_CANISTER_ID})
+    plan = build_cycles_plan(
+        desc,
+        "ic",
+        wallet_balance=10_000_000_000_000,
+        canister_balances={"realm_registry_backend": None},
+    )
+    backend = next(item for item in plan.items if item.label == "realm_registry_backend")
+    assert backend.available is None
+    assert not plan.ok
+    assert any("could not read" in rem for rem in plan.remediations)
+    assert not any("top-up" in rem for rem in plan.remediations)
+
+
+@patch("gaas.cycles_plan.dfx.canister_cycles_balance")
+def test_dead_pin_detected_from_balance_not_found(mock_balance) -> None:
+    from gaas.dfx import DfxError
+
+    dead_id = "jmgc7-2aaaa-aaaai-ax5qa-cai"
+    mock_balance.side_effect = DfxError(
+        f"Canister {dead_id} was not found",
+        command=["dfx", "canister", "status", dead_id],
+        stderr="IC0301",
+    )
+    desc = _descriptor(canisters={"realm_installer": dead_id})
+    plan = build_cycles_plan(desc, "ic", wallet_balance=177_423_000_000_000_000)
+    wallet = next(item for item in plan.items if item.label == "wallet")
+    assert plan.dead_pins == [("realm_installer", dead_id)]
+    assert wallet.required == sum(
+        _wallet_create_cost(name, desc) for name in PLATFORM_CANISTER_NAMES
+    )
+    assert not any(item.label == "realm_installer" for item in plan.items)
+    assert plan.ok
+
+
+@patch("gaas.cycles_plan.dfx.canister_cycles_balance")
+def test_explicit_canister_balances_skips_liveness_calls(mock_balance) -> None:
+    desc = _descriptor(canisters={"realm_registry_backend": VALID_CANISTER_ID})
+    build_cycles_plan(
+        desc,
+        "ic",
+        wallet_balance=10_000_000_000_000,
+        canister_balances={"realm_registry_backend": DEFAULT_THRESHOLD},
+    )
+    mock_balance.assert_not_called()

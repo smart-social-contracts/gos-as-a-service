@@ -48,6 +48,13 @@ export function detectNetwork(hostname, gaasEnvOverride) {
 	if (hostname === 'demo.gos.earth') return 'demo';
 	if (hostname === 'gos.earth' || hostname === 'registry.realmsgos.org') return 'ic';
 
+	// Unrecognized host — typically the raw <canister-id>.icp0.io URL, used
+	// whenever the custom domain is not wired up yet. The bundle was built for one
+	// environment, so trust that rather than guessing: defaulting to staging made
+	// a test deployment resolve staging canister ids and call canisters that do
+	// not exist there.
+	if (gaasEnv?.network) return gaasEnv.network;
+
 	return 'staging';
 }
 

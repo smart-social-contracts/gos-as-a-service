@@ -9,7 +9,7 @@
   "controls": {
     "list_view": "列表视图",
     "map_view": "地图视图",
-    "create_realm": "Deploy GOS",
+    "create_realm": "Launch a new realm",
     "marketplace": "市场",
     "architecture": "架构",
     "architecture_unavailable": "基础设施不可用"
@@ -97,7 +97,7 @@
     "globe_title": "探索地球仪",
     "globe_body": "Realm 显示在这张 3D 地图上。点击发光图钉可飞往该位置并查看详情。",
     "rail_title": "快捷操作",
-    "rail_body": "点击左上角的网格/应用按钮打开导览、Deploy GOS、基础设施和语言。右上角使用 Internet Identity 登录。",
+    "rail_body": "点击左上角的网格/应用按钮打开导览、Launch a new realm、基础设施和语言。右上角使用 Internet Identity 登录。",
     "browse_title": "浏览 Realm",
     "browse_body": "打开 Realm 浏览器以搜索、按阶段筛选并浏览列表。",
     "panel_title": "Realm 浏览器",

@@ -52,23 +52,29 @@ def test_platform_sheet_has_infra_and_deployments() -> None:
     stand_names = [stand["name"] for stand in infra["stands"]]
     assert stand_names == [
         "governance",
-        "orchestration",
         "installer",
         "realm-registry",
     ]
     assert infra["stands"][0]["canisters"][0]["name"] == "multisig"
     assert infra["stands"][0]["canisters"][0]["wasm_type"] == "multisig"
     assert infra["stands"][0]["canisters"][0]["teardown_priority"] == 40
-    baton = infra["stands"][1]["canisters"][0]
-    assert baton["name"] == "infra-baton"
-    assert baton["wasm_type"] == "baton"
-    assert baton["install_arg"] == {"top_commander": "$self"}
-    assert [c["name"] for c in infra["stands"][2]["canisters"]] == ["realm-installer"]
-    assert [c["name"] for c in infra["stands"][3]["canisters"]] == [
+    assert [c["name"] for c in infra["stands"][1]["canisters"]] == ["realm-installer"]
+    assert [c["name"] for c in infra["stands"][2]["canisters"]] == [
         "realm-registry-backend",
         "realm-registry-frontend",
     ]
     assert sheet["sections"][1]["stands"] == []
+
+
+def test_platform_sheet_has_no_infra_baton_stand() -> None:
+    """Per-realm batons are minted by realm_installer, not the platform sheet."""
+    sheet = platform_sheet()
+    infra = sheet["sections"][0]
+    stand_names = {stand["name"] for stand in infra["stands"]}
+    assert "orchestration" not in stand_names
+    for stand in infra["stands"]:
+        for canister in stand.get("canisters") or []:
+            assert canister.get("wasm_type") != "baton"
 
 
 def test_governance_deploy_sheet_omits_installer_and_registry() -> None:
@@ -78,12 +84,10 @@ def test_governance_deploy_sheet_omits_installer_and_registry() -> None:
     infra = sheet["sections"][0]
     assert [stand["name"] for stand in infra["stands"]] == [
         "governance",
-        "orchestration",
     ]
     full = platform_sheet()
     assert [stand["name"] for stand in full["sections"][0]["stands"]] == [
         "governance",
-        "orchestration",
         "installer",
         "realm-registry",
     ]
@@ -581,6 +585,12 @@ def test_ensure_platform_stand_creates_stand_and_registers(monkeypatch) -> None:
     ]
 
 
+def test_platform_canister_stand_excludes_casals_file_registry() -> None:
+    # Casals bootstrap registers file_registry under Casals/System via set_settings;
+    # GaaS must not also register it on Infra/casals-file-registry.
+    assert "casals-file-registry" not in conductor_seed.PLATFORM_CANISTER_STAND
+
+
 def test_ensure_platform_stand_tolerates_existing_stand(monkeypatch) -> None:
     calls: list[tuple[str, dict]] = []
 
@@ -597,21 +607,21 @@ def test_ensure_platform_stand_tolerates_existing_stand(monkeypatch) -> None:
         conductor_seed,
         "get_tree",
         lambda *_a, **_k: {
-            "sections": [{"name": "Infra", "stands": [{"name": "casals-file-registry", "canisters": []}]}]
+            "sections": [{"name": "Infra", "stands": [{"name": "installer", "canisters": []}]}]
         },
     )
 
     conductor_seed.ensure_platform_stand(
         "qthgp-3yaaa-aaaae-agveq-cai",
-        [("casals-file-registry", "ddddd-ddddd-ddddd-ddddd-ddddd-ddd", "backend")],
+        [("realm-installer", "ddddd-ddddd-ddddd-ddddd-ddddd-ddd", "backend")],
         "ic",
     )
     assert calls == [
         (
             "register_canister",
             {
-                "stand": "casals-file-registry",
-                "name": "casals-file-registry",
+                "stand": "installer",
+                "name": "realm-installer",
                 "canister_id": "ddddd-ddddd-ddddd-ddddd-ddddd-ddd",
                 "kind": "backend",
             },

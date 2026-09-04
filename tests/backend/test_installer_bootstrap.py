@@ -18,6 +18,8 @@ from bootstrap import (  # noqa: E402
     manifest_has_codex_block,
     needs_enter_setup_step,
     resolve_legacy_install_lists,
+    _install_step_failed,
+    resync_extension_batches,
     resync_extension_frontends_args,
     uses_monad_gos_bootstrap,
     uses_realms_bootstrap,
@@ -129,8 +131,25 @@ def test_configure_payload_includes_creator_and_portal_origin():
     assert payload["portal_origin"] == "https://portal.example"
     assert payload["frontend_canister_id"] == "frontend-principal"
     assert payload["realm_registry_canister_id"] == "realm-registry-id"
-    assert payload["file_registry_canister_id"] == "uq2mu-kaaaa-aaaah-avqcq-cai"
-    assert payload["marketplace_canister_id"] == "2wldc-niaaa-aaaad-qlxga-cai"
+    # Nothing supplied these and there are no baked-in per-network defaults, so
+    # they are omitted rather than pointing the realm at a stale canister.
+    assert "file_registry_canister_id" not in payload
+    assert "marketplace_canister_id" not in payload
+
+
+def test_configure_payload_carries_infra_file_registry_and_marketplace():
+    manifest = _bootstrap_manifest(
+        infra={
+            "file_registry_canister_id": "live-file-registry",
+            "marketplace_canister_id": "live-marketplace",
+        },
+    )
+    args = configure_canister_ids_args(
+        manifest, manifest["target_canister_id"], manifest["frontend_canister_id"]
+    )
+    payload, _warnings = configure_canister_ids_payload(args)
+    assert payload["file_registry_canister_id"] == "live-file-registry"
+    assert payload["marketplace_canister_id"] == "live-marketplace"
 
 
 def test_configure_payload_realm_registry_from_explicit_field():
@@ -163,7 +182,14 @@ def test_configure_payload_includes_infra_file_registry_and_marketplace():
 
 
 def test_ext_manifest_configure_includes_realm_registry():
-    ext_manifest = _ext_manifest_for_job(_bootstrap_manifest())
+    ext_manifest = _ext_manifest_for_job(
+        _bootstrap_manifest(
+            infra={
+                "file_registry_canister_id": "live-file-registry",
+                "marketplace_canister_id": "live-marketplace",
+            },
+        )
+    )
     configure_args = configure_canister_ids_args(
         ext_manifest,
         ext_manifest["target_canister_id"],
@@ -171,8 +197,8 @@ def test_ext_manifest_configure_includes_realm_registry():
     )
     payload, _warnings = configure_canister_ids_payload(configure_args)
     assert payload["realm_registry_canister_id"] == "realm-registry-id"
-    assert payload["file_registry_canister_id"] == "uq2mu-kaaaa-aaaah-avqcq-cai"
-    assert payload["marketplace_canister_id"] == "2wldc-niaaa-aaaad-qlxga-cai"
+    assert payload["file_registry_canister_id"] == "live-file-registry"
+    assert payload["marketplace_canister_id"] == "live-marketplace"
 
 
 def test_configure_missing_requesting_principal_warns_and_proceeds():
@@ -237,6 +263,73 @@ def test_resync_extension_frontends_only_passes_frontend():
     )
     args = resync_extension_frontends_args(manifest)
     assert args == {"frontend_canister_id": "frontend-principal"}
+
+
+def test_resync_batches_split_extensions():
+    """One call per few extensions: a full-set resync outruns the ingress window."""
+    manifest = {"extensions": [{"id": f"ext{i}"} for i in range(5)]}
+    assert resync_extension_batches(manifest) == [
+        ["ext0", "ext1"],
+        ["ext2", "ext3"],
+        ["ext4"],
+        [],  # final sweep: codex dependencies are not in the manifest
+    ]
+
+
+def test_resync_batches_ignore_blank_ids():
+    manifest = {"extensions": [{"id": "a"}, {"id": " "}, {}, {"id": "b"}]}
+    assert resync_extension_batches(manifest) == [["a", "b"], []]
+
+
+def test_resync_batches_without_extensions_keeps_one_unscoped_call():
+    """No ids → one call, so the realm still resyncs whatever it has installed."""
+    assert resync_extension_batches({"extensions": []}) == [[]]
+    assert resync_extension_batches({}) == [[]]
+
+
+def test_resync_batches_honour_explicit_size():
+    manifest = {"extensions": [{"id": "a"}, {"id": "b"}, {"id": "c"}]}
+    assert resync_extension_batches(manifest, batch_size=2) == [["a", "b"], ["c"], []]
+    assert resync_extension_batches(manifest, batch_size=0) == [["a"], ["b"], ["c"], []]
+
+
+def test_install_step_failure_reports_per_extension_errors():
+    """resync reports failures in `errors` with no top-level `error`."""
+    failed, err = _install_step_failed(
+        {
+            "success": False,
+            "synced": [{"extension_id": "vault"}],
+            "errors": [
+                {"extension_id": "voting", "error": "IC0506"},
+                {"extension_id": "census", "error": "no reply"},
+            ],
+        }
+    )
+    assert failed is True
+    assert "voting: IC0506" in err
+    assert "census: no reply" in err
+
+
+def test_install_step_failure_prefers_top_level_error():
+    failed, err = _install_step_failed({"success": False, "error": "not authorized"})
+    assert (failed, err) == (True, "not authorized")
+
+
+def test_install_step_failure_without_detail_falls_back():
+    assert _install_step_failed({"success": False}) == (True, "install failed")
+
+
+def test_install_step_success_and_non_dict():
+    assert _install_step_failed({"success": True}) == (False, "")
+    assert _install_step_failed("nonsense") == (False, "")
+
+
+def test_install_step_dependency_warnings_still_fail():
+    failed, err = _install_step_failed(
+        {"success": True, "dependency_warnings": [{"extension": "dep", "error": "boom"}]}
+    )
+    assert failed is True
+    assert "dependency install failed: dep: boom" == err
 
 
 def test_casals_path_always_enters_bootstrap_phase():
@@ -342,3 +435,10 @@ def test_blank_gos_implementation_gets_enter_setup_and_realms_bootstrap():
         "configure_canister_ids",
         "grant_frontend_access",
     ]
+
+
+def test_resync_batches_end_with_an_unscoped_sweep():
+    """Codex dependencies never appear in manifest.extensions."""
+    batches = resync_extension_batches({"extensions": [{"id": "a"}]})
+    assert batches[-1] == []
+    assert batches == [["a"], []]

@@ -113,6 +113,8 @@ class CasalsConfig(BaseModel):
     version: str
     release_repo: str = DEFAULT_CASALS_RELEASE_REPO
     commanders: list[str] = Field(default_factory=list)
+    # Casals conductor UI label; defaults to the GaaS platform sheet ``name`` (casals.json).
+    orchestra_name: str | None = None
 
     @field_validator("version")
     @classmethod
@@ -121,6 +123,20 @@ class CasalsConfig(BaseModel):
             return validate_descriptor_version(value)
         except ValueError as exc:
             raise ValueError(f"casals.version: {exc}") from exc
+
+    @field_validator("orchestra_name")
+    @classmethod
+    def validate_orchestra_name(cls, value: str | None) -> str | None:
+        if value is None or value == "":
+            return None
+        name = value.strip()
+        if not name:
+            return None
+        if "\n" in name or any(ord(ch) < 32 for ch in name):
+            raise ValueError("casals.orchestra_name must not contain newlines or control characters")
+        if len(name) > 64:
+            raise ValueError("casals.orchestra_name must be at most 64 characters")
+        return name
 
     @field_validator("commanders")
     @classmethod

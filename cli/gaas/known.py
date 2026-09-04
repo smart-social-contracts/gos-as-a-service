@@ -22,6 +22,8 @@ DEFAULT_CASALS_RELEASE_REPO: Final[str] = "smart-social-contracts/Casals"
 DEFAULT_PLATFORM_VERSION: Final[str] = "v0.3.1"
 DEFAULT_PLATFORM_RELEASE_REPO: Final[str] = "smart-social-contracts/gos-as-a-service"
 DEFAULT_CASALS_SECTION: Final[str] = "Deployments"
+# Fallback when casals.json has no ``name`` and the descriptor omits ``casals.orchestra_name``.
+DEFAULT_CASALS_ORCHESTRA_NAME: Final[str] = "gaas"
 
 # Maps platform canister names to dfx.json canister names.
 DFX_CANISTER_NAMES: Final[dict[str, str | None]] = {

@@ -14,7 +14,7 @@ from rich.console import Console
 from gaas import dfx
 from gaas.runlog import get_run_log, run_subprocess
 from gaas.descriptor import Descriptor
-from gaas.known import GOS_IMPLEMENTATIONS
+from gaas.known import DEFAULT_CASALS_ORCHESTRA_NAME, GOS_IMPLEMENTATIONS
 from gaas.file_registry_client import fetch_namespace_hashes, upload_file
 from gaas.platform import (
     find_gos_repo_root,
@@ -28,6 +28,9 @@ console = Console()
 CASALS_TEMPLATES_NAMESPACE = "casals-templates"
 
 # Latest orchestration template versions from Casals seed/templates.json.
+# orchestration-baton stays authorized even though casals.json has no infra-baton
+# stand: realm_installer mints one baton per realm (Deployments section) and hands
+# IC control of that realm's canisters to it.
 ORCHESTRATION_TEMPLATES: tuple[tuple[str, str, str], ...] = (
     ("orchestration-baton", "1.3.0", "orchestration-baton@1.3.0.wasm.gz"),
     ("orchestration-multisig", "1.2.0", "orchestration-multisig@1.2.0.wasm.gz"),
@@ -48,11 +51,28 @@ def platform_sheet(repo_root: Path | None = None) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-_GOVERNANCE_STANDS = frozenset({"governance", "orchestration"})
+def casals_orchestra_name(
+    descriptor: Descriptor,
+    repo_root: Path | None = None,
+) -> str:
+    """Resolve the GaaS Casals conductor label for ``set_settings``.
+
+    Descriptor ``casals.orchestra_name`` wins; otherwise use the platform sheet
+    ``name`` from ``casals.json``; finally ``DEFAULT_CASALS_ORCHESTRA_NAME``.
+    """
+    if descriptor.casals.orchestra_name:
+        return descriptor.casals.orchestra_name
+    sheet_name = (platform_sheet(repo_root).get("name") or "").strip()
+    if sheet_name:
+        return sheet_name
+    return DEFAULT_CASALS_ORCHESTRA_NAME
+
+
+_GOVERNANCE_STANDS = frozenset({"governance"})
 
 
 def governance_deploy_sheet(repo_root: Path | None = None) -> dict[str, Any]:
-    """Sheet fragment Casals may mint: multisig + infra-baton only.
+    """Sheet fragment Casals may mint: multisig only.
 
     Installer and realm-registry canisters are created by ``gaas new`` (dfx)
     and registered afterwards. Passing them to ``deploy_sheet`` tries to mint
@@ -497,13 +517,11 @@ PLATFORM_CANISTER_STAND: dict[str, str] = {
     "realm-installer": "installer",
     "realm-registry-backend": "realm-registry",
     "realm-registry-frontend": "realm-registry",
-    "casals-file-registry": "casals-file-registry",
 }
 
 PLATFORM_STAND_DESCRIPTIONS: dict[str, str] = {
     "installer": "Installer backend.",
     "realm-registry": "Realm registry backend and DNS frontend (keep-ID reinstall).",
-    "casals-file-registry": "Casals-owned file registry from casals new.",
 }
 
 

@@ -47,9 +47,9 @@ test('RegistryHeader has no fdr7z fallback and no hardcoded canister URL', () =>
 	assert.match(headerSource, /\{#if architectureUrl\}/);
 });
 
-test('hamburger links to Deploy GOS and omits Marketplace', () => {
+test('hamburger links to Launch a new realm and omits Marketplace', () => {
 	const en = JSON.parse(readFileSync(join(here, 'i18n/locales/en.json'), 'utf-8'));
-	assert.equal(en.controls.create_realm, 'Deploy GOS');
+	assert.equal(en.controls.create_realm, 'Launch a new realm');
 	assert.match(headerSource, /href="\/deploy-gos"/);
 	assert.match(headerSource, /controls\.create_realm/);
 	assert.equal(headerSource.includes('href="/create-realm"'), false);
@@ -70,9 +70,10 @@ test('Infrastructure link uses only the live registry Casals principal', () => {
 	assert.equal(pageSource.includes("getCanisterId('casals_frontend')"), false);
 });
 
-test('frontend prebuild does not generate casals_backend', () => {
+test('frontend prebuild verifies committed declarations instead of running dfx', () => {
+	// Declarations are committed under src/declarations, so the build needs no dfx.
+	// Calling `dfx generate` here broke unattended deploys on hosts that wrap dfx.
 	const pkg = JSON.parse(readFileSync(join(here, '../../package.json'), 'utf-8'));
-	assert.equal((pkg.scripts?.prebuild || '').includes('casals_backend'), false);
-	assert.match(pkg.scripts.prebuild, /dfx generate realm_registry_backend/);
-	assert.match(pkg.scripts.prebuild, /dfx generate realm_installer/);
+	assert.equal((pkg.scripts?.prebuild || '').includes('dfx'), false);
+	assert.match(pkg.scripts.prebuild, /check-declarations/);
 });

@@ -107,11 +107,73 @@ def configure_canister_ids_payload(args: dict) -> tuple[dict, list[str]]:
     return payload, warnings
 
 
+def _format_dependency_warnings(warnings: list) -> str:
+    parts = []
+    for item in (warnings or [])[:5]:
+        if isinstance(item, dict):
+            # dependency_warnings uses `extension`; resync errors use `extension_id`.
+            name = item.get("extension") or item.get("extension_id") or "?"
+            parts.append(f"{name}: {item.get('error', 'unknown')}")
+        else:
+            parts.append(str(item))
+    summary = "; ".join(parts)
+    if len(warnings or []) > 5:
+        summary += f" (+{len(warnings) - 5} more)"
+    return summary
+
+
+def _install_step_failed(parsed) -> tuple:
+    """Return (failed: bool, error: str) for an extension/codex install result."""
+    if not isinstance(parsed, dict):
+        return False, ""
+    if parsed.get("success") is False:
+        # resync_extension_frontends reports per-extension failures in `errors`
+        # and no top-level `error`, so the bare fallback hid the actual cause.
+        detail = parsed.get("error") or _format_dependency_warnings(
+            parsed.get("errors") or []
+        )
+        return True, (detail or "install failed")
+    warnings = parsed.get("dependency_warnings") or []
+    if warnings:
+        return True, f"dependency install failed: {_format_dependency_warnings(warnings)}"
+    return False, ""
+
+
 def resync_extension_frontends_args(manifest: dict) -> dict:
     """Build args for the resync_extension_frontends post-provision step."""
     return {
         "frontend_canister_id": (manifest.get("frontend_canister_id") or "").strip(),
     }
+
+
+# Copying one extension's bundle into the asset canister measures ~57s, with no
+# meaningful fixed cost per call, so resyncing every installed extension in one
+# update call cannot finish inside the ~5 min ingress window: the step died
+# part-way and left the job "partial". Two per call keeps a batch near two
+# minutes, leaving headroom for a bundle with many hashed assets.
+RESYNC_BATCH_SIZE = 2
+
+
+def resync_extension_batches(manifest: dict, batch_size: int = RESYNC_BATCH_SIZE) -> list:
+    """Split the manifest's extensions into per-call resync batches.
+
+    The last batch is always empty, meaning "no explicit ids": the realm then
+    sweeps everything it has installed. A codex pulls in dependencies that the
+    manifest never lists, so scoping every call to the manifest would leave
+    those bundles out. The sweep is cheap because the realm skips bundles
+    already on the asset canister.
+    """
+    ext_ids = []
+    for ext in manifest.get("extensions") or []:
+        ext_id = str(ext.get("id") or "").strip()
+        if ext_id:
+            ext_ids.append(ext_id)
+    if not ext_ids:
+        return [[]]
+    size = max(1, int(batch_size or 1))
+    batches = [ext_ids[i : i + size] for i in range(0, len(ext_ids), size)]
+    batches.append([])
+    return batches
 
 
 def gos_implementation(manifest: dict) -> str:

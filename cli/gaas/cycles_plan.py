@@ -53,6 +53,7 @@ class CyclesPlan:
     network: str
     items: list[CyclesLineItem] = field(default_factory=list)
     remediations: list[str] = field(default_factory=list)
+    dead_pins: list[tuple[str, str]] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -71,7 +72,12 @@ class CyclesPlan:
         return [
             item
             for item in self.items
-            if item.label != "wallet" and item.canister_id and item.shortfall > 0
+            if (
+                item.label != "wallet"
+                and item.canister_id
+                and item.available is not None
+                and item.shortfall > 0
+            )
         ]
 
     @property
@@ -155,6 +161,7 @@ def build_cycles_plan(
     identity: str | None = None,
     wallet_balance: int | None = None,
     canister_balances: dict[str, int | None] | None = None,
+    pins_missing_on_ic: set[str] | None = None,
 ) -> CyclesPlan:
     """Build wallet and canister cycle requirements for a descriptor.
 
@@ -162,17 +169,29 @@ def build_cycles_plan(
     platform canister, plus the top-up shortfall to bring existing canisters
     up to headroom. Canister line items still show the floor vs current
     balance; ``plan.ok`` is wallet-funded (gaas tops those canisters up).
+
+    Pinned principals that no longer exist on the IC are treated like missing
+    pins: their create cost is added to ``wallet_required`` and no top-up
+    line item is emitted. Pass ``pins_missing_on_ic`` to declare dead pins
+    without a replica lookup (tests); otherwise a failed balance read with
+    IC0301 / not-found is the signal when ``canister_balances`` is omitted.
     """
     plan = CyclesPlan(network=network)
     balances = canister_balances or {}
+    missing_on_ic = pins_missing_on_ic or set()
+    dead_pins: list[tuple[str, str]] = []
 
     canister_items: list[CyclesLineItem] = []
     topup_total = 0
     unknown_balance = False
     for name in KNOWN_CANISTER_NAMES:
-        canister_id = descriptor.canisters.get(name)
+        canister_id = (descriptor.canisters.get(name) or "").strip()
         if not canister_id:
             continue
+        if name in missing_on_ic:
+            dead_pins.append((name, canister_id))
+            continue
+
         required = canister_headroom(name, descriptor)
         available = balances.get(name)
         if available is None and network == "ic" and canister_balances is None:
@@ -180,7 +199,10 @@ def build_cycles_plan(
                 available = dfx.canister_cycles_balance(
                     canister_id, network, identity=identity
                 )
-            except dfx.DfxError:
+            except dfx.DfxError as exc:
+                if dfx.is_canister_not_found_error(exc):
+                    dead_pins.append((name, canister_id))
+                    continue
                 available = None
         item = CyclesLineItem(
             label=name,
@@ -198,6 +220,8 @@ def build_cycles_plan(
     for name in PLATFORM_CANISTER_NAMES:
         if name not in descriptor.canisters:
             wallet_required += _wallet_create_cost(name, descriptor)
+    for name, _canister_id in dead_pins:
+        wallet_required += _wallet_create_cost(name, descriptor)
 
     if wallet_balance is None and network == "ic":
         try:
@@ -214,6 +238,7 @@ def build_cycles_plan(
         )
     )
     plan.items.extend(canister_items)
+    plan.dead_pins = dead_pins
 
     wallet_item = plan.items[0]
     if wallet_item.shortfall > 0:
@@ -264,6 +289,12 @@ def render_cycles_plan_table(plan: CyclesPlan) -> Table:
 
 def print_cycles_plan(plan: CyclesPlan, console: Console | None = None) -> None:
     console = console or Console()
+    if plan.dead_pins:
+        console.print(
+            "[yellow]Stale pins not on IC (will recreate during create_canisters):[/yellow]"
+        )
+        for name, canister_id in plan.dead_pins:
+            console.print(f"  {name}: {canister_id}")
     console.print(render_cycles_plan_table(plan))
     if plan.ok and plan.pending_topups:
         console.print("[yellow]Will top up from wallet to reach headroom:[/yellow]")

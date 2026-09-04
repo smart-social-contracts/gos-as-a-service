@@ -6,7 +6,7 @@
   "scripts": {
     "setup": "npm i && dfx canister create realm_registry_backend && dfx generate realm_registry_backend && dfx deploy",
     "start": "vite --port 3000",
-    "prebuild": "cd ../.. && dfx generate realm_registry_backend && dfx generate realm_installer",
+    "prebuild": "node scripts/check-declarations.mjs",
     "build": "vite build",
     "postbuild": "node scripts/write-version-file.js",
     "test": "npm run test:unit",

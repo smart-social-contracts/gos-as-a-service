@@ -1,11 +1,11 @@
 {
-  "$comment": "GaaS platform sheet for `gaas new` then `casals sheet deploy` onto **GaaS Casals** only. Conductor canisters (casals_backend, casals_frontend, casals_file_registry) are created by `casals new` (always destroy-and-recreate), not this sheet. Registry vs installer are separate stands (same-stand backend+frontend on a lumped platform stand tripped ManagePermissions). infra-baton is minted here (top_commander $self). Deployments commander (the installer principal) is applied after mint via set_commander. realm-registry-frontend is DNS keep-ID (*.gos.earth): reinstall on the same principal is OK; do not delete_canister. Empty Deployments is intentional: gaas new destroys realm/quarter canisters and does not recreate them. Fleet file-registry is Product-owned (realms/casals.json), not an Infra stand. realms seed deploys realms/casals.json onto a separate Realms GOS Casals instance.",
+  "$comment": "GaaS platform sheet for `gaas new` then `casals sheet deploy` onto **GaaS Casals** only. Conductor canisters (casals_backend, casals_frontend, casals_file_registry) are created by `casals new` (always destroy-and-recreate), not this sheet. Registry vs installer are separate stands (same-stand backend+frontend on a lumped platform stand tripped ManagePermissions). No infra baton: batons are per-realm and are minted with the realm (see the Deployments section, e.g. <slug>-baton, which really does hold IC control of that realm's canisters). A single baton in front of installer + realm-registry only duplicated Casals's own commander plus the governance multisig and never became a controller of either canister. Deployments commander (the installer principal) is applied after mint via set_commander. realm-registry-frontend is DNS keep-ID (*.gos.earth): reinstall on the same principal is OK; do not delete_canister. Empty Deployments is intentional: gaas new destroys realm/quarter canisters and does not recreate them. Fleet file-registry is Product-owned (realms/casals.json), not an Infra stand. realms seed deploys realms/casals.json onto a separate Realms GOS Casals instance.",
   "name": "gaas",
-  "description": "GaaS *.gos.earth platform: governance, infra baton, installer, realm registry. Deployments start empty.",
+  "description": "GaaS *.gos.earth platform: governance, installer, realm registry. Deployments start empty.",
   "sections": [
     {
       "name": "Infra",
-      "description": "Orchestration governance (multisig + infra baton) and GaaS portal canisters (installer, realm registry).",
+      "description": "Orchestration governance (multisig) and GaaS portal canisters (installer, realm registry).",
       "stands": [
         {
           "name": "governance",
@@ -17,20 +17,6 @@
               "kind": "backend",
               "wasm_type": "multisig",
               "teardown_priority": 40
-            }
-          ]
-        },
-        {
-          "name": "orchestration",
-          "description": "Infra baton: managed-upgrade governance for installer and realm-registry. Top commander: this Casals backend.",
-          "canisters": [
-            {
-              "name": "infra-baton",
-              "wasm_key": "orchestration-baton",
-              "kind": "backend",
-              "wasm_type": "baton",
-              "teardown_priority": 40,
-              "install_arg": { "top_commander": "$self" }
             }
           ]
         },

@@ -72,6 +72,9 @@ from bootstrap import (
     resolve_founder,
     manifest_has_codex_block,
     needs_enter_setup_step,
+    _format_dependency_warnings,
+    _install_step_failed,
+    resync_extension_batches,
     resync_extension_frontends_args,
     resolve_legacy_install_lists,
     has_extension_installs,
@@ -1064,31 +1067,6 @@ _RETRY_BASE_S = 10
 _retry_counts: dict = {}
 
 
-def _format_dependency_warnings(warnings: list) -> str:
-    parts = []
-    for item in (warnings or [])[:5]:
-        if isinstance(item, dict):
-            parts.append(f"{item.get('extension', '?')}: {item.get('error', 'unknown')}")
-        else:
-            parts.append(str(item))
-    summary = "; ".join(parts)
-    if len(warnings or []) > 5:
-        summary += f" (+{len(warnings) - 5} more)"
-    return summary
-
-
-def _install_step_failed(parsed) -> tuple:
-    """Return (failed: bool, error: str) for an extension/codex install result."""
-    if not isinstance(parsed, dict):
-        return False, ""
-    if parsed.get("success") is False:
-        return True, (parsed.get("error") or "install failed")
-    warnings = parsed.get("dependency_warnings") or []
-    if warnings:
-        return True, f"dependency install failed: {_format_dependency_warnings(warnings)}"
-    return False, ""
-
-
 def _count_expected_steps(manifest: dict, backend_id: str = "", frontend_id: str = "") -> int:
     """Mirror ``_build_steps`` counts for progress UI before the task exists."""
     count = 0
@@ -1107,8 +1085,14 @@ def _count_expected_steps(manifest: dict, backend_id: str = "", frontend_id: str
         elif isinstance(ext, dict) and (ext.get("id") or "").strip():
             count += 1
     count += 2  # codex install + run_codex_init
-    if has_extension_installs({"extensions": realm_info.get("extensions") or []}):
-        count += 1  # resync_extension_frontends after extension installs
+    ext_list = realm_info.get("extensions") or []
+    if has_extension_installs({"extensions": ext_list}):
+        # One resync step per batch (see resync_extension_batches).
+        count += len(
+            resync_extension_batches(
+                {"extensions": [e if isinstance(e, dict) else {"id": e} for e in ext_list]}
+            )
+        )
     return count
 
 
@@ -1182,14 +1166,20 @@ def _build_steps(task, manifest: dict) -> list:
         ))
         idx += 1
     if has_extension_installs(manifest):
-        _log.info(f"[{task.name}] step {idx}: resync_extension_frontends")
-        steps.append(DeployStep(
-            task=task, idx=idx, kind="resync_extension_frontends",
-            label="resync_extension_frontends",
-            args_json=json.dumps(resync_extension_frontends_args(manifest)),
-            status="pending",
-        ))
-        idx += 1
+        for batch in resync_extension_batches(manifest):
+            args = resync_extension_frontends_args(manifest)
+            label = "resync_extension_frontends"
+            if batch:
+                args["extension_ids"] = batch
+                label = f"resync_extension_frontends[{batch[0]}…{batch[-1]}]"
+            _log.info(f"[{task.name}] step {idx}: {label}")
+            steps.append(DeployStep(
+                task=task, idx=idx, kind="resync_extension_frontends",
+                label=label,
+                args_json=json.dumps(args),
+                status="pending",
+            ))
+            idx += 1
     _log.info(f"[{task.name}] built {len(steps)} total steps")
     return steps
 
@@ -1905,7 +1895,16 @@ def _start_extensions_for_job(job, manifest: dict) -> Async[None]:
 
     realm_info = manifest.get("realm", {})
     network = (manifest.get("network") or "").strip()
-    registry_id = manifest.get("file_registry_canister_id", "") or configured_file_registry_id(network)
+    # Use the shared resolver: callers (realms new, the wizard) put the live id
+    # under manifest.infra, and reading only the top-level key sent this step to
+    # whatever the installer's own config held — historically a stale default.
+    registry_id = _resolve_file_registry_canister_id(manifest)
+    if not registry_id:
+        raise RuntimeError(
+            "no file registry: manifest carries no file_registry_canister_id and the "
+            "installer has none configured (run `realms seed`, or POST configure with "
+            "file_registry_id) — refusing to install packages from nowhere"
+        )
     realm_registry_id = (
         (manifest.get("realm_registry_canister_id") or manifest.get("registry_canister_id") or "").strip()
     )

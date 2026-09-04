@@ -21,7 +21,7 @@ from gaas.namespace_approval_seed import (
     refuse_demo_environment,
     seed_namespace_approvals,
 )
-from gaas.phases import DeployContext, PHASES, SEED_PHASES, run_phases, run_seed_phases
+from gaas.phases import DeployContext, PHASES, SEED_PHASES, run_phases, run_seed_phases, repair_platform_controllers
 from gaas.preflight import PreflightReport
 from gaas.runlog import print_log_path, start_run_log, stop_run_log
 from gaas.wizard import confirm_deploy, run_wizard
@@ -269,7 +269,7 @@ def new_command(
         "--from-phase",
         "--from",
         help=(
-            "Resume from this deploy phase. Accepts the 1-based [N/15] index "
+            "Resume from this deploy phase. Accepts the 1-based [N/16] index "
             "printed during the run, or a phase id (e.g. seed_conductor). "
             "Validation still runs."
         ),
@@ -382,6 +382,27 @@ def seed_command(
         casals_src=casals_src,
         from_phase=from_phase,
     )
+
+
+@app.command("repair-controllers")
+def repair_controllers_command(
+    descriptor: Path = typer.Argument(..., help="Descriptor JSON path"),
+    identity: str = typer.Option(..., "--identity", help="dfx identity"),
+    network: str = typer.Option("ic", "--network", help="Target network: ic or local"),
+) -> None:
+    """Repair platform canister IC controllers (Casals + deployer on test)."""
+    if network not in {"ic", "local"}:
+        console.print("[red]--network must be 'ic' or 'local'[/red]")
+        raise typer.Exit(code=1)
+
+    desc = Descriptor.load(descriptor)
+    ctx = DeployContext(identity=identity, network=network, descriptor_path=descriptor)
+    try:
+        repair_platform_controllers(desc, ctx)
+    except RuntimeError as exc:
+        console.print(f"[red]Controller repair failed:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+    console.print("[green]Controller repair complete.[/green]")
 
 
 @app.command("stamp-namespace-approvals")

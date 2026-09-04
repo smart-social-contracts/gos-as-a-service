@@ -4,15 +4,11 @@ import json
 
 from ic_python_db import Entity, Integer, String
 
-_FILE_REGISTRY_IDS = {
-    "demo": "vi64l-3aaaa-aaaae-qj4va-cai",
-    "test": "uq2mu-kaaaa-aaaah-avqcq-cai",
-}
-
-_MARKETPLACE_IDS = {
-    "test": "2wldc-niaaa-aaaad-qlxga-cai",
-    "demo": "ehyfg-wyaaa-aaaae-qg3qq-cai",
-}
+# No per-network default ids. The file registry and marketplace are Realms
+# product canisters, re-minted whenever an environment is rebuilt, so a baked-in
+# map silently points a fresh environment at a deleted canister — every package
+# install then fails with "canister not found" instead of "not configured".
+# Callers must get them from the manifest or from `configure`.
 
 
 class InstallerConfig(Entity):
@@ -54,17 +50,13 @@ def get_config() -> InstallerConfig:
 
 
 def configured_file_registry_id(network: str = "") -> str:
-    fid = (get_config().file_registry_id or "").strip()
-    if fid:
-        return fid
-    return _FILE_REGISTRY_IDS.get((network or "").strip().lower(), "")
+    """The configured file registry, or "" when nobody has configured one."""
+    return (get_config().file_registry_id or "").strip()
 
 
 def configured_marketplace_id(network: str = "") -> str:
-    mid = (get_config().marketplace_id or "").strip()
-    if mid:
-        return mid
-    return _MARKETPLACE_IDS.get((network or "").strip().lower(), "")
+    """The configured marketplace, or "" when nobody has configured one."""
+    return (get_config().marketplace_id or "").strip()
 
 
 def configured_portal_base(manifest=None):
@@ -84,10 +76,13 @@ def apply_installer_config(params: dict) -> None:
         cfg.registry_principal = (params.get("registry_backend_id") or "").strip()
     if "registry_principal" in params:
         cfg.registry_principal = (params.get("registry_principal") or "").strip()
-    if "file_registry_id" in params:
-        cfg.file_registry_id = (params.get("file_registry_id") or "").strip()
-    if "marketplace_id" in params:
-        cfg.marketplace_id = (params.get("marketplace_id") or "").strip()
+    # Empty means "not provided" for the product pointers: `gaas new` and
+    # `realms seed` both call configure, and only seed knows these ids. Treating ""
+    # as "clear" let a later gaas re-run erase them.
+    if (params.get("file_registry_id") or "").strip():
+        cfg.file_registry_id = params["file_registry_id"].strip()
+    if (params.get("marketplace_id") or "").strip():
+        cfg.marketplace_id = params["marketplace_id"].strip()
     if "casals_canister_id" in params:
         cfg.casals_canister_id = (params.get("casals_canister_id") or "").strip()
     if "casals_section" in params:

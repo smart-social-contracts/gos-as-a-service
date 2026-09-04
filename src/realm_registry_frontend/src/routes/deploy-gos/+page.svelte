@@ -4,11 +4,14 @@
   import { page } from '$app/stores';
   import { _, locale } from 'svelte-i18n';
   import { CONFIG } from '$lib/config.js';
-  import { buildRealmDeploymentManifest, slugify } from '$lib/deployment-manifest.js';
+  import { buildRealmDeploymentManifest, portalUrlForSlug, slugify } from '$lib/deployment-manifest.js';
   import AuthControls from '$lib/components/AuthControls.svelte';
   import {
     GOS_IMPLEMENTATIONS,
+    GGG_DOCS_URL,
     getGosImplementation,
+    gggGosImplementations,
+    otherGosImplementations,
     shouldShowVersionPicker,
     soleDeployVersionOption,
     visibleWizardSteps,
@@ -43,9 +46,6 @@
   let invitationLoading = false;
   let checkingActivation = true;
 
-  // Deploy mode
-  let deployMode = 'automatic'; // 'automatic' or 'manual'
-  
   // Automatic deployment state
   let isDeploying = false;
   let deployError = null;
@@ -101,6 +101,12 @@
     if (formData.subnet_choice === 'european') return 'European';
     if (formData.subnet_choice === 'other') return formData.subnet_id || '—';
     return 'Automatic';
+  }
+
+  function softwareVersionLabel(version) {
+    const v = (version || '').trim();
+    if (!v || v === 'main' || v === 'latest') return 'Latest';
+    return v;
   }
 
   function ensureSubnetOptionsForChoice() {
@@ -418,6 +424,8 @@
   // Extensions and initial data are codex-driven (issue #242).
   $: visibleSteps = visibleWizardSteps(formData.gos_implementation);
   $: currentStepId = visibleSteps[currentStep]?.id ?? 'platform';
+  $: gggGosList = gggGosImplementations(GOS_IMPLEMENTATIONS);
+  $: otherGosList = otherGosImplementations(GOS_IMPLEMENTATIONS);
   $: if (currentStep >= visibleSteps.length) {
     currentStep = Math.max(0, visibleSteps.length - 1);
   }
@@ -451,7 +459,9 @@
     formData.slug = slugify(formData.name);
   }
 
-  $: portalPreviewPath = formData.slug ? `/r/${slugify(formData.slug)}` : '';
+  $: portalPreviewUrl = formData.slug
+    ? portalUrlForSlug(formData.slug, CONFIG.deploy_queue_network, CONFIG)
+    : '';
 
   onDestroy(() => {
     closeDeployProgress();
@@ -546,12 +556,6 @@
     }
   }
 
-  function copyToClipboard(text) {
-    if (browser) {
-      navigator.clipboard.writeText(text);
-    }
-  }
-
   function generateManifest() {
     return buildRealmDeploymentManifest(formData, CONFIG.default_deploy_queue_network, {
       deployVersion: formData.deploy_version,
@@ -581,8 +585,7 @@
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      // Show success (no redirect, stay on deploy page)
-      // User can use the downloaded manifest with the CLI
+      // Stay on the page after download.
     } catch (err) {
       submitError = err.message || 'Failed to create realm';
     } finally {
@@ -594,7 +597,7 @@
 </script>
 
 <svelte:head>
-  <title>Deploy your GOS | Realms</title>
+  <title>Launch a new realm | Realms</title>
 </svelte:head>
 
 <div class="page-shell">
@@ -670,8 +673,8 @@
 {:else}
 <div class="wizard-container">
   <header class="wizard-header">
-    <h1>Deploy your GOS</h1>
-    <p class="subtitle">Deploy your realm on the platform — configure codex, token, and branding inside the realm afterward</p>
+    <h1>Launch a new realm</h1>
+    <p class="subtitle">Follow the steps to launch your new realm.</p>
   </header>
 
   <!-- Progress Steps -->
@@ -733,7 +736,7 @@
     {#if currentStepId === 'basics'}
       <!-- Basics -->
       <div class="form-step">
-        <h2>Basic Information</h2>
+        <h2>Realm Identification</h2>
         <p class="step-description">Give your realm a unique identity</p>
 
         <div class="form-group">
@@ -760,10 +763,9 @@
             placeholder="e.g., atlantis"
             class:error={errors.slug}
           />
-          {#if portalPreviewPath}
-            <p class="hint">Portal path: <code>{portalPreviewPath}</code></p>
+          {#if portalPreviewUrl}
+            <p class="hint">This is the URL of your realm's portal: <code>{portalPreviewUrl}</code></p>
           {/if}
-          <p class="hint">Codex, token, and branding are configured inside your realm after deployment.</p>
           {#if errors.slug}
             <span class="error-message">{errors.slug}</span>
           {/if}
@@ -773,48 +775,84 @@
     {:else if currentStepId === 'platform'}
       <!-- Platform -->
       <div class="form-step">
-        <h2>Choose Platform</h2>
-        <p class="step-description">Select the Governance Operating System implementation for your realm</p>
+        <h2>Choose your GOS</h2>
+        <p class="step-description">Select the Governance Operating System (GOS) of your realm</p>
 
         <div class="form-group">
-          <label>GOS Implementation</label>
-          <div class="codex-options">
-            {#each GOS_IMPLEMENTATIONS as impl}
-              {#if impl.available}
-                <button
-                  type="button"
-                  class="codex-card"
-                  class:selected={formData.gos_implementation === impl.id}
-                  on:click={() => selectGosImplementation(impl.id)}
-                >
-                  <div class="codex-radio">
-                    {#if formData.gos_implementation === impl.id}
-                      <div class="codex-radio-dot"></div>
-                    {/if}
+          <div class="gos-group">
+            <h3>GGG standard</h3>
+            <p class="gos-group-explain">
+              Generalized Global Governance (GGG) is the architecture a GOS is built for.
+              A realm is a GGG entity — that is why this platform is a realm registry.
+              <a href={GGG_DOCS_URL} target="_blank" rel="noopener noreferrer">GGG docs</a>
+            </p>
+            <div class="codex-options">
+              {#each gggGosList as impl (impl.id)}
+                {#if impl.available}
+                  <button
+                    type="button"
+                    class="codex-card"
+                    class:selected={formData.gos_implementation === impl.id}
+                    on:click={() => selectGosImplementation(impl.id)}
+                  >
+                    <div class="codex-radio">
+                      {#if formData.gos_implementation === impl.id}
+                        <div class="codex-radio-dot"></div>
+                      {/if}
+                    </div>
+                    <div class="codex-info">
+                      <span class="codex-name">{impl.name}</span>
+                      {#if impl.tagline}
+                        <span class="codex-tagline">{impl.tagline}</span>
+                      {/if}
+                      <span class="codex-desc">{impl.description}</span>
+                    </div>
+                  </button>
+                {:else}
+                  <div
+                    class="codex-card disabled"
+                    aria-disabled="true"
+                  >
+                    <div class="codex-radio"></div>
+                    <div class="codex-info">
+                      <span class="codex-name">
+                        {impl.name}
+                        <span class="coming-soon-badge">Coming soon</span>
+                      </span>
+                      {#if impl.tagline}
+                        <span class="codex-tagline">{impl.tagline}</span>
+                      {/if}
+                      <span class="codex-desc">{impl.description}</span>
+                    </div>
                   </div>
-                  <div class="codex-info">
-                    <span class="codex-name">{impl.name}</span>
-                    <span class="codex-tagline">{impl.tagline}</span>
-                    <span class="codex-desc">{impl.description}</span>
+                {/if}
+              {/each}
+            </div>
+          </div>
+
+          <div class="gos-group">
+            <h3>Other</h3>
+            {#if otherGosList.length}
+              <div class="codex-options">
+                {#each otherGosList as impl (impl.id)}
+                  <div class="codex-card disabled" aria-disabled="true">
+                    <div class="codex-radio"></div>
+                    <div class="codex-info">
+                      <span class="codex-name">
+                        {impl.name}
+                        <span class="coming-soon-badge">Coming soon</span>
+                      </span>
+                      {#if impl.tagline}
+                        <span class="codex-tagline">{impl.tagline}</span>
+                      {/if}
+                      <span class="codex-desc">{impl.description}</span>
+                    </div>
                   </div>
-                </button>
-              {:else}
-                <div
-                  class="codex-card disabled"
-                  aria-disabled="true"
-                >
-                  <div class="codex-radio"></div>
-                  <div class="codex-info">
-                    <span class="codex-name">
-                      {impl.name}
-                      <span class="coming-soon-badge">Coming soon</span>
-                    </span>
-                    <span class="codex-tagline">{impl.tagline}</span>
-                    <span class="codex-desc">{impl.description}</span>
-                  </div>
-                </div>
-              {/if}
-            {/each}
+                {/each}
+              </div>
+            {:else}
+              <p class="gos-empty">None available yet.</p>
+            {/if}
           </div>
           {#if errors.gos_implementation}
             <span class="error-message">{errors.gos_implementation}</span>
@@ -844,11 +882,15 @@
       <!-- Subnet placement -->
       <div class="form-step">
         <h2>Subnet placement</h2>
-        <p class="step-description">Choose where your realm's canisters should land</p>
+        <p class="step-description">
+          The Internet Computer runs on computers around the world, grouped into subnets.
+          By choosing a subnet, you choose the countries where the computers that run your realm are located.
+        </p>
+        <p class="field-hint subnet-placement-hint">
+          Leave Automatic unless you need a specific region — for example GDPR or other data-residency rules.
+        </p>
 
         <div class="deploy-version-card">
-          <span class="subnet-placement-label">Subnet placement</span>
-          <p class="field-hint">Advanced — leave on Automatic unless you have data-residency requirements.</p>
           <div class="codex-options" role="group" aria-label="Subnet placement">
             <button
               type="button"
@@ -879,7 +921,7 @@
               </div>
               <div class="codex-info">
                 <span class="codex-name">European</span>
-                <span class="codex-desc">Deploy on the European subnet. Helps with GDPR and data-residency requirements.</span>
+                <span class="codex-desc">Run your realm on the European subnet. Useful for GDPR and data-residency requirements.</span>
               </div>
             </button>
             <button
@@ -895,7 +937,7 @@
               </div>
               <div class="codex-info">
                 <span class="codex-name">Other</span>
-                <span class="codex-desc">Choose a specific subnet from the list of available subnets.</span>
+                <span class="codex-desc">Pick a specific subnet from those currently available.</span>
               </div>
             </button>
           </div>
@@ -921,7 +963,7 @@
       <!-- Review & Deploy -->
       <div class="form-step">
         <h2>Review & Deploy</h2>
-        <p class="step-description">Confirm platform settings, then deploy your realm</p>
+        <p class="step-description">Confirm these settings, then launch your realm.</p>
 
         <div class="codex-manifest-details review-summary">
           <div class="codex-detail-row">
@@ -932,41 +974,32 @@
             <span class="codex-detail-label">Slug</span>
             <span class="codex-detail-value"><code>{slugify(formData.slug || formData.name || '') || '—'}</code></span>
           </div>
-          {#if portalPreviewPath}
+          {#if portalPreviewUrl}
             <div class="codex-detail-row">
               <span class="codex-detail-label">Portal</span>
-              <span class="codex-detail-value"><code>{portalPreviewPath}</code></span>
+              <span class="codex-detail-value"><code>{portalPreviewUrl}</code></span>
             </div>
           {/if}
           <div class="codex-detail-row">
-            <span class="codex-detail-label">Platform</span>
+            <span class="codex-detail-label">GOS</span>
             <span class="codex-detail-value">{getGosImplementation(formData.gos_implementation)?.name || formData.gos_implementation}</span>
           </div>
           <div class="codex-detail-row">
             <span class="codex-detail-label">Software version</span>
-            <span class="codex-detail-value">{formData.deploy_version}</span>
+            <span class="codex-detail-value">{softwareVersionLabel(formData.deploy_version)}</span>
           </div>
           <div class="codex-detail-row">
             <span class="codex-detail-label">Subnet</span>
             <span class="codex-detail-value">{subnetSummaryLabel()}</span>
           </div>
-          <p class="codex-details-note">After deployment you will finish codex, token, and branding setup inside the realm.</p>
+          <p class="codex-details-note">After launch you will finish codex, token, and branding setup inside the realm.</p>
         </div>
 
-        <h3 class="review-deploy-heading">Deployment</h3>
-        <p class="step-description">Choose how you want to deploy your governance system</p>
+        <h3 class="review-deploy-heading">Launch</h3>
+        <p class="step-description">We'll create this realm for you on the Internet Computer.</p>
 
         <div class="deploy-options">
-          <!-- Option 1: Automatic Deployment -->
-          <div 
-            class="deploy-option" 
-            class:active={deployMode === 'automatic'}
-            class:disabled={!isLoggedIn || userCredits < REQUIRED_CREDITS}
-            on:click={() => { if (isLoggedIn && userCredits >= REQUIRED_CREDITS) deployMode = 'automatic'; }}
-            on:keydown={(e) => { if (e.key === 'Enter' && isLoggedIn && userCredits >= REQUIRED_CREDITS) deployMode = 'automatic'; }}
-            role="button"
-            tabindex="0"
-          >
+          <div class="deploy-option active">
             <div class="deploy-option-header">
               <div class="deploy-option-icon">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -974,17 +1007,15 @@
                 </svg>
               </div>
               <div>
-                <h3>Automatic Deployment</h3>
+                <h3>Launch realm</h3>
                 {#if !isLoggedIn}
-                  <span class="badge-warning">Login Required</span>
+                  <span class="badge-warning">Login required</span>
                 {:else if userCredits < REQUIRED_CREDITS}
-                  <span class="badge-warning">Credits Required</span>
-                {:else}
-                  <span class="badge-recommended">Recommended</span>
+                  <span class="badge-warning">Credits required</span>
                 {/if}
               </div>
             </div>
-            <p class="deploy-option-desc">Deploy via Casals on the Internet Computer — fully on-chain, no servers required.</p>
+            <p class="deploy-option-desc">Fully on-chain. No servers to run.</p>
             
             {#if !isLoggedIn}
               <div class="deploy-requirement">
@@ -992,9 +1023,9 @@
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                   <circle cx="12" cy="7" r="4"></circle>
                 </svg>
-                <span>Please log in to use automatic deployment</span>
-                <button type="button" class="btn btn-small btn-dark" on:click|stopPropagation={handleLogin}>
-                  Log In
+                <span>Sign in to launch this realm</span>
+                <button type="button" class="btn btn-small btn-primary" on:click={handleLogin}>
+                  Log in
                 </button>
               </div>
             {:else if userCredits < REQUIRED_CREDITS}
@@ -1004,35 +1035,34 @@
                   <path d="M12 6v6l4 2"></path>
                 </svg>
                 <span>You need at least {REQUIRED_CREDITS} credits (you have {userCredits})</span>
-                <button type="button" class="btn btn-small btn-outline" on:click|stopPropagation={loadUserCredits}>
+                <button type="button" class="btn btn-small btn-outline" on:click={loadUserCredits}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path>
                     <path d="M21 3v5h-5"></path>
                   </svg>
                   Refresh
                 </button>
-                <a href="/my-dashboard" class="btn btn-small btn-dark" on:click|stopPropagation>
-                  Buy Credits
+                <a href="/my-dashboard" class="btn btn-small btn-primary">
+                  Buy credits
                 </a>
               </div>
-            {:else if deployMode === 'automatic'}
-              <!-- Deploy button when automatic mode is selected and user has credits -->
+            {:else}
               <div class="deploy-action">
                   <p class="deploy-cost">Cost: <strong>{REQUIRED_CREDITS} credits</strong> (you have {userCredits})</p>
                   <button 
                     type="button" 
                     class="btn btn-primary btn-deploy" 
-                    on:click|stopPropagation={onDeployClick}
+                    on:click={onDeployClick}
                     disabled={isDeploying}
                   >
                     {#if isDeploying}
                       <span class="spinner-small"></span>
-                      Deploying...
+                      Launching...
                     {:else}
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"></path>
                       </svg>
-                      Deploy Now
+                      Launch realm
                     {/if}
                   </button>
                   {#if deployError}
@@ -1041,92 +1071,25 @@
                 </div>
             {/if}
           </div>
+        </div>
 
-          <!-- Option 2: Manual Deployment -->
-          <div 
-            class="deploy-option" 
-            class:active={deployMode === 'manual'}
-            on:click={() => deployMode = 'manual'}
-            on:keydown={(e) => { if (e.key === 'Enter') deployMode = 'manual'; }}
-            role="button"
-            tabindex="0"
-          >
-            <div class="deploy-option-header">
-              <div class="deploy-option-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="16 18 22 12 16 6"></polyline>
-                  <polyline points="8 6 2 12 8 18"></polyline>
-                </svg>
-              </div>
-              <div>
-                <h3>Manual Deployment</h3>
-                <span class="badge-developer">For Developers</span>
-              </div>
-            </div>
-            <p class="deploy-option-desc">Deploy your own governance system in minutes using the CLI.</p>
-
-            {#if deployMode === 'manual'}
-            <div class="deploy-steps">
-              <div class="deploy-step">
-                <div class="deploy-step-number">1</div>
-                <div class="deploy-step-content">
-                  <h4>Install the CLI</h4>
-                  <div class="code-block">
-                    <code>pip install realms-gos</code>
-                    <button type="button" class="copy-btn" on:click={() => copyToClipboard('pip install realms-gos')} aria-label="Copy command">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div class="deploy-step">
-                <div class="deploy-step-number">2</div>
-                <div class="deploy-step-content">
-                  <h4>Create and Deploy</h4>
-                  <div class="code-block">
-                    <code>realms realm create --deploy --network staging</code>
-                    <button type="button" class="copy-btn" on:click={() => copyToClipboard('realms realm create --deploy --network staging')} aria-label="Copy command">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <a href="https://github.com/smart-social-contracts/realms" target="_blank" rel="noopener noreferrer" class="docs-link" on:click|stopPropagation>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-              </svg>
-              View Documentation
-            </a>
-
-            <div class="download-config-inline">
-              <div class="download-config-text">
-                <strong>Download Configuration</strong>
-                <span>Download your realm configuration to use with the CLI or save for later.</span>
-              </div>
-              <button type="button" class="btn btn-small" on:click|stopPropagation={handleSubmit} disabled={isSubmitting}>
-                {#if isSubmitting}
-                  <span class="spinner-small"></span>
-                {:else}
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                    <polyline points="7 10 12 15 17 10"></polyline>
-                    <line x1="12" y1="15" x2="12" y2="3"></line>
-                  </svg>
-                  Download
-                {/if}
-              </button>
-            </div>
-            {/if}
+        <div class="download-config-inline">
+          <div class="download-config-text">
+            <strong>Download configuration</strong>
+            <span>Optional. Save these settings as a file.</span>
           </div>
+          <button type="button" class="btn btn-small btn-outline" on:click={handleSubmit} disabled={isSubmitting}>
+            {#if isSubmitting}
+              <span class="spinner-small"></span>
+            {:else}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              Download
+            {/if}
+          </button>
         </div>
 
         {#if submitError}
@@ -1455,6 +1418,40 @@
     margin-bottom: 0.5rem;
   }
 
+  .gos-group {
+    margin-bottom: 1.5rem;
+  }
+
+  .gos-group:last-of-type {
+    margin-bottom: 0;
+  }
+
+  .gos-group h3 {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #171717;
+    margin: 0 0 0.35rem;
+  }
+
+  .gos-group-explain {
+    font-size: 0.875rem;
+    color: #525252;
+    line-height: 1.5;
+    margin: 0 0 0.75rem;
+  }
+
+  .gos-group-explain a {
+    color: #171717;
+    font-weight: 500;
+    text-underline-offset: 0.15em;
+  }
+
+  .gos-empty {
+    font-size: 0.875rem;
+    color: #737373;
+    margin: 0;
+  }
+
   .required {
     color: #EF4444;
   }
@@ -1504,6 +1501,10 @@
     display: block;
   }
 
+  .hint code {
+    word-break: break-all;
+  }
+
   .form-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1544,35 +1545,6 @@
     inset: 0;
     opacity: 0;
     cursor: pointer;
-  }
-
-  .btn-generate-branding {
-    margin-top: 0.5rem;
-    width: 100%;
-    padding: 0.45rem 0.75rem;
-    border: 1px dashed #d4d4d4;
-    border-radius: 0.5rem;
-    background: #fafafa;
-    color: #404040;
-    font-size: 0.8125rem;
-    font-weight: 600;
-    cursor: pointer;
-  }
-
-  .btn-generate-branding:hover:not(:disabled) {
-    background: #f5f5f5;
-    border-color: #a3a3a3;
-  }
-
-  .btn-generate-branding:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  .branding-generate-hint {
-    margin: 0.5rem 0 1.25rem;
-    font-size: 0.8125rem;
-    color: #737373;
   }
 
   .upload-placeholder {
@@ -1835,24 +1807,6 @@
     font-size: 0.625rem;
   }
 
-  .token-section {
-    margin-bottom: 0.5rem;
-  }
-
-  .token-config {
-    background: #F5F5F5;
-    border-radius: 0.75rem;
-    padding: 1.25rem;
-    margin-top: 1rem;
-  }
-
-  .land-token-config {
-    background: #F5F5F5;
-    border-radius: 0.75rem;
-    padding: 1.25rem;
-    margin-top: 1rem;
-  }
-
   /* Review */
   .review-card {
     background: #FAFAFA;
@@ -1865,26 +1819,6 @@
     gap: 1rem;
     padding: 1.5rem;
     align-items: flex-start;
-  }
-
-  .review-logo {
-    width: 64px;
-    height: 64px;
-    border-radius: 0.75rem;
-    object-fit: cover;
-    flex-shrink: 0;
-  }
-
-  .review-logo-placeholder {
-    width: 64px;
-    height: 64px;
-    background: #E5E5E5;
-    border-radius: 0.75rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #A3A3A3;
-    flex-shrink: 0;
   }
 
   .review-header h3 {
@@ -1927,44 +1861,6 @@
   .review-section p {
     margin: 0;
     color: #171717;
-  }
-
-  .review-tokens {
-    display: flex;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-  }
-
-  .token-badge {
-    display: flex;
-    flex-direction: column;
-    gap: 0.125rem;
-    background: #FFFFFF;
-    border: 1px solid #E5E5E5;
-    border-radius: 0.5rem;
-    padding: 0.75rem 1rem;
-    min-width: 120px;
-  }
-
-  .token-badge.land {
-    background: #FEF3C7;
-    border-color: #F59E0B;
-  }
-
-  .token-symbol {
-    font-weight: 700;
-    font-size: 1rem;
-    color: #171717;
-  }
-
-  .token-name {
-    font-size: 0.75rem;
-    color: #737373;
-  }
-
-  .token-supply {
-    font-size: 0.625rem;
-    color: #A3A3A3;
   }
 
   .error-banner {
@@ -2359,6 +2255,7 @@
   .codex-detail-value {
     font-size: 0.85rem;
     color: #334155;
+    word-break: break-all;
   }
 
   .codex-dep-chips {
@@ -2573,6 +2470,18 @@
     color: #171717;
   }
 
+  .btn-small.btn-primary {
+    background: #171717;
+    color: #FFFFFF;
+    border-color: #171717;
+  }
+
+  .btn-small.btn-primary:hover {
+    background: #404040;
+    color: #FFFFFF;
+    border-color: #404040;
+  }
+
   .empty-state {
     text-align: center;
     color: #A3A3A3;
@@ -2719,10 +2628,8 @@
     color: #171717;
   }
 
-  .subnet-placement-label {
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: #171717;
+  .subnet-placement-hint {
+    margin: -0.75rem 0 1.25rem;
   }
 
   .deploy-version-select {

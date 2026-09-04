@@ -120,8 +120,11 @@ def test_run_casals_new_fresh_create(mock_run: MagicMock, tmp_path: Path) -> Non
     assert mock_run.call_args.kwargs["cwd"] == casals
 
 
+@patch("gaas.casals_cli.canister_missing_on_ic", return_value=False)
 @patch("gaas.casals_cli.subprocess.run")
-def test_run_casals_new_adopt_passes_ids_file(mock_run: MagicMock, tmp_path: Path) -> None:
+def test_run_casals_new_adopt_passes_ids_file(
+    mock_run: MagicMock, _mock_missing: MagicMock, tmp_path: Path
+) -> None:
     casals = _make_casals_checkout(tmp_path)
     stdout = json.dumps(
         {
@@ -218,6 +221,63 @@ def test_run_casals_new_force_create_skips_ids_file(mock_run: MagicMock, tmp_pat
     assert "--no-seed" in argv
     assert argv[argv.index("-e") + 1] == "ic"
     assert not any(str(arg).endswith(".ids.json") for arg in argv)
+
+
+@patch("gaas.casals_cli.canister_missing_on_ic", return_value=True)
+@patch("gaas.casals_cli.subprocess.run")
+def test_run_casals_new_discards_dead_bootstrap_pin(
+    mock_run: MagicMock,
+    mock_missing: MagicMock,
+    tmp_path: Path,
+) -> None:
+    casals = _make_casals_checkout(tmp_path)
+    dead_backend = "2bzyp-7yaaa-aaaao-bbi6a-cai"
+    fresh_backend = "qthgp-3yaaa-aaaae-agveq-cai"
+    stdout = json.dumps(
+        {
+            "ok": True,
+            "mode": "create",
+            "canisters": {
+                "casals_backend": fresh_backend,
+                "casals_frontend": CASALS_BOOTSTRAP_TEST_IDS["casals_frontend"],
+                "ic_file_registry": CASALS_BOOTSTRAP_TEST_IDS["casals_file_registry"],
+                "ic_file_registry_frontend": CASALS_BOOTSTRAP_TEST_IDS[
+                    "casals_file_registry_frontend"
+                ],
+            },
+            "seeded": False,
+        }
+    )
+    mock_run.return_value = subprocess.CompletedProcess(
+        args=[],
+        returncode=0,
+        stdout=stdout,
+        stderr="",
+    )
+
+    desc = Descriptor.model_validate(
+        {
+            **SAMPLE_DESCRIPTOR,
+            "canisters": {"casals_backend": dead_backend},
+        }
+    )
+    result = run_casals_new(
+        desc,
+        network="ic",
+        identity="deployer",
+        casals_src=casals,
+        yes=True,
+    )
+
+    assert result["mode"] == "create"
+    assert result["healed_bootstrap_pins"] == [
+        {"name": "casals_backend", "dead_id": dead_backend}
+    ]
+    assert "casals_backend" not in desc.canisters or desc.canisters["casals_backend"] == fresh_backend
+    assert desc.canisters["casals_backend"] == fresh_backend
+    argv = mock_run.call_args.args[0]
+    assert not any(str(arg).endswith(".ids.json") for arg in argv)
+    mock_missing.assert_called_once_with(dead_backend, "ic", identity="deployer")
 
 
 @patch("gaas.casals_cli.subprocess.run")

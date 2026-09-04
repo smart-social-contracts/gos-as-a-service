@@ -9,7 +9,7 @@
   "controls": {
     "list_view": "Listenansicht",
     "map_view": "Kartenansicht",
-    "create_realm": "Deploy GOS",
+    "create_realm": "Launch a new realm",
     "marketplace": "Marktplatz",
     "architecture": "Architektur",
     "architecture_unavailable": "Infrastruktur ist nicht verfügbar"
@@ -97,7 +97,7 @@
     "globe_title": "Globus erkunden",
     "globe_body": "Realms erscheinen auf dieser 3D-Karte. Klicken Sie auf einen leuchtenden Pin, um dorthin zu fliegen und Details zu öffnen.",
     "rail_title": "Schnellzugriff",
-    "rail_body": "Öffnen Sie die Raster-/Apps-Schaltfläche (oben links) für Tour, Deploy GOS, Infrastructure und Sprache. Mit Internet Identity oben rechts anmelden.",
+    "rail_body": "Öffnen Sie die Raster-/Apps-Schaltfläche (oben links) für Tour, Launch a new realm, Infrastructure und Sprache. Mit Internet Identity oben rechts anmelden.",
     "browse_title": "Realms durchsuchen",
     "browse_body": "Öffnen Sie den Realm-Browser zum Suchen, Filtern nach Phase und Scrollen der Liste.",
     "panel_title": "Realm-Browser",

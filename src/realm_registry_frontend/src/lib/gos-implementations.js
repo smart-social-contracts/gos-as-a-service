@@ -4,12 +4,16 @@
  * @typedef {import('../../scripts/gaas-env.js').GaasEnv} GaasEnv
  */
 
+/** GitHub docs for the Generalized Global Governance (GGG) standard. */
+export const GGG_DOCS_URL =
+	'https://github.com/smart-social-contracts/realms/blob/main/docs/reference/CORE_ENTITIES.md';
+
 const DEFAULT_GOS_METADATA = {
 	'realms-gos': {
 		name: 'Realms GOS',
-		tagline: 'Governance Operating System — Python/Basilisk on the Internet Computer',
+		tagline: '',
 		description:
-			'GGG-compliant governance with extensions, codices, treasury, justice and more.',
+			'A customizable Governance Operating System with a rich ecosystem of codices and extensions such as treasury, justice and more.',
 		gggConformance: '1.0'
 	},
 	'monad-gos': {
@@ -37,9 +41,9 @@ const DEFAULT_GOS_IMPLEMENTATIONS = [
 	{
 		id: 'realms-gos',
 		name: 'Realms GOS',
-		tagline: 'Governance Operating System — Python/Basilisk on the Internet Computer',
+		tagline: '',
 		description:
-			'GGG-compliant governance with extensions, codices, treasury, justice and more.',
+			'A customizable Governance Operating System with a rich ecosystem of codices and extensions such as treasury, justice and more.',
 		available: true,
 		loaderProfile: 'realms-iframe-v1',
 		gggConformance: '1.0',
@@ -136,6 +140,24 @@ export function wizardStepLabel(stepIndex) {
 export function getGosImplementation(id) {
 	if (!id) return undefined;
 	return GOS_IMPLEMENTATIONS.find((impl) => impl.id === id);
+}
+
+/**
+ * GOS implementations that claim GGG conformance (the GGG-architecture guests).
+ *
+ * @param {typeof GOS_IMPLEMENTATIONS} [list]
+ */
+export function gggGosImplementations(list = GOS_IMPLEMENTATIONS) {
+	return list.filter((impl) => Boolean(impl.gggConformance));
+}
+
+/**
+ * GOS implementations that are not GGG-architecture.
+ *
+ * @param {typeof GOS_IMPLEMENTATIONS} [list]
+ */
+export function otherGosImplementations(list = GOS_IMPLEMENTATIONS) {
+	return list.filter((impl) => !impl.gggConformance);
 }
 
 /**

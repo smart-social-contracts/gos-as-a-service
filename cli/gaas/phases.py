@@ -31,6 +31,7 @@ from gaas.codex_seed import seed_codex_catalog
 from gaas.cycles_plan import apply_headroom_topups, canister_headroom
 from gaas.conductor_seed import (
     authorize_gos_entry,
+    casals_orchestra_name,
     configure_multisig_signers,
     ensure_deployments_commander,
     ensure_platform_stand,
@@ -146,6 +147,116 @@ def _save_descriptor(descriptor: Descriptor, ctx: DeployContext) -> None:
         descriptor.save(ctx.descriptor_path)
 
 
+def _create_and_register_canister(
+    name: str,
+    descriptor: Descriptor,
+    ctx: DeployContext,
+    principal: str,
+) -> str:
+    """Mint a platform canister, persist its id, and verify it exists on the replica."""
+    fund = canister_headroom(name, descriptor) if ctx.network == "ic" else None
+    dfx_name = DFX_CANISTER_NAMES.get(name)
+    if dfx_name:
+        canister_id = dfx.create_canister(
+            dfx_name,
+            ctx.network,
+            identity=ctx.identity,
+            with_cycles=fund,
+        )
+    else:
+        canister_id = dfx.create_canister_via_ledger(
+            ctx.network,
+            identity=ctx.identity,
+            controller=principal,
+        )
+        if fund and ctx.network == "ic":
+            dfx.top_up_canister(
+                canister_id,
+                fund,
+                ctx.network,
+                identity=ctx.identity,
+            )
+
+    descriptor.set_canister_id(name, canister_id)
+    try:
+        created = dfx.canister_status(
+            canister_id, ctx.network, identity=ctx.identity
+        )
+    except dfx.DfxError as exc:
+        if not dfx.is_canister_not_found_error(exc):
+            raise RuntimeError(
+                f"refusing to use {name} {canister_id}: create did not leave a "
+                f"live canister on {ctx.network} ({exc})"
+            ) from exc
+        # Named ``dfx canister create`` reused a dead canister_ids.json row.
+        dead_id = canister_id
+        console.print(
+            f"  {name}: named create reused dead {dead_id}; minting via ledger"
+        )
+        if dfx_name:
+            dfx.forget_dead_named_canister_mappings(
+                dfx_name,
+                ctx.network,
+                identity=ctx.identity,
+                is_dead=lambda cid, _dead=dead_id: cid == _dead,
+            )
+        canister_id = dfx.create_canister_via_ledger(
+            ctx.network,
+            identity=ctx.identity,
+            controller=principal,
+        )
+        if fund and ctx.network == "ic":
+            dfx.top_up_canister(
+                canister_id,
+                fund,
+                ctx.network,
+                identity=ctx.identity,
+            )
+        descriptor.set_canister_id(name, canister_id)
+        created = dfx.canister_status(
+            canister_id, ctx.network, identity=ctx.identity
+        )
+    _save_descriptor(descriptor, ctx)
+    console.print(f"  {name}: created {canister_id} ({created.status})")
+    return canister_id
+
+
+def _try_adopt_pinned_canister(
+    name: str,
+    existing_id: str,
+    descriptor: Descriptor,
+    ctx: DeployContext,
+    principal: str,
+) -> bool:
+    """Adopt a live pin when deployer is a controller. Return False when the pin is dead."""
+    try:
+        status = dfx.canister_status(existing_id, ctx.network, identity=ctx.identity)
+    except dfx.DfxError as exc:
+        if dfx.is_canister_not_found_error(exc):
+            console.print(
+                f"  {name}: stale pin {existing_id} not on IC; creating fresh canister"
+            )
+            descriptor.canisters.pop(name, None)
+            return False
+        raise
+
+    controllers = status.controllers
+    if controllers and principal not in controllers:
+        raise RuntimeError(
+            f"identity {principal!r} is not a controller of adopted canister "
+            f"{name} ({existing_id}); controllers: {', '.join(controllers)}"
+        )
+
+    if name == "realm_installer" and (
+        descriptor.name == "staging"
+        or ctx.network in ("staging", "local", "localhost")
+    ):
+        assert_installer_live_for_network(existing_id, ctx.network)
+
+    console.print(f"  {name}: adopt {existing_id} ({status.status})")
+    return True
+
+
 def _normalize_version(version: str) -> str:
     return normalize_catalog_version(version)
 
@@ -238,8 +349,6 @@ def _installer_config_json(descriptor: Descriptor) -> str:
     canisters = descriptor.canisters
     payload = {
         "registry_backend_id": canisters.get("realm_registry_backend", ""),
-        "file_registry_id": canisters.get("file_registry", ""),
-        "marketplace_id": canisters.get("marketplace_backend", ""),
         "casals_canister_id": canisters.get("casals_backend", ""),
         "casals_section": DEFAULT_CASALS_SECTION,
         "portal_url": _portal_url(descriptor),
@@ -248,6 +357,18 @@ def _installer_config_json(descriptor: Descriptor) -> str:
         "baton_wasm_key": "orchestration-baton@1.3.0",
         "cycle_threshold_cycles": descriptor.threshold_cycles(),
     }
+    # file_registry / marketplace_backend belong to the Realms product stack, which
+    # `realms seed` mints after this phase has already run. They are absent from the
+    # GaaS descriptor, so sending them here would send "" — and a re-run of this
+    # phase would erase the pointers seed configured, leaving the installer to fall
+    # back to whatever id its build has baked in.
+    for key, name in (
+        ("file_registry_id", "file_registry"),
+        ("marketplace_id", "marketplace_backend"),
+    ):
+        value = (canisters.get(name) or "").strip()
+        if value:
+            payload[key] = value
     return json.dumps(payload)
 
 
@@ -279,13 +400,17 @@ def _casals_settings_json(descriptor: Descriptor, deployer_principal: str) -> st
         "file_registry_canister_id": file_registry_id,
         "casals_frontend_canister_id": canisters.get("casals_frontend", ""),
         "realm_installer_canister_id": canisters.get("realm_installer", ""),
+        "orchestra_name": casals_orchestra_name(descriptor),
         "default_min_cycles": threshold,
         "default_topup_cycles": threshold,
         "treasury_reserve": threshold,
         "create_cycles": threshold,
         "monitor_enabled": False,
     }
-    file_registry_frontend_id = canisters.get("file_registry_frontend")
+    file_registry_frontend_id = (
+        canisters.get("casals_file_registry_frontend")
+        or canisters.get("file_registry_frontend")
+    )
     if file_registry_frontend_id:
         payload["file_registry_frontend_canister_id"] = file_registry_frontend_id
     if descriptor.services.monitor_url:
@@ -294,6 +419,12 @@ def _casals_settings_json(descriptor: Descriptor, deployer_principal: str) -> st
     if descriptor.services.monitor_principal:
         payload["monitor_principal"] = descriptor.services.monitor_principal
     extras: list[str] = []
+    # The installer finalizes every realm Casals provisions (config, codex,
+    # extensions), and the realm backend only grants realm.admin to its IC
+    # controllers, so it has to be a controller of each new realm canister.
+    installer_id = (canisters.get("realm_installer") or "").strip()
+    if installer_id:
+        extras.append(installer_id)
     if _resolve_can_test_mode(descriptor) and deployer_principal:
         extras.append(deployer_principal)
     if extras:
@@ -407,19 +538,38 @@ def phase_validate(descriptor: Descriptor, ctx: DeployContext) -> None:
     print_log_path()
 
 
+def _fund_bootstrap_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
+    """Raise the casals-minted canisters to their per-role cycle headroom.
+
+    ``casals new`` mints the conductor, its frontend and its file registry with
+    its own flat allowance, and it runs *after* the preflight top-up pass. On a
+    from-scratch deploy nothing else funds them, so the conductor would enter
+    ``deploy_sheet`` far below the treasury headroom the plan reserved for it
+    and die with IC0504 mid-sheet. Topping up here closes that window; it is a
+    no-op once each canister already holds its target.
+    """
+    if ctx.network != "ic":
+        return
+    for name in CASALS_BOOTSTRAP_NAMES:
+        canister_id = (descriptor.canisters.get(name) or "").strip()
+        if not canister_id:
+            continue
+        target = canister_headroom(name, descriptor)
+        balance = dfx.canister_cycles_balance(
+            canister_id, ctx.network, identity=ctx.identity
+        )
+        if balance is None or balance >= target:
+            continue
+        shortfall = target - balance
+        console.print(f"  funding {name} ({canister_id}) +{shortfall:,}")
+        dfx.top_up_canister(
+            canister_id, shortfall, ctx.network, identity=ctx.identity
+        )
+
+
 def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
     dfx.use_identity(ctx.identity)
     principal = dfx.get_principal(ctx.identity)
-
-    installer_id = descriptor.canisters.get("realm_installer", "")
-    if installer_id and (
-        descriptor.name == "staging"
-        or ctx.network in ("staging", "local", "localhost")
-    ):
-        try:
-            assert_installer_live_for_network(installer_id, ctx.network)
-        except CanisterNotFoundError as exc:
-            raise RuntimeError(str(exc)) from exc
 
     result = run_casals_new(
         descriptor,
@@ -429,6 +579,10 @@ def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
         yes=True,
         force_create=ctx.destroy_except_frontend,
     )
+    for entry in result.get("healed_bootstrap_pins") or []:
+        console.print(
+            f"  {entry['name']}: healed stale bootstrap pin {entry['dead_id']}"
+        )
     _save_descriptor(descriptor, ctx)
     mode = "adopt" if result.get("mode") == "upgrade" else "created"
     casals_ids = ", ".join(
@@ -437,86 +591,22 @@ def phase_create_canisters(descriptor: Descriptor, ctx: DeployContext) -> None:
         if descriptor.canisters.get(name)
     )
     console.print(f"  casals new: {mode} {casals_ids}")
+    _fund_bootstrap_canisters(descriptor, ctx)
 
     for name in KNOWN_CANISTER_NAMES:
         if name in CASALS_BOOTSTRAP_NAMES:
             continue
-        existing_id = descriptor.canisters.get(name)
-        if existing_id:
-            status = dfx.canister_status(existing_id, ctx.network, identity=ctx.identity)
-            controllers = status.controllers
-            if controllers and principal not in controllers:
-                raise RuntimeError(
-                    f"identity {principal!r} is not a controller of adopted canister "
-                    f"{name} ({existing_id}); controllers: {', '.join(controllers)}"
-                )
-            console.print(f"  {name}: adopt {existing_id} ({status.status})")
+        existing_id = (descriptor.canisters.get(name) or "").strip()
+        if existing_id and _try_adopt_pinned_canister(
+            name, existing_id, descriptor, ctx, principal
+        ):
             continue
 
-        fund = canister_headroom(name, descriptor) if ctx.network == "ic" else None
-        dfx_name = DFX_CANISTER_NAMES.get(name)
-        if dfx_name:
-            canister_id = dfx.create_canister(
-                dfx_name,
-                ctx.network,
-                identity=ctx.identity,
-                with_cycles=fund,
-            )
-        else:
-            canister_id = dfx.create_canister_via_ledger(
-                ctx.network,
-                identity=ctx.identity,
-                controller=principal,
-            )
-            if fund and ctx.network == "ic":
-                dfx.top_up_canister(
-                    canister_id,
-                    fund,
-                    ctx.network,
-                    identity=ctx.identity,
-                )
-
-        descriptor.set_canister_id(name, canister_id)
-        try:
-            created = dfx.canister_status(
-                canister_id, ctx.network, identity=ctx.identity
-            )
-        except dfx.DfxError as exc:
-            if not dfx.is_canister_not_found_error(exc):
-                raise RuntimeError(
-                    f"refusing to use {name} {canister_id}: create did not leave a "
-                    f"live canister on {ctx.network} ({exc})"
-                ) from exc
-            # Named ``dfx canister create`` reused a dead canister_ids.json row.
-            dead_id = canister_id
+        new_id = _create_and_register_canister(name, descriptor, ctx, principal)
+        if existing_id and existing_id != new_id:
             console.print(
-                f"  {name}: named create reused dead {dead_id}; minting via ledger"
+                f"  {name}: replaced dead pin {existing_id} with {new_id}"
             )
-            if dfx_name:
-                dfx.forget_dead_named_canister_mappings(
-                    dfx_name,
-                    ctx.network,
-                    identity=ctx.identity,
-                    is_dead=lambda cid, _dead=dead_id: cid == _dead,
-                )
-            canister_id = dfx.create_canister_via_ledger(
-                ctx.network,
-                identity=ctx.identity,
-                controller=principal,
-            )
-            if fund and ctx.network == "ic":
-                dfx.top_up_canister(
-                    canister_id,
-                    fund,
-                    ctx.network,
-                    identity=ctx.identity,
-                )
-            descriptor.set_canister_id(name, canister_id)
-            created = dfx.canister_status(
-                canister_id, ctx.network, identity=ctx.identity
-            )
-        _save_descriptor(descriptor, ctx)
-        console.print(f"  {name}: created {canister_id} ({created.status})")
 
     _persist_and_guard_portal_frontends(descriptor, ctx, require_http=False)
 
@@ -1349,14 +1439,10 @@ def phase_seed_conductor(descriptor: Descriptor, ctx: DeployContext) -> None:
     for name, key, kind in (
         ("realm-registry-backend", "realm_registry_backend", "backend"),
         ("realm-installer", "realm_installer", "backend"),
-        ("casals-file-registry", "casals_file_registry", "backend"),
         ("realm-registry-frontend", "realm_registry_frontend", "frontend"),
     ):
         canister_id = descriptor.canisters.get(key)
         if not canister_id:
-            # Casals' own file-registry is optional until casals new writes it.
-            if key == "casals_file_registry":
-                continue
             raise RuntimeError(f"{key} ID required for platform stand registration")
         platform_canisters.append((name, canister_id, kind))
     ensure_platform_stand(
@@ -1422,6 +1508,11 @@ def _casals_co_controller_targets(
     for name in (
         *_infra_canister_names(),
         "casals_file_registry",
+        # Casals reads canister_status on every canister in its tree to prime the
+        # cycles snapshot, so it must control the file-registry UI too. Leaving it
+        # out makes the snapshot report a permanent "not allowed to read the
+        # canister status" error for that row.
+        "casals_file_registry_frontend",
         "casals_frontend",
     ):
         _add(name, descriptor.canisters.get(name, ""))
@@ -1465,10 +1556,11 @@ def ensure_casals_co_controller(descriptor: Descriptor, ctx: DeployContext) -> N
             console.print(f"  {name}: Casals already controller")
             continue
         if deployer not in status.controllers:
-            console.print(
-                f"  {name}: skip add Casals (deployer is not a controller)"
+            raise RuntimeError(
+                f"{name} ({canister_id}): deployer is not a controller; "
+                f"cannot add Casals as co-controller "
+                f"(actual: {', '.join(status.controllers)})"
             )
-            continue
         console.print(f"  {name}: add Casals as co-controller")
         dfx.add_canister_controller(
             canister_id, casals_id, ctx.network, identity=ctx.identity
@@ -1716,69 +1808,190 @@ def phase_configure_multisig(descriptor: Descriptor, ctx: DeployContext) -> None
     )
 
 
-def phase_controller_topology(descriptor: Descriptor, ctx: DeployContext) -> None:
+def _resolve_multisig_backend_id(
+    descriptor: Descriptor, ctx: DeployContext, *, require: bool = True
+) -> str | None:
     multisig_id = (descriptor.multisig.backend_id or "").strip()
     if not multisig_id:
-        casals_id = descriptor.canisters.get("casals_backend", "")
+        casals_id = (descriptor.canisters.get("casals_backend") or "").strip()
         if casals_id:
             tree = get_tree(casals_id, ctx.network, identity=ctx.identity)
-            multisig_id = _find_canister_id(tree, "multisig")
-    if not multisig_id:
-        if ctx.network in ("local", "localhost"):
-            console.print(
-                "[yellow]  skip: no multisig backend_id "
-                "(orchestration templates unavailable)[/yellow]"
-            )
-            return
+            multisig_id = _find_canister_id(tree, "multisig") or ""
+    if multisig_id:
+        return multisig_id
+    if ctx.network in ("local", "localhost"):
+        return None
+    if require:
+        raise RuntimeError("multisig backend_id required for controller topology")
+    return None
+
+
+def _platform_infra_canister_names(descriptor: Descriptor) -> list[str]:
+    names = list(_infra_canister_names())
+    if descriptor.canisters.get("casals_file_registry"):
+        names.append("casals_file_registry")
+    return names
+
+
+def platform_controller_expectations(
+    descriptor: Descriptor,
+    ctx: DeployContext,
+    *,
+    multisig_id: str | None = None,
+) -> dict[str, list[str]]:
+    casals_backend_id = (descriptor.canisters.get("casals_backend") or "").strip()
+    if not casals_backend_id:
+        raise RuntimeError("casals_backend ID required")
+    multisig = (multisig_id or "").strip() or _resolve_multisig_backend_id(
+        descriptor, ctx, require=ctx.network not in ("local", "localhost")
+    )
+    if not multisig and ctx.network not in ("local", "localhost"):
         raise RuntimeError("multisig backend_id required for controller topology")
 
     deployer = dfx.get_principal(ctx.identity)
     test_mode = _resolve_can_test_mode(descriptor)
-    casals_backend_id = descriptor.canisters.get("casals_backend", "")
 
-    def controllers(base: list[str]) -> list[str]:
-        if test_mode and deployer not in base:
+    def with_deployer(base: list[str]) -> list[str]:
+        if test_mode and deployer and deployer not in base:
             return base + [deployer]
-        return base
+        return list(base)
 
-    casals_pair = ("casals_backend", "casals_frontend")
-    for name in casals_pair:
-        canister_id = descriptor.canisters.get(name)
-        if not canister_id:
-            raise RuntimeError(f"missing canister ID for {name}")
-        target = controllers([multisig_id])
+    expectations: dict[str, list[str]] = {}
+    if multisig:
+        for name in ("casals_backend", "casals_frontend"):
+            if descriptor.canisters.get(name):
+                expectations[name] = with_deployer([multisig])
+    for name in _platform_infra_canister_names(descriptor):
+        if descriptor.canisters.get(name):
+            expectations[name] = with_deployer([casals_backend_id])
+    return expectations
+
+
+def _canister_id_for_expectation_key(descriptor: Descriptor, name: str) -> str:
+    canister_id = (descriptor.canisters.get(name) or "").strip()
+    if not canister_id:
+        raise RuntimeError(f"missing canister ID for {name}")
+    return canister_id
+
+
+def verify_platform_controller_topology(
+    descriptor: Descriptor, ctx: DeployContext
+) -> None:
+    if ctx.network in ("local", "localhost"):
+        console.print(
+            "[yellow]  skip: no platform controller verification on local[/yellow]"
+        )
+        return
+
+    multisig_id = _resolve_multisig_backend_id(descriptor, ctx, require=True)
+    expectations = platform_controller_expectations(
+        descriptor, ctx, multisig_id=multisig_id
+    )
+    errors: list[str] = []
+    casals_backend_id = (descriptor.canisters.get("casals_backend") or "").strip()
+
+    for name, expected in expectations.items():
+        canister_id = _canister_id_for_expectation_key(descriptor, name)
+        try:
+            status = dfx.canister_status(
+                canister_id, ctx.network, identity=ctx.identity
+            )
+        except dfx.DfxError as exc:
+            errors.append(f"{name} ({canister_id}): cannot read status ({exc})")
+            continue
+        actual = set(status.controllers)
+        expected_set = set(expected)
+        if actual != expected_set:
+            errors.append(
+                f"{name} ({canister_id}): actual={sorted(actual)} "
+                f"expected={sorted(expected_set)}"
+            )
+        elif (
+            name in _platform_infra_canister_names(descriptor)
+            and casals_backend_id not in actual
+        ):
+            errors.append(
+                f"{name} ({canister_id}): missing Casals backend controller "
+                f"{casals_backend_id}"
+            )
+
+    if errors:
+        raise RuntimeError(
+            "platform controller verification failed:\n  - "
+            + "\n  - ".join(errors)
+        )
+    console.print(
+        f"  verified controller topology on {len(expectations)} platform canister(s)"
+    )
+
+
+def apply_platform_controller_topology(
+    descriptor: Descriptor, ctx: DeployContext
+) -> None:
+    if ctx.network in ("local", "localhost"):
+        console.print(
+            "[yellow]  skip: no multisig backend_id "
+            "(orchestration templates unavailable)[/yellow]"
+        )
+        return
+
+    multisig_id = _resolve_multisig_backend_id(descriptor, ctx, require=True)
+    expectations = platform_controller_expectations(
+        descriptor, ctx, multisig_id=multisig_id
+    )
+    test_mode = _resolve_can_test_mode(descriptor)
+    changed = 0
+
+    for name, target in expectations.items():
+        canister_id = _canister_id_for_expectation_key(descriptor, name)
+        status = dfx.canister_status(
+            canister_id, ctx.network, identity=ctx.identity
+        )
+        target_set = set(target)
+        if set(status.controllers) == target_set:
+            console.print(f"  {name}: controllers already correct")
+            continue
         console.print(f"  {name}: controllers -> {', '.join(target)}")
         dfx.update_canister_settings(
             canister_id, target, ctx.network, identity=ctx.identity
         )
-        status = dfx.canister_status(canister_id, ctx.network, identity=ctx.identity)
-        if set(status.controllers) != set(target):
-            raise RuntimeError(
-                f"{name} controller verify failed: {status.controllers} != {target}"
-            )
-
-    infra_names = list(_infra_canister_names())
-    if descriptor.canisters.get("casals_file_registry"):
-        infra_names.append("casals_file_registry")
-    for name in infra_names:
-        canister_id = descriptor.canisters.get(name)
-        if not canister_id:
-            raise RuntimeError(f"missing canister ID for {name}")
-        target = controllers([casals_backend_id])
-        console.print(f"  {name}: controllers -> {', '.join(target)}")
-        dfx.update_canister_settings(
-            canister_id, target, ctx.network, identity=ctx.identity
+        status = dfx.canister_status(
+            canister_id, ctx.network, identity=ctx.identity
         )
-        status = dfx.canister_status(canister_id, ctx.network, identity=ctx.identity)
-        if set(status.controllers) != set(target):
+        if set(status.controllers) != target_set:
             raise RuntimeError(
-                f"{name} controller verify failed: {status.controllers} != {target}"
+                f"{name} ({canister_id}) controller apply failed: "
+                f"{status.controllers} != {target}"
             )
+        changed += 1
+
+    if changed:
+        console.print(f"  updated controllers on {changed} canister(s)")
+    else:
+        console.print("  controller topology already applied (no changes)")
 
     if test_mode:
-        console.print("  test mode: deployer retained as co-controller on platform canisters")
+        console.print(
+            "  test mode: deployer retained as co-controller on platform canisters"
+        )
     else:
-        console.print("  production: gaas deployer no longer controls platform canisters")
+        console.print(
+            "  production: gaas deployer no longer controls platform canisters"
+        )
+
+
+def phase_controller_topology(descriptor: Descriptor, ctx: DeployContext) -> None:
+    apply_platform_controller_topology(descriptor, ctx)
+
+
+def phase_verify_controller_topology(descriptor: Descriptor, ctx: DeployContext) -> None:
+    verify_platform_controller_topology(descriptor, ctx)
+
+
+def repair_platform_controllers(descriptor: Descriptor, ctx: DeployContext) -> None:
+    """Apply then verify platform controller topology (standalone repair)."""
+    apply_platform_controller_topology(descriptor, ctx)
+    verify_platform_controller_topology(descriptor, ctx)
 
 
 def phase_grant_commanders(descriptor: Descriptor, ctx: DeployContext) -> None:
@@ -1793,11 +2006,25 @@ def phase_grant_commanders(descriptor: Descriptor, ctx: DeployContext) -> None:
         console.print("  skip: no orchestra sections found")
         return
 
-    if not _is_interactive(ctx):
-        console.print(
-            "  skip: grant Casals commanders interactively "
-            "(re-run without --yes on a TTY)"
+    # descriptor.casals.commanders is the durable record of who should hold
+    # commander rights, so grant it on every run instead of only when an
+    # operator is present. set_commander adds-or-updates, so this is idempotent.
+    declared = [p for p in descriptor.casals.commanders if p]
+    if declared:
+        ensure_section_commanders(
+            casals_id,
+            sections,
+            declared,
+            ctx.network,
+            identity=ctx.identity,
         )
+
+    if not _is_interactive(ctx):
+        if not declared:
+            console.print(
+                "  skip: no commanders declared in descriptor (casals.commanders) "
+                "and not on a TTY to prompt for one"
+            )
         return
 
     casals_frontend_id = descriptor.canisters.get("casals_frontend")
@@ -1930,15 +2157,17 @@ def phase_ids_to_run(
     from_phase: str | None,
     *,
     validate_phase_id: str,
+    mandatory_phase_ids: tuple[str, ...] = (),
 ) -> set[str]:
     start = parse_from_phase(from_phase, phases)
     run_ids = {phase_id for phase_id, _title, _func in phases[start:]}
-    validate_index = next(
-        (i for i, (phase_id, _, _) in enumerate(phases) if phase_id == validate_phase_id),
-        None,
-    )
-    if validate_index is not None and start > validate_index:
-        run_ids.add(validate_phase_id)
+    for mandatory_id in (validate_phase_id, *mandatory_phase_ids):
+        mandatory_index = next(
+            (i for i, (phase_id, _, _) in enumerate(phases) if phase_id == mandatory_id),
+            None,
+        )
+        if mandatory_index is not None and start > mandatory_index:
+            run_ids.add(mandatory_id)
     return run_ids
 
 
@@ -1956,12 +2185,16 @@ def _run_phase_table(
     phases: list[tuple[str, str, PhaseFunc]],
     *,
     validate_phase_id: str,
+    mandatory_phase_ids: tuple[str, ...] = (),
     on_phase_start: Callable[[int, str, str], None] | None = None,
 ) -> DeployContext:
     total = len(phases)
     start = parse_from_phase(ctx.from_phase, phases)
     run_ids = phase_ids_to_run(
-        phases, ctx.from_phase, validate_phase_id=validate_phase_id
+        phases,
+        ctx.from_phase,
+        validate_phase_id=validate_phase_id,
+        mandatory_phase_ids=mandatory_phase_ids,
     )
     if start > 0:
         skipped = [
@@ -2036,11 +2269,20 @@ PHASES: list[tuple[str, str, PhaseFunc]] = [
         phase_prime_cycles_snapshot,
     ),
     ("configure_multisig", "Configuring multisig signers", phase_configure_multisig),
+    (
+        "controller_topology",
+        "Applying controller topology",
+        phase_controller_topology,
+    ),
     ("install_frontends", "Building + installing frontends", phase_install_frontends),
     ("domain_wiring", "Domain wiring", phase_domain_wiring),
     ("smoke_checks", "Smoke checks", phase_smoke_checks),
     ("grant_commanders", "Granting Casals commanders", phase_grant_commanders),
-    ("controller_topology", "Applying controller topology", phase_controller_topology),
+    (
+        "verify_controller_topology",
+        "Verifying platform controller topology",
+        phase_verify_controller_topology,
+    ),
 ]
 
 
@@ -2055,5 +2297,6 @@ def run_phases(
         ctx,
         PHASES,
         validate_phase_id="validate",
+        mandatory_phase_ids=("controller_topology", "verify_controller_topology"),
         on_phase_start=on_phase_start,
     )

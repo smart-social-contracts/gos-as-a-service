@@ -2,9 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   GOS_IMPLEMENTATIONS,
+  GGG_DOCS_URL,
   buildGosImplementationsFromEnv,
   buildGosManifestBlock,
   getGosImplementation,
+  gggGosImplementations,
+  otherGosImplementations,
   normalizeGosDeployVersion,
   resolveGosImplementations,
   shouldShowVersionPicker,
@@ -21,6 +24,7 @@ test('registry includes realms-gos as available with realms-iframe-v1 loader', (
   assert.equal(realms.available, true);
   assert.equal(realms.loaderProfile, 'realms-iframe-v1');
   assert.equal(realms.gggConformance, '1.0');
+  assert.match(realms.description, /customizable Governance Operating System/);
 });
 
 test('registry includes monad-gos as available with monad-iframe-v1 loader', () => {
@@ -29,6 +33,18 @@ test('registry includes monad-gos as available with monad-iframe-v1 loader', () 
   assert.equal(monadGos.available, true);
   assert.equal(monadGos.loaderProfile, 'monad-iframe-v1');
   assert.equal(monadGos.gggConformance, '1.0');
+});
+
+test('GGG docs URL points at the GitHub GGG entity reference', () => {
+  assert.match(GGG_DOCS_URL, /github.com\/smart-social-contracts\/realms/);
+  assert.match(GGG_DOCS_URL, /CORE_ENTITIES.md/);
+});
+
+test('gggGosImplementations lists GGG-architecture GOS; other is empty by default', () => {
+  const ggg = gggGosImplementations(GOS_IMPLEMENTATIONS);
+  const other = otherGosImplementations(GOS_IMPLEMENTATIONS);
+  assert.ok(ggg.some((impl) => impl.id === 'realms-gos'));
+  assert.equal(other.length, 0);
 });
 
 test('getGosImplementation returns matching entry or undefined', () => {

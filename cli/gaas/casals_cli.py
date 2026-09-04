@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 
 from gaas.descriptor import Descriptor
+from gaas.dfx import canister_missing_on_ic
 from gaas.platform import require_casals_checkout
 
 CASALS_BOOTSTRAP_NAMES: tuple[str, ...] = (
@@ -57,6 +58,24 @@ def _apply_canisters_to_descriptor(
             descriptor.set_canister_id(gos_name, cid.strip())
 
 
+def discard_dead_bootstrap_pins(
+    descriptor: Descriptor,
+    *,
+    network: str,
+    identity: str | None,
+) -> list[tuple[str, str]]:
+    """Drop bootstrap pins that no longer exist on the IC. Returns healed (name, id)."""
+    healed: list[tuple[str, str]] = []
+    for name in CASALS_BOOTSTRAP_NAMES:
+        cid = (descriptor.canisters.get(name) or "").strip()
+        if not cid:
+            continue
+        if canister_missing_on_ic(cid, network, identity=identity):
+            healed.append((name, cid))
+            descriptor.canisters.pop(name, None)
+    return healed
+
+
 def run_casals_new(
     descriptor: Descriptor,
     *,
@@ -83,6 +102,11 @@ def run_casals_new(
         argv.append("-y")
     argv.append("--no-seed")
 
+    healed_bootstrap = [] if force_create else discard_dead_bootstrap_pins(
+        descriptor,
+        network=network,
+        identity=identity,
+    )
     existing = {} if force_create else ids_file_payload(descriptor)
     ids_path: Path | None = None
     if existing:
@@ -130,6 +154,11 @@ def run_casals_new(
         if isinstance(canisters, dict):
             _apply_canisters_to_descriptor(descriptor, canisters)
 
+        if healed_bootstrap:
+            parsed = dict(parsed)
+            parsed["healed_bootstrap_pins"] = [
+                {"name": name, "dead_id": dead_id} for name, dead_id in healed_bootstrap
+            ]
         return parsed
     finally:
         if ids_path is not None:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 
@@ -23,6 +23,9 @@ from gaas.phases import (
     parse_from_phase,
     phase_configure_backends,
     phase_controller_topology,
+    phase_verify_controller_topology,
+    apply_platform_controller_topology,
+    verify_platform_controller_topology,
     phase_create_canisters,
     phase_destroy_except_frontend,
     phase_domain_wiring,
@@ -54,11 +57,12 @@ def test_phases_order() -> None:
         "seed_conductor",
         "prime_cycles_snapshot",
         "configure_multisig",
+        "controller_topology",
         "install_frontends",
         "domain_wiring",
         "smoke_checks",
         "grant_commanders",
-        "controller_topology",
+        "verify_controller_topology",
     ]
 
 
@@ -79,11 +83,26 @@ def test_parse_from_phase_rejects_unknown() -> None:
         parse_from_phase("99", PHASES)
 
 
+def test_phase_ids_to_run_from_install_frontends_includes_controller_phases() -> None:
+    ids = phase_ids_to_run(
+        PHASES,
+        "install_frontends",
+        validate_phase_id="validate",
+        mandatory_phase_ids=("controller_topology", "verify_controller_topology"),
+    )
+    assert "validate" in ids
+    assert "controller_topology" in ids
+    assert "verify_controller_topology" in ids
+    assert "install_frontends" in ids
+    assert "create_canisters" not in ids
+
+
 def test_phase_ids_to_run_from_step_8_keeps_validate() -> None:
     ids = phase_ids_to_run(PHASES, "8", validate_phase_id="validate")
     assert "validate" in ids
     assert "seed_conductor" in ids
     assert "controller_topology" in ids
+    assert "verify_controller_topology" in ids
     assert "destroy_except_frontend" not in ids
     assert "create_canisters" not in ids
     assert "seed_file_registry" not in ids
@@ -527,6 +546,136 @@ def test_phase_create_canisters_skips_treasury_restore_when_zero(
     mock_top_up.assert_not_called()
 
 
+def _not_found_status_error(canister_id: str) -> DfxError:
+    return DfxError(
+        f"Canister {canister_id} was not found",
+        command=["dfx", "canister", "status", canister_id],
+        stderr="IC0301",
+    )
+
+
+@patch("gaas.phases.run_casals_new", side_effect=mock_run_casals_new)
+@patch("gaas.phases.dfx.create_canister_via_ledger")
+@patch("gaas.phases.dfx.create_canister")
+@patch("gaas.phases.dfx.canister_status")
+@patch("gaas.phases.dfx.get_principal", return_value="aaaaa-aa")
+@patch("gaas.phases.dfx.use_identity")
+@patch("gaas.phases._persist_and_guard_portal_frontends")
+def test_phase_create_heals_dead_platform_pin(
+    _persist,
+    _use_identity,
+    mock_principal,
+    mock_status,
+    mock_create,
+    _mock_ledger,
+    _mock_casals_new,
+    tmp_path: Path,
+) -> None:
+    dead = "mq5y2-riaaa-aaaai-ax5pq-cai"
+    minted = "uayfg-bqaaa-aaaac-bfygq-cai"
+
+    def fake_status(cid, network, **kwargs):
+        if cid == dead:
+            raise _not_found_status_error(cid)
+        return MagicMock(
+            status="running",
+            controllers=("aaaaa-aa",),
+            raw="status: running",
+        )
+
+    mock_principal.return_value = "aaaaa-aa"
+    mock_status.side_effect = fake_status
+    mock_create.side_effect = [
+        minted,
+        "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
+        "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+    ]
+
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {"realm_registry_backend": dead}
+    desc = Descriptor.model_validate(data)
+    path = tmp_path / "env.gaas.json"
+    desc.save(path)
+    ctx = DeployContext(identity="deployer", network="ic", descriptor_path=path)
+
+    phase_create_canisters(desc, ctx)
+
+    assert desc.canisters["realm_registry_backend"] == minted
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    assert saved["canisters"]["realm_registry_backend"] == minted
+
+
+@patch("gaas.phases.run_casals_new", side_effect=mock_run_casals_new)
+@patch("gaas.phases.dfx.create_canister")
+@patch("gaas.phases.dfx.canister_status")
+@patch("gaas.phases.dfx.get_principal", return_value="aaaaa-aa")
+@patch("gaas.phases.dfx.use_identity")
+@patch("gaas.phases._persist_and_guard_portal_frontends")
+def test_phase_create_adopts_live_pin_with_deployer_controller(
+    _persist,
+    _use_identity,
+    _principal,
+    mock_status,
+    mock_create,
+    _mock_casals_new,
+    tmp_path: Path,
+) -> None:
+    mock_status.return_value = MagicMock(
+        status="running",
+        controllers=("aaaaa-aa",),
+        raw="status: running",
+    )
+    mock_create.side_effect = [
+        "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
+        "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+    ]
+
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {"realm_registry_backend": VALID_CANISTER_ID}
+    desc = Descriptor.model_validate(data)
+    path = tmp_path / "env.gaas.json"
+    desc.save(path)
+    ctx = DeployContext(identity="deployer", network="ic", descriptor_path=path)
+
+    phase_create_canisters(desc, ctx)
+
+    assert desc.canisters["realm_registry_backend"] == VALID_CANISTER_ID
+    adopt_calls = [
+        call.args[0]
+        for call in mock_status.call_args_list
+        if call.args and call.args[0] == VALID_CANISTER_ID
+    ]
+    assert adopt_calls
+    assert mock_create.call_count == 2
+
+
+@patch("gaas.phases.run_casals_new", side_effect=mock_run_casals_new)
+@patch("gaas.phases.dfx.canister_status")
+@patch("gaas.phases.dfx.get_principal", return_value="aaaaa-aa")
+@patch("gaas.phases.dfx.use_identity")
+@patch("gaas.phases._persist_and_guard_portal_frontends")
+def test_phase_create_rejects_live_pin_without_deployer_controller(
+    _persist,
+    _use_identity,
+    _principal,
+    mock_status,
+    _mock_casals_new,
+) -> None:
+    mock_status.return_value = MagicMock(
+        status="running",
+        controllers=("other-principal-aaaaa-aa",),
+        raw="status: running",
+    )
+
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {"realm_registry_backend": VALID_CANISTER_ID}
+    desc = Descriptor.model_validate(data)
+    ctx = DeployContext(identity="deployer", network="ic")
+
+    with pytest.raises(RuntimeError, match="not a controller"):
+        phase_create_canisters(desc, ctx)
+
+
 def test_registry_init_json_can_test_mode() -> None:
     desc = Descriptor.model_validate(SAMPLE_DESCRIPTOR)
     default_json = json.loads(_registry_config_json(desc))
@@ -786,19 +935,41 @@ def test_phase_configure_backends_closed_skips_runtime_flags(
     assert runtime_calls == []
 
 
-def test_installer_config_json_includes_ids() -> None:
+def test_installer_config_json_omits_product_ids_when_absent() -> None:
+    """GaaS descriptors (e.g. environments/test.json) lack product canister ids."""
     data = dict(SAMPLE_DESCRIPTOR)
     data["canisters"] = {
         "realm_registry_backend": VALID_CANISTER_ID,
-        "file_registry": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aab",
-        "marketplace_backend": "ccccc-ccccc-ccccc-ccccc-ccccc-ccc",
+        "realm_installer": "fltjm-tyaaa-aaaap-qunhq-cai",
         "casals_backend": "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
     }
     desc = Descriptor.model_validate(data)
     payload = json.loads(_installer_config_json(desc))
+    assert "file_registry_id" not in payload
+    assert "marketplace_id" not in payload
     assert payload["registry_backend_id"] == VALID_CANISTER_ID
-    assert payload["file_registry_id"] == ""
-    assert payload["marketplace_id"] == ""
+    assert payload["casals_canister_id"] == "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb"
+    assert payload["provision_via_casals"] is True
+    assert payload["create_stand_baton"] is True
+
+
+def test_installer_config_json_includes_product_ids_when_present() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    file_registry = "uq2mu-kaaaa-aaaah-avqcq-cai"
+    marketplace = "2wldc-niaaa-aaaad-qlxga-cai"
+    data["canisters"] = {
+        "realm_registry_backend": VALID_CANISTER_ID,
+        "casals_backend": "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+    }
+    desc = Descriptor.model_validate(data)
+    # Realms product ids are not KNOWN_CANISTER_NAMES; the validator strips them
+    # on load, but _installer_config_json must still emit them when present.
+    desc.canisters["file_registry"] = file_registry
+    desc.canisters["marketplace_backend"] = marketplace
+    payload = json.loads(_installer_config_json(desc))
+    assert payload["registry_backend_id"] == VALID_CANISTER_ID
+    assert payload["file_registry_id"] == file_registry
+    assert payload["marketplace_id"] == marketplace
     assert payload["casals_canister_id"] == "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb"
     assert payload["portal_url"] == "https://test.gos.earth"
     assert payload["provision_via_casals"] is True
@@ -826,6 +997,34 @@ def test_casals_settings_json_prefers_casals_file_registry() -> None:
     assert payload["file_registry_canister_id"] == "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb"
 
 
+def test_casals_settings_json_prefers_casals_file_registry_frontend() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        "file_registry": VALID_CANISTER_ID,
+        "casals_file_registry_frontend": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aab",
+        "file_registry_frontend": "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+    }
+    desc = Descriptor.model_validate(data)
+    payload = json.loads(_casals_settings_json(desc, "deployer-principal"))
+    assert payload["file_registry_frontend_canister_id"] == (
+        "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aab"
+    )
+
+
+def test_casals_settings_json_casals_file_registry_frontend_descriptor_key() -> None:
+    """environments/*.json use casals_file_registry_frontend, not file_registry_frontend."""
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        "casals_file_registry": VALID_CANISTER_ID,
+        "casals_file_registry_frontend": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aab",
+    }
+    desc = Descriptor.model_validate(data)
+    payload = json.loads(_casals_settings_json(desc, "deployer-principal"))
+    assert payload["file_registry_frontend_canister_id"] == (
+        "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aab"
+    )
+
+
 def test_casals_settings_json_defaults_and_test_mode() -> None:
     data = dict(SAMPLE_DESCRIPTOR)
     data["canisters"] = {
@@ -849,11 +1048,16 @@ def test_casals_settings_json_defaults_and_test_mode() -> None:
     assert closed["default_topup_cycles"] == 2_000_000_000_000
     assert closed["treasury_reserve"] == 2_000_000_000_000
     assert closed["create_cycles"] == 2_000_000_000_000
-    assert "extra_controller_principals" not in closed
+    # The installer administers every provisioned realm, so it is a controller
+    # regardless of test mode; the deployer is added only on test-mode envs.
+    assert closed["extra_controller_principals"] == [
+        "ccccc-ccccc-ccccc-ccccc-ccccc-ccc",
+    ]
 
     open_desc = desc.model_copy(update={"flags": {"can_test_mode": True}})
     open_payload = json.loads(_casals_settings_json(open_desc, "deployer-principal"))
     assert open_payload["extra_controller_principals"] == [
+        "ccccc-ccccc-ccccc-ccccc-ccccc-ccc",
         "deployer-principal",
     ]
 
@@ -920,6 +1124,40 @@ def test_casals_settings_json_no_monitor_url() -> None:
     assert "monitor_principal" not in payload
 
 
+def test_casals_settings_json_includes_orchestra_name_from_platform_sheet() -> None:
+    from gaas.conductor_seed import casals_orchestra_name, platform_sheet
+
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        "casals_file_registry": VALID_CANISTER_ID,
+        "casals_frontend": "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+        "realm_installer": "ccccc-ccccc-ccccc-ccccc-ccccc-ccc",
+    }
+    desc = Descriptor.model_validate(data)
+    expected = casals_orchestra_name(desc)
+    assert expected == platform_sheet()["name"]
+
+    payload = json.loads(_casals_settings_json(desc, "deployer-principal"))
+    assert payload["orchestra_name"] == expected
+    assert payload["file_registry_canister_id"] == VALID_CANISTER_ID
+    assert payload["casals_frontend_canister_id"] == "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb"
+    assert payload["realm_installer_canister_id"] == "ccccc-ccccc-ccccc-ccccc-ccccc-ccc"
+    assert payload["default_min_cycles"] == 2_000_000_000_000
+
+
+def test_casals_settings_json_orchestra_name_descriptor_override() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {"casals_file_registry": VALID_CANISTER_ID}
+    data["casals"] = {
+        **data["casals"],
+        "orchestra_name": "custom-gaas-env",
+    }
+    desc = Descriptor.model_validate(data)
+    payload = json.loads(_casals_settings_json(desc, "deployer-principal"))
+    assert payload["orchestra_name"] == "custom-gaas-env"
+    assert payload["file_registry_canister_id"] == VALID_CANISTER_ID
+
+
 def test_infra_canister_names() -> None:
     names = _infra_canister_names()
     assert "realm_registry_backend" in names
@@ -941,15 +1179,23 @@ def test_controller_topology_test_mode(
     mock_principal.return_value = "deployer-principal"
     multisig_id = "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aac"
     casals_backend_id = "eeeee-eeeee-eeeee-eeeee-eeeee-eee"
+    updated: set[str] = set()
 
     def status_side_effect(canister_id, network, *, identity=None):
-        if canister_id in (casals_backend_id, "fffff-fffff-fffff-fffff-fffff-fff"):
-            controllers = (multisig_id, "deployer-principal")
+        if canister_id in updated:
+            if canister_id in (casals_backend_id, "fffff-fffff-fffff-fffff-fffff-fff"):
+                controllers = (multisig_id, "deployer-principal")
+            else:
+                controllers = (casals_backend_id, "deployer-principal")
         else:
-            controllers = (casals_backend_id, "deployer-principal")
+            controllers = ("deployer-principal",)
         return MagicMock(status="running", controllers=controllers)
 
+    def update_side_effect(canister_id, controllers, network, *, identity=None):
+        updated.add(canister_id)
+
     mock_status.side_effect = status_side_effect
+    mock_update.side_effect = update_side_effect
     data = dict(SAMPLE_DESCRIPTOR)
     data["flags"] = {"can_test_mode": True}
     data["canisters"] = {
@@ -1222,9 +1468,35 @@ def test_phase_seed_conductor_registers_platform_canisters(
     assert args[1] == [
         ("realm-registry-backend", "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa", "backend"),
         ("realm-installer", "ccccc-ccccc-ccccc-ccccc-ccccc-ccc", "backend"),
-        ("casals-file-registry", "ggggg-ggggg-ggggg-ggggg-ggggg-ggg", "backend"),
         ("realm-registry-frontend", "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb", "frontend"),
     ]
+
+
+def test_phase_seed_conductor_platform_canisters_exclude_casals_file_registry() -> None:
+    """Casals bootstrap owns file_registry under Casals/System; not an Infra stand."""
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        "realm_registry_backend": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
+        "realm_registry_frontend": "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+        "realm_installer": "ccccc-ccccc-ccccc-ccccc-ccccc-ccc",
+        "casals_backend": "fffff-fffff-fffff-fffff-fffff-fff",
+        "casals_file_registry": "ggggg-ggggg-ggggg-ggggg-ggggg-ggg",
+    }
+    desc = Descriptor.model_validate(data)
+    ctx = DeployContext(identity="deployer", network="ic")
+    with (
+        patch("gaas.phases.ensure_section_commanders"),
+        patch("gaas.phases.ensure_deployments_commander"),
+        patch("gaas.phases.ensure_platform_stand") as mock_platform_stand,
+        patch("gaas.phases.ensure_sheet_and_deploy_multisig"),
+        patch("gaas.phases.authorize_gos_entry"),
+        patch("gaas.phases.seed_orchestration_templates"),
+        patch("gaas.phases.ensure_casals_co_controller"),
+    ):
+        phase_seed_conductor(desc, ctx)
+    platform_canisters = mock_platform_stand.call_args[0][1]
+    platform_names = [name for name, _cid, _kind in platform_canisters]
+    assert "casals-file-registry" not in platform_names
 
 
 def test_casals_co_controller_targets_skip_self() -> None:
@@ -1350,8 +1622,14 @@ CASALS_FRONTEND_ID = "ggggg-ggggg-ggggg-ggggg-ggggg-ggg"
 MOCK_TREE = {"sections": [{"name": "Infra"}, {"name": "Deployments"}]}
 
 
-def _grant_commanders_descriptor(tmp_path: Path | None = None) -> tuple[Descriptor, DeployContext]:
+def _grant_commanders_descriptor(
+    tmp_path: Path | None = None,
+    *,
+    commanders: list[str] | None = None,
+) -> tuple[Descriptor, DeployContext]:
     data = dict(SAMPLE_DESCRIPTOR)
+    if commanders is not None:
+        data["casals"] = {**SAMPLE_DESCRIPTOR["casals"], "commanders": commanders}
     data["canisters"] = {
         "casals_backend": CASALS_BACKEND_ID,
         "casals_frontend": CASALS_FRONTEND_ID,
@@ -1401,6 +1679,82 @@ def test_phase_grant_commanders_non_interactive_yes_flag(
     phase_grant_commanders(desc, ctx)
 
     mock_ensure.assert_not_called()
+
+
+@patch("gaas.phases.console.input")
+@patch("gaas.phases.ensure_section_commanders")
+@patch("gaas.phases.get_tree", return_value=MOCK_TREE)
+@patch("gaas.phases.sys.stdin")
+def test_phase_grant_commanders_applies_declared_unattended(
+    mock_stdin,
+    _get_tree,
+    mock_ensure,
+    mock_input,
+) -> None:
+    """--yes must still grant commanders the descriptor already declares."""
+    mock_stdin.isatty.return_value = True
+    desc, ctx = _grant_commanders_descriptor(commanders=[PRINCIPAL_A])
+    ctx.yes = True
+
+    phase_grant_commanders(desc, ctx)
+
+    mock_ensure.assert_called_once_with(
+        CASALS_BACKEND_ID,
+        ["Deployments", "Infra"],
+        [PRINCIPAL_A],
+        "ic",
+        identity="deployer",
+    )
+    mock_input.assert_not_called()
+
+
+@patch("gaas.phases.console.input")
+@patch("gaas.phases.ensure_section_commanders")
+@patch("gaas.phases.get_tree", return_value=MOCK_TREE)
+@patch("gaas.phases.sys.stdin")
+def test_phase_grant_commanders_declared_grant_is_idempotent_across_runs(
+    mock_stdin,
+    _get_tree,
+    mock_ensure,
+    mock_input,
+) -> None:
+    mock_stdin.isatty.return_value = False
+    desc, ctx = _grant_commanders_descriptor(commanders=[PRINCIPAL_A, PRINCIPAL_B])
+    ctx.yes = True
+
+    phase_grant_commanders(desc, ctx)
+    phase_grant_commanders(desc, ctx)
+
+    assert mock_ensure.call_count == 2
+    for granted in mock_ensure.call_args_list:
+        assert granted[0][2] == [PRINCIPAL_A, PRINCIPAL_B]
+    assert desc.casals.commanders == [PRINCIPAL_A, PRINCIPAL_B]
+    mock_input.assert_not_called()
+
+
+@patch("gaas.phases._save_descriptor")
+@patch("gaas.phases.console.input")
+@patch("gaas.phases.ensure_section_commanders")
+@patch("gaas.phases.get_tree", return_value=MOCK_TREE)
+@patch("gaas.phases.sys.stdin")
+def test_phase_grant_commanders_declared_then_interactive_additions(
+    mock_stdin,
+    _get_tree,
+    mock_ensure,
+    mock_input,
+    mock_save,
+    tmp_path: Path,
+) -> None:
+    mock_stdin.isatty.return_value = True
+    mock_input.side_effect = [PRINCIPAL_B, ""]
+    desc, ctx = _grant_commanders_descriptor(tmp_path, commanders=[PRINCIPAL_A])
+
+    phase_grant_commanders(desc, ctx)
+
+    assert mock_ensure.call_args_list[0][0][2] == [PRINCIPAL_A]
+    assert mock_ensure.call_args_list[1][0][2] == [PRINCIPAL_B]
+    assert desc.casals.commanders == [PRINCIPAL_A, PRINCIPAL_B]
+    assert mock_save.call_count == 1
 
 
 @patch("gaas.phases._save_descriptor")
@@ -1728,3 +2082,214 @@ def test_phase_install_backends_uses_platform_file_registry_for_casals(
         if call.args[0] == "ccccc-ccccc-ccccc-ccccc-ccc"
     )
     assert casals_fr_install.args[1] == str(platform_wasm)
+
+
+def _controller_topology_fixture() -> tuple[Descriptor, DeployContext, str, str]:
+    multisig_id = "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aac"
+    casals_backend_id = "eeeee-eeeee-eeeee-eeeee-eeeee-eee"
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["flags"] = {"can_test_mode": True}
+    data["canisters"] = {
+        "realm_registry_backend": VALID_CANISTER_ID,
+        "realm_registry_frontend": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aab",
+        "realm_installer": "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+        "casals_backend": casals_backend_id,
+        "casals_frontend": "fffff-fffff-fffff-fffff-fffff-fff",
+        "casals_file_registry": "ggggg-ggggg-ggggg-ggggg-ggggg-ggg",
+    }
+    data["multisig"] = {"backend_id": multisig_id}
+    desc = Descriptor.model_validate(data)
+    ctx = DeployContext(identity="deployer", network="ic")
+    return desc, ctx, multisig_id, casals_backend_id
+
+
+@patch("gaas.phases.dfx.canister_status")
+@patch("gaas.phases.dfx.get_principal", return_value="deployer-principal")
+def test_verify_controller_topology_fails_without_casals(
+    _mock_principal,
+    mock_status,
+) -> None:
+    desc, ctx, _multisig_id, casals_backend_id = _controller_topology_fixture()
+
+    def status_side_effect(canister_id, network, *, identity=None):
+        return MagicMock(status="running", controllers=("deployer-principal",))
+
+    mock_status.side_effect = status_side_effect
+    with pytest.raises(RuntimeError, match="platform controller verification failed"):
+        verify_platform_controller_topology(desc, ctx)
+
+
+@patch("gaas.phases.dfx.canister_status")
+@patch("gaas.phases.dfx.get_principal", return_value="deployer-principal")
+def test_verify_controller_topology_passes_when_correct(
+    _mock_principal,
+    mock_status,
+) -> None:
+    desc, ctx, multisig_id, casals_backend_id = _controller_topology_fixture()
+
+    def status_side_effect(canister_id, network, *, identity=None):
+        if canister_id in (casals_backend_id, "fffff-fffff-fffff-fffff-fffff-fff"):
+            controllers = (multisig_id, "deployer-principal")
+        else:
+            controllers = (casals_backend_id, "deployer-principal")
+        return MagicMock(status="running", controllers=controllers)
+
+    mock_status.side_effect = status_side_effect
+    verify_platform_controller_topology(desc, ctx)
+
+
+@patch("gaas.phases.dfx.canister_status")
+@patch("gaas.phases.dfx.update_canister_settings")
+@patch("gaas.phases.dfx.get_principal", return_value="deployer-principal")
+def test_apply_controller_topology_idempotent_when_correct(
+    _mock_principal,
+    mock_update,
+    mock_status,
+) -> None:
+    desc, ctx, multisig_id, casals_backend_id = _controller_topology_fixture()
+
+    def status_side_effect(canister_id, network, *, identity=None):
+        if canister_id in (casals_backend_id, "fffff-fffff-fffff-fffff-fffff-fff"):
+            controllers = (multisig_id, "deployer-principal")
+        else:
+            controllers = (casals_backend_id, "deployer-principal")
+        return MagicMock(status="running", controllers=controllers)
+
+    mock_status.side_effect = status_side_effect
+    apply_platform_controller_topology(desc, ctx)
+    mock_update.assert_not_called()
+
+
+@patch("gaas.phases.dfx.add_canister_controller")
+@patch("gaas.phases.dfx.canister_status")
+@patch("gaas.phases.dfx.get_principal", return_value="deployer-principal")
+@patch("gaas.phases.get_tree", return_value={"sections": []})
+def test_ensure_casals_co_controller_raises_without_deployer(
+    _get_tree,
+    _get_principal,
+    mock_status,
+    mock_add,
+) -> None:
+    from gaas.dfx import CanisterStatus
+
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        "casals_backend": "fffff-fffff-fffff-fffff-fffff-fff",
+        "realm_registry_backend": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
+    }
+    desc = Descriptor.model_validate(data)
+    ctx = DeployContext(identity="deployer", network="ic")
+    mock_status.return_value = CanisterStatus(
+        canister_id="aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
+        status="running",
+        raw="",
+        controllers=("someone-else",),
+    )
+    with pytest.raises(RuntimeError, match="deployer is not a controller"):
+        ensure_casals_co_controller(desc, ctx)
+    mock_add.assert_not_called()
+
+
+def test_casals_co_controller_targets_include_file_registry_frontend() -> None:
+    """Casals reads canister_status on the file-registry UI when priming cycles."""
+    from gaas.phases import _casals_co_controller_targets
+
+    desc, _ctx, _multisig_id, _casals_backend_id = _controller_topology_fixture()
+    desc.canisters["casals_file_registry_frontend"] = (
+        "hhhhh-hhhhh-hhhhh-hhhhh-hhhhh-hhh"
+    )
+
+    labels = [label for label, _cid in _casals_co_controller_targets(desc)]
+    assert "casals_file_registry_frontend" in labels
+
+
+@patch("gaas.phases.dfx.top_up_canister")
+@patch("gaas.phases.dfx.canister_cycles_balance")
+def test_fund_bootstrap_canisters_raises_conductor_to_headroom(
+    mock_balance,
+    mock_top_up,
+) -> None:
+    """casals new mints below the plan's headroom; phase 3 must close the gap."""
+    from gaas.cycles_plan import canister_headroom
+    from gaas.phases import _fund_bootstrap_canisters
+
+    desc, ctx = _grant_commanders_descriptor()
+    minted = 1_500_000_000_000
+    mock_balance.return_value = minted
+
+    _fund_bootstrap_canisters(desc, ctx)
+
+    topped = {
+        args[0]: args[1] for args, _kwargs in (c for c in mock_top_up.call_args_list)
+    }
+    assert topped[CASALS_BACKEND_ID] == (
+        canister_headroom("casals_backend", desc) - minted
+    )
+    assert topped[CASALS_FRONTEND_ID] == (
+        canister_headroom("casals_frontend", desc) - minted
+    )
+
+
+@patch("gaas.phases.dfx.top_up_canister")
+@patch("gaas.phases.dfx.canister_cycles_balance")
+def test_fund_bootstrap_canisters_noop_when_already_funded(
+    mock_balance,
+    mock_top_up,
+) -> None:
+    from gaas.phases import _fund_bootstrap_canisters
+
+    desc, ctx = _grant_commanders_descriptor()
+    mock_balance.return_value = 999_000_000_000_000
+
+    _fund_bootstrap_canisters(desc, ctx)
+    mock_top_up.assert_not_called()
+
+
+@patch("gaas.phases.dfx.top_up_canister")
+@patch("gaas.phases.dfx.canister_cycles_balance")
+def test_fund_bootstrap_canisters_skips_local_network(
+    mock_balance,
+    mock_top_up,
+) -> None:
+    from gaas.phases import _fund_bootstrap_canisters
+
+    desc, ctx = _grant_commanders_descriptor()
+    ctx.network = "local"
+
+    _fund_bootstrap_canisters(desc, ctx)
+    mock_balance.assert_not_called()
+    mock_top_up.assert_not_called()
+
+
+def test_casals_settings_json_makes_installer_a_provision_controller() -> None:
+    """Realms deny realm.admin to non-controllers, so the installer must be one."""
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["flags"] = {"can_test_mode": False}
+    data["canisters"] = {
+        "file_registry": VALID_CANISTER_ID,
+        "realm_installer": "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+    }
+    desc = Descriptor.model_validate(data)
+
+    payload = json.loads(_casals_settings_json(desc, "deployer-principal"))
+
+    assert payload["extra_controller_principals"] == [
+        "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb"
+    ]
+
+
+def test_casals_settings_json_installer_and_deployer_on_test_mode() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["flags"] = {"can_test_mode": True}
+    data["canisters"] = {
+        "file_registry": VALID_CANISTER_ID,
+        "realm_installer": "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+    }
+    desc = Descriptor.model_validate(data)
+
+    payload = json.loads(_casals_settings_json(desc, "deployer-principal"))
+
+    assert payload["extra_controller_principals"] == [
+        "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
+        "deployer-principal",
+    ]

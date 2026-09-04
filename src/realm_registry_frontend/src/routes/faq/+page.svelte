@@ -33,7 +33,7 @@
     {
       id: 'deployment',
       question: 'How do I deploy a Realm?',
-      answer: 'You can deploy a realm using our Create Realm wizard. The wizard guides you through setting up your realm\'s basic information, branding, token configuration, governance structure, and extensions. A minimum of 5 credits is required for automatic deployment.'
+      answer: 'You can deploy a realm using our Create Realm wizard. The wizard walks you through platform and deployment choices — codex, treasury token, and branding are configured inside your realm after it launches. A minimum of 5 credits is required for automatic deployment.'
     },
     {
       id: 'extensions',

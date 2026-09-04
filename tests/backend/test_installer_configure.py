@@ -21,17 +21,6 @@ from installer_config import (
 
 mock_ic = basilisk.ic
 
-_FILE_REGISTRY_IDS = {
-    "demo": "vi64l-3aaaa-aaaae-qj4va-cai",
-    "test": "uq2mu-kaaaa-aaaah-avqcq-cai",
-}
-
-_MARKETPLACE_IDS = {
-    "test": "2wldc-niaaa-aaaad-qlxga-cai",
-    "demo": "ehyfg-wyaaa-aaaae-qg3qq-cai",
-}
-
-
 def _reset_installer_config():
     cfg = InstallerConfig["singleton"]
     if cfg:
@@ -39,18 +28,30 @@ def _reset_installer_config():
     list(InstallerConfig.instances())
 
 
-def test_defaults_use_hardcoded_file_registry_per_network():
+def test_unconfigured_file_registry_is_empty_for_every_network():
+    """No baked-in ids: they are re-minted per environment rebuild."""
     _reset_installer_config()
-    assert configured_file_registry_id("test") == _FILE_REGISTRY_IDS["test"]
-    assert configured_file_registry_id("demo") == _FILE_REGISTRY_IDS["demo"]
-    assert configured_file_registry_id("staging") == ""
+    for network in ("test", "demo", "staging", ""):
+        assert configured_file_registry_id(network) == ""
 
 
-def test_defaults_use_hardcoded_marketplace_per_network():
+def test_unconfigured_marketplace_is_empty_for_every_network():
     _reset_installer_config()
-    assert configured_marketplace_id("test") == _MARKETPLACE_IDS["test"]
-    assert configured_marketplace_id("demo") == _MARKETPLACE_IDS["demo"]
-    assert configured_marketplace_id("staging") == ""
+    for network in ("test", "demo", "staging", ""):
+        assert configured_marketplace_id(network) == ""
+
+
+def test_configure_ignores_empty_product_pointers():
+    """gaas new configures the installer without knowing these ids; "" must not clear them."""
+    _reset_installer_config()
+    apply_installer_config({"file_registry_id": "fr-1", "marketplace_id": "mp-1"})
+    apply_installer_config(
+        {"file_registry_id": "", "marketplace_id": "", "portal_url": "https://p"}
+    )
+    payload = installer_config_payload()
+    assert payload["file_registry_id"] == "fr-1"
+    assert payload["marketplace_id"] == "mp-1"
+    assert payload["portal_url"] == "https://p"
 
 
 def test_configure_overrides_file_registry_id():

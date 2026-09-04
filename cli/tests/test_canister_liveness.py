@@ -222,38 +222,65 @@ def test_staging_json_adopts_live_stand():
     assert DEAD_CASALS_FRONTEND not in desc.canisters.values()
 
 
+@patch("gaas.phases.run_casals_new", side_effect=mock_run_casals_new)
 @patch("gaas.phases.dfx.create_canister_via_ledger")
 @patch("gaas.phases.dfx.create_canister")
 @patch("gaas.phases.dfx.canister_status")
 @patch("gaas.phases.dfx.get_principal", return_value="aaaaa-aa")
 @patch("gaas.phases.dfx.use_identity")
 @patch("gaas.phases._persist_and_guard_portal_frontends")
-def test_adopt_rejects_ghost_staging_installer(
+def test_adopt_heals_ghost_staging_installer(
     _persist,
     _use_identity,
     _principal,
     mock_status,
     mock_create,
     _ledger,
+    _mock_casals_new,
     tmp_path: Path,
 ) -> None:
+    from gaas.dfx import DfxError
+    from unittest.mock import MagicMock
+
+    dead = GHOST_INSTALLER
+    minted = "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb"
+
+    def fake_status(cid, network, **kwargs):
+        if cid == dead:
+            raise DfxError(
+                "Canister not found",
+                command=["dfx", "canister", "status", cid],
+                stderr="IC0301",
+            )
+        return MagicMock(
+            status="running",
+            controllers=("aaaaa-aa",),
+            raw="status: running",
+        )
+
+    mock_status.side_effect = fake_status
+    mock_create.side_effect = [
+        "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
+        minted,
+    ]
+
     data = dict(SAMPLE_DESCRIPTOR)
     data["name"] = "staging"
     data["domain"] = "staging.gos.earth"
     data["canisters"] = {
-        "realm_installer": GHOST_INSTALLER,
+        "realm_registry_backend": VALID_CANISTER_ID,
+        "realm_installer": dead,
     }
     desc = Descriptor.model_validate(data)
     path = tmp_path / "staging.json"
     desc.save(path)
     ctx = DeployContext(identity="deployer", network="ic", descriptor_path=path)
 
-    with patch("gaas.phases.assert_installer_live_for_network", side_effect=CanisterNotFoundError("canister not found (IC0301)")):
-        with pytest.raises(RuntimeError, match="IC0301"):
-            phase_create_canisters(desc, ctx)
+    phase_create_canisters(desc, ctx)
 
-    mock_status.assert_not_called()
-    mock_create.assert_not_called()
+    assert desc.canisters["realm_installer"] == minted
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    assert saved["canisters"]["realm_installer"] == minted
 
 
 @patch("gaas.phases.run_casals_new", side_effect=mock_run_casals_new)
@@ -430,26 +457,57 @@ def test_persist_guard_fails_gaas_new_on_dead_casals_frontend(mock_live, _persis
     _persist.assert_not_called()
 
 
+@patch("gaas.phases.run_casals_new", side_effect=mock_run_casals_new)
 @patch("gaas.phases.dfx.create_canister_via_ledger")
 @patch("gaas.phases.dfx.create_canister")
 @patch("gaas.phases.dfx.canister_status")
 @patch("gaas.phases.dfx.get_principal", return_value="aaaaa-aa")
 @patch("gaas.phases.dfx.use_identity")
 @patch("gaas.phases._persist_and_guard_portal_frontends")
-def test_adopt_rejects_ghost_local_installer(
+def test_adopt_heals_ghost_local_installer(
     _persist,
     _use_identity,
     _principal,
     mock_status,
     mock_create,
     _ledger,
+    _mock_casals_new,
     tmp_path: Path,
 ) -> None:
+    from gaas.dfx import DfxError
+    from unittest.mock import MagicMock
+
+    dead = GHOST_INSTALLER
+    minted = "ccccc-ccccc-ccccc-ccccc-ccc"
+
+    def fake_status(cid, network, **kwargs):
+        if cid == dead:
+            raise DfxError(
+                "Canister not found",
+                command=["dfx", "canister", "status", cid],
+                stderr="IC0301",
+            )
+        return MagicMock(
+            status="running",
+            controllers=("aaaaa-aa",),
+            raw="status: running",
+        )
+
+    mock_status.side_effect = fake_status
+    # Keyed on which canister is created rather than call order: how many
+    # canisters are created before the installer is an implementation detail.
+    def fake_create(dfx_name, network, **kwargs):
+        if "installer" in dfx_name:
+            return minted
+        return "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa"
+
+    mock_create.side_effect = fake_create
+
     data = dict(SAMPLE_DESCRIPTOR)
     data["name"] = "local"
     data["domain"] = "local.localhost"
     data["canisters"] = {
-        "realm_installer": GHOST_INSTALLER,
+        "realm_installer": dead,
         "realm_registry_backend": VALID_CANISTER_ID,
     }
     desc = Descriptor.model_validate(data)
@@ -457,51 +515,71 @@ def test_adopt_rejects_ghost_local_installer(
     desc.save(path)
     ctx = DeployContext(identity="default", network="local", descriptor_path=path)
 
-    with patch(
-        "gaas.phases.assert_installer_live_for_network",
-        side_effect=CanisterNotFoundError("canister not found (IC0301)"),
-    ):
-        with pytest.raises(RuntimeError, match="IC0301"):
-            phase_create_canisters(desc, ctx)
+    phase_create_canisters(desc, ctx)
 
-    mock_status.assert_not_called()
-    mock_create.assert_not_called()
+    assert desc.canisters["realm_installer"] == minted
     saved = json.loads(path.read_text(encoding="utf-8"))
-    assert saved["canisters"]["realm_installer"] == GHOST_INSTALLER
-    assert saved["canisters"]["realm_registry_backend"] == VALID_CANISTER_ID
+    assert saved["canisters"]["realm_installer"] == minted
 
 
-@patch("gaas.canister_liveness.fetch_local_canister_record", side_effect=_missing_fetch)
+@patch("gaas.phases.run_casals_new", side_effect=mock_run_casals_new)
 @patch("gaas.phases.dfx.create_canister_via_ledger")
 @patch("gaas.phases.dfx.create_canister")
 @patch("gaas.phases.dfx.canister_status")
 @patch("gaas.phases.dfx.get_principal", return_value="aaaaa-aa")
 @patch("gaas.phases.dfx.use_identity")
 @patch("gaas.phases._persist_and_guard_portal_frontends")
-def test_adopt_rejects_ghost_local_installer_via_replica_ping(
+def test_adopt_heals_ghost_local_installer_via_replica_ping(
     _persist,
     _use_identity,
     _principal,
     mock_status,
     mock_create,
     _ledger,
-    _local_fetch,
+    _mock_casals_new,
     tmp_path: Path,
 ) -> None:
+    from gaas.dfx import DfxError
+    from unittest.mock import MagicMock
+
+    dead = GHOST_INSTALLER
+    minted = "ccccc-ccccc-ccccc-ccccc-ccc"
+
+    def fake_status(cid, network, **kwargs):
+        if cid == dead:
+            raise DfxError(
+                "Canister not found",
+                command=["dfx", "canister", "status", cid],
+                stderr="IC0301",
+            )
+        return MagicMock(
+            status="running",
+            controllers=("aaaaa-aa",),
+            raw="status: running",
+        )
+
+    mock_status.side_effect = fake_status
+    # Keyed on which canister is created rather than call order: how many
+    # canisters are created before the installer is an implementation detail.
+    def fake_create(dfx_name, network, **kwargs):
+        if "installer" in dfx_name:
+            return minted
+        return "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa"
+
+    mock_create.side_effect = fake_create
+
     data = dict(SAMPLE_DESCRIPTOR)
     data["name"] = "local"
     data["domain"] = "local.localhost"
-    data["canisters"] = {"realm_installer": GHOST_INSTALLER}
+    data["canisters"] = {"realm_installer": dead}
     desc = Descriptor.model_validate(data)
     path = tmp_path / "local-ghost.json"
     desc.save(path)
     ctx = DeployContext(identity="default", network="local", descriptor_path=path)
 
-    with pytest.raises(RuntimeError, match="IC0301"):
-        phase_create_canisters(desc, ctx)
+    phase_create_canisters(desc, ctx)
 
-    mock_status.assert_not_called()
-    mock_create.assert_not_called()
+    assert desc.canisters["realm_installer"] == minted
     saved = json.loads(path.read_text(encoding="utf-8"))
-    assert saved["canisters"]["realm_installer"] == GHOST_INSTALLER
+    assert saved["canisters"]["realm_installer"] == minted
 

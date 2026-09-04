@@ -870,6 +870,19 @@ def is_canister_not_found_error(exc: BaseException | str) -> bool:
     return "IC0301" in text or "not found" in text.lower()
 
 
+def canister_missing_on_ic(
+    canister_id: str, network: str, *, identity: str | None = None
+) -> bool:
+    """Return True when the replica reports the principal is absent (IC0301)."""
+    try:
+        canister_status(canister_id, network, identity=identity)
+    except DfxError as exc:
+        if is_canister_not_found_error(exc):
+            return True
+        raise
+    return False
+
+
 def delete_canister(*_args: object, **_kwargs: object) -> None:
     raise DfxError(
         CANISTER_DELETE_FORBIDDEN,

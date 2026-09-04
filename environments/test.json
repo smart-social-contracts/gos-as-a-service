@@ -15,23 +15,23 @@
     }
   ],
   "canisters": {
-    "realm_registry_frontend": "qtank-3qaaa-aaaaa-qhb6q-cai",
-    "casals_backend": "2bzyp-7yaaa-aaaao-bbi6a-cai",
-    "casals_frontend": "2i2tt-jqaaa-aaaao-bbi7q-cai",
-    "casals_file_registry": "2gy63-saaaa-aaaao-bbi6q-cai",
-    "casals_file_registry_frontend": "2p3vh-eiaaa-aaaao-bbi7a-cai",
-    "realm_registry_backend": "mq5y2-riaaa-aaaai-ax5pq-cai",
-    "realm_installer": "jmgc7-2aaaa-aaaai-ax5qa-cai"
+    "casals_backend": "jlmdu-7yaaa-aaaak-qzesa-cai",
+    "casals_frontend": "jzkun-tiaaa-aaaak-qzera-cai",
+    "casals_file_registry": "jmnfa-saaaa-aaaak-qzesq-cai",
+    "casals_file_registry_frontend": "j6lsz-6qaaa-aaaak-qzerq-cai",
+    "realm_registry_backend": "j6avg-wqaaa-aaaai-ax5ta-cai",
+    "realm_registry_frontend": "jzbts-3iaaa-aaaai-ax5tq-cai",
+    "realm_installer": "iupx4-uaaaa-aaaai-ax5ua-cai"
   },
   "casals": {
     "version": "main",
     "release_repo": "smart-social-contracts/Casals",
     "commanders": [
-      "3itd6-2sx7g-vefdk-xhebm-fucot-llay5-lhqd6-pkjac-m7mkf-vhwqq-fqe"
+      "ah6ac-cc73l-bb2zc-ni7bh-jov4q-roeyj-6k2ob-mkg5j-pequi-vuaa6-2ae"
     ]
   },
   "multisig": {
-    "backend_id": "rwmbn-syaaa-aaaao-bbjaa-cai",
+    "backend_id": "jfoo4-eiaaa-aaaak-qzeta-cai",
     "signers": [
       "3itd6-2sx7g-vefdk-xhebm-fucot-llay5-lhqd6-pkjac-m7mkf-vhwqq-fqe"
     ],
