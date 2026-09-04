@@ -51,7 +51,10 @@
   },
   "test_flags": {
     "test_mode": true,
-    "ii_bypass": true
+    "user_self_registration": false,
+    "demo_data": false,
+    "ii_bypass": true,
+    "skip_terms": false
   },
   "cycles": {
     "threshold_tc": 2.0

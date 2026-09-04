@@ -47,6 +47,13 @@
   "flags": {
     "can_test_mode": true
   },
+  "test_flags": {
+    "test_mode": false,
+    "user_self_registration": false,
+    "demo_data": false,
+    "ii_bypass": false,
+    "skip_terms": false
+  },
   "cycles": {
     "threshold_tc": 2.0
   },

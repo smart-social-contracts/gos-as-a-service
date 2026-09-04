@@ -34,15 +34,20 @@ def _clear_registry_config():
             cfg.delete()
 
 
-def test_can_test_mode_true_defaults_test_flags():
+def test_can_test_mode_true_does_not_invent_test_flags():
+    """can_test_mode only means "test mode is permitted here", not "it is on".
+
+    Staging runs with can_test_mode true and every test flag false, so inferring
+    test_mode/ii_bypass from can_test_mode would silently auto-log-in every
+    visitor there as the deterministic test identity.
+    """
     _clear_registry_config()
     apply_env_config({"can_test_mode": True})
     assert is_can_test_mode() is True
 
     manifest = apply_env_inheritance({})
     assert manifest["can_test_mode"] is True
-    assert manifest["test_flags"]["test_mode"] is True
-    assert manifest["test_flags"]["ii_bypass"] is True
+    assert manifest["test_flags"] == {}
 
 
 def test_can_test_mode_true_copies_runtime_flags():
