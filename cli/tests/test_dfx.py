@@ -212,10 +212,41 @@ def test_add_canister_controller_is_additive(monkeypatch) -> None:
         identity="deployer",
     )
     args = captured["args"]
-    assert "update-settings" in args
     assert "--add-controller" in args
     assert "--set-controller" not in args
     assert "qthgp-3yaaa-aaaae-agveq-cai" in args
+
+
+def test_add_canister_controller_uses_icp_not_dfx(monkeypatch) -> None:
+    """dfx update-settings refuses a canister that is not in dfx.json.
+
+    It maps the id back to a project canister name to read its compute
+    allocation, so controller topology could not cover the Casals canisters,
+    which are built in the Casals repo. icp takes a bare principal.
+    """
+    from gaas import dfx
+
+    captured: dict = {}
+    monkeypatch.setattr(dfx, "_run", lambda args, **kw: captured.update(args=args))
+    dfx.add_canister_controller(
+        "7ya3k-yyaaa-aaaae-qkk2q-cai",
+        "7rdqw-oqaaa-aaaae-qkk3a-cai",
+        "ic",
+        identity="deployer",
+    )
+    args = captured["args"]
+    assert args[0] == "icp"
+    assert args[:5] == [
+        "icp",
+        "canister",
+        "settings",
+        "update",
+        "7ya3k-yyaaa-aaaae-qkk2q-cai",
+    ]
+    assert "update-settings" not in args
+    assert args[args.index("-n") + 1] == "https://icp0.io"
+    assert args[args.index("--root-key") + 1] == "mainnet"
+    assert args[args.index("--identity") + 1] == "deployer"
 
 
 def test_reject_canister_delete_blocks_raw_delete() -> None:

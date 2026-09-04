@@ -621,6 +621,16 @@ def update_canister_settings(
     _run(args, check=True)
 
 
+def _icp_network_flags(network: str) -> list[str]:
+    """icp has no icp.yaml in this repo, so a replica must be named explicitly."""
+    net = (network or "").strip()
+    if net in ("ic", ""):
+        return ["-n", "https://icp0.io", "--root-key", "mainnet"]
+    if net.startswith("http"):
+        return ["-n", net, "--root-key", "fetch"]
+    return ["-n", net]
+
+
 def add_canister_controller(
     canister_id: str,
     controller: str,
@@ -628,7 +638,15 @@ def add_canister_controller(
     *,
     identity: str | None = None,
 ) -> None:
-    """Add a controller without replacing the existing set."""
+    """Add a controller without replacing the existing set.
+
+    Uses ``icp``, not ``dfx canister update-settings``: dfx resolves the id back
+    to a project canister name and then reads its compute allocation from
+    dfx.json, so it refuses to touch a canister this repo does not build —
+    "Canister 'casals_file_registry_frontend' not found in dfx.json". The Casals
+    canisters are built in the Casals repo, and controller topology has to cover
+    them. icp takes a bare principal with no project coupling.
+    """
     controller = (controller or "").strip()
     if not controller:
         raise DfxError(
@@ -637,16 +655,17 @@ def add_canister_controller(
             stderr="empty controller",
         )
     args = [
-        "dfx",
+        "icp",
         "canister",
-        "--network",
-        network,
-        "update-settings",
+        "settings",
+        "update",
         canister_id,
+        "--add-controller",
+        controller,
     ]
+    args.extend(_icp_network_flags(network))
     if identity:
         args.extend(["--identity", identity])
-    args.extend(["--add-controller", controller])
     _run(args, check=True)
 
 

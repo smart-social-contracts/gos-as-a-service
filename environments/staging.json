@@ -18,7 +18,10 @@
     "casals_backend": "7rdqw-oqaaa-aaaae-qkk3a-cai",
     "casals_frontend": "77b56-vaaaa-aaaae-qkk2a-cai",
     "casals_file_registry": "7kgmt-uiaaa-aaaae-qkkzq-cai",
-    "casals_file_registry_frontend": "7ya3k-yyaaa-aaaae-qkk2q-cai"
+    "casals_file_registry_frontend": "7ya3k-yyaaa-aaaae-qkk2q-cai",
+    "realm_registry_backend": "7wcwc-diaaa-aaaae-qkk3q-cai",
+    "realm_registry_frontend": "63msm-maaaa-aaaae-qkk4a-cai",
+    "realm_installer": "64nuy-byaaa-aaaae-qkk4q-cai"
   },
   "casals": {
     "version": "main",
