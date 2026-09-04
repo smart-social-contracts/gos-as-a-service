@@ -71,7 +71,7 @@ from gaas.platform import (
     resolve_casals_wasm,
     resolve_platform_backend_wasm,
 )
-from gaas.canister_ids_sync import persist_descriptor_canister_ids
+from gaas.canister_ids_sync import align_ic_alias, persist_descriptor_canister_ids
 from gaas.canister_liveness import (
     CanisterNotFoundError,
     assert_casals_frontend_live,
@@ -529,6 +529,19 @@ def phase_validate(descriptor: Descriptor, ctx: DeployContext) -> None:
     errors = descriptor.validate_descriptor()
     if errors:
         raise RuntimeError("descriptor validation failed:\n  - " + "\n  - ".join(errors))
+
+    # Runs in every deploy and resume, before anything resolves a canister by
+    # name on --network ic, so the shared "ic" rows cannot still be pointing at
+    # the environment that deployed last.
+    try:
+        realigned = align_ic_alias(_find_repo_root(ctx), descriptor)
+    except PlatformError:
+        realigned = {}
+    for name, (old, new) in realigned.items():
+        console.print(
+            f"  canister_ids.json: ic alias for {name} "
+            f"{old or '(absent)'} -> {new or '(absent)'}"
+        )
 
     try:
         casals_root = require_casals_checkout(ctx.casals_src)

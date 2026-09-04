@@ -183,43 +183,99 @@ def test_main_exits_nonzero_for_ghost(monkeypatch):
     assert main([GHOST_INSTALLER, "realm_installer"]) == 1
 
 
-def test_canister_ids_and_dfx_point_staging_installer_at_ta6df():
+def test_canister_ids_and_dfx_carry_no_dead_ids():
+    """Inventory files hold no id we know to be gone.
+
+    Ids themselves are not pinned: a deploy legitimately rewrites them, and a
+    test that hardcodes them just goes stale and gets ignored.
+    """
     root = Path(__file__).resolve().parents[2]
     ids = json.loads((root / "canister_ids.json").read_text(encoding="utf-8"))
     dfx = json.loads((root / "dfx.json").read_text(encoding="utf-8"))
-    assert ids["realm_installer"]["staging"] == LIVE_INSTALLER
-    ic_installer = ids["realm_installer"].get("ic")
-    if ic_installer:
-        assert not is_known_dead_canister(ic_installer)
-    assert "hznxf" not in json.dumps(ids)
-    assert "gudtl" not in json.dumps(ids)
-    assert (
-        dfx["canisters"]["realm_installer"]["remote"]["id"]["staging"] == LIVE_INSTALLER
-    )
-    assert ids["casals_frontend"]["staging"] == LIVE_CASALS_FRONTEND
-    assert ids["casals_frontend"]["test"] == LIVE_TEST_CASALS_FRONTEND
-    assert DEAD_CASALS_FRONTEND not in json.dumps(ids)
-    assert DEAD_CASALS_FRONTEND not in json.dumps(dfx)
-    assert "fdr7z" not in json.dumps(ids)
-    assert dfx["canisters"]["casals_frontend"]["remote"]["id"]["staging"] == (
-        LIVE_CASALS_FRONTEND
-    )
+    for blob in (json.dumps(ids), json.dumps(dfx)):
+        for dead in ("hznxf", "gudtl", "fdr7z", DEAD_CASALS_FRONTEND):
+            assert dead not in blob
+    for name, entry in ids.items():
+        if not isinstance(entry, dict):
+            continue
+        for env, canister_id in entry.items():
+            assert not is_known_dead_canister(canister_id), f"{name}.{env}"
 
 
-def test_staging_json_adopts_live_stand():
-    path = Path(__file__).resolve().parents[2] / "environments" / "staging.json"
-    desc = Descriptor.load(path)
-    assert desc.canisters["realm_installer"] == LIVE_INSTALLER
-    assert desc.canisters["realm_registry_backend"] == "snqhl-daaaa-aaaan-q6n3q-cai"
-    assert desc.canisters["casals_backend"] == "th7fr-bqaaa-aaaan-q6n4q-cai"
-    assert desc.canisters["realm_registry_frontend"] == "77243-aqaaa-aaaau-aggza-cai"
-    assert desc.canisters["casals_frontend"] == LIVE_CASALS_FRONTEND
+def test_canister_ids_never_share_one_canister_between_environments():
+    """The shared "ic" row let staging adopt test's registry and installer."""
+    root = Path(__file__).resolve().parents[2]
+    ids = json.loads((root / "canister_ids.json").read_text(encoding="utf-8"))
+    for name, entry in ids.items():
+        if not isinstance(entry, dict):
+            continue
+        by_env = {
+            env: cid for env, cid in entry.items() if env != "ic" and (cid or "").strip()
+        }
+        duplicates = {
+            cid for cid in by_env.values() if list(by_env.values()).count(cid) > 1
+        }
+        assert not duplicates, f"{name}: same canister in several environments: {duplicates}"
+
+
+def test_dfx_remote_ids_agree_with_canister_ids():
+    root = Path(__file__).resolve().parents[2]
+    ids = json.loads((root / "canister_ids.json").read_text(encoding="utf-8"))
+    dfx = json.loads((root / "dfx.json").read_text(encoding="utf-8"))
+    for dfx_name, spec in (dfx.get("canisters") or {}).items():
+        remote = (spec or {}).get("remote")
+        if not isinstance(remote, dict):
+            continue
+        for env, canister_id in (remote.get("id") or {}).items():
+            known = (ids.get(dfx_name) or {}).get(env)
+            if known:
+                assert canister_id == known, f"{dfx_name}.{env}"
+
+
+def _environment_descriptors() -> dict[str, Descriptor]:
+    env_dir = Path(__file__).resolve().parents[2] / "environments"
+    return {
+        name: Descriptor.load(env_dir / f"{name}.json")
+        for name in ("test", "staging", "demo")
+    }
+
+
+def test_staging_json_holds_no_dead_or_product_canisters():
+    """Structure only — a real deploy rewrites these ids, so none are pinned here.
+
+    Realms GOS product canisters (file_registry, marketplace_*) belong to
+    `realms seed`, not to a GaaS descriptor.
+    """
+    desc = _environment_descriptors()["staging"]
     assert "file_registry" not in desc.canisters
     assert "marketplace_backend" not in desc.canisters
     assert "marketplace_frontend" not in desc.canisters
     assert GHOST_INSTALLER not in desc.canisters.values()
     assert "hznxf-fqaaa-aaaae-ag2ua-cai" not in desc.canisters.values()
     assert DEAD_CASALS_FRONTEND not in desc.canisters.values()
+
+
+def test_environments_never_share_a_canister():
+    """No two environments may name the same canister.
+
+    They all deploy with --network ic, and dfx keys canister_ids.json by network,
+    so a shared "ic" row once made staging's `dfx canister create` hand back
+    test's live registry and installer — which the staging run then upgraded and
+    reconfigured as staging, taking test.gos.earth down with it.
+    """
+    descriptors = _environment_descriptors()
+    owners: dict[str, str] = {}
+    shared: dict[str, list[str]] = {}
+    for env, desc in descriptors.items():
+        for name, canister_id in desc.canisters.items():
+            cid = (canister_id or "").strip()
+            if not cid:
+                continue
+            if cid in owners:
+                shared.setdefault(cid, [owners[cid]]).append(f"{env}.{name}")
+            else:
+                owners[cid] = f"{env}.{name}"
+    assert not shared, f"canisters claimed by more than one environment: {shared}"
 
 
 @patch("gaas.phases.run_casals_new", side_effect=mock_run_casals_new)

@@ -35,6 +35,44 @@ def _write_json(path: Path, data: dict[str, Any]) -> None:
     path.write_text(json.dumps(data, indent=_JSON_INDENT) + "\n", encoding="utf-8")
 
 
+def align_ic_alias(repo_root: Path, descriptor: Any) -> dict[str, tuple[str, str]]:
+    """Point every ``"ic"`` row in ``canister_ids.json`` at *descriptor*'s ids.
+
+    test, staging and demo all deploy with ``--network ic``, and dfx keys the file
+    by network — so they share one ``"ic"`` row per canister. ``dfx canister
+    create <name> --network ic`` returns whatever id sits in that row, which made
+    a staging deploy hand back test's live registry and installer and then
+    reconfigure them as staging.
+
+    The row is an alias for the environment being deployed right now: set from the
+    descriptor, and removed where the descriptor has no id so a named create mints
+    a canister instead of adopting another environment's.
+
+    Returns the rows that changed, as ``{name: (old, new)}`` with ``""`` for absent.
+    """
+    ids_path = Path(repo_root) / "canister_ids.json"
+    ids_data = _read_json(ids_path)
+    canisters = getattr(descriptor, "canisters", None) or {}
+    changed: dict[str, tuple[str, str]] = {}
+
+    for name, entry in ids_data.items():
+        if not isinstance(entry, dict):
+            continue
+        desired = (canisters.get(name) or "").strip()
+        current = (entry.get("ic") or "").strip()
+        if desired == current:
+            continue
+        if desired:
+            entry["ic"] = desired
+        else:
+            entry.pop("ic", None)
+        changed[name] = (current, desired)
+
+    if changed:
+        _write_json(ids_path, ids_data)
+    return changed
+
+
 def persist_descriptor_canister_ids(repo_root: Path, descriptor: Any) -> Path:
     """Write ``descriptor.canisters`` into ``canister_ids.json`` / ``dfx.json``.
 
