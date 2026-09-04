@@ -280,6 +280,22 @@ def _portal_url(descriptor: Descriptor) -> str:
     return f"https://{descriptor.domain}"
 
 
+# descriptor test_flags name -> key in the registry's get_runtime_flags reply.
+# Mirrors _FLAG_MAP in src/realm_registry_backend/core/runtime_flags.py; keep in
+# step with it when a flag is added.
+_RUNTIME_FLAG_KEYS = {
+    "test_mode": "test_mode",
+    "ii_bypass": "test_mode_ii_bypass",
+    "user_self_registration": "test_mode_user_self_registration",
+    "demo_data": "test_mode_demo_data",
+    "skip_terms": "test_mode_skip_terms",
+    "skip_passport_zkproof": "test_mode_skip_passport_zkproof",
+    "skip_authentication": "test_mode_skip_authentication",
+    "disable_card_billing": "test_mode_disable_card_billing",
+    "assistant_experimental_notice": "test_mode_assistant_experimental_notice",
+}
+
+
 def _resolve_can_test_mode(descriptor: Descriptor) -> bool:
     """Precedence: explicit flags.can_test_mode > deprecated flags.open_mode >
     deprecated services.open_mode > derived (true when no billing_url)."""
@@ -326,10 +342,11 @@ def _registry_runtime_config_json(descriptor: Descriptor, network: str) -> str |
         payload["casals_frontend_canister_id"] = casals_frontend
 
     if _resolve_can_test_mode(descriptor):
-        test_flags = {
-            "test_mode": True,
-            "ii_bypass": True,
-        }
+        # No test_mode/ii_bypass base: can_test_mode means test mode is permitted
+        # here, not that it is on. Inferring them turned staging — which runs with
+        # every test flag false — into an environment that auto-logs-in every
+        # visitor as the deterministic test identity. The descriptor decides.
+        test_flags: dict = {}
         if (network or "").strip().lower() in ("staging", "demo"):
             test_flags["disable_card_billing"] = True
             test_flags["assistant_experimental_notice"] = True
@@ -858,11 +875,23 @@ def phase_configure_backends(descriptor: Descriptor, ctx: DeployContext) -> None
                 f"set_canister_config_json: {flags!r}"
             )
         runtime_payload = json.loads(runtime_json)
-        if runtime_payload.get("test_flags"):
-            if not flags.get("test_mode") or not flags.get("test_mode_ii_bypass"):
+        requested_flags = runtime_payload.get("test_flags") or {}
+        if requested_flags:
+            # Verify what the descriptor asked for, flag by flag. Asserting
+            # test_mode and ii_bypass are true only held while test was the one
+            # environment declaring test_flags; staging declares them all false.
+            mismatched = {
+                name: {
+                    "requested": want,
+                    "live": flags.get(_RUNTIME_FLAG_KEYS.get(name, name)),
+                }
+                for name, want in requested_flags.items()
+                if flags.get(_RUNTIME_FLAG_KEYS.get(name, name)) != want
+            }
+            if mismatched:
                 raise RuntimeError(
                     "registry runtime flags mismatch after set_canister_config_json: "
-                    f"{flags!r}"
+                    f"{mismatched!r} (live: {flags!r})"
                 )
             console.print("  registry runtime test flags verified")
         if expected_casals:

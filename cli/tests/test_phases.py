@@ -765,18 +765,40 @@ def test_registry_config_json_casals_frontend() -> None:
 
 def test_registry_runtime_config_json_can_test_mode() -> None:
     desc = Descriptor.model_validate(SAMPLE_DESCRIPTOR)
-    # No billing_url → derived can test mode.
+    # No billing_url → derived can test mode. can_test_mode only permits test
+    # mode, so nothing is turned on unless the descriptor says so.
     ic_payload = json.loads(_registry_runtime_config_json(desc, "ic"))
-    assert ic_payload == {
-        "test_flags": {"test_mode": True, "ii_bypass": True},
+    assert ic_payload == {"test_flags": {}}
+
+
+def test_registry_runtime_config_json_sends_descriptor_test_flags() -> None:
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["flags"] = {"can_test_mode": True}
+    data["test_flags"] = {"test_mode": True, "ii_bypass": True, "demo_data": False}
+    desc = Descriptor.model_validate(data)
+    payload = json.loads(_registry_runtime_config_json(desc, "ic"))
+    assert payload["test_flags"] == {
+        "test_mode": True,
+        "ii_bypass": True,
+        "demo_data": False,
     }
 
+
+def test_registry_runtime_config_json_honours_all_false_test_flags() -> None:
+    """Staging: test mode permitted, every flag off — must not be overridden."""
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["flags"] = {"can_test_mode": True}
+    data["test_flags"] = {"test_mode": False, "ii_bypass": False}
+    desc = Descriptor.model_validate(data)
+    payload = json.loads(_registry_runtime_config_json(desc, "ic"))
+    assert payload["test_flags"] == {"test_mode": False, "ii_bypass": False}
+
+
+def test_registry_runtime_config_json_non_ic_carries_network() -> None:
+    desc = Descriptor.model_validate(SAMPLE_DESCRIPTOR)
     open_desc = desc.model_copy(update={"flags": {"can_test_mode": True}})
     local_payload = json.loads(_registry_runtime_config_json(open_desc, "local"))
-    assert local_payload == {
-        "test_flags": {"test_mode": True, "ii_bypass": True},
-        "network": "local",
-    }
+    assert local_payload == {"test_flags": {}, "network": "local"}
 
     billed_closed = desc.model_copy(
         update={
@@ -843,7 +865,7 @@ def test_phase_configure_backends_can_test_mode_sets_runtime_flags(
             return json.dumps({"portal_url": "https://test.gos.earth"})
         if canister_id == registry_id and method == "set_canister_config_json":
             payload = json.loads(_parse_candid_string(arg))
-            assert payload["test_flags"] == {"test_mode": True, "ii_bypass": True}
+            assert payload["test_flags"] == {}
             return json.dumps({"success": True})
         if canister_id == registry_id and method == "get_runtime_flags":
             return json.dumps(
@@ -876,6 +898,94 @@ def test_phase_configure_backends_can_test_mode_sets_runtime_flags(
         if c[0][0] == registry_id and c[0][1] == "set_canister_config_json"
     ]
     assert len(runtime_calls) == 1
+
+
+def _configure_backends_with_flags(
+    mock_call: MagicMock,
+    mock_principal: MagicMock,
+    *,
+    descriptor_flags: dict,
+    live_flags: dict,
+) -> None:
+    """Drive phase_configure_backends with given descriptor flags vs live flags."""
+    mock_principal.return_value = "deployer-principal"
+    registry_id = VALID_CANISTER_ID
+    installer_id = "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aab"
+    casals_id = "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb"
+    portal_url = f"https://{SAMPLE_DESCRIPTOR['domain']}"
+    configure_ok = (
+        json.dumps(
+            {"success": True, "portal_url": portal_url, "can_test_mode": True}
+        )
+        .replace("\\", "\\\\")
+        .replace('"', '\\"')
+    )
+
+    def call_side_effect(canister_id, method, arg, network, *, identity=None, query=False):
+        del network, identity, query
+        if canister_id == registry_id and method == "configure":
+            return f'variant {{ Ok = "{configure_ok}" }}'
+        if canister_id == registry_id and method == "get_env_config":
+            return json.dumps({"portal_url": portal_url})
+        if canister_id == registry_id and method == "set_canister_config_json":
+            return json.dumps({"success": True})
+        if canister_id == registry_id and method == "get_runtime_flags":
+            return json.dumps({"success": True, **live_flags})
+        if canister_id == installer_id and method == "configure":
+            return json.dumps({"success": True})
+        if canister_id == installer_id and method == "get_installer_config":
+            return json.dumps({"registry_backend_id": registry_id})
+        if canister_id == casals_id and method == "set_settings":
+            return json.dumps({"ok": True})
+        raise AssertionError(f"unexpected call: {canister_id} {method}")
+
+    mock_call.side_effect = call_side_effect
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["flags"] = {"can_test_mode": True}
+    data["test_flags"] = descriptor_flags
+    data["canisters"] = {
+        "realm_registry_backend": registry_id,
+        "realm_installer": installer_id,
+        "casals_backend": casals_id,
+    }
+    phase_configure_backends(
+        Descriptor.model_validate(data),
+        DeployContext(identity="deployer", network="ic"),
+    )
+
+
+@patch("gaas.phases.dfx.get_principal")
+@patch("gaas.phases.dfx.canister_call")
+def test_phase_configure_backends_accepts_all_false_test_flags(
+    mock_call: MagicMock,
+    mock_principal: MagicMock,
+) -> None:
+    """Staging's all-false flags verify against an all-false registry.
+
+    The check used to demand test_mode and ii_bypass be true whenever the
+    descriptor carried any test_flags, which failed every staging deploy.
+    """
+    _configure_backends_with_flags(
+        mock_call,
+        mock_principal,
+        descriptor_flags={"test_mode": False, "ii_bypass": False},
+        live_flags={"test_mode": False, "test_mode_ii_bypass": False},
+    )
+
+
+@patch("gaas.phases.dfx.get_principal")
+@patch("gaas.phases.dfx.canister_call")
+def test_phase_configure_backends_rejects_flag_not_applied(
+    mock_call: MagicMock,
+    mock_principal: MagicMock,
+) -> None:
+    with pytest.raises(RuntimeError, match="ii_bypass"):
+        _configure_backends_with_flags(
+            mock_call,
+            mock_principal,
+            descriptor_flags={"test_mode": True, "ii_bypass": True},
+            live_flags={"test_mode": True, "test_mode_ii_bypass": False},
+        )
 
 
 @patch("gaas.phases.dfx.get_principal")
