@@ -898,6 +898,17 @@ def is_canister_not_found_error(exc: BaseException | str) -> bool:
     return "IC0301" in text or "not found" in text.lower()
 
 
+def is_not_a_controller_error(exc: BaseException | str) -> bool:
+    """True when the replica refused because the caller does not control it.
+
+    Distinct from IC0301: the canister exists, we just have no say over it —
+    which is the normal state for anything Casals minted, since Casals does not
+    add the deploy identity to canisters it creates for itself.
+    """
+    text = str(exc)
+    return "IC0542" in text or "not allowed to read the canister status" in text.lower()
+
+
 def canister_missing_on_ic(
     canister_id: str, network: str, *, identity: str | None = None
 ) -> bool:

@@ -1581,16 +1581,27 @@ def ensure_casals_co_controller(descriptor: Descriptor, ctx: DeployContext) -> N
     except Exception:
         tree = None
 
+    # Ids that only exist because Casals minted them (the multisig baton is
+    # created by deploy_sheet, not by us). Casals controls those by construction
+    # and does not add the deploy identity, so we cannot read their status and
+    # have nothing to grant.
+    casals_minted = {_find_canister_id(tree, "multisig")} - {""} if tree else set()
+
     for name, canister_id in _casals_co_controller_targets(descriptor, tree):
         try:
             status = dfx.canister_status(
                 canister_id, ctx.network, identity=ctx.identity
             )
         except dfx.DfxError as exc:
-            detail = str(exc)
-            if "IC0301" in detail or "not found" in detail.lower():
+            if dfx.is_canister_not_found_error(exc):
                 console.print(
                     f"  {name}: skip add Casals ({canister_id} not found)"
+                )
+                continue
+            if dfx.is_not_a_controller_error(exc) and canister_id in casals_minted:
+                console.print(
+                    f"  {name}: Casals-minted ({canister_id}); "
+                    f"Casals controls it and the deployer cannot read its status"
                 )
                 continue
             raise

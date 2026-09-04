@@ -2403,3 +2403,98 @@ def test_casals_settings_json_installer_and_deployer_on_test_mode() -> None:
         "bbbbb-bbbbb-bbbbb-bbbbb-bbbbb-bbb",
         "deployer-principal",
     ]
+
+
+@patch("gaas.phases.dfx.add_canister_controller")
+@patch("gaas.phases.dfx.canister_status")
+@patch("gaas.phases.dfx.get_principal", return_value="deployer-principal")
+@patch("gaas.phases.get_tree")
+def test_ensure_casals_co_controller_tolerates_casals_minted_baton(
+    mock_tree,
+    _get_principal,
+    mock_status,
+    mock_add,
+) -> None:
+    """Casals mints the multisig baton and keeps the deploy identity off it.
+
+    Reading its status therefore fails with IC0542, and treating that like any
+    other status failure aborted demo's deploy on a canister that already had the
+    only controller we wanted it to have.
+    """
+    from gaas.dfx import CanisterStatus, DfxError
+
+    baton = "dkgyk-uaaaa-aaaab-ag3ma-cai"
+    mock_tree.return_value = {
+        "sections": [
+            {
+                "name": "Infra",
+                "stands": [
+                    {
+                        "name": "governance",
+                        "canisters": [{"name": "multisig", "canister_id": baton}],
+                    }
+                ],
+            }
+        ]
+    }
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        "casals_backend": "fffff-fffff-fffff-fffff-fffff-fff",
+        "realm_registry_backend": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
+    }
+    desc = Descriptor.model_validate(data)
+    ctx = DeployContext(identity="deployer", network="ic")
+
+    def status_for(canister_id, *_a, **_k):
+        if canister_id == baton:
+            raise DfxError(
+                "reject code CanisterError, reject message Caller deployer-principal "
+                'is not allowed to read the canister status, error code Some("IC0542")',
+                command=[],
+                stderr="",
+            )
+        return CanisterStatus(
+            canister_id=canister_id,
+            status="running",
+            raw="",
+            controllers=("deployer-principal",),
+        )
+
+    mock_status.side_effect = status_for
+
+    ensure_casals_co_controller(desc, ctx)
+
+    assert baton not in [call.args[0] for call in mock_add.call_args_list]
+    assert "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa" in [
+        call.args[0] for call in mock_add.call_args_list
+    ]
+
+
+@patch("gaas.phases.dfx.add_canister_controller")
+@patch("gaas.phases.dfx.canister_status")
+@patch("gaas.phases.dfx.get_principal", return_value="deployer-principal")
+@patch("gaas.phases.get_tree", return_value={"sections": []})
+def test_ensure_casals_co_controller_still_raises_for_our_own_canister(
+    _tree,
+    _get_principal,
+    mock_status,
+    _mock_add,
+) -> None:
+    """Only Casals-minted ids get the pass; losing control of ours is a fault."""
+    from gaas.dfx import DfxError
+
+    data = dict(SAMPLE_DESCRIPTOR)
+    data["canisters"] = {
+        "casals_backend": "fffff-fffff-fffff-fffff-fffff-fff",
+        "realm_registry_backend": "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa",
+    }
+    desc = Descriptor.model_validate(data)
+    ctx = DeployContext(identity="deployer", network="ic")
+    mock_status.side_effect = DfxError(
+        'is not allowed to read the canister status, error code Some("IC0542")',
+        command=[],
+        stderr="",
+    )
+
+    with pytest.raises(DfxError):
+        ensure_casals_co_controller(desc, ctx)
