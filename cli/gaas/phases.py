@@ -25,6 +25,14 @@ from gaas.artifacts import fetch_release_assets
 from gaas.casals_cli import CASALS_BOOTSTRAP_NAMES, run_casals_new
 from gaas.descriptor import CANISTER_ID_RE, Descriptor
 from gaas.destroy import destroy_except_frontend
+from gaas.cloudflare import (
+    CloudflareError,
+    RecordOutcome,
+    apply_records,
+    cloudflare_record_type,
+    token_from_env,
+    zone_for_domain,
+)
 from gaas.dns import render_dns_records, wait_for_dns
 from gaas.domain_reg import attempt_domain_registration
 from gaas.codex_seed import seed_codex_catalog
@@ -542,6 +550,10 @@ def phase_validate(descriptor: Descriptor, ctx: DeployContext) -> None:
             f"  canister_ids.json: ic alias for {name} "
             f"{old or '(absent)'} -> {new or '(absent)'}"
         )
+
+    # Domain wiring is the last phase, so an unset token would otherwise only
+    # surface after everything is minted and installed.
+    check_dns_credentials(descriptor)
 
     try:
         casals_root = require_casals_checkout(ctx.casals_src)
@@ -1270,6 +1282,69 @@ def phase_install_frontends(descriptor: Descriptor, ctx: DeployContext) -> None:
             shutil.rmtree(casals_staging)
 
 
+def check_dns_credentials(descriptor: Descriptor) -> None:
+    """Fail now if the configured DNS provider cannot possibly work later."""
+    dns_cfg = descriptor.dns
+    if dns_cfg.provider != "cloudflare":
+        return
+    if not token_from_env(dns_cfg.token_env):
+        raise RuntimeError(
+            f"dns.provider is cloudflare but {dns_cfg.token_env} is not set. "
+            f"Export the API token (Zone:Read + DNS:Edit on the zone) or set "
+            f"dns.provider to manual."
+        )
+    zone = dns_cfg.zone or zone_for_domain(descriptor.domain)
+    console.print(f"  DNS: cloudflare zone {zone} (token from ${dns_cfg.token_env})")
+
+
+def apply_descriptor_dns_records(
+    descriptor: Descriptor, frontend_id: str
+) -> list[RecordOutcome]:
+    """Put the rendered records in DNS when a provider can do it for us.
+
+    Returns the per-record outcomes, or an empty list when the descriptor leaves
+    DNS to a human. A configured provider that then fails is an error rather
+    than a fallback to manual: silently degrading to "please type these in" is
+    how a remap gets forgotten and a domain ends up serving a dead canister.
+    """
+    dns_cfg = descriptor.dns
+    if dns_cfg.provider != "cloudflare":
+        return []
+
+    token = token_from_env(dns_cfg.token_env)
+    if not token:
+        raise RuntimeError(
+            f"dns.provider is cloudflare but {dns_cfg.token_env} is not set. "
+            f"Export the API token (Zone:Read + DNS:Edit on the zone) or set "
+            f"dns.provider to manual."
+        )
+
+    zone = dns_cfg.zone or zone_for_domain(descriptor.domain)
+    try:
+        outcomes = apply_records(
+            render_dns_records(descriptor.domain, frontend_id),
+            token=token,
+            zone=zone,
+            domain=descriptor.domain,
+            ttl=dns_cfg.ttl,
+        )
+    except CloudflareError as exc:
+        raise RuntimeError(f"Cloudflare DNS apply failed for zone {zone}: {exc}") from exc
+
+    for outcome in outcomes:
+        colour = "green" if outcome.action == "created" else (
+            "yellow" if outcome.action == "updated" else "dim"
+        )
+        detail = f" ({outcome.detail})" if outcome.detail else ""
+        console.print(
+            f"  cloudflare {zone}: [{colour}]{outcome.action}[/{colour}] "
+            f"{cloudflare_record_type(outcome.record)} {outcome.record.host}{detail}"
+        )
+    if all(outcome.action == "unchanged" for outcome in outcomes):
+        console.print("  cloudflare: zone already correct")
+    return outcomes
+
+
 def phase_domain_wiring(descriptor: Descriptor, ctx: DeployContext) -> None:
     if ctx.network == "local":
         console.print("  skipping domain wiring on local network")
@@ -1288,16 +1363,25 @@ def phase_domain_wiring(descriptor: Descriptor, ctx: DeployContext) -> None:
         table.add_row(record.record_type, record.host, record.value)
     console.print(table)
 
+    applied = apply_descriptor_dns_records(descriptor, frontend_id)
+
     if ctx.skip_dns_wait:
         console.print("  --skip-dns-wait: continuing without DNS poll")
     else:
         timeout = float(ctx.dns_timeout_min * 60)
         console.print(f"  waiting up to {ctx.dns_timeout_min} min for DNS propagation...")
         if not wait_for_dns(descriptor.domain, frontend_id, timeout=timeout):
-            console.print(
-                "[red]DNS records not detected in time.[/red] Configure the records above, "
-                "register the domain at https://reg.icp0.io if needed, then re-run deploy."
-            )
+            if applied:
+                console.print(
+                    "[red]DNS records not visible in time.[/red] They were written to "
+                    "Cloudflare, so this is propagation lag or a resolver cache — "
+                    "re-run deploy, and check the zone is not proxied (orange cloud off)."
+                )
+            else:
+                console.print(
+                    "[red]DNS records not detected in time.[/red] Configure the records above, "
+                    "register the domain at https://reg.icp0.io if needed, then re-run deploy."
+                )
             _save_descriptor(descriptor, ctx)
             ctx.stopped = True
             raise RuntimeError("domain wiring timed out waiting for DNS propagation")

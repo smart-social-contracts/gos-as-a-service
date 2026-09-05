@@ -472,10 +472,58 @@ def stamp_namespace_approvals_command(
 @app.command("dns-records")
 def dns_records_command(
     descriptor: Path = typer.Argument(..., help="Descriptor JSON path"),
+    apply: bool = typer.Option(
+        False,
+        "--apply",
+        help="Write the records to DNS via the descriptor's dns.provider "
+        "(cloudflare needs the token in $CLOUDFLARE_API_TOKEN)",
+    ),
+    verify: bool = typer.Option(
+        False,
+        "--verify",
+        help="Report whether the live records already match the descriptor",
+    ),
 ) -> None:
-    """Print DNS records required for the environment domain."""
+    """Print (and optionally write) the DNS records the environment domain needs.
+
+    ``--apply`` is the remap path: after a fleet is re-minted, it points
+    _canister-id at the new frontend without a full deploy.
+    """
     desc = Descriptor.load(descriptor)
     _print_dns_table(desc)
+
+    frontend_id = desc.canisters.get("realm_registry_frontend", "")
+
+    if apply:
+        from gaas.phases import apply_descriptor_dns_records
+
+        if not frontend_id:
+            console.print("[red]realm_registry_frontend id missing from descriptor.[/red]")
+            raise typer.Exit(code=1)
+        try:
+            outcomes = apply_descriptor_dns_records(desc, frontend_id)
+        except RuntimeError as exc:
+            console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(code=1) from exc
+        if not outcomes:
+            console.print(
+                f"  dns.provider is {desc.dns.provider!r}: nothing applied. "
+                f"Set it to cloudflare to write these automatically."
+            )
+
+    if verify:
+        from gaas.dns import dns_records_ready
+
+        if not frontend_id:
+            console.print("[red]realm_registry_frontend id missing from descriptor.[/red]")
+            raise typer.Exit(code=1)
+        ready, issues = dns_records_ready(desc.domain, frontend_id)
+        if ready:
+            console.print(f"  [green]live DNS matches[/green] {desc.domain} → {frontend_id}")
+        else:
+            for issue in issues:
+                console.print(f"  [yellow]{issue}[/yellow]")
+            raise typer.Exit(code=1)
 
 
 @app.command("status")

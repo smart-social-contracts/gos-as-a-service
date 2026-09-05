@@ -260,8 +260,41 @@ class CyclesConfig(BaseModel):
         return int(self.threshold_tc * 1_000_000_000_000)
 
 
+DNS_PROVIDERS = ("manual", "cloudflare")
+
+
 class DnsConfig(BaseModel):
+    """How the custom-domain records get into DNS.
+
+    ``manual`` prints them for an operator to enter. ``cloudflare`` applies them
+    over the API, reading the token from ``token_env`` — the token itself never
+    belongs in a descriptor, since these are committed.
+    """
+
     provider: str = "manual"
+    # Blank means "derive from the domain", which is right whenever the zone is
+    # the last two labels (realmsgos.org, gos.earth).
+    zone: str = ""
+    token_env: str = "CLOUDFLARE_API_TOKEN"
+    ttl: int = 60
+
+    @field_validator("provider")
+    @classmethod
+    def validate_provider(cls, value: str) -> str:
+        provider = (value or "manual").strip().lower()
+        if provider not in DNS_PROVIDERS:
+            raise ValueError(
+                f"dns.provider must be one of {', '.join(DNS_PROVIDERS)}, got {value!r}"
+            )
+        return provider
+
+    @field_validator("ttl")
+    @classmethod
+    def validate_ttl(cls, value: int) -> int:
+        # Cloudflare rejects anything under 60 unless it is 1 ("automatic").
+        if value != 1 and value < 60:
+            raise ValueError("dns.ttl must be 1 (automatic) or at least 60 seconds")
+        return value
 
 
 class MarketplaceConfig(BaseModel):

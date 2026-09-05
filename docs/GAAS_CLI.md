@@ -174,7 +174,7 @@ Never run raw `dfx canister delete` — it burns leftover cycles.
 | `canisters` | Existing canister IDs; omit a key to let gaas create that canister. |
 | `casals` | Casals release used when provisioning realms via the installer. |
 | `services` | Off-chain service URLs baked into the registry frontend build. |
-| `dns` | DNS provider hint; only `manual` is supported today. |
+| `dns` | Who writes the custom-domain records: `manual` (print them) or `cloudflare` (apply them). See [Custom domain DNS](#custom-domain-dns). |
 
 ## Descriptor reference
 
@@ -425,6 +425,54 @@ For domain `test.gos.earth` and frontend canister `qtank-3qaaa-aaaaa-qhb6q-cai`:
 | TXT | `_canister-id.test.gos.earth` | `qtank-3qaaa-aaaaa-qhb6q-cai` | Prove canister ownership to the IC |
 | CNAME | `_acme-challenge.test.gos.earth` | `_acme-challenge.test.gos.earth.icp2.io` | Delegate ACME certificate challenge |
 
+Only the TXT record names a canister. The other two are derived from the domain,
+so **re-minting an environment only changes `_canister-id`** — that is the whole
+of a "remap".
+
+### Cloudflare (automatic)
+
+Set the provider in the descriptor:
+
+```json
+"dns": { "provider": "cloudflare" }
+```
+
+Export a token with **Zone:Read** and **DNS:Edit** on the zone, then deploy as
+usual:
+
+```bash
+export CLOUDFLARE_API_TOKEN=...
+gaas new environments/test.json --identity deployer --network ic
+```
+
+`validate` (phase 1) checks the token is present, so a missing one fails before
+anything is minted rather than at domain wiring. The **domain wiring** phase then
+creates or updates the three records and prints `created` / `updated` /
+`unchanged` per record. Re-running changes nothing.
+
+Records are always written **unproxied**: a proxied record makes Cloudflare
+answer from its own edge, which hides the IC gateway and breaks the ACME
+challenge. If a record is found proxied, it is switched off.
+
+A configured provider that fails aborts the deploy rather than falling back to
+manual — otherwise a forgotten remap leaves the domain on a dead canister.
+
+To remap without a full deploy (e.g. after re-minting the frontend):
+
+```bash
+gaas dns-records environments/test.json --apply     # write the records
+gaas dns-records environments/test.json --verify    # check live DNS matches
+```
+
+`--verify` needs no token; it reads public DNS and exits non-zero on a mismatch.
+
+Optional `dns` keys: `zone` (defaults to the last two labels of the domain),
+`token_env` (defaults to `CLOUDFLARE_API_TOKEN`), `ttl` (defaults to 60; use `1`
+for Cloudflare "automatic").
+
+The token is read only from the environment. Descriptors are committed, so they
+have no field for it.
+
 ### Namecheap Advanced DNS walkthrough
 
 1. Log in to Namecheap → **Domain List** → **Manage** → **Advanced DNS**.
@@ -636,13 +684,19 @@ gaas status DESCRIPTOR [OPTIONS]
 
 ### `gaas dns-records`
 
-Print DNS records required for the environment domain.
+Print — and optionally write or check — the DNS records the environment domain needs.
 
 ```
-gaas dns-records DESCRIPTOR
+gaas dns-records DESCRIPTOR [--apply] [--verify]
 ```
 
-Uses `realm_registry_frontend` from the descriptor; if missing, prints a placeholder warning and uses a sample ID for preview only.
+| Flag | Effect |
+|---|---|
+| (none) | Print the three records. |
+| `--apply` | Write them via the descriptor's `dns.provider`. `cloudflare` needs `$CLOUDFLARE_API_TOKEN`; `manual` applies nothing and says so. This is the remap path after re-minting a frontend. |
+| `--verify` | Compare live public DNS against the descriptor. No token needed. Exits non-zero on a mismatch and lists each problem. |
+
+Uses `realm_registry_frontend` from the descriptor; if missing, prints a placeholder warning and uses a sample ID for preview only (`--apply` and `--verify` refuse instead).
 
 ## Related
 
