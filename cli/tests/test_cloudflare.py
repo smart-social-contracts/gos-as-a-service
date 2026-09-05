@@ -41,6 +41,7 @@ class _FakeSession:
         self.zone_result = [{"id": "zone-1"}]
         self.existing: dict[tuple[str, str], dict] = {}
         self.written: list[dict] = []
+        self.deleted: list[str] = []
 
     def request(self, method, url, headers=None, timeout=None, **kwargs):
         path = url.split("/client/v4", 1)[1]
@@ -52,7 +53,14 @@ class _FakeSession:
         if method == "GET" and path.endswith("/dns_records"):
             params = kwargs.get("params") or {}
             hit = self.existing.get((params.get("type"), params.get("name")))
-            return _Response({"success": True, "result": [hit] if hit else []})
+            if hit is None:
+                result = []
+            else:
+                result = hit if isinstance(hit, list) else [hit]
+            return _Response({"success": True, "result": result})
+        if method == "DELETE":
+            self.deleted.append(path.rsplit("/", 1)[-1])
+            return _Response({"success": True, "result": {"id": "gone"}})
         if method in {"POST", "PATCH"}:
             self.written.append({"method": method, "path": path, "body": kwargs.get("json")})
             return _Response({"success": True, "result": {"id": "rec-new"}})
@@ -202,6 +210,58 @@ class TestApply:
         session = _FakeSession()
         assert apply_records([], token="tok", zone="realmsgos.org", session=session) == []
         assert session.calls == []
+
+
+class TestDuplicates:
+    """The IC refuses a domain whose _canister-id holds more than one TXT record."""
+
+    def _session_with_two_txt(self):
+        session = _FakeSession()
+        session.existing = {
+            ("TXT", "_canister-id.test.realmsgos.org"): [
+                {"id": "keep", "content": "old-id", "proxied": False, "ttl": 60},
+                {"id": "dupe", "content": "stale-id", "proxied": False, "ttl": 60},
+            ],
+        }
+        return session
+
+    def test_extra_txt_records_are_deleted(self):
+        session = self._session_with_two_txt()
+        outcomes = apply_records(
+            _records("new-id"), token="tok", zone="realmsgos.org", session=session
+        )
+
+        assert session.deleted == ["dupe"]
+        txt = outcomes[1]
+        assert txt.action == "updated"
+        assert "dropped 1 duplicate" in txt.detail
+        assert "old-id -> new-id" in txt.detail
+
+    def test_duplicate_is_reported_even_when_content_already_right(self):
+        session = _FakeSession()
+        session.existing = {
+            ("TXT", "_canister-id.test.realmsgos.org"): [
+                {"id": "keep", "content": "same-id", "proxied": False, "ttl": 60},
+                {"id": "dupe", "content": "same-id", "proxied": False, "ttl": 60},
+            ],
+        }
+        outcomes = apply_records(
+            _records("same-id"), token="tok", zone="realmsgos.org", session=session
+        )
+        # Not "unchanged": the zone did change, and silence would hide the fix.
+        assert outcomes[1].action == "updated"
+        assert outcomes[1].detail == "dropped 1 duplicate"
+        assert session.deleted == ["dupe"]
+
+    def test_a_single_record_is_never_deleted(self):
+        session = _FakeSession()
+        session.existing = {
+            ("TXT", "_canister-id.test.realmsgos.org"): {
+                "id": "only", "content": "same-id", "proxied": False, "ttl": 60,
+            },
+        }
+        apply_records(_records("same-id"), token="tok", zone="realmsgos.org", session=session)
+        assert session.deleted == []
 
 
 class TestErrors:

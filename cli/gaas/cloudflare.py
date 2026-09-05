@@ -132,13 +132,18 @@ class CloudflareDns:
         self._zone_ids[zone] = zone_id
         return zone_id
 
-    def _existing(self, zone_id: str, record_type: str, name: str) -> dict[str, Any] | None:
-        result = self._call(
-            "GET",
-            f"/zones/{zone_id}/dns_records",
-            params={"type": record_type, "name": name},
+    def _matching(self, zone_id: str, record_type: str, name: str) -> list[dict[str, Any]]:
+        return list(
+            self._call(
+                "GET",
+                f"/zones/{zone_id}/dns_records",
+                params={"type": record_type, "name": name},
+            )
+            or []
         )
-        return result[0] if result else None
+
+    def _delete(self, zone_id: str, record_id: str) -> None:
+        self._call("DELETE", f"/zones/{zone_id}/dns_records/{record_id}")
 
     def upsert(self, zone_id: str, record: DnsRecord) -> RecordOutcome:
         record_type = cloudflare_record_type(record)
@@ -151,10 +156,18 @@ class CloudflareDns:
             "proxied": PROXIED,
         }
 
-        existing = self._existing(zone_id, record_type, name)
-        if existing is None:
+        matches = self._matching(zone_id, record_type, name)
+        if not matches:
             self._call("POST", f"/zones/{zone_id}/dns_records", json=body)
             return RecordOutcome(record, "created")
+
+        # Each host we manage holds exactly one value, so extras are duplicates
+        # to clear rather than a set to preserve. The IC rejects a domain whose
+        # _canister-id has more than one TXT record, and a stale duplicate is
+        # invisible until registration fails.
+        existing, *duplicates = matches
+        for duplicate in duplicates:
+            self._delete(zone_id, str(duplicate["id"]))
 
         # Compare only what we manage. Cloudflare hands TXT content back
         # unquoted, so this is a plain string comparison.
@@ -163,13 +176,21 @@ class CloudflareDns:
             and bool(existing.get("proxied")) is PROXIED
             and int(existing.get("ttl") or 0) == self._ttl
         )
+        dropped = (
+            f"; dropped {len(duplicates)} duplicate"
+            f"{'s' if len(duplicates) > 1 else ''}"
+            if duplicates
+            else ""
+        )
         if same:
-            return RecordOutcome(record, "unchanged")
+            if not duplicates:
+                return RecordOutcome(record, "unchanged")
+            return RecordOutcome(record, "updated", dropped.lstrip("; "))
 
         was = str(existing.get("content") or "")
         self._call("PATCH", f"/zones/{zone_id}/dns_records/{existing['id']}", json=body)
         detail = f"{was} -> {record.value}" if was != record.value else "settings realigned"
-        return RecordOutcome(record, "updated", detail)
+        return RecordOutcome(record, "updated", detail + dropped)
 
 
 def _errors_text(payload: dict[str, Any]) -> str:

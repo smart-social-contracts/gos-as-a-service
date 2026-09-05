@@ -191,7 +191,7 @@ Schema is enforced by `cli/gaas/descriptor.py` and `cli/gaas/known.py`.
 | `canisters` | no | `{}` | Map of known canister name → IC canister ID. Keys must be from the known list below. Values must match the IC principal format. |
 | `casals` | **yes** | — | Casals release pin for realm provisioning. |
 | `services` | no | `{}` | Off-chain service URLs for the registry frontend. |
-| `dns` | no | `{"provider": "manual"}` | DNS configuration. |
+| `dns` | no | `{"provider": "manual"}` | Who writes the custom-domain records. See [`dns`](#dns). |
 
 ### `gos[]` entries
 
@@ -357,7 +357,10 @@ In production (no test mode), gaas loses IC control after this phase — it must
 
 | Field | Required | Default | Description |
 |---|---|---|---|
-| `provider` | no | `"manual"` | DNS provider. Only `"manual"` is implemented; gaas prints records for you to add at your registrar. |
+| `provider` | no | `"manual"` | `"manual"` prints the records for you to add at your registrar. `"cloudflare"` applies them over the API. See [Cloudflare (automatic)](#cloudflare-automatic). |
+| `zone` | no | derived | Cloudflare zone holding the domain. Defaults to the domain's last two labels (`gos.earth` for `test.gos.earth`); set it explicitly for a multi-label suffix such as `.co.uk`. |
+| `token_env` | no | `"CLOUDFLARE_API_TOKEN"` | Environment variable holding the API token. The token is never stored in the descriptor. |
+| `ttl` | no | `60` | Record TTL in seconds. `1` means Cloudflare "automatic"; anything else must be ≥ 60. |
 
 ### Known GOS implementations (`known.py`)
 
