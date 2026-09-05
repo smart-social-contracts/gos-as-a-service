@@ -16,7 +16,10 @@
   import { isUnknownSlugError, findJobForSlug, unknownSlugView } from '$lib/unknown-slug.js';
   import {
     clearSplashBrandHint,
+    firstSplashLogoUrl,
     HOST_SPLASH_MARK_PATH,
+    resolveAcceptedSplashLogoUrl,
+    splashLogoInputFromPortal,
     writeSplashBrandHint,
   } from '$lib/realm-utils.js';
   import RealmsSphereLoader from '$lib/components/RealmsSphereLoader.svelte';
@@ -43,6 +46,42 @@
   let iframeLoaded = false;
   let iframeReady = false;
   let iframeReadyFallbackTimer = null;
+  let splashLogoUrl = '';
+  let splashLogoLocked = false;
+  let splashValidateToken = 0;
+
+  function resetSplashLogo() {
+    splashLogoUrl = '';
+    splashLogoLocked = false;
+    splashValidateToken += 1;
+  }
+
+  function onSplashRealmLogoLoad() {
+    splashLogoLocked = true;
+  }
+
+  $: splashLogoInputs = splashLogoInputFromPortal({ splashHint: data.splashHint, realm });
+  $: splashLogoCandidate = firstSplashLogoUrl(splashLogoInputs);
+  $: splashPreloadUrl = splashLogoCandidate;
+
+  function queueSplashLogoValidation(inputs, candidate) {
+    if (!browser || !candidate) {
+      if (!splashLogoLocked) splashLogoUrl = '';
+      return;
+    }
+    const token = ++splashValidateToken;
+    void (async () => {
+      const accepted = await resolveAcceptedSplashLogoUrl(inputs);
+      if (token !== splashValidateToken) return;
+      if (accepted) {
+        splashLogoUrl = accepted;
+      } else if (!splashLogoLocked) {
+        splashLogoUrl = '';
+      }
+    })();
+  }
+
+  $: queueSplashLogoValidation(splashLogoInputs, splashLogoCandidate);
 
   $: slug = $page.params.slug;
   $: subPath = $page.url.pathname.replace(new RegExp(`^/r/${slug}`), '') || '/';
@@ -186,6 +225,7 @@
     slugView = null;
     iframeLoaded = false;
     iframeReady = false;
+    resetSplashLogo();
     clearIframeReadyFallback();
     stopCreatingPoll();
     bridge?.dispose?.();
@@ -256,6 +296,9 @@
 <svelte:head>
   <title>{slug} — Realms</title>
   <link rel="preload" as="image" href={HOST_SPLASH_MARK_PATH} />
+  {#if splashPreloadUrl}
+    <link rel="preload" as="image" href={splashPreloadUrl} />
+  {/if}
 </svelte:head>
 
 <div class="portal-shell">
@@ -319,7 +362,7 @@
         aria-live="polite"
         transition:fade={{ duration: 300 }}
       >
-        <RealmsSphereLoader size={128} />
+        <RealmsSphereLoader size={128} logoUrl={splashLogoUrl} on:realmLogoLoad={onSplashRealmLogoLoad} />
         <p class="loading-label">{iframeLoaded ? 'Preparing realm…' : 'Loading realm'}</p>
       </div>
     {/if}

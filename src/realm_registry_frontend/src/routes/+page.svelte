@@ -390,6 +390,7 @@
     position: relative;
     width: 100vw;
     height: 100vh;
+    height: 100dvh;
     overflow: hidden;
     overscroll-behavior: none;
     background: var(--bg);
@@ -397,7 +398,7 @@
 
   .map-shell {
     position: absolute;
-    top: 0;
+    top: var(--test-mode-banner-height, 0px);
     bottom: 0;
     left: var(--map-inset-left, 0px);
     right: var(--map-inset-right, 0px);

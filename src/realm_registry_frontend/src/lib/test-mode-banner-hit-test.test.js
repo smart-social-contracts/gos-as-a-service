@@ -20,6 +20,9 @@ import test from 'node:test';
 const here = dirname(fileURLToPath(import.meta.url));
 const banner = readFileSync(join(here, 'components/TestModeBanner.svelte'), 'utf8');
 const header = readFileSync(join(here, 'components/RegistryHeader.svelte'), 'utf8');
+const appHtml = readFileSync(join(here, '../app.html'), 'utf8');
+const layout = readFileSync(join(here, '../routes/+layout.svelte'), 'utf8');
+const home = readFileSync(join(here, '../routes/+page.svelte'), 'utf8');
 
 test('dismiss is a native button wired to dismissBanner', () => {
 	assert.match(banner, /<button[^>]*type="button"/);
@@ -42,4 +45,21 @@ test('banner stays above the header strip without covering hub/auth zones', () =
 	assert.match(header, /header-right/);
 	assert.match(header, /toggleHub/);
 	assert.match(header, /showAuthMenu/);
+});
+
+test('viewport-fit=cover enables safe-area insets on iOS', () => {
+	assert.match(appHtml, /viewport-fit=cover/);
+	assert.match(appHtml, /initial-scale=1/);
+});
+
+test('globe home insets map shell below the fixed test banner', () => {
+	assert.match(home, /\.registry-page \{[\s\S]*height:\s*100vh[\s\S]*height:\s*100dvh/);
+	assert.match(home, /\.map-shell \{[\s\S]*top:\s*var\(--test-mode-banner-height,\s*0px\)/);
+	assert.match(header, /top:\s*var\(--test-mode-banner-height,\s*0px\)/);
+});
+
+test('app shell uses dynamic viewport height without double banner padding on map routes', () => {
+	assert.match(layout, /\.app-shell \{[\s\S]*min-height:\s*100vh[\s\S]*min-height:\s*100dvh/);
+	assert.match(layout, /\.app-shell\.full-viewport \{[\s\S]*padding-top:\s*0/);
+	assert.match(layout, /\.loading-screen \{[\s\S]*min-height:\s*100vh[\s\S]*min-height:\s*100dvh/);
 });

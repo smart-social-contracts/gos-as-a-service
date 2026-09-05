@@ -17,8 +17,10 @@ import {
   LEFTOVER_BRANDING_SHA256,
   pathnameFromAssetUrl,
   readSplashBrandHint,
+  resolveAcceptedSplashLogoUrl,
   sha256Hex,
   splashLogoCandidates,
+  splashLogoInputFromPortal,
   SPLASH_BRAND_HINT_STORAGE_KEY,
   writeSplashBrandHint,
 } from './realm-utils.js';
@@ -120,17 +122,92 @@ test('splash brand hint persists slug → frontend canister for the first splash
     { frontendCanisterId: id, configuredLogoUrl: '/custom/logo.png' },
     storage
   );
-  assert.deepEqual(readSplashBrandHint('realmtest6', storage), {
+  const hint = readSplashBrandHint('realmtest6', storage);
+  assert.deepEqual(hint, {
     frontendCanisterId: id,
     configuredLogoUrl: '/custom/logo.png',
   });
+  assert.equal(firstSplashLogoUrl(hint), `https://${id}.icp0.io/custom/logo.png`);
   assert.equal(
-    firstSplashLogoUrl(readSplashBrandHint('realmtest6', storage)),
+    firstSplashLogoUrl(splashLogoInputFromPortal({ splashHint: hint })),
     `https://${id}.icp0.io/custom/logo.png`
   );
   assert.match(storage.getItem(SPLASH_BRAND_HINT_STORAGE_KEY), /wumyk-tiaaa-aaaae-agz6q-cai/);
   clearSplashBrandHint('realmtest6', storage);
   assert.equal(readSplashBrandHint('realmtest6', storage), null);
+});
+
+test('splashLogoInputFromPortal prefers resolved realm over splash hint', () => {
+  const id = 'abcde-aaaaa-aaaan-aaaaq-cai';
+  assert.deepEqual(
+    splashLogoInputFromPortal({
+      splashHint: { frontendCanisterId: 'old-id', configuredLogoUrl: '/custom/logo.png' },
+      realm: { frontendCanisterId: id, logoUrl: 'https://files.example/brand.png' },
+    }),
+    { frontendCanisterId: id, configuredLogoUrl: 'https://files.example/brand.png' }
+  );
+  assert.equal(
+    firstSplashLogoUrl(
+      splashLogoInputFromPortal({
+        splashHint: { frontendCanisterId: id, configuredLogoUrl: '' },
+      })
+    ),
+    `https://${id}.icp0.io/custom/logo.png`
+  );
+});
+
+test('resolveAcceptedSplashLogoUrl walks candidates and skips leftovers / 404s', async () => {
+  const id = 'abcde-aaaaa-aaaan-aaaaq-cai';
+  const real = new Uint8Array([1, 2, 3, 4, 5]);
+  const fetchImpl = async (url) => {
+    const u = String(url);
+    if (u.includes('/custom/logo.png')) return { ok: false };
+    if (u.includes('/logo.png')) {
+      return {
+        ok: true,
+        headers: { get: () => 'image/png' },
+        arrayBuffer: async () => real.buffer,
+      };
+    }
+    return { ok: false };
+  };
+
+  assert.equal(
+    await resolveAcceptedSplashLogoUrl({ frontendCanisterId: id, configuredLogoUrl: '' }, fetchImpl),
+    `https://${id}.icp0.io/logo.png`
+  );
+  assert.equal(
+    await resolveAcceptedSplashLogoUrl(
+      { frontendCanisterId: id, configuredLogoUrl: '/images/logo_sphere_only.svg' },
+      fetchImpl
+    ),
+    `https://${id}.icp0.io/logo.png`
+  );
+  assert.equal(await resolveAcceptedSplashLogoUrl({ frontendCanisterId: id }, async () => ({ ok: false })), '');
+});
+
+test('resolveAcceptedSplashLogoUrl never falls back to the retired clover at /images/logo.png', async () => {
+  const id = 'abcde-aaaaa-aaaan-aaaaq-cai';
+  const clover = readFileSync(join(testdata, 'leftover-clover-logo.png'));
+  const fetchImpl = async (url) => {
+    const u = String(url);
+    if (u.includes('/custom/logo.png')) return { ok: false };
+    if (u.endsWith('.icp0.io/logo.png')) return { ok: false };
+    if (u.includes('/images/logo.png')) {
+      return {
+        ok: true,
+        headers: { get: () => 'image/png' },
+        arrayBuffer: async () => bufferOf(clover),
+      };
+    }
+    return { ok: false };
+  };
+
+  assert.equal(await resolveAcceptedSplashLogoUrl({ frontendCanisterId: id }, fetchImpl), '');
+  assert.equal(
+    await acceptSplashLogoUrl(`https://${id}.icp0.io/images/logo.png`, fetchImpl),
+    false
+  );
 });
 
 function bufferOf(fileBytes) {

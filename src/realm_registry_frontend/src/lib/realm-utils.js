@@ -96,9 +96,10 @@ export const HOST_SPLASH_MARK_PATH = '/images/logo_sphere_only.svg';
 
 /**
  * SHA-256 of platform leftovers that must never be painted as a realm brand.
- * Fresh Realms GOS frontends ship the Syntropia DNA/globe and city photo at
- * `/custom/logo.png` and `/custom/background.png` — those bytes are template
- * defaults, not a founder-set brand.
+ * The retired clover PNG was deleted from Realms; keep the hash so live
+ * leftovers are still rejected. Fresh Realms GOS frontends also ship the
+ * Syntropia DNA/globe and city photo at `/custom/logo.png` and
+ * `/custom/background.png` — those bytes are template defaults, not a founder-set brand.
  */
 export const LEFTOVER_BRANDING_SHA256 = new Set([
   // Retired clover / figure-eight shipped at `/images/logo.png`.
@@ -217,6 +218,17 @@ export function splashLogoCandidates({ frontendCanisterId = '', configuredLogoUr
  */
 export function firstSplashLogoUrl({ frontendCanisterId = '', configuredLogoUrl = '' } = {}) {
   return splashLogoCandidates({ frontendCanisterId, configuredLogoUrl })[0] || '';
+}
+
+/**
+ * Merge portal splash-hint + resolved realm state for splash logo helpers.
+ * @param {{ splashHint?: { frontendCanisterId?: string, configuredLogoUrl?: string } | null, realm?: { frontendCanisterId?: string, logoUrl?: string } | null }} [sources]
+ */
+export function splashLogoInputFromPortal({ splashHint = null, realm = null } = {}) {
+  return {
+    frontendCanisterId: String(realm?.frontendCanisterId || splashHint?.frontendCanisterId || '').trim(),
+    configuredLogoUrl: String(realm?.logoUrl || splashHint?.configuredLogoUrl || '').trim(),
+  };
 }
 
 /** Persisted slug → frontend canister so a hard reload can paint `/custom/logo.png` immediately. */
@@ -342,6 +354,19 @@ export async function acceptSplashLogoUrl(url, fetchImpl = globalThis.fetch) {
   const candidate = String(url || '').trim();
   if (!candidate || isLeftoverPlatformLogoPath(candidate)) return false;
   return acceptBrandingAssetUrl(candidate, fetchImpl);
+}
+
+/**
+ * First splash candidate that passes acceptSplashLogoUrl, in priority order.
+ * Never falls back to the retired clover at `/images/logo.png`.
+ * @param {{ frontendCanisterId?: string, configuredLogoUrl?: string }} inputs
+ * @param {typeof fetch} [fetchImpl]
+ */
+export async function resolveAcceptedSplashLogoUrl(inputs, fetchImpl = globalThis.fetch) {
+  for (const url of splashLogoCandidates(inputs)) {
+    if (await acceptSplashLogoUrl(url, fetchImpl)) return url;
+  }
+  return '';
 }
 
 export function formatFullDate(timestamp) {
