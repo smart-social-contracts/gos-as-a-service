@@ -327,14 +327,21 @@ def fetch_casals_tree(
     *,
     identity: str | None = None,
 ) -> dict[str, Any]:
-    raw = _run_dfx(
-        [casals_id, "get_tree", "()"],
-        network=network,
+    # Ask dfx for JSON rather than unescaping the candid literal ourselves: the
+    # tree embeds JSON inside JSON (a section's stand_template), and guessing
+    # how a value was escaped is how this broke in the first place.
+    payload = _dfx_json(
+        casals_id,
+        "get_tree",
+        "()",
+        network,
         identity=identity,
         query=True,
     )
-    text = _parse_candid_text(raw)
-    return json.loads(text)
+    tree = _unwrap_ok(payload)
+    if not isinstance(tree, dict) or "sections" not in tree:
+        raise E2EError(f"get_tree returned no sections: {str(tree)[:300]}")
+    return tree
 
 
 def _find_stand(tree: dict[str, Any], section: str, stand: str) -> dict[str, Any] | None:
