@@ -626,6 +626,10 @@ DEPLOYMENTS_COMMANDER_PERMISSIONS = [
     "orchestration.baton.upgrade",
     "orchestration.baton.hand_off",
     "orchestration.managed_upgrade.run",
+    # Releasing a stand is how the installer asks for the section's baton
+    # topology; the three permissions above are what Casals then exercises
+    # on its behalf.
+    "orchestration.stand.release",
 ]
 
 

@@ -16,7 +16,6 @@ from baton_deferral import (
     build_baton_handoff_payload,
     decode_baton_handoff_payload,
     encode_baton_handoff_payload,
-    hand_targets_from_payload,
     should_record_deferred_baton,
     should_run_deferred_baton_handoff,
 )
@@ -168,9 +167,7 @@ class CasalsService(Service):
     @service_update
     def upgrade_to(self, args: text) -> text: ...
     @service_update
-    def orchestration_hand_to_baton(self, args: text) -> text: ...
-    @service_update
-    def orchestration_configure_baton(self, args: text) -> text: ...
+    def orchestration_release_stand(self, args: text) -> text: ...
     @service_update
     def destroy_stand(self, args: text) -> text: ...
 
@@ -2894,50 +2891,28 @@ def _casals_create_or_reuse_canister(casals, job_id: str, stand: str, name: str,
     return cid
 
 
-def _setup_stand_baton(casals, job_id: str, stand: str, casals_id: str,
-                       baton_key: str, targets: list, backend_id: str):
-    """Generator: per-realm Baton governance for a freshly provisioned stand.
+def _setup_stand_baton(casals, job_id: str, stand: str):
+    """Generator: ask Casals to release the stand into its baton topology.
 
-    Creates ``<stand>-baton`` (top_commander = the Casals backend, so Casals
-    can administer it), hands each realm canister to it (Baton becomes a
-    co-controller + registers it as managed), then sets the commanders and the
-    2-of-2 approval policy: casals-backend AND the realm backend must both
-    approve every managed upgrade / asset provision.
+    What the baton is called, which WASM it runs, which canisters it takes
+    control of, and who must approve its upgrades are all declared once on the
+    section's ``stand_template`` in the sheet. The installer only chooses the
+    moment — hand-off drops it from the canisters' controllers, so this cannot
+    run until bootstrap is finished.
 
-    ``targets`` is a list of (canister_name, canister_id) to hand off.
-    Idempotent — safe to re-run on a partially provisioned job.
+    Idempotent: Casals skips a baton it already minted and targets already
+    handed off, so a retried job converges instead of failing.
     """
-    baton_name = f"{stand}-baton"
-    baton_id = yield from _casals_create_or_reuse_canister(
-        casals, job_id, stand, baton_name, "backend", baton_key,
-        install_arg={"top_commander": casals_id},
-    )
-    jlog(job_id).info(f"stand baton ready: {baton_name} ({baton_id})")
-
-    for target_name, target_id in targets:
-        if not target_id:
-            continue
-        hand_res: CallResult = yield casals.orchestration_hand_to_baton(json.dumps({
-            "target": target_name, "baton": baton_name,
-        }))
-        _casals_ok(hand_res)
-        jlog(job_id).info(f"handed {target_name} ({target_id}) to {baton_name}")
-
-    commanders = [casals_id] + ([backend_id] if backend_id else [])
-    policy = {
-        "threshold": len(commanders),
-        "eligible": list(commanders),
-        "required": list(commanders),
-    }
-    cfg_res: CallResult = yield casals.orchestration_configure_baton(json.dumps({
-        "baton": baton_name,
-        "commanders": commanders,
-        "approval_policy": policy,
+    rel_res: CallResult = yield casals.orchestration_release_stand(json.dumps({
+        "stand": stand,
     }))
-    _casals_ok(cfg_res)
+    data = _casals_ok(rel_res)
+    baton_id = (data.get("baton_id") or "").strip()
+    if not baton_id:
+        raise RuntimeError(f"casals released stand '{stand}' without a baton id")
     jlog(job_id).info(
-        f"baton {baton_name} configured: commanders={commanders}, "
-        f"policy {policy['threshold']}-of-{len(commanders)}"
+        f"stand '{stand}' released: baton {data.get('baton')} ({baton_id}), "
+        f"handed_off={data.get('handed_off')}, skipped={data.get('skipped_targets')}"
     )
     return baton_id
 
@@ -2959,23 +2934,13 @@ def _run_deferred_baton_handoff(job: DeploymentJob):
     payload = decode_baton_handoff_payload(raw)
     stand = (payload.get("stand") or "").strip()
     casals_id = (payload.get("casals_id") or "").strip()
-    baton_key = (payload.get("baton_key") or cfg.baton_wasm_key or "orchestration-baton@1.3.0").strip()
-    backend_id = (payload.get("backend_id") or job.backend_canister_id or "").strip()
-    hand_targets = hand_targets_from_payload(payload)
 
     if not stand or not casals_id:
         raise RuntimeError("baton hand-off payload missing stand or casals_id")
-    if not hand_targets:
-        raise RuntimeError("baton hand-off payload has no hand targets")
 
-    jlog(job.name).info(
-        f"running deferred baton hand-off for stand '{stand}' ({len(hand_targets)} targets)"
-    )
+    jlog(job.name).info(f"releasing stand '{stand}' into its baton topology")
     casals = CasalsService(Principal.from_str(casals_id))
-    baton_id = yield from _setup_stand_baton(
-        casals, job.name, stand, casals_id, baton_key,
-        hand_targets, backend_id,
-    )
+    baton_id = yield from _setup_stand_baton(casals, job.name, stand)
     job.baton_canister_id = baton_id
     job.baton_pending = 0
     jlog(job.name).info(f"deferred baton hand-off complete: {baton_id}")

@@ -2,9 +2,11 @@
 
 The installer must remain an IC controller on realm canisters through
 ``set_quarter_provisioning_config``, extension installs, and the
-``schedule_registration`` backend/frontend prep calls. Baton hand-off
-(via ``orchestration_hand_to_baton``) removes the installer from the
-controller set, so it runs only after those steps complete.
+``schedule_registration`` backend/frontend prep calls. Releasing the stand
+(``orchestration_release_stand``) hands its canisters to the baton, which
+removes the installer from the controller set, so it runs only after those
+steps complete. What that topology looks like is Casals's business; the
+timing is the installer's.
 """
 
 from __future__ import annotations

@@ -77,6 +77,43 @@ def test_platform_sheet_has_no_infra_baton_stand() -> None:
             assert canister.get("wasm_type") != "baton"
 
 
+def test_deployments_section_declares_the_realm_baton_topology() -> None:
+    """The installer asks Casals to release a stand; the sheet says what that means.
+
+    Without this template ``orchestration_release_stand`` has nothing to apply
+    and every realm provision fails, so it is load-bearing rather than
+    documentation.
+    """
+    sheet = platform_sheet()
+    deployments = sheet["sections"][1]
+    baton = deployments["stand_template"]["baton"]
+
+    assert baton["name"] == "{stand}-baton"
+    assert baton["wasm_key"] == "orchestration-baton@1.3.0"
+    assert baton["install_arg"] == {"top_commander": "$casals"}
+    assert baton["handoff_targets"] == [
+        "{stand}-backend",
+        "{stand}-frontend",
+        "{stand}-token",
+    ]
+
+    # 2-of-2: Casals and the realm's own backend must both approve an upgrade.
+    both = ["$casals", "$canister:{stand}-backend"]
+    assert baton["commanders"] == both
+    assert baton["approval_policy"] == {
+        "threshold": 2,
+        "eligible": both,
+        "required": both,
+    }
+
+
+def test_deployments_commander_may_release_a_stand() -> None:
+    """Releasing is the installer's entry point, so the grant must include it."""
+    from gaas.conductor_seed import DEPLOYMENTS_COMMANDER_PERMISSIONS
+
+    assert "orchestration.stand.release" in DEPLOYMENTS_COMMANDER_PERMISSIONS
+
+
 def test_governance_deploy_sheet_omits_installer_and_registry() -> None:
     from gaas.conductor_seed import governance_deploy_sheet
 
