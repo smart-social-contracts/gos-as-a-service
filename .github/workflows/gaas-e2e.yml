@@ -20,9 +20,12 @@ env:
   PYTHON_VERSION: "3.10"
   NODE_VERSION: "20"
   DFX_VERSION: "0.32.0"
-  # v0.3.1 is the first tag whose CLI has `casals new`, which `gaas new` shells
-  # out to during create_canisters.
-  CASALS_VERSION: "v0.3.1"
+  # `gaas new` shells out to `casals new` during create_canisters. No tag works:
+  # v0.3.0 has no such command, and v0.3.1 deploys a fresh instance with
+  # --mode upgrade, which fails on empty canisters with IC0537. The fix
+  # (eb14771 "Make a fresh create one idempotent deploy") is only on main, so
+  # pin the commit rather than a release.
+  CASALS_VERSION: "d8d86bf563d91f32eba20bcab51b39803c8925b7"
 
 jobs:
   gaas-local-e2e:
