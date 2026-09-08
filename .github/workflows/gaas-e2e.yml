@@ -9,6 +9,7 @@ on:
       - "dfx.json"
       - "casals_backend.did"
       - ".github/workflows/gaas-e2e.yml"
+      - "scripts/e2e_local_realm_baton_topology.py"
   workflow_dispatch:
 
 concurrency:
@@ -24,7 +25,7 @@ env:
 jobs:
   gaas-local-e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 70
+    timeout-minutes: 90
     env:
       # v0.3.0 GitHub release has no casals_backend.wasm.gz; use the checkout
       # this job already builds so create/adopt stay on the local replica.
@@ -122,6 +123,18 @@ jobs:
           FRONTEND_ID=$(python3 -c "import json; print(json.load(open('environments/local.json'))['canisters']['realm_registry_frontend'])")
           code=$(curl -s -o /dev/null -w "%{http_code}" "http://${FRONTEND_ID}.localhost:4943/")
           test "$code" = "200"
+
+      # Realm provision regression guard: request_deployment → installer
+      # provision_via_casals → stand/backend/frontend/baton in Casals get_tree.
+      # Realm WASM/assets come from gaas new seed_file_registry (realms-gos@main
+      # source build into casals_file_registry) — not re-published here.
+      - name: E2E realm provision (Casals/baton topology)
+        run: |
+          export TERM=xterm
+          cd cli
+          .venv/bin/python ../scripts/e2e_local_realm_baton_topology.py \
+            --descriptor ../environments/local.json \
+            --network local
 
       - name: Snapshot created canister IDs
         run: |

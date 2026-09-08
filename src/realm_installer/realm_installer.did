@@ -173,7 +173,6 @@ service : (text) -> {
   "get_casals_config" : () -> (ResultCasalsConfig) query;
   "retry_deployment" : (text) -> (ResultProvision);
   "provision_via_casals" : (text) -> (ResultProvision);
-  "provision_quarter" : (text) -> (text);
   "report_canister_ready" : (text) -> (ResultReportReady);
   "report_frontend_verified" : (text) -> (ResultReportFrontend);
   "get_canister_logs" : (opt nat, opt nat, opt text, opt text) -> (vec PublicLogEntry) query;
