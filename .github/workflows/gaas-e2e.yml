@@ -95,6 +95,23 @@ jobs:
           npm install -g @icp-sdk/icp-cli
           icp --version
 
+      # icp keeps its own identity store and so cannot see dfx's `default`.
+      # Import the same key under the same name so both CLIs act as one
+      # principal; otherwise the canisters icp deploys and the ones dfx creates
+      # end up with different controllers.
+      - name: Share the dfx identity with icp
+        run: |
+          export TERM=xterm
+          export DFX_WARNING=-mainnet_plaintext_identity
+          dfx identity get-principal > /dev/null
+          dfx identity export default > /tmp/dfx-default.pem
+          icp identity import --from-pem /tmp/dfx-default.pem --storage plaintext default
+          icp identity default default
+          icp_principal=$(icp identity principal --identity default)
+          dfx_principal=$(dfx identity get-principal)
+          echo "icp=$icp_principal dfx=$dfx_principal"
+          test "$icp_principal" = "$dfx_principal"
+
       - name: Install GaaS CLI
         run: |
           cd cli
