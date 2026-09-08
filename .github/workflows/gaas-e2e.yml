@@ -144,11 +144,24 @@ jobs:
           grep -n -- '--cycles' "$CASALS_SRC/casals_cli.py"
           python3 -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" "$CASALS_SRC/casals_cli.py"
 
+      # The GaaS CLI sets controllers with `icp ... -n local`, which resolves the
+      # network against this project's manifest, and the repo has none. Declare a
+      # network that connects to the replica the Casals project hosts, rather
+      # than one icp would try to manage a second time.
+      - name: Declare the local network for the GaaS project
+        run: |
+          if [ ! -f icp.yaml ]; then
+            printf 'networks:\n  - name: local\n    mode: connected\n    url: http://127.0.0.1:4943\n    root-key: fetch\n' \
+              > icp.yaml
+          fi
+          cat icp.yaml
+
       - name: Start local replica
         run: |
           export TERM=xterm
           (cd "$CASALS_SRC" && icp network start local -d)
           dfx ping local
+          icp network ping local
 
       - name: gaas new (local descriptor)
         run: |
