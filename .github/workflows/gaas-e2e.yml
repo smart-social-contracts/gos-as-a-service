@@ -20,14 +20,16 @@ env:
   PYTHON_VERSION: "3.10"
   NODE_VERSION: "20"
   DFX_VERSION: "0.32.0"
-  CASALS_VERSION: "v0.3.0"
+  # v0.3.1 is the first tag whose CLI has `casals new`, which `gaas new` shells
+  # out to during create_canisters.
+  CASALS_VERSION: "v0.3.1"
 
 jobs:
   gaas-local-e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
-      # v0.3.0 GitHub release has no casals_backend.wasm.gz; use the checkout
+      # The GitHub release has no casals_backend.wasm.gz; use the checkout
       # this job already builds so create/adopt stay on the local replica.
       CASALS_SRC: ${{ github.workspace }}/Casals
     steps:
