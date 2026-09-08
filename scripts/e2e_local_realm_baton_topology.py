@@ -79,6 +79,34 @@ def _run_dfx(
     return result.stdout.strip()
 
 
+_CANDID_ESCAPES = {'"': '"', "\\": "\\", "n": "\n", "r": "\r", "t": "\t"}
+
+
+def _unescape_candid(text: str) -> str:
+    """Decode a candid text literal one escape at a time.
+
+    Replacing \\" wholesale corrupts any value that itself contains escaped
+    JSON - a section's stand_template, for instance - because the backslash of
+    a \\\\ pair gets eaten and the quote after it is read as an escape.
+    """
+    out: list[str] = []
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if ch != "\\" or i + 1 >= len(text):
+            out.append(ch)
+            i += 1
+            continue
+        escaped = _CANDID_ESCAPES.get(text[i + 1])
+        if escaped is None:
+            out.append(ch)
+            i += 1
+        else:
+            out.append(escaped)
+            i += 2
+    return "".join(out)
+
+
 def _parse_candid_text(raw: str) -> str:
     raw = raw.strip()
     if raw.startswith("(") and raw.endswith(")"):
@@ -87,7 +115,7 @@ def _parse_candid_text(raw: str) -> str:
         raw = raw[:-1].strip()
     if raw.startswith('"') and raw.endswith('"'):
         raw = raw[1:-1]
-    return raw.replace('\\"', '"')
+    return _unescape_candid(raw)
 
 
 def _dfx_json(
