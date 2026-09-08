@@ -122,17 +122,31 @@ jobs:
           .venv/bin/pip install --upgrade pip
           .venv/bin/pip install -e ".[dev]"
 
-      # Casals deploys with icp while the GaaS CLI drives dfx, so both have to
-      # address one replica. icp owns it (dfx cannot host an `icp deploy`), and
-      # its gateway is moved off the default 8000 onto dfx's 4943 so every
-      # dfx-based phase and the frontend curl keep working unchanged.
-      - name: Start local replica
+      # Two mismatches between the pinned Casals checkout and this job, both
+      # local-only and worth pushing upstream:
+      #   1. Casals deploys with icp while the GaaS CLI drives dfx, so both must
+      #      address one replica. icp owns it (dfx cannot host an `icp deploy`),
+      #      so its gateway moves off the default 8000 onto dfx's 4943 and every
+      #      dfx-based phase and the frontend curl keep working unchanged.
+      #   2. icp funds canister creation with 2T, where dfx's local default is
+      #      100T. At 2T the conductor starves part-way through the sheet deploy
+      #      and seed_conductor fails with IC0504.
+      - name: Adapt Casals checkout to the local replica
         run: |
-          export TERM=xterm
           if ! grep -q '^networks:' "$CASALS_SRC/icp.yaml"; then
             printf '\nnetworks:\n  - name: local\n    mode: managed\n    gateway:\n      port: 4943\n' \
               >> "$CASALS_SRC/icp.yaml"
           fi
+          sed -i 's/\["--mode", "auto", "-y"\]/["--mode", "auto", "--cycles", "100t", "-y"]/' \
+            "$CASALS_SRC/casals_cli.py"
+          sed -i 's/\["--mode", mode, "-y"\]/["--mode", mode, "--cycles", "100t", "-y"]/' \
+            "$CASALS_SRC/casals_cli.py"
+          grep -n -- '--cycles' "$CASALS_SRC/casals_cli.py"
+          python3 -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" "$CASALS_SRC/casals_cli.py"
+
+      - name: Start local replica
+        run: |
+          export TERM=xterm
           (cd "$CASALS_SRC" && icp network start local -d)
           dfx ping local
 
