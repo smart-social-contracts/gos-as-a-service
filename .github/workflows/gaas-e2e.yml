@@ -253,7 +253,12 @@ jobs:
           print("adopt reused installer and registry principals")
           PY
 
-      - name: gaas new (ghost installer must fail closed)
+      # A pinned installer that no longer exists is healed, not refused: adopt
+      # mints a fresh one and rewrites the pin (f46e10a, and the "adopt heals
+      # ghost installer" tests). This step used to assert the opposite, which
+      # predates that change. What still must hold is that the dead principal is
+      # never adopted and never reaches the real descriptor.
+      - name: gaas new (ghost installer is healed)
         run: |
           python3 - <<'PY'
           import json
@@ -274,20 +279,18 @@ jobs:
           code=$?
           set -e
           cat /tmp/gaas-ghost.out
-          test "$code" -ne 0
-          grep -F "refusing to use realm_installer" /tmp/gaas-ghost.out
-          grep -F "IC0301" /tmp/gaas-ghost.out
+          test "$code" -eq 0
+          grep -F "stale pin fksuf-niaaa-aaaae-ag22q-cai not on IC" /tmp/gaas-ghost.out
+          ! grep -E "realm_installer: adopt fksuf-niaaa-aaaae-ag22q-cai" /tmp/gaas-ghost.out
           python3 - <<'PY'
           import json
           ghost = "fksuf-niaaa-aaaae-ag22q-cai"
-          original = json.load(open("/tmp/gaas-pre-ghost-ids.json"))
+          healed = json.load(open("/tmp/local-ghost.json"))["canisters"]["realm_installer"]
+          assert healed, "ghost descriptor lost its installer instead of healing it"
+          assert healed != ghost, "dead installer was adopted"
           live = json.load(open("environments/local.json"))["canisters"]
-          ghost_desc = json.load(open("/tmp/local-ghost.json"))["canisters"]
-          assert live["realm_installer"] == original["realm_installer"]
-          assert live["realm_installer"] != ghost
-          assert ghost not in live.values()
-          assert ghost_desc["realm_installer"] == ghost
-          print("ghost installer refused; live descriptor not baked")
+          assert ghost not in live.values(), "ghost principal reached the real descriptor"
+          print(f"ghost installer healed to {healed}")
           PY
 
       - name: Stop local replica

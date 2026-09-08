@@ -894,8 +894,20 @@ def detect_install_mode(canister_id: str, network: str, *, identity: str | None 
 
 
 def is_canister_not_found_error(exc: BaseException | str) -> bool:
-    text = str(exc)
-    return "IC0301" in text or "not found" in text.lower()
+    """True when the replica says the principal has no canister behind it.
+
+    A mainnet replica rejects with IC0301, but a local one answers the same
+    question over HTTP as ``canister_not_found`` / "does not exist". Missing
+    those spellings makes a dead pin surface as an unhandled status failure
+    instead of something callers can heal.
+    """
+    text = str(exc).lower()
+    return (
+        "ic0301" in text
+        or "not found" in text
+        or "canister_not_found" in text
+        or "specified canister does not exist" in text
+    )
 
 
 def is_not_a_controller_error(exc: BaseException | str) -> bool:
