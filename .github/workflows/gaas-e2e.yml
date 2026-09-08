@@ -89,6 +89,12 @@ jobs:
       - name: Install ic-wasm
         run: npm install -g @icp-sdk/ic-wasm
 
+      # `casals new` deploys the conductor with icp, not dfx.
+      - name: Install icp-cli
+        run: |
+          npm install -g @icp-sdk/icp-cli
+          icp --version
+
       - name: Install GaaS CLI
         run: |
           cd cli
