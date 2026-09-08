@@ -25,7 +25,7 @@ env:
   # --mode upgrade, which fails on empty canisters with IC0537. The fix
   # (eb14771 "Make a fresh create one idempotent deploy") is only on main, so
   # pin the commit rather than a release.
-  CASALS_VERSION: "d8d86bf563d91f32eba20bcab51b39803c8925b7"
+  CASALS_VERSION: "4a87cf791b7aa943e682451c63a69450997af9bd"
 
 jobs:
   gaas-local-e2e:
