@@ -102,11 +102,18 @@ jobs:
           .venv/bin/pip install --upgrade pip
           .venv/bin/pip install -e ".[dev]"
 
+      # Casals deploys with icp while the GaaS CLI drives dfx, so both have to
+      # address one replica. icp owns it (dfx cannot host an `icp deploy`), and
+      # its gateway is moved off the default 8000 onto dfx's 4943 so every
+      # dfx-based phase and the frontend curl keep working unchanged.
       - name: Start local replica
         run: |
           export TERM=xterm
-          dfx start --background --clean --host 127.0.0.1:4943
-          sleep 3
+          if ! grep -q '^networks:' "$CASALS_SRC/icp.yaml"; then
+            printf '\nnetworks:\n  - name: local\n    mode: managed\n    gateway:\n      port: 4943\n' \
+              >> "$CASALS_SRC/icp.yaml"
+          fi
+          (cd "$CASALS_SRC" && icp network start local -d)
           dfx ping local
 
       - name: gaas new (local descriptor)
@@ -229,4 +236,4 @@ jobs:
         if: always()
         run: |
           export TERM=xterm
-          dfx stop || true
+          (cd "$CASALS_SRC" && icp network stop) || true
