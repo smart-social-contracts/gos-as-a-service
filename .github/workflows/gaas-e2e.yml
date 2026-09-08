@@ -176,8 +176,19 @@ jobs:
           export TERM=xterm
           cd cli
           .venv/bin/gaas status ../environments/local.json --network local | tee /tmp/gaas-status.txt
+          # Casals owns its own file registry, and the GaaS platform is the
+          # registry pair plus the installer. The standalone file_registry and
+          # marketplace_backend that used to bring this to nine are no longer
+          # part of `gaas new`. Name them rather than counting, so a rename
+          # cannot pass by keeping the total intact.
+          for name in casals_backend casals_frontend casals_file_registry \
+                      casals_file_registry_frontend realm_registry_backend \
+                      realm_registry_frontend realm_installer; do
+            grep -F "$name" /tmp/gaas-status.txt | grep -q running \
+              || { echo "missing or not running: $name"; exit 1; }
+          done
           running_count=$(grep -c running /tmp/gaas-status.txt || true)
-          test "$running_count" -eq 9
+          test "$running_count" -eq 7
           ! grep -i error /tmp/gaas-status.txt
 
       - name: Assert registry frontend HTTP 200
