@@ -57,11 +57,11 @@ def test_phases_order() -> None:
         "seed_conductor",
         "prime_cycles_snapshot",
         "configure_multisig",
-        "controller_topology",
         "install_frontends",
         "domain_wiring",
         "smoke_checks",
         "grant_commanders",
+        "controller_topology",
         "verify_controller_topology",
     ]
 
@@ -1278,7 +1278,7 @@ def test_infra_canister_names() -> None:
     assert "casals_backend" not in names
 
 
-@patch("gaas.phases.dfx.canister_status")
+@patch("gaas.phases.dfx.canister_controllers")
 @patch("gaas.phases.dfx.update_canister_settings")
 @patch("gaas.phases.dfx.get_principal")
 def test_controller_topology_test_mode(
@@ -1299,7 +1299,7 @@ def test_controller_topology_test_mode(
                 controllers = (casals_backend_id, "deployer-principal")
         else:
             controllers = ("deployer-principal",)
-        return MagicMock(status="running", controllers=controllers)
+        return controllers
 
     def update_side_effect(canister_id, controllers, network, *, identity=None):
         updated.add(canister_id)
@@ -2213,7 +2213,7 @@ def _controller_topology_fixture() -> tuple[Descriptor, DeployContext, str, str]
     return desc, ctx, multisig_id, casals_backend_id
 
 
-@patch("gaas.phases.dfx.canister_status")
+@patch("gaas.phases.dfx.canister_controllers")
 @patch("gaas.phases.dfx.get_principal", return_value="deployer-principal")
 def test_verify_controller_topology_fails_without_casals(
     _mock_principal,
@@ -2222,14 +2222,14 @@ def test_verify_controller_topology_fails_without_casals(
     desc, ctx, _multisig_id, casals_backend_id = _controller_topology_fixture()
 
     def status_side_effect(canister_id, network, *, identity=None):
-        return MagicMock(status="running", controllers=("deployer-principal",))
+        return ("deployer-principal",)
 
     mock_status.side_effect = status_side_effect
     with pytest.raises(RuntimeError, match="platform controller verification failed"):
         verify_platform_controller_topology(desc, ctx)
 
 
-@patch("gaas.phases.dfx.canister_status")
+@patch("gaas.phases.dfx.canister_controllers")
 @patch("gaas.phases.dfx.get_principal", return_value="deployer-principal")
 def test_verify_controller_topology_passes_when_correct(
     _mock_principal,
@@ -2242,13 +2242,13 @@ def test_verify_controller_topology_passes_when_correct(
             controllers = (multisig_id, "deployer-principal")
         else:
             controllers = (casals_backend_id, "deployer-principal")
-        return MagicMock(status="running", controllers=controllers)
+        return controllers
 
     mock_status.side_effect = status_side_effect
     verify_platform_controller_topology(desc, ctx)
 
 
-@patch("gaas.phases.dfx.canister_status")
+@patch("gaas.phases.dfx.canister_controllers")
 @patch("gaas.phases.dfx.update_canister_settings")
 @patch("gaas.phases.dfx.get_principal", return_value="deployer-principal")
 def test_apply_controller_topology_idempotent_when_correct(
@@ -2263,7 +2263,7 @@ def test_apply_controller_topology_idempotent_when_correct(
             controllers = (multisig_id, "deployer-principal")
         else:
             controllers = (casals_backend_id, "deployer-principal")
-        return MagicMock(status="running", controllers=controllers)
+        return controllers
 
     mock_status.side_effect = status_side_effect
     apply_platform_controller_topology(desc, ctx)

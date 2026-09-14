@@ -2,22 +2,26 @@
   "casals_backend": {
     "demo": "cjkrm-ayaaa-aaaab-ag3kq-cai",
     "staging": "7rdqw-oqaaa-aaaae-qkk3a-cai",
-    "test": "jlmdu-7yaaa-aaaak-qzesa-cai"
+    "test": "jlmdu-7yaaa-aaaak-qzesa-cai",
+    "production": "6dk2i-uaaaa-aaaal-qxitq-cai"
   },
   "casals_file_registry": {
     "demo": "colxy-naaaa-aaaab-ag3ka-cai",
     "staging": "7kgmt-uiaaa-aaaae-qkkzq-cai",
-    "test": "jmnfa-saaaa-aaaak-qzesq-cai"
+    "test": "jmnfa-saaaa-aaaak-qzesq-cai",
+    "production": "6el44-zyaaa-aaaal-qxita-cai"
   },
   "casals_file_registry_frontend": {
+    "demo": "chi4e-3iaaa-aaaab-ag3lq-cai",
     "staging": "7ya3k-yyaaa-aaaae-qkk2q-cai",
     "test": "j6lsz-6qaaa-aaaak-qzerq-cai",
-    "demo": "chi4e-3iaaa-aaaab-ag3lq-cai"
+    "production": "7oe6g-3iaaa-aaaal-qxiua-cai"
   },
   "casals_frontend": {
     "demo": "caj2q-wqaaa-aaaab-ag3la-cai",
     "staging": "77b56-vaaaa-aaaae-qkk2a-cai",
-    "test": "jzkun-tiaaa-aaaak-qzera-cai"
+    "test": "jzkun-tiaaa-aaaak-qzera-cai",
+    "production": "6nixa-pqaaa-aaaal-qxisq-cai"
   },
   "file_registry": {
     "demo": "mv5sc-siaaa-aaaae-ag3iq-cai",
@@ -39,18 +43,21 @@
     "test": "mxyd5-3qaaa-aaaao-ba2xq-cai"
   },
   "realm_installer": {
+    "demo": "hr2s2-riaaa-aaaas-amxqq-cai",
     "staging": "64nuy-byaaa-aaaae-qkk4q-cai",
     "test": "iupx4-uaaaa-aaaai-ax5ua-cai",
-    "demo": "hr2s2-riaaa-aaaas-amxqq-cai"
+    "production": "f6bll-oqaaa-aaaas-amx4a-cai"
   },
   "realm_registry_backend": {
+    "demo": "ckaol-xyaaa-aaaas-amxpq-cai",
     "staging": "7wcwc-diaaa-aaaae-qkk3q-cai",
     "test": "j6avg-wqaaa-aaaai-ax5ta-cai",
-    "demo": "ckaol-xyaaa-aaaas-amxpq-cai"
+    "production": "euojr-maaaa-aaaas-amx3a-cai"
   },
   "realm_registry_frontend": {
+    "demo": "hw3uo-4qaaa-aaaas-amxqa-cai",
     "staging": "63msm-maaaa-aaaae-qkk4a-cai",
     "test": "jzbts-3iaaa-aaaai-ax5tq-cai",
-    "demo": "hw3uo-4qaaa-aaaas-amxqa-cai"
+    "production": "etppf-byaaa-aaaas-amx3q-cai"
   }
 }

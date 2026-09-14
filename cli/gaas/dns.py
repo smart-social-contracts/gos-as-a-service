@@ -71,6 +71,23 @@ def _resolve_cname(name: str) -> str | None:
     return None
 
 
+def _resolve_addresses(name: str) -> set[str]:
+    """A + AAAA answers for ``name`` (following CNAMEs), empty when unresolvable."""
+    found: set[str] = set()
+    for rtype in ("A", "AAAA"):
+        try:
+            answers = dns.resolver.resolve(name, rtype)
+        except (
+            dns.resolver.NXDOMAIN,
+            dns.resolver.NoAnswer,
+            dns.resolver.NoNameservers,
+            dns.exception.Timeout,
+        ):
+            continue
+        found.update(str(rdata).lower() for rdata in answers)
+    return found
+
+
 def dns_records_ready(domain: str, canister_id: str) -> tuple[bool, list[str]]:
     """Return whether required DNS records appear to be propagated."""
     domain = domain.rstrip(".").lower()
@@ -93,9 +110,16 @@ def dns_records_ready(domain: str, canister_id: str) -> tuple[bool, list[str]]:
     host_expected = f"{domain}.{ICP_GATEWAY}"
     host_cname = _resolve_cname(domain)
     if host_cname != host_expected:
-        issues.append(
-            f"CNAME/ALIAS {domain} expected {host_expected}, got {host_cname or 'missing'}"
-        )
+        # Apex hosts are usually A/AAAA records: providers flatten a CNAME at
+        # the apex, and older setups point straight at the gateway addresses.
+        # Either way the host is ready if it resolves to the same addresses as
+        # the gateway name would.
+        own = _resolve_addresses(domain)
+        gateway = _resolve_addresses(host_expected)
+        if not own or not gateway or not own.issubset(gateway):
+            issues.append(
+                f"CNAME/ALIAS {domain} expected {host_expected}, got {host_cname or 'missing'}"
+            )
 
     return len(issues) == 0, issues
 

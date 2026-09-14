@@ -54,6 +54,9 @@ class CyclesPlan:
     items: list[CyclesLineItem] = field(default_factory=list)
     remediations: list[str] = field(default_factory=list)
     dead_pins: list[tuple[str, str]] = field(default_factory=list)
+    # Pinned canisters the deployer no longer controls (production topology
+    # applied). Their cycles are Casals' / the multisig's business, not ours.
+    handed_off: list[tuple[str, str]] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -180,6 +183,7 @@ def build_cycles_plan(
     balances = canister_balances or {}
     missing_on_ic = pins_missing_on_ic or set()
     dead_pins: list[tuple[str, str]] = []
+    handed_off: list[tuple[str, str]] = []
 
     canister_items: list[CyclesLineItem] = []
     topup_total = 0
@@ -202,6 +206,9 @@ def build_cycles_plan(
             except dfx.DfxError as exc:
                 if dfx.is_canister_not_found_error(exc):
                     dead_pins.append((name, canister_id))
+                    continue
+                if dfx.is_not_controller_error(exc):
+                    handed_off.append((name, canister_id))
                     continue
                 available = None
         item = CyclesLineItem(
@@ -239,6 +246,7 @@ def build_cycles_plan(
     )
     plan.items.extend(canister_items)
     plan.dead_pins = dead_pins
+    plan.handed_off = handed_off
 
     wallet_item = plan.items[0]
     if wallet_item.shortfall > 0:
@@ -294,6 +302,13 @@ def print_cycles_plan(plan: CyclesPlan, console: Console | None = None) -> None:
             "[yellow]Stale pins not on IC (will recreate during create_canisters):[/yellow]"
         )
         for name, canister_id in plan.dead_pins:
+            console.print(f"  {name}: {canister_id}")
+    if plan.handed_off:
+        console.print(
+            "[dim]Not in plan (deployer is no longer a controller; "
+            "Casals/multisig manage their cycles):[/dim]"
+        )
+        for name, canister_id in plan.handed_off:
             console.print(f"  {name}: {canister_id}")
     console.print(render_cycles_plan_table(plan))
     if plan.ok and plan.pending_topups:

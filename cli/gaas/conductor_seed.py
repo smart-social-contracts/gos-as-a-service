@@ -33,7 +33,9 @@ CASALS_TEMPLATES_NAMESPACE = "casals-templates"
 # IC control of that realm's canisters to it.
 ORCHESTRATION_TEMPLATES: tuple[tuple[str, str, str], ...] = (
     ("orchestration-baton", "1.3.0", "orchestration-baton@1.3.0.wasm.gz"),
-    ("orchestration-multisig", "1.2.0", "orchestration-multisig@1.2.0.wasm.gz"),
+    # 1.4.0 exposes cycles_balance, which the Casals cycles snapshot reads when
+    # it is not a controller of the multisig (production topology).
+    ("orchestration-multisig", "1.4.0", "orchestration-multisig@1.4.0.wasm.gz"),
 )
 
 
@@ -287,11 +289,8 @@ def seed_orchestration_templates(
     )
     for family, version, filename in ORCHESTRATION_TEMPLATES:
         key = f"{family}@{version}"
-        registry_path = key.replace("@", "@") + ".wasm" if "@" in filename else f"{family}.wasm"
-        if family == "orchestration-baton":
-            registry_path = "orchestration-baton@1.3.0.wasm"
-        elif family == "orchestration-multisig":
-            registry_path = "orchestration-multisig@1.2.0.wasm"
+        # Registry path mirrors the Casals seed catalog (seed/templates.json `path`).
+        registry_path = f"{key}.wasm"
 
         gz_path = _resolve_template_wasm(casals_root, filename)
         wasm_bytes = _gunzip_bytes(gz_path)

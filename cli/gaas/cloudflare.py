@@ -157,6 +157,19 @@ class CloudflareDns:
         }
 
         matches = self._matching(zone_id, record_type, name)
+        if not matches and record_type == "CNAME":
+            # An apex may already point at the IC gateway with A/AAAA records —
+            # the gateway's other supported shape. Cloudflare refuses a CNAME
+            # beside them (error 81053), and replacing them is not this tool's
+            # call, so keep them and move on to the records that do change.
+            addresses = self._matching(zone_id, "A", name) + self._matching(
+                zone_id, "AAAA", name
+            )
+            if addresses:
+                values = ", ".join(str(a.get("content") or "") for a in addresses)
+                return RecordOutcome(
+                    record, "unchanged", f"kept existing A/AAAA ({values})"
+                )
         if not matches:
             self._call("POST", f"/zones/{zone_id}/dns_records", json=body)
             return RecordOutcome(record, "created")

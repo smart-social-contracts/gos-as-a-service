@@ -1380,7 +1380,7 @@ def phase_domain_wiring(descriptor: Descriptor, ctx: DeployContext) -> None:
             else:
                 console.print(
                     "[red]DNS records not detected in time.[/red] Configure the records above, "
-                    "register the domain at https://reg.icp0.io if needed, then re-run deploy."
+                    "register the domain via https://icp0.io/custom-domains/v1/<domain> if needed, then re-run deploy."
                 )
             _save_descriptor(descriptor, ctx)
             ctx.stopped = True
@@ -1415,7 +1415,24 @@ def phase_smoke_checks(descriptor: Descriptor, ctx: DeployContext) -> None:
     ]
 
     for name, canister_id in descriptor.canisters.items():
-        status = dfx.canister_status(canister_id, ctx.network, identity=ctx.identity)
+        try:
+            status = dfx.canister_status(canister_id, ctx.network, identity=ctx.identity)
+        except dfx.DfxError as exc:
+            if not dfx.is_not_controller_error(exc):
+                raise
+            # Production topology: the deployer no longer controls this canister,
+            # so run state is not readable. `canister info` is public and still
+            # proves it exists with a module installed; the HTTP / query smoke
+            # checks below cover liveness.
+            _controllers, module_hash = dfx.canister_info(
+                canister_id, ctx.network, identity=ctx.identity
+            )
+            if not module_hash:
+                raise RuntimeError(
+                    f"{name} ({canister_id}) has no module installed"
+                ) from exc
+            console.print(f"  {name}: not a controller; module present (status unreadable)")
+            continue
         if status.status != "running":
             raise RuntimeError(f"{name} ({canister_id}) status is {status.status}, expected running")
 
@@ -2030,13 +2047,15 @@ def verify_platform_controller_topology(
     for name, expected in expectations.items():
         canister_id = _canister_id_for_expectation_key(descriptor, name)
         try:
-            status = dfx.canister_status(
+            # `canister info`, not `status`: in production the deployer is no
+            # longer a controller here and `status` would be rejected (IC0542).
+            controllers = dfx.canister_controllers(
                 canister_id, ctx.network, identity=ctx.identity
             )
         except dfx.DfxError as exc:
-            errors.append(f"{name} ({canister_id}): cannot read status ({exc})")
+            errors.append(f"{name} ({canister_id}): cannot read controllers ({exc})")
             continue
-        actual = set(status.controllers)
+        actual = set(controllers)
         expected_set = set(expected)
         if actual != expected_set:
             errors.append(
@@ -2081,24 +2100,26 @@ def apply_platform_controller_topology(
 
     for name, target in expectations.items():
         canister_id = _canister_id_for_expectation_key(descriptor, name)
-        status = dfx.canister_status(
+        # Public `canister info` read: after the update below the deployer may
+        # no longer be a controller, and `canister status` would be rejected.
+        current = dfx.canister_controllers(
             canister_id, ctx.network, identity=ctx.identity
         )
         target_set = set(target)
-        if set(status.controllers) == target_set:
+        if set(current) == target_set:
             console.print(f"  {name}: controllers already correct")
             continue
         console.print(f"  {name}: controllers -> {', '.join(target)}")
         dfx.update_canister_settings(
             canister_id, target, ctx.network, identity=ctx.identity
         )
-        status = dfx.canister_status(
+        current = dfx.canister_controllers(
             canister_id, ctx.network, identity=ctx.identity
         )
-        if set(status.controllers) != target_set:
+        if set(current) != target_set:
             raise RuntimeError(
                 f"{name} ({canister_id}) controller apply failed: "
-                f"{status.controllers} != {target}"
+                f"{list(current)} != {target}"
             )
         changed += 1
 
@@ -2406,15 +2427,17 @@ PHASES: list[tuple[str, str, PhaseFunc]] = [
         phase_prime_cycles_snapshot,
     ),
     ("configure_multisig", "Configuring multisig signers", phase_configure_multisig),
+    ("install_frontends", "Building + installing frontends", phase_install_frontends),
+    ("domain_wiring", "Domain wiring", phase_domain_wiring),
+    ("smoke_checks", "Smoke checks", phase_smoke_checks),
+    ("grant_commanders", "Granting Casals commanders", phase_grant_commanders),
+    # Last: with can_test_mode off this drops the deployer from every platform
+    # canister, so every install_code (frontends included) must already be done.
     (
         "controller_topology",
         "Applying controller topology",
         phase_controller_topology,
     ),
-    ("install_frontends", "Building + installing frontends", phase_install_frontends),
-    ("domain_wiring", "Domain wiring", phase_domain_wiring),
-    ("smoke_checks", "Smoke checks", phase_smoke_checks),
-    ("grant_commanders", "Granting Casals commanders", phase_grant_commanders),
     (
         "verify_controller_topology",
         "Verifying platform controller topology",

@@ -310,6 +310,45 @@ def canister_status(canister_id: str, network: str, *, identity: str | None = No
     )
 
 
+def canister_controllers(
+    canister_id: str, network: str, *, identity: str | None = None
+) -> tuple[str, ...]:
+    """Controller set via ``dfx canister info`` (public read_state).
+
+    ``canister status`` is controller-only, so once production topology drops
+    the deployer from a canister it can no longer read it. ``info`` needs no
+    rights and is what the controller apply/verify phases must use.
+    """
+    controllers, _module_hash = canister_info(canister_id, network, identity=identity)
+    return controllers
+
+
+def canister_info(
+    canister_id: str, network: str, *, identity: str | None = None
+) -> tuple[tuple[str, ...], str | None]:
+    """``(controllers, module_hash)`` from ``dfx canister info`` — public, no
+    controller rights needed. ``module_hash`` is None when nothing is installed."""
+    args = ["dfx", "canister", "--network", network, "info", canister_id]
+    if identity:
+        args.extend(["--identity", identity])
+    last_exc: DfxError | None = None
+    for attempt in range(5):
+        try:
+            result = _run(args, check=True)
+            break
+        except DfxError as exc:
+            last_exc = exc
+            text = str(exc).lower()
+            if "502" in text or "http error" in text or "error sending request" in text:
+                time.sleep(2 * (attempt + 1))
+                continue
+            raise
+    else:
+        assert last_exc is not None
+        raise last_exc
+    return parse_controllers(result.stdout), parse_module_hash(result.stdout)
+
+
 def cycles_balance(network: str, *, identity: str | None = None) -> int | None:
     args = ["dfx", "cycles", "balance", "--network", network]
     if identity:
@@ -627,6 +666,10 @@ def update_canister_settings(
         args.extend(["--identity", identity])
     for controller in controllers:
         args.extend(["--set-controller", controller])
+    # Handing a canister to the multisig / Casals drops the deployer from the
+    # controller set; dfx then asks for yes/no on a TTY and declines without one.
+    # That handover is the intended topology, so answer for it.
+    args.append("--yes")
     _run(args, check=True)
 
 
@@ -891,6 +934,14 @@ def detect_install_mode(canister_id: str, network: str, *, identity: str | None 
     if status.module_hash_missing:
         return "install"
     return "upgrade"
+
+
+def is_not_controller_error(exc: BaseException | str) -> bool:
+    """True when ``canister status`` was rejected because the caller is not a
+    controller (IC0542). In production topology that is the normal state of
+    every platform canister once it has been handed to Casals / the multisig."""
+    text = str(exc).lower()
+    return "ic0542" in text or "not allowed to read the canister status" in text
 
 
 def is_canister_not_found_error(exc: BaseException | str) -> bool:
