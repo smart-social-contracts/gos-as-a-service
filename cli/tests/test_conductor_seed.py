@@ -130,6 +130,73 @@ def test_governance_deploy_sheet_omits_installer_and_registry() -> None:
     ]
 
 
+def test_governance_fragment_refused_on_populated_conductor(monkeypatch) -> None:
+    """deploy_sheet retires what the sheet omits and mints from the pool, so
+    the governance fragment must never be deployed beside registered canisters."""
+    from gaas.conductor_seed import canisters_sheet_would_retire, governance_deploy_sheet
+
+    fragment = governance_deploy_sheet()
+    populated = {
+        "sections": [
+            {"name": "Casals", "stands": [{"name": "System", "canisters": [{"name": "file_registry"}]}]},
+            {
+                "name": "Infra",
+                "stands": [
+                    {"name": "installer", "canisters": [{"name": "realm-installer"}]},
+                    {"name": "realm-registry", "canisters": [{"name": "registry-backend"}]},
+                ],
+            },
+        ]
+    }
+    assert sorted(canisters_sheet_would_retire(fragment, populated)) == [
+        "realm-installer",
+        "registry-backend",
+    ]
+    fresh = {"sections": [{"name": "Infra", "stands": []}, {"name": "Deployments", "stands": []}]}
+    assert canisters_sheet_would_retire(fragment, fresh) == []
+
+    calls: list[tuple[str, dict]] = []
+    monkeypatch.setattr(conductor_seed, "get_tree", lambda *a, **k: populated)
+    monkeypatch.setattr(
+        conductor_seed,
+        "_casals_call",
+        lambda cid, method, payload, network, identity=None: calls.append((method, payload)) or {},
+    )
+    with pytest.raises(RuntimeError, match="realm-installer"):
+        conductor_seed.ensure_sheet_and_deploy_multisig("aaaaa-aa", "ic")
+    assert all(method != "deploy_sheet" for method, _ in calls)
+
+
+def test_governance_fragment_deploys_additively_on_fresh_conductor(monkeypatch) -> None:
+    calls: list[tuple[str, dict]] = []
+    trees = iter(
+        [
+            {"sections": [{"name": "Infra", "stands": []}, {"name": "Deployments", "stands": []}]},
+            {
+                "sections": [
+                    {
+                        "name": "Infra",
+                        "stands": [
+                            {"name": "governance", "canisters": [{"name": "multisig", "canister_id": "bbbbb-bb"}]}
+                        ],
+                    }
+                ]
+            },
+        ]
+    )
+    monkeypatch.setattr(conductor_seed, "get_tree", lambda *a, **k: next(trees))
+    monkeypatch.setattr(
+        conductor_seed,
+        "_casals_call",
+        lambda cid, method, payload, network, identity=None: calls.append((method, payload))
+        or {"created_canisters": ["multisig"]},
+    )
+    conductor_seed.ensure_sheet_and_deploy_multisig("aaaaa-aa", "ic")
+    deploys = [payload for method, payload in calls if method == "deploy_sheet"]
+    assert len(deploys) == 1
+    assert deploys[0]["retire_missing"] is False
+
+
 def test_ensure_deployments_commander_grants_installer(monkeypatch) -> None:
     calls: list[tuple[str, dict]] = []
     monkeypatch.setattr(

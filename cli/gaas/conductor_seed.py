@@ -163,6 +163,28 @@ def _canister_names(tree: dict[str, Any]) -> set[str]:
     return names
 
 
+def canisters_sheet_would_retire(sheet: dict[str, Any], tree: dict[str, Any]) -> list[str]:
+    """Registered canisters (outside Casals' own section) that ``sheet`` omits.
+
+    Casals ``deploy_sheet`` stops those, returns them to the pool, and mints the
+    sheet's new canisters from that pool first — so deploying a partial sheet
+    on a populated conductor can reinstall a live platform canister as the
+    multisig. (Realms production lost its marketplace backend and fleet file
+    registry exactly this way on 2026-09-14.)
+    """
+    wanted = _canister_names(sheet)
+    at_risk: list[str] = []
+    for sec in tree.get("sections") or []:
+        if (sec.get("name") or "").strip() == "Casals":
+            continue
+        for stand in sec.get("stands") or []:
+            for canister in stand.get("canisters") or []:
+                name = (canister.get("name") or "").strip()
+                if name and name not in wanted:
+                    at_risk.append(name)
+    return at_risk
+
+
 def backends_before_frontends(
     platform_canisters: list[tuple[str, str, str]],
 ) -> list[tuple[str, str, str]]:
@@ -487,11 +509,25 @@ def ensure_sheet_and_deploy_multisig(
         _casals_call(casals_id, "set_sheet", sheet, network, identity=identity)
 
     if not multisig_id:
+        # The governance fragment is only safe on a conductor that holds
+        # nothing else yet (fresh `gaas new`, before installer / registry are
+        # registered). On a populated conductor deploy_sheet would retire the
+        # rest to the pool and may reinstall one of them as the multisig.
+        fragment = governance_deploy_sheet()
+        at_risk = canisters_sheet_would_retire(fragment, tree)
+        if at_risk:
+            raise RuntimeError(
+                "refusing governance-only deploy_sheet: the conductor already "
+                f"holds {', '.join(sorted(at_risk))}, which Casals would stop "
+                "and retire to the pool (and may reinstall as the multisig). "
+                "Mint the multisig with a sheet that names every registered "
+                "canister, or pass retire_missing=false to deploy_sheet."
+            )
         console.print("  deploy_sheet (governance/multisig)...")
         result = _casals_call(
             casals_id,
             "deploy_sheet",
-            {"sheet": governance_deploy_sheet()},
+            {"sheet": fragment, "retire_missing": False},
             network,
             identity=identity,
         )
@@ -501,6 +537,12 @@ def ensure_sheet_and_deploy_multisig(
         errors = result.get("errors") or []
         if errors:
             raise RuntimeError(f"deploy_sheet errors: {errors}")
+        retired = result.get("retired_canisters") or []
+        if retired:
+            raise RuntimeError(
+                f"deploy_sheet retired {', '.join(retired)} to the pool; restore "
+                "them (register by name, pool_remove, start) before continuing"
+            )
         tree = get_tree(casals_id, network, identity=identity)
         multisig_id = _find_canister_id(tree, "multisig")
         if not multisig_id:
