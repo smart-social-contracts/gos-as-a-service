@@ -124,20 +124,22 @@ jobs:
           npm run build --workspace=realm_registry_frontend
           test -f src/realm_registry_frontend/dist/index.html
 
-      - name: Build realm backend (realms/.basilisk/realm_backend)
+      # The gaas `local` environment hands new realms test flags (test_mode,
+      # ii_bypass) through the installer; a production-variant realm wasm
+      # refuses them, so the realm halves are built as the test variant here.
+      - name: Build realm backend, test variant (realms/.basilisk/realm_backend)
         working-directory: realms
         run: |
           python3 -m pip install -r requirements.txt
           CANISTER_CANDID_PATH="$PWD/src/realm_backend/realm_backend.did" \
-            python3 scripts/pack_realm_backend.py
+            python3 scripts/pack_realm_backend.py --variant test
           ls -l .basilisk/realm_backend/realm_backend.wasm
 
-      - name: Build realm frontend (realms/src/realm_frontend/dist)
-        working-directory: realms/src/realm_frontend
+      - name: Build realm frontend, test variant (realms/src/realm_frontend/dist)
+        working-directory: realms
         run: |
-          npm install --legacy-peer-deps
-          npm run build
-          test -f dist/index.html
+          (cd src/realm_frontend && npm install --legacy-peer-deps && REALMS_BUILD_VARIANT=test npm run build && test -f dist/index.html)
+          python3 scripts/check_frontend_variant.py src/realm_frontend/dist test
 
       - name: Fetch ic-tokens token_backend.wasm (realms/.external-wasms)
         working-directory: realms
@@ -178,6 +180,9 @@ jobs:
       - name: Show orchestra state on failure
         if: failure()
         working-directory: Casals
+        env:
+          # The harness keeps each orchestra's bindings in <CASALS_HOME>/<sheet name>/.
+          CASALS_HOME: ${{ env.CASALS_HOME }}/gaas
         run: |
           export TERM=xterm
           ls -la "$CASALS_HOME" || true

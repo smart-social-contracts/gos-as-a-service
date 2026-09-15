@@ -70,8 +70,15 @@ def call_json(cid: str, method: str, arg: str | None = None, *, query: bool = Fa
 
 
 def _bindings_file() -> dict:
-    with open(os.path.join(HOME, f"gaas.{ENV}.json")) as fh:
-        return json.load(fh)
+    # `casals up` writes <home>/gaas.<env>.json; the Casals e2e harness gives
+    # every orchestra its own sub-home, <CASALS_HOME>/gaas/. Accept both so the
+    # same CASALS_HOME works for the harness and for this script.
+    candidates = [os.path.join(HOME, f"gaas.{ENV}.json"), os.path.join(HOME, "gaas", f"gaas.{ENV}.json")]
+    for path in candidates:
+        if os.path.isfile(path):
+            with open(path) as fh:
+                return json.load(fh)
+    raise Fail(f"no gaas bindings under CASALS_HOME={HOME} (looked for {', '.join(candidates)}); run casals up first")
 
 
 # icp-cli wants a project: reuse the one `casals up` keeps for this orchestra.
