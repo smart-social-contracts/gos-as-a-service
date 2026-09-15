@@ -117,7 +117,7 @@ type PublicLogEntry = record { timestamp : nat; level : text; logger_name : text
 type HealthView = record { ok : bool; canister : text };
 type TakeSnapshotOk = record { job_id : text; snapshot_id : text; skipped : bool };
 type ProvisionOk = record { job_id : text; status : text; stand : text; backend_canister_id : text; frontend_canister_id : text };
-type CasalsConfigView = record { provision_via_casals : bool; casals_canister_id : text; casals_section : text; registry_principal : text; create_stand_baton : bool; baton_wasm_key : text };
+type CasalsConfigView = record { provision_via_casals : bool; casals_canister_id : text; casals_section : text; registry_principal : text };
 type RResultEnqueue = variant { Ok : REnqueueOk; Err : RInstallerError };
 type RResultProvision = variant { Ok : RProvisionOk; Err : RInstallerError };
 type GetCreditsResult = variant { Ok : UserCreditsRecord; Err : text };
@@ -147,7 +147,7 @@ type RealmInstallerService = service { enqueue_deployment : (text) -> (RResultEn
 type RealmTargetService = service { install_extension_from_registry : (text) -> (text); install_codex_from_registry : (text) -> (text); run_codex_init : (text) -> (text); resync_extension_frontends : (text) -> (text) };
 type RealmRegistryService = service { register_realm : (text, text, text, text, text) -> (text); remove_realm : (text) -> (text); deployment_failed : (text, text, text) -> (text); deployment_succeeded : (text, text) -> (text) };
 type FileRegistryService = service { get_extension_manifest : (text) -> (text) query };
-type CasalsService = service { get_tree : () -> (text) query; get_cycles_cached : () -> (text) query; create_stand : (text) -> (text); create_canister : (text) -> (text); set_commander : (text) -> (text); upgrade_to : (text) -> (text); orchestration_hand_to_baton : (text) -> (text); orchestration_configure_baton : (text) -> (text); destroy_stand : (text) -> (text) };
+type CasalsService = service { get_tree : () -> (text) query; get_cycles_cached : () -> (text) query; create_stand : (text) -> (text); destroy_stand : (text) -> (text) };
 
 service : (text) -> {
   "status" : () -> (GetStatusResult) query;

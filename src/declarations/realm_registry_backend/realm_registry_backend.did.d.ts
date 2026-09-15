@@ -47,23 +47,16 @@ export interface CanisterStatusResult {
   'module_hash' : [] | [Uint8Array | number[]],
 }
 export interface CasalsConfigView {
-  'create_stand_baton' : boolean,
   'provision_via_casals' : boolean,
   'casals_section' : string,
   'registry_principal' : string,
   'casals_canister_id' : string,
-  'baton_wasm_key' : string,
 }
 export interface CasalsService {
-  'create_canister' : ActorMethod<[string], string>,
   'create_stand' : ActorMethod<[string], string>,
   'destroy_stand' : ActorMethod<[string], string>,
   'get_cycles_cached' : ActorMethod<[], string>,
   'get_tree' : ActorMethod<[], string>,
-  'orchestration_configure_baton' : ActorMethod<[string], string>,
-  'orchestration_hand_to_baton' : ActorMethod<[string], string>,
-  'set_commander' : ActorMethod<[string], string>,
-  'upgrade_to' : ActorMethod<[string], string>,
 }
 export interface CreateCanisterArgs { 'settings' : [] | [CanisterSettings] }
 export interface CreateCanisterResult { 'canister_id' : Principal }
