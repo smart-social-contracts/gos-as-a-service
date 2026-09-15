@@ -58,9 +58,10 @@ test('hamburger links to Launch a new realm and omits Marketplace', () => {
 });
 
 test('portal source and canister_ids no longer mention fdr7z', () => {
+	// Only the negative check: which live id an environment runs is casals.json's
+	// business, and pinning one here broke every time an environment was rebuilt.
 	assert.equal(pageSource.includes('fdr7z'), false);
 	assert.equal(idsSource.includes('fdr7z'), false);
-	assert.match(idsSource, /to4on-xyaaa-aaaan-q6n5a-cai/);
 });
 
 test('Infrastructure link uses only the live registry Casals principal', () => {
