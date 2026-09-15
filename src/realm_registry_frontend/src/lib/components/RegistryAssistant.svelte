@@ -42,6 +42,7 @@
   import { shouldOfferPersonalConnect } from '$lib/geister/assistant-providers.js';
   import { clampPanelWidth, defaultPanelWidth } from '$lib/panel-width.js';
   import { assistantPanelBoxStyle, computeAssistantPanelBox } from '$lib/assistant-viewport.js';
+  import { readTestModeBannerHeightPx } from '$lib/visual-viewport-insets.js';
   import {
     fetchConversations,
     createConversation,
@@ -354,6 +355,7 @@
       visualOffsetTop: vv?.offsetTop ?? 0,
       layoutHeight: window.innerHeight,
       layoutWidth: window.innerWidth,
+      bannerHeightPx: readTestModeBannerHeightPx(),
     });
     panelViewportStyle = assistantPanelBoxStyle(box);
   }

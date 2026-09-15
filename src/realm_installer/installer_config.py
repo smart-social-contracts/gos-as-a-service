@@ -21,8 +21,6 @@ class InstallerConfig(Entity):
     file_registry_id = String(max_length=64, default="")
     marketplace_id = String(max_length=64, default="")
     portal_url = String(max_length=512, default="")
-    create_stand_baton = Integer(default=0)
-    baton_wasm_key = String(max_length=64, default="orchestration-baton@1.3.0")
     cycle_threshold_cycles = Integer(default=2_000_000_000_000)
 
 
@@ -59,10 +57,20 @@ def configured_marketplace_id(network: str = "") -> str:
     return (get_config().marketplace_id or "").strip()
 
 
+def portal_url_to_origin(portal_url: str) -> str:
+    """Extract scheme://host from a portal base or federation page URL."""
+    url = (portal_url or "").strip().rstrip("/")
+    if not url:
+        return ""
+    if "://" not in url:
+        return url
+    scheme, rest = url.split("://", 1)
+    host = rest.split("/", 1)[0]
+    return f"{scheme}://{host}"
+
+
 def configured_portal_base(manifest=None):
     manifest = manifest or {}
-    from ic_assets import portal_url_to_origin
-
     federation = manifest.get("federation") or {}
     url = (federation.get("portal_url") or "").strip()
     if url:
@@ -91,10 +99,6 @@ def apply_installer_config(params: dict) -> None:
         cfg.portal_url = (params.get("portal_url") or "").strip().rstrip("/")
     if "provision_via_casals" in params:
         cfg.provision_via_casals = 1 if params["provision_via_casals"] else 0
-    if "create_stand_baton" in params:
-        cfg.create_stand_baton = 1 if params["create_stand_baton"] else 0
-    if "baton_wasm_key" in params:
-        cfg.baton_wasm_key = (params.get("baton_wasm_key") or "orchestration-baton@1.3.0").strip()
     if "cycle_threshold_cycles" in params:
         cfg.cycle_threshold_cycles = int(params.get("cycle_threshold_cycles") or 0)
 

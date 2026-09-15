@@ -52,47 +52,30 @@ test('buildRealmDeploymentManifest slugifies custom slug for federation', () => 
   assert.equal(manifest.federation.slug, slugify('Custom_Slug Name!'));
 });
 
-test('casals wasm keys always pin the channel (main must not collapse to bare family)', () => {
-  const mainManifest = buildRealmDeploymentManifest(
+test('casals block names the stand only (WASMs come from the stand_template)', () => {
+  const manifest = buildRealmDeploymentManifest(
     { name: 'Main Realm', gos_implementation: 'realms-gos' },
     'staging',
     TEST_CONFIG,
     { deployVersion: 'main', useCasals: true },
   );
-  assert.equal(mainManifest.casals.backend_wasm_key, 'realm-backend@main');
-  assert.equal(mainManifest.casals.frontend_wasm_key, 'realm-assets@main');
-
-  const pinnedManifest = buildRealmDeploymentManifest(
-    { name: 'Pinned Realm', gos_implementation: 'realms-gos' },
-    'staging',
-    TEST_CONFIG,
-    { deployVersion: '0.4.0', useCasals: true },
-  );
-  assert.equal(pinnedManifest.casals.backend_wasm_key, 'realm-backend@0.4.0');
-  assert.equal(pinnedManifest.casals.frontend_wasm_key, 'realm-assets@0.4.0');
+  assert.deepEqual(manifest.casals, { section: 'Deployments', stand: 'main-realm' });
+  assert.equal(manifest.deploy_version, 'main');
 });
 
-test('monad-gos casals wasm keys use monad artifact families', () => {
-  const mainManifest = buildRealmDeploymentManifest(
+test('monad-gos still carries its gos block without casals wasm keys', () => {
+  const manifest = buildRealmDeploymentManifest(
     { name: 'Monad GOS Realm', gos_implementation: 'monad-gos' },
     'staging',
     TEST_CONFIG,
-    { deployVersion: 'main', useCasals: true },
-  );
-  assert.equal(mainManifest.gos.implementation, 'monad-gos');
-  assert.equal(mainManifest.gos.loader_profile, 'monad-iframe-v1');
-  assert.equal(mainManifest.gos.ggg_conformance, '1.0');
-  assert.equal(mainManifest.casals.backend_wasm_key, 'monad-backend@main');
-  assert.equal(mainManifest.casals.frontend_wasm_key, 'monad-assets@main');
-
-  const pinnedManifest = buildRealmDeploymentManifest(
-    { name: 'Monad GOS Pinned', gos_implementation: 'monad-gos' },
-    'staging',
-    TEST_CONFIG,
     { deployVersion: '0.4.0', useCasals: true },
   );
-  assert.equal(pinnedManifest.casals.backend_wasm_key, 'monad-backend@0.4.0');
-  assert.equal(pinnedManifest.casals.frontend_wasm_key, 'monad-assets@0.4.0');
+  assert.equal(manifest.gos.implementation, 'monad-gos');
+  assert.equal(manifest.gos.loader_profile, 'monad-iframe-v1');
+  assert.equal(manifest.gos.ggg_conformance, '1.0');
+  assert.equal(manifest.deploy_version, '0.4.0');
+  assert.equal(manifest.casals.backend_wasm_key, undefined);
+  assert.equal(manifest.casals.frontend_wasm_key, undefined);
 });
 
 test('networkInfra returns null without GaaS-owned infra fields', () => {

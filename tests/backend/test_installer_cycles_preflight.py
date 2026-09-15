@@ -45,18 +45,28 @@ def _report(*, treasury: int, file_registry: int | None = None):
     }
 
 
-def test_typical_realm_requires_seven_trillion_with_baton():
+def test_typical_realm_requires_seven_trillion_for_baton_backend_frontend():
     manifest = _manifest(deploy_scope="both")
-    assert estimate_canister_creation_count(manifest, create_stand_baton=True) == 3
-    required = estimate_conductor_cycles_required(manifest, create_stand_baton=True)
+    assert estimate_canister_creation_count(manifest) == 3
+    required = estimate_conductor_cycles_required(manifest)
     assert required == 3 * PREFLIGHT_PER_CANISTER_CREATE_CYCLES + PREFLIGHT_OPS_MARGIN_CYCLES
     assert required == 7_000_000_000_000
 
 
-def test_backend_only_without_baton_requires_five_trillion():
+def test_new_token_counts_the_optional_template_member():
+    manifest = {**_manifest(), "realm": {"token": {"name": "Alpha Token", "symbol": "ALP"}}}
+    assert estimate_canister_creation_count(manifest) == 4
+    assert estimate_conductor_cycles_required(manifest) == 9_000_000_000_000
+
+
+def test_existing_ledger_adds_no_canister():
+    manifest = {**_manifest(), "realm": {"token": {"existing": "ckBTC"}}}
+    assert estimate_canister_creation_count(manifest) == 3
+
+
+def test_deploy_scope_does_not_change_the_template_shape():
     manifest = _manifest(deploy_scope="backend_only")
-    required = estimate_conductor_cycles_required(manifest, create_stand_baton=False)
-    assert required == 1 * PREFLIGHT_PER_CANISTER_CREATE_CYCLES + PREFLIGHT_OPS_MARGIN_CYCLES
+    assert estimate_canister_creation_count(manifest) == 3
 
 
 def test_resolve_file_registry_id_prefers_manifest_infra():
@@ -66,7 +76,7 @@ def test_resolve_file_registry_id_prefers_manifest_infra():
 
 def test_insufficient_conductor_returns_actionable_error():
     manifest = _manifest()
-    required = estimate_conductor_cycles_required(manifest, create_stand_baton=True)
+    required = estimate_conductor_cycles_required(manifest)
     report = _report(treasury=1_490_000_000_000, file_registry=2_000_000_000_000)
     err = check_cycles_preflight(
         report,
@@ -85,7 +95,7 @@ def test_insufficient_conductor_returns_actionable_error():
 
 def test_insufficient_file_registry_returns_actionable_error():
     manifest = _manifest()
-    required = estimate_conductor_cycles_required(manifest, create_stand_baton=True)
+    required = estimate_conductor_cycles_required(manifest)
     report = _report(treasury=10_000_000_000_000, file_registry=100_000_000_000)
     err = check_cycles_preflight(
         report,
@@ -103,7 +113,7 @@ def test_insufficient_file_registry_returns_actionable_error():
 
 def test_sufficient_balances_pass_preflight():
     manifest = _manifest()
-    required = estimate_conductor_cycles_required(manifest, create_stand_baton=True)
+    required = estimate_conductor_cycles_required(manifest)
     report = _report(
         treasury=required + 1,
         file_registry=DEFAULT_CYCLE_THRESHOLD_CYCLES + 1,
@@ -119,7 +129,7 @@ def test_sufficient_balances_pass_preflight():
 
 def test_configured_file_registry_min_cycles_override():
     manifest = _manifest()
-    required = estimate_conductor_cycles_required(manifest, create_stand_baton=True)
+    required = estimate_conductor_cycles_required(manifest)
     report = _report(treasury=required + 1, file_registry=1_500_000_000_000)
     assert check_cycles_preflight(
         report,
@@ -133,7 +143,7 @@ def test_configured_file_registry_min_cycles_override():
 
 def test_missing_file_registry_row_skips_gracefully():
     manifest = _manifest()
-    required = estimate_conductor_cycles_required(manifest, create_stand_baton=True)
+    required = estimate_conductor_cycles_required(manifest)
     report = {"treasury": {"spendable": required + 1}, "canisters": []}
     assert check_cycles_preflight(
         report,

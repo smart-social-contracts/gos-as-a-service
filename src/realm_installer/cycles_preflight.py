@@ -17,24 +17,23 @@ DEFAULT_CYCLE_THRESHOLD_CYCLES = 2_000_000_000_000
 FILE_REGISTRY_CANISTER_NAME = "file-registry"
 
 
-def estimate_canister_creation_count(manifest: dict, *, create_stand_baton: bool) -> int:
-    """Count canisters Casals will create for this deployment."""
-    deploy_scope = (manifest.get("deploy_scope") or "both").strip()
-    count = 0
-    if deploy_scope in ("both", "backend_only"):
-        count += 1
-    if deploy_scope in ("both", "frontend_only"):
-        count += 1
-    if create_stand_baton:
+def estimate_canister_creation_count(manifest: dict) -> int:
+    """Count canisters the conductor will create for this stand from the
+    ``stand_template``: baton + backend + frontend, plus the optional token
+    when the wizard chose a new one (``realm.token.name``/``symbol`` set and no
+    ``existing`` ledger)."""
+    count = 3
+    token = (manifest.get("realm") or {}).get("token") or {}
+    if not (token.get("existing") or "").strip() and (token.get("name") or "").strip() \
+            and (token.get("symbol") or "").strip():
         count += 1
     return count
 
 
-def estimate_conductor_cycles_required(manifest: dict, *, create_stand_baton: bool) -> int:
+def estimate_conductor_cycles_required(manifest: dict) -> int:
     """Estimate conductor treasury spend for a new realm deployment."""
     return (
-        estimate_canister_creation_count(manifest, create_stand_baton=create_stand_baton)
-        * PREFLIGHT_PER_CANISTER_CREATE_CYCLES
+        estimate_canister_creation_count(manifest) * PREFLIGHT_PER_CANISTER_CREATE_CYCLES
         + PREFLIGHT_OPS_MARGIN_CYCLES
     )
 
@@ -63,6 +62,10 @@ def parse_cycles_report(raw: str | dict | Any) -> dict:
 
 
 def conductor_spendable(report: dict) -> int | None:
+    # A conductor that has not sampled its balance yet answers a stub report
+    # (`snapshot_incomplete`): unknown is not zero, so no verdict.
+    if report.get("snapshot_incomplete"):
+        return None
     treasury = report.get("treasury") or {}
     if not isinstance(treasury, dict):
         return None
@@ -167,7 +170,3 @@ def check_cycles_preflight(
     if not errors:
         return None
     return "insufficient cycles: " + "; ".join(errors)
-
-
-# Backward-compatible alias used by provisioning path during rollout.
-check_casals_cycles_preflight = check_cycles_preflight

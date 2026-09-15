@@ -1,55 +1,282 @@
 {
-  "$comment": "GaaS platform sheet for `gaas new` then `casals sheet deploy` onto **GaaS Casals** only. Conductor canisters (casals_backend, casals_frontend, casals_file_registry) are created by `casals new` (always destroy-and-recreate), not this sheet. Registry vs installer are separate stands (same-stand backend+frontend on a lumped platform stand tripped ManagePermissions). No infra baton: batons are per-realm and are minted with the realm (see the Deployments section, e.g. <slug>-baton, which really does hold IC control of that realm's canisters). A single baton in front of installer + realm-registry only duplicated Casals's own commander plus the governance multisig and never became a controller of either canister. Deployments commander (the installer principal) is applied after mint via set_commander. realm-registry-frontend is DNS keep-ID (*.gos.earth): reinstall on the same principal is OK; do not delete_canister. Empty Deployments is intentional: gaas new destroys realm/quarter canisters and does not recreate them. Fleet file-registry is Product-owned (realms/casals.json), not an Infra stand. realms seed deploys realms/casals.json onto a separate Realms GOS Casals instance.",
+  "version": 2,
   "name": "gaas",
-  "description": "GaaS *.gos.earth platform: governance, installer, realm registry. Deployments start empty.",
+  "description": "GaaS platform: conductor, governance multisig, realm installer, realm registry (portal), and the realm stand template the installer mints from. `casals up casals.json -e <env>` builds all of it from scratch and reconciles it afterwards.",
+  "environments": {
+    "local": {
+      "network": "local",
+      "dns": {
+        "provider": "none"
+      },
+      "portal_url": "http://${canister:realm-registry-frontend}.localhost:8000",
+      "can_test_mode": true,
+      "test_flags": {
+        "test_mode": true,
+        "ii_bypass": true,
+        "user_self_registration": true,
+        "demo_data": true,
+        "skip_terms": true
+      },
+      "principals": {
+        "operator": "$deployer"
+      },
+      "cycles": {
+        "min_balance_tc": 0.5,
+        "budget_tc": 300
+      }
+    },
+    "production": {
+      "network": "ic",
+      "dns": {
+        "provider": "cloudflare",
+        "zone": "gos.earth",
+        "token_env": "CLOUDFLARE_API_TOKEN",
+        "ttl": 60
+      },
+      "portal_url": "https://gos.earth",
+      "can_test_mode": false,
+      "test_flags": {
+        "ii_bypass": false
+      },
+      "principals": {
+        "operator": "rd4en-sizpv-vnamr-6vbfc-uljz5-vvz7c-g4nzy-uflq2-zbj3x-mrwjs-gqe",
+        "signer_2": "5re5j-sqs53-usina-7u2ga-yioiv-vishn-4uw7j-y6l72-kvg73-ut2th-oqe",
+        "signer_3": "55alf-xclhd-rtshz-lk4lo-wav4q-q3a5e-sktkm-zlshq-vvhjs-re6os-wae",
+        "signer_4": "leedy-5gplf-ddm4v-22tvs-yhylw-rs4hz-6ezyu-udzyp-3jhnk-boliz-aae"
+      },
+      "cycles": {
+        "min_balance_tc": 2.0,
+        "budget_tc": 20
+      }
+    }
+  },
+  "conductor": {
+    "backend": {
+      "wasm": "casals-backend",
+      "kind": "backend",
+      "mode": "managed",
+      "controllers": [
+        "$multisig"
+      ]
+    },
+    "frontend": {
+      "wasm": "casals-frontend",
+      "kind": "frontend",
+      "mode": "managed",
+      "controllers": [
+        "$multisig"
+      ]
+    },
+    "file_registry": {
+      "wasm": "file-registry",
+      "kind": "backend",
+      "mode": "managed",
+      "controllers": [
+        "$self"
+      ],
+      "cycles": {
+        "min_balance_tc": 30
+      }
+    },
+    "file_registry_frontend": {
+      "wasm": "file-registry-frontend",
+      "kind": "frontend",
+      "mode": "managed",
+      "controllers": [
+        "$self"
+      ]
+    },
+    "commanders": [
+      {
+        "principal": "$principal:operator",
+        "permissions": "*"
+      }
+    ],
+    "settings": {
+      "orchestra_name": "gaas",
+      "reconcile_interval_secs": 30
+    }
+  },
+  "governance": {
+    "multisig": {
+      "wasm": "orchestration-multisig@1.5.0",
+      "kind": "backend",
+      "mode": "managed",
+      "signers": [
+        "$principal:operator"
+      ],
+      "threshold": 1,
+      "controllers": [
+        "$multisig"
+      ]
+    }
+  },
+  "registry": {
+    "$comment": "Product wasms are built in this repo and in ../realms before `casals up` (local:; the exact recipes are the build steps of .github/workflows/gaas-e2e.yml); conductor wasms by the Casals CLI (build:). Frontend dists are published as content namespaces.",
+    "wasms": [
+      {
+        "family": "casals-backend",
+        "version": "main",
+        "source": "build:casals_backend"
+      },
+      {
+        "family": "file-registry",
+        "version": "main",
+        "source": "build:ic_file_registry"
+      },
+      {
+        "family": "orchestration-multisig",
+        "version": "1.5.0",
+        "source": "local:seed/templates/orchestration-multisig@1.5.0.wasm.gz"
+      },
+      {
+        "family": "orchestration-baton",
+        "version": "1.3.0",
+        "source": "local:seed/templates/orchestration-baton@1.3.0.wasm.gz"
+      },
+      {
+        "family": "certified-assets",
+        "version": "1.0.0",
+        "source": "local:seed/templates/hello-world-frontend.wasm.gz"
+      },
+      {
+        "family": "realm-installer",
+        "version": "main",
+        "source": "local:.basilisk/realm_installer/realm_installer.wasm"
+      },
+      {
+        "family": "realm-registry-backend",
+        "version": "main",
+        "source": "local:.basilisk/realm_registry_backend/realm_registry_backend.wasm"
+      },
+      {
+        "family": "realm-backend",
+        "version": "main",
+        "source": "local:../realms/.basilisk/realm_backend/realm_backend.wasm"
+      },
+      {
+        "family": "token-backend",
+        "version": "0.1.0",
+        "source": "local:../realms/.external-wasms/token_backend.wasm"
+      }
+    ],
+    "publish": [
+      {
+        "path": "frontend/realm-registry-frontend/main",
+        "source": "local:src/realm_registry_frontend/dist"
+      },
+      {
+        "path": "frontend/realm-assets/main",
+        "source": "local:../realms/src/realm_frontend/dist"
+      }
+    ]
+  },
   "sections": [
     {
       "name": "Infra",
-      "description": "Orchestration governance (multisig) and GaaS portal canisters (installer, realm registry).",
+      "description": "Realm installer and realm registry (the *.gos.earth portal).",
       "stands": [
         {
-          "name": "governance",
-          "description": "Root multisig for platform and baton IC control. Signers configured post-deploy.",
-          "canisters": [
-            {
-              "name": "multisig",
-              "wasm_key": "orchestration-multisig",
-              "kind": "backend",
-              "wasm_type": "multisig",
-              "teardown_priority": 40
-            }
-          ]
-        },
-        {
           "name": "installer",
-          "description": "Realm installer backend. Granted Deployments section commander after mint.",
           "canisters": [
             {
               "name": "realm-installer",
-              "wasm_key": "installer-backend",
               "kind": "backend",
-              "wasm_type": "basilisk",
-              "teardown_priority": 30
+              "mode": "managed",
+              "wasm": "realm-installer@main",
+              "controllers": [
+                "$self",
+                "$multisig"
+              ],
+              "config": [
+                {
+                  "method": "configure",
+                  "args": {
+                    "registry_backend_id": "$canister:realm-registry-backend",
+                    "file_registry_id": "$canister:file-registry",
+                    "casals_canister_id": "$self",
+                    "casals_section": "Deployments",
+                    "portal_url": "$env.portal_url",
+                    "provision_via_casals": true
+                  },
+                  "converged_when": {
+                    "query": "get_installer_config",
+                    "equals_args": true
+                  }
+                }
+              ],
+              "health": [
+                {
+                  "query": "get_installer_config",
+                  "expect": {
+                    "success": true
+                  }
+                }
+              ]
             }
           ]
         },
         {
           "name": "realm-registry",
-          "description": "Realm registry backend and DNS-mapped frontend (*.gos.earth keep-ID; reinstall OK).",
           "canisters": [
             {
               "name": "realm-registry-backend",
-              "wasm_key": "registry-backend",
               "kind": "backend",
-              "wasm_type": "basilisk",
-              "teardown_priority": 30
+              "mode": "managed",
+              "wasm": "realm-registry-backend@main",
+              "controllers": [
+                "$self",
+                "$multisig"
+              ],
+              "config": [
+                {
+                  "method": "configure",
+                  "args": {
+                    "portal_url": "$env.portal_url",
+                    "can_test_mode": "$env.can_test_mode",
+                    "installer_id": "$canister:realm-installer",
+                    "casals_frontend_canister_id": "$canister:casals-frontend"
+                  },
+                  "converged_when": {
+                    "query": "get_env_config",
+                    "equals_args": true
+                  }
+                },
+                {
+                  "method": "set_canister_config_json",
+                  "args": {
+                    "casals_frontend_canister_id": "$canister:casals-frontend",
+                    "network": "$env.network",
+                    "test_flags": "$env.test_flags"
+                  },
+                  "converged_when": {
+                    "query": "get_runtime_flags",
+                    "contains": {
+                      "casals_frontend_canister_id": "$canister:casals-frontend"
+                    }
+                  }
+                }
+              ]
             },
             {
               "name": "realm-registry-frontend",
-              "wasm_key": "registry-assets",
               "kind": "frontend",
-              "wasm_type": "assets",
-              "teardown_priority": 20
+              "mode": "managed",
+              "wasm": "certified-assets@1.0.0",
+              "controllers": [
+                "$self",
+                "$multisig"
+              ],
+              "content": "frontend/realm-registry-frontend/main",
+              "files": {
+                "/canister_ids.js": "globalThis.__CANISTER_IDS = {\"realm_registry_backend\": \"$stand.backend\", \"realm_installer\": \"$canister:realm-installer\", \"casals_frontend\": \"$canister:casals-frontend\"};\n"
+              },
+              "health": [
+                {
+                  "http": "/index.html",
+                  "status": 200
+                }
+              ]
             }
           ]
         }
@@ -57,27 +284,105 @@
     },
     {
       "name": "Deployments",
-      "description": "Realm stands (created later by realm_installer). Empty on purpose for a full rebuild: gaas new destroys existing realm/quarter canisters. Installer is granted section commander after sheet deploy.",
+      "description": "Realm stands. The installer calls create_stand({section, name, members}); the conductor builds the stand from this template on its next plan/apply and the installer configures the realm once get_bindings shows its canisters. A realm grows itself: its backend (stand commander) calls create_stand({name, members: [\"{stand}-quarter-{n}\"]}) and polls get_bindings.",
       "stand_template": {
-        "$comment": "Baton topology every realm stand gets, applied by Casals via orchestration_release_stand. The installer asks for a stand to be released; it no longer mints the baton, walks the hand-off targets, or computes the policy itself. {stand} expands to the stand name, $casals to the Casals backend, and $canister:<name> to that canister's principal. handoff_targets that a stand does not have (most realms have no token) are skipped.",
+        "name_pattern": "*",
+        "created_by": "$canister:realm-installer",
         "baton": {
-          "name": "{stand}-baton",
-          "wasm_key": "orchestration-baton@1.3.0",
-          "install_arg": { "top_commander": "$casals" },
-          "handoff_targets": [
-            "{stand}-backend",
-            "{stand}-frontend",
-            "{stand}-token"
+          "commanders": [
+            "$self",
+            "$stand.backend"
           ],
-          "commanders": ["$casals", "$canister:{stand}-backend"],
-          "approval_policy": {
-            "threshold": 2,
-            "eligible": ["$casals", "$canister:{stand}-backend"],
-            "required": ["$casals", "$canister:{stand}-backend"]
+          "threshold": 2,
+          "manages": [
+            "backend",
+            "frontend",
+            "token",
+            "quarter"
+          ],
+          "hand_off": true
+        },
+        "commanders": [
+          { "principal": "$stand.backend", "permissions": "stand.create" }
+        ],
+        "canisters": [
+          {
+            "name": "{stand}-baton",
+            "kind": "backend",
+            "mode": "managed",
+            "wasm": "orchestration-baton@1.3.0",
+            "install_arg": {
+              "top_commander": "$self"
+            },
+            "controllers": [
+              "$self",
+              "$multisig"
+            ]
+          },
+          {
+            "name": "{stand}-backend",
+            "kind": "backend",
+            "mode": "managed",
+            "wasm": "realm-backend@main",
+            "controllers": [
+              "$self",
+              "$multisig",
+              "$canister:realm-installer"
+            ]
+          },
+          {
+            "name": "{stand}-frontend",
+            "kind": "frontend",
+            "mode": "managed",
+            "wasm": "certified-assets@1.0.0",
+            "controllers": [
+              "$self",
+              "$multisig",
+              "$canister:realm-installer"
+            ],
+            "content": "frontend/realm-assets/main",
+            "files": {
+              "/canister_ids.js": "globalThis.__CANISTER_IDS={realm_backend:\"$stand.backend\",internet_identity:\"https://identity.ic0.app\",file_registry:\"$canister:file-registry\",portal_url:\"${env.portal_url}/r/{stand}\",test_mode_ii_bypass:$env.test_flags.ii_bypass};\n"
+            },
+            "health": [
+              {
+                "http": "/index.html",
+                "status": 200
+              }
+            ]
+          },
+          {
+            "name": "{stand}-token",
+            "kind": "backend",
+            "mode": "managed",
+            "wasm": "token-backend@0.1.0",
+            "optional": true,
+            "install_arg": "(record { name = \"{stand} Token\"; symbol = \"RLM\"; decimals = 8 : nat8; total_supply = 100_000_000_000_000_000 : nat; fee = 10_000 : nat; test = opt $env.can_test_mode; initial_owner = opt principal \"$stand.backend\" })",
+            "controllers": [
+              "$self",
+              "$multisig"
+            ]
+          },
+          {
+            "name": "{stand}-quarter-{n}",
+            "kind": "backend",
+            "mode": "managed",
+            "wasm": "realm-backend@main",
+            "optional": true,
+            "controllers": [
+              "$self",
+              "$multisig",
+              "$stand.backend"
+            ]
           }
-        }
+        ]
       },
       "stands": []
     }
-  ]
+  ],
+  "cycles": {
+    "min_balance_tc": 0.5,
+    "top_up_from": "$self",
+    "conductor_min_balance_tc": 5.0
+  }
 }

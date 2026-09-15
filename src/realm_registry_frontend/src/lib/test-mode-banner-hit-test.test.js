@@ -20,6 +20,7 @@ import test from 'node:test';
 const here = dirname(fileURLToPath(import.meta.url));
 const banner = readFileSync(join(here, 'components/TestModeBanner.svelte'), 'utf8');
 const header = readFileSync(join(here, 'components/RegistryHeader.svelte'), 'utf8');
+const realmPanel = readFileSync(join(here, 'components/RealmPanel.svelte'), 'utf8');
 const appHtml = readFileSync(join(here, '../app.html'), 'utf8');
 const layout = readFileSync(join(here, '../routes/+layout.svelte'), 'utf8');
 const home = readFileSync(join(here, '../routes/+page.svelte'), 'utf8');
@@ -56,6 +57,13 @@ test('globe home insets map shell below the fixed test banner', () => {
 	assert.match(home, /\.registry-page \{[\s\S]*height:\s*100vh[\s\S]*height:\s*100dvh/);
 	assert.match(home, /\.map-shell \{[\s\S]*top:\s*var\(--test-mode-banner-height,\s*0px\)/);
 	assert.match(header, /top:\s*var\(--test-mode-banner-height,\s*0px\)/);
+	assert.match(realmPanel, /\.realm-panel \{[\s\S]*top:\s*var\(--test-mode-banner-height,\s*0px\)/);
+});
+
+test('banner height is measured from the live element, not a hard-coded rem value', () => {
+	assert.match(banner, /ResizeObserver/);
+	assert.match(banner, /getBoundingClientRect\(\)\.height/);
+	assert.doesNotMatch(banner, /2\.75rem/);
 });
 
 test('app shell uses dynamic viewport height without double banner padding on map routes', () => {

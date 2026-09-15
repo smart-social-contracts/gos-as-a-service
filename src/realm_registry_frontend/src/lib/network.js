@@ -46,7 +46,7 @@ export function detectNetwork(hostname, gaasEnvOverride) {
 	if (hostname === 'test.gos.earth') return 'test';
 	if (hostname === 'staging.gos.earth') return 'staging';
 	if (hostname === 'demo.gos.earth') return 'demo';
-	if (hostname === 'gos.earth' || hostname === 'registry.realmsgos.org') return 'ic';
+	if (hostname === 'gos.earth' || hostname === 'realmsgos.org' || hostname === 'registry.realmsgos.org') return 'ic';
 
 	// Unrecognized host — typically the raw <canister-id>.icp0.io URL, used
 	// whenever the custom domain is not wired up yet. The bundle was built for one
@@ -67,6 +67,12 @@ export function detectNetwork(hostname, gaasEnvOverride) {
  */
 export function getCanisterId(name, options = {}) {
 	const { hostname, canisterIdsMap, envOverride, gaasEnvOverride } = options;
+	// /canister_ids.js, written by the orchestrator at deploy time, is the one
+	// build-independent source: the same dist serves every environment.
+	const runtime = typeof globalThis !== 'undefined' ? globalThis.__CANISTER_IDS : undefined;
+	if (runtime && typeof runtime[name] === 'string' && runtime[name]) {
+		return runtime[name];
+	}
 	const network = detectNetwork(hostname, gaasEnvOverride);
 	const envKey = `CANISTER_ID_${name.toUpperCase()}`;
 

@@ -23,7 +23,9 @@ Casals is an **external platform component**, not built from this repo. The real
 | demo | `jo3cj-faaaa-aaaac-bffea-cai` |
 | staging | `th7fr-bqaaa-aaaan-q6n4q-cai` |
 
-Test and demo keep the realms-era canister IDs. Staging was rebuilt; live IDs are in [`environments/staging.json`](environments/staging.json). DNS-mapped frontends (`realm_registry_frontend`, `marketplace_frontend`) were kept.
+Test and demo keep the realms-era canister IDs. Staging was rebuilt; DNS-mapped frontends (`realm_registry_frontend`, `marketplace_frontend`) were kept.
+
+The environment is declared in `casals.json` and built with `casals up` (see the Casals repo).
 
 ```mermaid
 flowchart LR
@@ -52,20 +54,13 @@ flowchart LR
 
 **`*.gos.earth`** (`staging.gos.earth`, `demo.gos.earth`, `test.gos.earth`) is mapped in DNS and IC custom-domain tables to **`realm_registry_frontend`** — the wizard + federation site.
 
-**`*.realmsgos.org`** is mapped the same way to **`marketplace_frontend`** when that canister is in the environment descriptor.
+**`*.realmsgos.org`** is mapped the same way to **`marketplace_frontend`** when that canister is in the sheet.
 
 For both, the canister ID is part of the hostname contract — a deleted ID cannot be reused, so replacing it means new registrar records and a new IC domain registration (hours of downtime).
 
 Other frontends (`casals_frontend`, file-registry UI, realm UIs) are **not** DNS-mapped apex targets. They can be destroyed and recreated.
 
-To rebuild an environment without touching DNS mappings, `gaas` drain-destroys everything else (including other frontends), parks leftover cycles on the cycles wallet, and **adopts** the existing DNS-mapped frontend IDs:
-
-```bash
-gaas new environments/staging.json --identity deployer --network ic --yes \
-  --destroy-except-realm-registry-frontend
-```
-
-Do not `dfx canister delete` the DNS canisters. See [AGENTS.md](./AGENTS.md#dns-mapped-frontends--why-we-keep-realm_registry_frontend-and-marketplace_frontend) and [docs/GAAS_CLI.md](./docs/GAAS_CLI.md#rebuild-except-realm-registry-frontend---destroy-except-realm-registry-frontend).
+Do not `dfx canister delete` the DNS canisters. See [AGENTS.md](./AGENTS.md#dns-mapped-frontends--why-we-keep-realm_registry_frontend-and-marketplace_frontend).
 
 ## Deploy cost
 
@@ -131,4 +126,4 @@ The **realms** repo references release artifact URLs in its `dfx.json` / mundus 
 - Realm deployments pull `realm_backend.wasm.gz` and `realm_frontend.tar.gz` from **realms** releases (unchanged).
 - Registry/installer artifacts come from **this** repo's releases.
 
-See [docs/GAAS_CLI.md](./docs/GAAS_CLI.md) for the descriptor-driven `gaas` CLI, and [AGENTS.md](./AGENTS.md) for agent-oriented deploy loops, canister IDs, and debugging.
+See [AGENTS.md](./AGENTS.md) for agent-oriented deploy loops, canister IDs, and debugging.

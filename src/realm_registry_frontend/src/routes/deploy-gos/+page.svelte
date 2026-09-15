@@ -20,6 +20,7 @@
   import { getAuthenticatedRegistryActor } from '$lib/canisters.js';
   import { deploymentJobUrl } from '$lib/deployment-url.js';
   import { friendlyNetworkError, retryOnTransientNetworkError } from '$lib/network-retry.js';
+  import { ALPHA_INVITE_REQUEST_URL } from '$lib/invite-request-url.js';
   import {
     findRecentDeploymentJob,
     isAmbiguousDeploymentRequestError,
@@ -652,7 +653,15 @@
       </div>
       <div class="invitation-request-info">
         <p>Don't have an invitation code?</p>
-        <p class="invitation-request-channels">Request one by reaching out to us on <a href="https://oc.app/community/x2nkd-waaaa-aaaar-bhh4q-cai" target="_blank" rel="noopener">OpenChat</a>.</p>
+        <p class="invitation-request-hint">Request access — we'll review your submission and email you a code.</p>
+        <a
+          href={ALPHA_INVITE_REQUEST_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="btn btn-outline invitation-request-btn"
+        >
+          Request Invite
+        </a>
       </div>
     </div>
   </div>
@@ -1216,18 +1225,16 @@
     font-size: 0.875rem;
   }
 
-  .invitation-request-channels {
+  .invitation-request-hint {
     color: #525252;
+    margin-bottom: 1rem !important;
   }
 
-  .invitation-request-channels a {
-    color: #6366f1;
-    text-decoration: none;
-    font-weight: 500;
-  }
-
-  .invitation-request-channels a:hover {
-    text-decoration: underline;
+  .invitation-request-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 180px;
   }
 
   .wizard-container {

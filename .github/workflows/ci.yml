@@ -28,6 +28,15 @@ jobs:
         # formatting rules; keep them byte-close to the realms originals.
         continue-on-error: true
         run: pip install black && black --check src/ tests/ scripts/
+      - name: No principal / canister-id tables outside casals.json
+        # The environment is declared in casals.json; scripts and workflows must
+        # not carry their own copies of ids (they drift, then someone deploys to
+        # the wrong canister). Test fixtures and generated declarations are exempt.
+        run: |
+          if grep -rnoE '\b[a-z0-9]{5}(-[a-z0-9]{5}){3,10}-[a-z0-9]{3}\b' scripts .github --exclude-dir=node_modules; then
+            echo "::error::canister/principal ids belong in casals.json (read them with 'casals export')"; exit 1
+          fi
+          test ! -d cli || { echo "::error::the gaas CLI was deleted in favour of 'casals up'; do not resurrect it"; exit 1; }
 
   unit:
     runs-on: ubuntu-latest
@@ -40,22 +49,8 @@ jobs:
         run: pip install -r requirements-dev.txt
       - name: Backend unit tests
         run: python3 -m pytest tests/backend/ -q
-
-  gaas-cli:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: Install GaaS CLI
-        run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install -e "cli/[dev]"
-      - name: GaaS CLI unit tests
-        run: python3 -m pytest cli/tests/ -q
       - name: Probe baked Casals frontends
-        run: python3 -m gaas.canister_liveness --probe-baked
+        run: python3 scripts/canister_liveness.py --probe-baked
 
   frontend:
     runs-on: ubuntu-latest

@@ -658,7 +658,7 @@
     }
 
     .hub-panel {
-      top: calc(0.75rem + 44px + 0.55rem);
+      top: calc(var(--test-mode-banner-height, 0px) + 0.75rem + 44px + 0.55rem);
       width: min(300px, calc(100vw - 1.25rem));
       min-width: min(260px, calc(100vw - 1.25rem));
       max-width: min(300px, calc(100vw - 1.25rem));

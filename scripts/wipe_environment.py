@@ -9,25 +9,87 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
+import json
+import os
+import re
 import shutil
 import subprocess
-import sys
 import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-CLI_ROOT = REPO_ROOT / "cli"
-sys.path.insert(0, str(CLI_ROOT))
+_DFX_ENV = {
+    "TERM": "xterm",
+    "NO_COLOR": "1",
+    "DFX_WARNING": "-mainnet_plaintext_identity",
+}
+_MODULE_HASH_RE = re.compile(r"module\s*hash:\s*(0x[0-9a-f]+|none)", re.I)
 
-from gaas.descriptor import Descriptor  # noqa: E402
-from gaas.dfx import (  # noqa: E402
-    DfxError,
-    canister_status,
-    install_wasm,
-    parse_module_hash,
-)
+
+class DfxError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class CanisterStatus:
+    canister_id: str
+    status: str
+    raw: str
+
+
+def _run_dfx(args: list[str]) -> str:
+    try:
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            env={**os.environ, **_DFX_ENV},
+            check=False,
+        )
+    except FileNotFoundError as exc:
+        raise DfxError("dfx executable not found; install DFINITY SDK") from exc
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip()
+        raise DfxError(
+            f"dfx command failed (exit {result.returncode}): {' '.join(args)}\n{detail[-1500:]}"
+        )
+    return result.stdout
+
+
+def parse_module_hash(status_raw: str) -> str | None:
+    """Return module hash from `dfx canister status` output, or None if absent."""
+    for line in status_raw.splitlines():
+        match = _MODULE_HASH_RE.search(line)
+        if not match:
+            continue
+        value = match.group(1)
+        if value.lower() == "none":
+            return None
+        return value.lower()
+    return None
+
+
+def canister_status(canister_id: str, network: str, *, identity: str) -> CanisterStatus:
+    raw = _run_dfx(
+        ["dfx", "canister", "--network", network, "status", canister_id, "--identity", identity]
+    ).strip()
+    status = "unknown"
+    for line in raw.splitlines():
+        if line.lower().startswith("status:"):
+            status = line.split(":", 1)[1].strip().lower()
+            break
+    return CanisterStatus(canister_id=canister_id, status=status, raw=raw)
+
+
+def install_wasm(canister_id: str, wasm_path: str, network: str, mode: str, *, identity: str) -> None:
+    _run_dfx(
+        [
+            "dfx", "canister", "--network", network, "install", canister_id,
+            "--wasm", wasm_path, f"--mode={mode}", "--identity", identity, "--yes",
+        ]
+    )
+
 
 # Minimal valid WASM module: WAT `(module)` -> 8 bytes.
 BLANK_WAT = "(module)"
@@ -104,8 +166,12 @@ def materialize_blank_wasm() -> tuple[Path, str]:
 
 
 def load_canisters(descriptor_path: Path, only: tuple[str, ...]) -> dict[str, str]:
-    descriptor = Descriptor.load(descriptor_path)
-    canisters = dict(descriptor.canisters)
+    payload = json.loads(descriptor_path.read_text(encoding="utf-8"))
+    canisters = {
+        str(name): str(cid)
+        for name, cid in (payload.get("canisters") or {}).items()
+        if cid
+    }
     if not canisters:
         raise SystemExit(f"{descriptor_path}: descriptor has no canisters map entries")
 
@@ -216,7 +282,6 @@ def wipe_canisters(
             network,
             "reinstall",
             identity=identity,
-            yes=True,
         )
 
 
@@ -258,7 +323,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "descriptor",
         type=Path,
-        help="Path to environment JSON descriptor (e.g. environments/test.json)",
+        help="Path to a JSON inventory of canisters to wipe (name → id)",
     )
     parser.add_argument(
         "--network",

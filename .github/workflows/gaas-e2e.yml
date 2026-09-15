@@ -3,13 +3,11 @@ name: GaaS E2E
 on:
   pull_request:
     paths:
-      - "cli/**"
-      - "environments/**"
+      - "casals.json"
       - "src/**"
       - "dfx.json"
-      - "casals_backend.did"
+      - "tests/e2e/**"
       - ".github/workflows/gaas-e2e.yml"
-      - "scripts/e2e_local_realm_baton_topology.py"
   workflow_dispatch:
 
 concurrency:
@@ -17,33 +15,47 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PYTHON_VERSION: "3.10"
+  PYTHON_VERSION: "3.11"
   NODE_VERSION: "20"
   DFX_VERSION: "0.32.0"
-  # `gaas new` shells out to `casals new` during create_canisters. No tag works:
-  # v0.3.0 has no such command, and v0.3.1 deploys a fresh instance with
-  # --mode upgrade, which fails on empty canisters with IC0537. The fix
-  # (eb14771 "Make a fresh create one idempotent deploy") is only on main, so
-  # pin the commit rather than a release.
-  CASALS_VERSION: "5ef5f78228cbb8fbc40a3457e01e4803d0550a2f"
+  CASALS_VERSION: "main"
+  REALMS_VERSION: "main"
+  IC_TOKENS_VERSION: "0.1.0"
+  # The whole GaaS environment is `casals.json`; the Casals e2e harness builds it
+  # from an empty replica and grades it, then a realm is born the way the portal
+  # does it. Both scripts share one CASALS_HOME (bindings) and one icp identity.
+  CASALS_HOME: ${{ github.workspace }}/casals-home
+  CASALS_E2E_ENV: local
+  CASALS_E2E_IDENTITY: local-dev
+  ENV: local
+  IDENTITY: local-dev
 
 jobs:
   gaas-local-e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
-    env:
-      # The GitHub release has no casals_backend.wasm.gz; use the checkout
-      # this job already builds so create/adopt stay on the local replica.
-      CASALS_SRC: ${{ github.workspace }}/Casals
+    timeout-minutes: 120
     steps:
+      # The sheet resolves `local:` sources against its own directory:
+      # `../realms/...` for the realm stand template, `.basilisk/...` for the
+      # platform wasms. The three repos must therefore be siblings.
       - uses: actions/checkout@v4
+        with:
+          path: gos-as-a-service
 
-      - name: Checkout Casals (conductor build + dfx create stub)
+      - name: Checkout Casals (conductor + CLI + e2e harness)
         uses: actions/checkout@v4
         with:
           repository: smart-social-contracts/Casals
           ref: ${{ env.CASALS_VERSION }}
           path: Casals
+          submodules: recursive
+
+      - name: Checkout realms (realm backend/frontend the stand template installs)
+        uses: actions/checkout@v4
+        with:
+          repository: smart-social-contracts/realms
+          ref: ${{ env.REALMS_VERSION }}
+          path: realms
           submodules: recursive
 
       - uses: actions/setup-python@v5
@@ -53,8 +65,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
 
+      # dfx is only used for `dfx generate` (portal candid declarations) and to
+      # mint the shared identity; the replica and every deploy go through icp.
       - name: Install dfx
         run: |
           curl -fsSL "https://github.com/dfinity/sdk/releases/download/${DFX_VERSION}/dfx-${DFX_VERSION}-x86_64-linux.tar.gz" -o /tmp/dfx.tar.gz
@@ -62,239 +75,118 @@ jobs:
           rm /tmp/dfx.tar.gz
           dfx --version
 
-      - name: Basilisk venv (platform backends)
+      - name: Install icp-cli and ic-wasm
         run: |
-          python3 -m venv .venv-basilisk
-          .venv-basilisk/bin/pip install --upgrade pip
-          .venv-basilisk/bin/pip install \
-            ic-basilisk==0.14.2 ic-basilisk-toolkit==0.5.3 \
-            ic-python-db==0.11.0 ic-python-logging==0.3.4
-
-      - name: Build Casals conductor stub for dfx create
-        run: |
-          cd Casals
-          python3 -m venv .venv-basilisk
-          .venv-basilisk/bin/pip install --upgrade pip
-          .venv-basilisk/bin/pip install \
-            ic-basilisk==0.14.2 ic-basilisk-toolkit==0.5.3 \
-            ic-python-db==0.11.0 ic-python-logging==0.3.4
-          export PATH="$PWD/.venv-basilisk/bin:$PATH"
-          export CANISTER_CANDID_PATH="$(pwd)/casals_backend.did"
-          python -m basilisk casals_backend src/main.py
-          cp casals_backend.did ../casals_backend.did
-          cp .basilisk/casals_backend/casals_backend.wasm ../casals_backend.wasm
-
-      - name: Install npm deps
-        run: npm ci --legacy-peer-deps
-
-      # realms-gos "main" pin source-builds the realm backend; its build embeds
-      # candid:service metadata with ic-wasm.
-      - name: Install ic-wasm
-        run: npm install -g @icp-sdk/ic-wasm
-
-      # `casals new` deploys the conductor with icp, not dfx.
-      - name: Install icp-cli
-        run: |
-          npm install -g @icp-sdk/icp-cli
+          npm install -g @icp-sdk/icp-cli @icp-sdk/ic-wasm
           icp --version
 
-      # icp keeps its own identity store and so cannot see dfx's `default`.
-      # Import the same key under the same name so both CLIs act as one
-      # principal; otherwise the canisters icp deploys and the ones dfx creates
-      # end up with different controllers.
-      - name: Share the dfx identity with icp
+      # One interpreter for the Casals CLI (`build:` runs `make build-backend`,
+      # which needs `python3 -m basilisk` on PATH) and for the product builds.
+      - name: Install Python toolchain (Casals CLI + Basilisk)
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -r Casals/requirements-dev.txt
+          python3 -m pip install -r gos-as-a-service/requirements-dev.txt
+          python3 -m basilisk --version || true
+
+      # icp keeps its own identity store. Mint the e2e identity with dfx and
+      # import the same key into icp under the name the harness and
+      # deploy_realm.py expect (`local-dev`), so both CLIs act as one principal.
+      - name: Create the local-dev identity (dfx + icp)
         run: |
           export TERM=xterm
           export DFX_WARNING=-mainnet_plaintext_identity
-          dfx identity get-principal > /dev/null
-          dfx identity export default > /tmp/dfx-default.pem
-          icp identity import --from-pem /tmp/dfx-default.pem --storage plaintext default
-          icp identity default default
-          icp_principal=$(icp identity principal --identity default)
-          dfx_principal=$(dfx identity get-principal)
+          dfx identity new local-dev --storage-mode plaintext
+          dfx identity export local-dev > /tmp/local-dev.pem
+          icp identity import local-dev --from-pem /tmp/local-dev.pem --storage plaintext
+          icp_principal=$(icp identity principal --identity local-dev)
+          dfx_principal=$(dfx identity get-principal --identity local-dev)
           echo "icp=$icp_principal dfx=$dfx_principal"
           test "$icp_principal" = "$dfx_principal"
 
-      - name: Install GaaS CLI
+      # ── product wasms referenced by casals.json as `local:` ─────────────────
+      - name: Build GaaS platform backends (realm_installer, realm_registry_backend)
+        working-directory: gos-as-a-service
         run: |
-          cd cli
-          python3 -m venv .venv
-          .venv/bin/pip install --upgrade pip
-          .venv/bin/pip install -e ".[dev]"
+          CANISTER_CANDID_PATH="$PWD/src/realm_installer/realm_installer.did" \
+            python3 -m basilisk realm_installer src/realm_installer/main.py
+          CANISTER_CANDID_PATH="$PWD/src/realm_registry_backend/realm_registry_backend.did" \
+            python3 -m basilisk realm_registry_backend src/realm_registry_backend/main.py
+          ls -l .basilisk/realm_installer/realm_installer.wasm \
+                .basilisk/realm_registry_backend/realm_registry_backend.wasm
 
-      # Two mismatches between the pinned Casals checkout and this job, both
-      # local-only and worth pushing upstream:
-      #   1. Casals deploys with icp while the GaaS CLI drives dfx, so both must
-      #      address one replica. icp owns it (dfx cannot host an `icp deploy`),
-      #      so its gateway moves off the default 8000 onto dfx's 4943 and every
-      #      dfx-based phase and the frontend curl keep working unchanged.
-      #   2. icp funds canister creation with 2T, where dfx's local default is
-      #      100T. At 2T the conductor starves part-way through the sheet deploy
-      #      and seed_conductor fails with IC0504.
-      - name: Adapt Casals checkout to the local replica
+      - name: Build GaaS portal (realm_registry_frontend/dist)
+        working-directory: gos-as-a-service
         run: |
-          if ! grep -q '^networks:' "$CASALS_SRC/icp.yaml"; then
-            printf '\nnetworks:\n  - name: local\n    mode: managed\n    gateway:\n      port: 4943\n' \
-              >> "$CASALS_SRC/icp.yaml"
-          fi
-          sed -i 's/\["--mode", "auto", "-y"\]/["--mode", "auto", "--cycles", "100t", "-y"]/' \
-            "$CASALS_SRC/casals_cli.py"
-          sed -i 's/\["--mode", mode, "-y"\]/["--mode", mode, "--cycles", "100t", "-y"]/' \
-            "$CASALS_SRC/casals_cli.py"
-          grep -n -- '--cycles' "$CASALS_SRC/casals_cli.py"
-          python3 -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" "$CASALS_SRC/casals_cli.py"
+          npm ci --legacy-peer-deps
+          dfx generate realm_registry_backend
+          dfx generate realm_installer
+          npm run build --workspace=realm_registry_frontend
+          test -f src/realm_registry_frontend/dist/index.html
 
-      # The GaaS CLI sets controllers with `icp ... -n local`, which resolves the
-      # network against this project's manifest, and the repo has none. Declare a
-      # network that connects to the replica the Casals project hosts, rather
-      # than one icp would try to manage a second time.
-      - name: Declare the local network for the GaaS project
+      - name: Build realm backend (realms/.basilisk/realm_backend)
+        working-directory: realms
         run: |
-          if [ ! -f icp.yaml ]; then
-            printf 'networks:\n  - name: local\n    mode: connected\n    url: http://127.0.0.1:4943\n    root-key: fetch\n' \
-              > icp.yaml
-          fi
-          cat icp.yaml
+          python3 -m pip install -r requirements.txt
+          CANISTER_CANDID_PATH="$PWD/src/realm_backend/realm_backend.did" \
+            python3 scripts/pack_realm_backend.py
+          ls -l .basilisk/realm_backend/realm_backend.wasm
 
-      - name: Start local replica
+      - name: Build realm frontend (realms/src/realm_frontend/dist)
+        working-directory: realms/src/realm_frontend
+        run: |
+          npm install --legacy-peer-deps
+          npm run build
+          test -f dist/index.html
+
+      - name: Fetch ic-tokens token_backend.wasm (realms/.external-wasms)
+        working-directory: realms
+        run: |
+          mkdir -p .external-wasms
+          curl -fsSL "https://github.com/smart-social-contracts/ic-tokens/releases/download/v${IC_TOKENS_VERSION}/token_backend.wasm" \
+            -o .external-wasms/token_backend.wasm
+          ls -l .external-wasms/token_backend.wasm
+
+      # ── the environment: casals up from an empty replica, graded ────────────
+      # run_e2e.py starts the local replica itself (`icp network start -e local`),
+      # funds `local-dev`, then runs the scenarios against the gaas sheet:
+      #   fresh          — `casals up` converges from nothing, `plan` empty, oracle PASS
+      #   idempotent     — a second `up` changes nothing (covers adopt/heal re-runs)
+      #   runtime_stand  — a stand minted at runtime via create_stand converges
+      # KEEP=1 leaves the replica and the orchestra up for the next step.
+      - name: casals up gaas sheet + e2e scenarios (Casals harness)
+        working-directory: Casals
+        env:
+          KEEP: "1"
+          SCENARIOS: fresh,idempotent,runtime_stand
         run: |
           export TERM=xterm
-          (cd "$CASALS_SRC" && icp network start local -d)
-          dfx ping local
-          icp network ping local
+          python3 tests/e2e/run_e2e.py ../gos-as-a-service/casals.json
 
-      - name: gaas new (local descriptor)
+      # ── a realm is born the way the portal does it ──────────────────────────
+      # request_deployment → installer create_stand → conductor builds the stand
+      # from the `Deployments` template → realm frontend serves /canister_ids.js
+      # pointing at a backend that answers `status`.
+      - name: Deploy a realm through the portal path
+        working-directory: gos-as-a-service
+        env:
+          TIMEOUT_S: "1500"
         run: |
           export TERM=xterm
-          export PATH="$PWD/.venv-basilisk/bin:$PATH"
-          cd cli
-          .venv/bin/gaas new ../environments/local.json --network local --yes \
-            --casals-src "$CASALS_SRC"
+          python3 tests/e2e/deploy_realm.py ci-realm
 
-      - name: Assert canisters running
+      - name: Show orchestra state on failure
+        if: failure()
+        working-directory: Casals
         run: |
           export TERM=xterm
-          cd cli
-          .venv/bin/gaas status ../environments/local.json --network local | tee /tmp/gaas-status.txt
-          # Casals owns its own file registry, and the GaaS platform is the
-          # registry pair plus the installer. The standalone file_registry and
-          # marketplace_backend that used to bring this to nine are no longer
-          # part of `gaas new`. Name them rather than counting, so a rename
-          # cannot pass by keeping the total intact.
-          for name in casals_backend casals_frontend casals_file_registry \
-                      casals_file_registry_frontend realm_registry_backend \
-                      realm_registry_frontend realm_installer; do
-            grep -F "$name" /tmp/gaas-status.txt | grep -q running \
-              || { echo "missing or not running: $name"; exit 1; }
-          done
-          running_count=$(grep -c running /tmp/gaas-status.txt || true)
-          test "$running_count" -eq 7
-          ! grep -i error /tmp/gaas-status.txt
-
-      - name: Assert registry frontend HTTP 200
-        run: |
-          FRONTEND_ID=$(python3 -c "import json; print(json.load(open('environments/local.json'))['canisters']['realm_registry_frontend'])")
-          code=$(curl -s -o /dev/null -w "%{http_code}" "http://${FRONTEND_ID}.localhost:4943/")
-          test "$code" = "200"
-
-      # Realm provision regression guard: request_deployment → installer
-      # provision_via_casals → stand/backend/frontend/baton in Casals get_tree.
-      # Realm WASM/assets come from gaas new seed_file_registry (realms-gos@main
-      # source build into casals_file_registry) — not re-published here.
-      - name: E2E realm provision (Casals/baton topology)
-        run: |
-          export TERM=xterm
-          cd cli
-          .venv/bin/python ../scripts/e2e_local_realm_baton_topology.py \
-            --descriptor ../environments/local.json \
-            --network local
-
-      - name: Snapshot created canister IDs
-        run: |
-          python3 - <<'PY'
-          import json
-          cans = json.load(open("environments/local.json"))["canisters"]
-          for key in (
-              "realm_installer",
-              "realm_registry_backend",
-              "realm_registry_frontend",
-          ):
-              assert cans.get(key), f"missing {key} after create"
-          json.dump(cans, open("/tmp/gaas-created-ids.json", "w"))
-          print(json.dumps(cans, indent=2, sort_keys=True))
-          PY
-
-      - name: gaas new (adopt existing IDs)
-        run: |
-          export TERM=xterm
-          export PATH="$PWD/.venv-basilisk/bin:$PATH"
-          cd cli
-          .venv/bin/gaas new ../environments/local.json --network local --yes \
-            --casals-src "$CASALS_SRC" | tee /tmp/gaas-adopt.out
-          grep -E "realm_installer: adopt " /tmp/gaas-adopt.out
-          grep -E "realm_registry_backend: adopt " /tmp/gaas-adopt.out
-          ! grep -E "realm_installer: created " /tmp/gaas-adopt.out
-          ! grep -E "realm_registry_backend: created " /tmp/gaas-adopt.out
-
-      - name: Assert adopt reused installer and registry IDs
-        run: |
-          python3 - <<'PY'
-          import json
-          created = json.load(open("/tmp/gaas-created-ids.json"))
-          current = json.load(open("environments/local.json"))["canisters"]
-          for key in (
-              "realm_installer",
-              "realm_registry_backend",
-              "realm_registry_frontend",
-          ):
-              assert current.get(key) == created[key], (
-                  f"{key} changed on adopt: {created[key]} -> {current.get(key)}"
-              )
-          print("adopt reused installer and registry principals")
-          PY
-
-      # A pinned installer that no longer exists is healed, not refused: adopt
-      # mints a fresh one and rewrites the pin (f46e10a, and the "adopt heals
-      # ghost installer" tests). This step used to assert the opposite, which
-      # predates that change. What still must hold is that the dead principal is
-      # never adopted and never reaches the real descriptor.
-      - name: gaas new (ghost installer is healed)
-        run: |
-          python3 - <<'PY'
-          import json
-          ghost = "fksuf-niaaa-aaaae-ag22q-cai"
-          src = json.load(open("environments/local.json"))
-          json.dump(src["canisters"], open("/tmp/gaas-pre-ghost-ids.json", "w"))
-          src["canisters"]["realm_installer"] = ghost
-          with open("/tmp/local-ghost.json", "w") as fh:
-              json.dump(src, fh, indent=2)
-              fh.write("\n")
-          print(f"ghost descriptor installer={ghost}")
-          PY
-          export TERM=xterm
-          export PATH="$PWD/.venv-basilisk/bin:$PATH"
-          set +e
-          cli/.venv/bin/gaas new /tmp/local-ghost.json --network local --yes \
-            --casals-src "$CASALS_SRC" > /tmp/gaas-ghost.out 2>&1
-          code=$?
-          set -e
-          cat /tmp/gaas-ghost.out
-          test "$code" -eq 0
-          grep -F "stale pin fksuf-niaaa-aaaae-ag22q-cai not on IC" /tmp/gaas-ghost.out
-          ! grep -E "realm_installer: adopt fksuf-niaaa-aaaae-ag22q-cai" /tmp/gaas-ghost.out
-          python3 - <<'PY'
-          import json
-          ghost = "fksuf-niaaa-aaaae-ag22q-cai"
-          healed = json.load(open("/tmp/local-ghost.json"))["canisters"]["realm_installer"]
-          assert healed, "ghost descriptor lost its installer instead of healing it"
-          assert healed != ghost, "dead installer was adopted"
-          live = json.load(open("environments/local.json"))["canisters"]
-          assert ghost not in live.values(), "ghost principal reached the real descriptor"
-          print(f"ghost installer healed to {healed}")
-          PY
+          ls -la "$CASALS_HOME" || true
+          python3 -m casals_cli.main -e local --identity local-dev show ../gos-as-a-service/casals.json || true
+          python3 -m casals_cli.main -e local --identity local-dev plan ../gos-as-a-service/casals.json || true
 
       - name: Stop local replica
         if: always()
+        working-directory: Casals
         run: |
           export TERM=xterm
-          (cd "$CASALS_SRC" && icp network stop) || true
+          icp network stop -e local || true

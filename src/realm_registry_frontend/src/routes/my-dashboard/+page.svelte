@@ -49,10 +49,6 @@
   const billingEnabled = CONFIG.billing_service_url != null;
   const BILLING_SERVICE_URL = CONFIG.billing_service_url || 'http://localhost:8001';
 
-  // Invitation status
-  let invitationActivated = false;
-  let invitationModeOn = false;
-  
   // Read tab from URL parameter (?tab=realms | billing | credits | connect)
   $: if (browser && $page.url.searchParams.get('tab')) {
     const tabParam = $page.url.searchParams.get('tab');
@@ -157,19 +153,6 @@
       destroyRecords = loadDestroyRecords(userPrincipal.toText());
       loading = false;
 
-      // Check invitation activation status
-      try {
-        const { backend } = await import('$lib/canisters.js');
-        const modeResult = await backend.get_invitation_mode();
-        invitationModeOn = modeResult?.Ok === 'enabled';
-        if (invitationModeOn && userPrincipal) {
-          const actResult = await backend.is_principal_activated(userPrincipal.toText());
-          invitationActivated = actResult?.Ok === 'activated';
-        }
-      } catch (e) {
-        console.error('Invitation status check failed:', e);
-      }
-      
       await loadDeployments();
       loadWizardDrafts();
       
@@ -647,23 +630,6 @@
           </svg>
           <span class="principal-text">{userPrincipal.toText()}</span>
         </div>
-        {#if invitationModeOn}
-          <div class="invitation-status" class:activated={invitationActivated}>
-            {#if invitationActivated}
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <path d="M20 6L9 17l-5-5"/>
-              </svg>
-              Invitation redeemed
-            {:else}
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"/>
-                <line x1="12" y1="8" x2="12" y2="12"/>
-                <line x1="12" y1="16" x2="12.01" y2="16"/>
-              </svg>
-              Invitation required — <a href="/deploy-gos">redeem a code</a>
-            {/if}
-          </div>
-        {/if}
       {/if}
     </header>
 
@@ -1279,32 +1245,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .invitation-status {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-top: 0.75rem;
-    padding: 0.5rem 0.75rem;
-    border-radius: 0.5rem;
-    font-size: 0.8rem;
-    font-weight: 500;
-    background: #FEF3C7;
-    color: #92400E;
-    border: 1px solid #FDE68A;
-  }
-
-  .invitation-status.activated {
-    background: #D1FAE5;
-    color: #065F46;
-    border-color: #A7F3D0;
-  }
-
-  .invitation-status a {
-    color: inherit;
-    font-weight: 600;
-    text-decoration: underline;
   }
 
   .loading-container {

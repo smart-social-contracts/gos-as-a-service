@@ -19,15 +19,36 @@
   $: viewingRealm = $page.url.pathname.startsWith('/r/');
   $: showBanner = browser && $testMode && !dismissed && !viewingRealm;
 
-  $: if (browser) {
-    const height = showBanner ? '2.75rem' : '0px';
-    document.documentElement.style.setProperty('--test-mode-banner-height', height);
-    document.documentElement.classList.toggle('test-mode-banner-on', showBanner);
+  function clearBannerHeight() {
+    if (!browser) return;
+    document.documentElement.style.setProperty('--test-mode-banner-height', '0px');
+    document.documentElement.classList.remove('test-mode-banner-on');
+  }
+
+  function syncBannerHeight(node) {
+    const apply = () => {
+      const height = `${node.getBoundingClientRect().height}px`;
+      document.documentElement.style.setProperty('--test-mode-banner-height', height);
+      document.documentElement.classList.add('test-mode-banner-on');
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(node);
+    return {
+      destroy() {
+        ro.disconnect();
+        clearBannerHeight();
+      },
+    };
+  }
+
+  $: if (browser && !showBanner) {
+    clearBannerHeight();
   }
 </script>
 
 {#if showBanner}
-  <div class="test-mode-banner" role="status">
+  <div class="test-mode-banner" use:syncBannerHeight role="status">
     <p class="banner-text">
       <span class="title">{$_('demo_banner.title')}</span> {$_('demo_banner.description')}
     </p>

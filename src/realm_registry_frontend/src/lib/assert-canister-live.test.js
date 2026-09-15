@@ -10,8 +10,8 @@ import {
 
 function fakeRepo(scriptBody = '') {
 	const dir = mkdtempSync(join(tmpdir(), 'assert-live-'));
-	mkdirSync(join(dir, 'cli/gaas'), { recursive: true });
-	writeFileSync(join(dir, 'cli/gaas/canister_liveness.py'), scriptBody, 'utf-8');
+	mkdirSync(join(dir, 'scripts'), { recursive: true });
+	writeFileSync(join(dir, 'scripts/canister_liveness.py'), scriptBody, 'utf-8');
 	return dir;
 }
 

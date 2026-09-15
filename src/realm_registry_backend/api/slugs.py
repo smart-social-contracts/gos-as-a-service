@@ -23,8 +23,8 @@ _PORTAL_HOSTS = {
     "staging": "https://staging.gos.earth",
     "demo": "https://demo.gos.earth",
     "test": "https://test.gos.earth",
-    "ic": "https://registry.realmsgos.org",
-    "production": "https://registry.realmsgos.org",
+    "ic": "https://realmsgos.org",
+    "production": "https://realmsgos.org",
 }
 
 

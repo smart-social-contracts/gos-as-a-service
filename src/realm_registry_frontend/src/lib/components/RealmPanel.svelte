@@ -284,7 +284,7 @@
 
   .realm-panel {
     position: fixed;
-    top: 0;
+    top: var(--test-mode-banner-height, 0px);
     left: 0;
     bottom: 0;
     z-index: 260;

@@ -36,6 +36,20 @@ test('docked iPhone panel fits the visual viewport so the composer is not under 
   assert.equal(assistantPanelBoxStyle(box), 'height: 660px; top: 0px; bottom: auto');
 });
 
+test('docked panel clears the measured test-mode banner height', () => {
+  const box = computeAssistantPanelBox({
+    docked: true,
+    visualHeight: 700,
+    visualOffsetTop: 0,
+    layoutHeight: 700,
+    layoutWidth: 1280,
+    bannerHeightPx: 48,
+  });
+  assert.ok(box);
+  assert.equal(box.topPx, 48);
+  assert.equal(box.heightPx, 652);
+});
+
 test('docked panel follows visualViewport offsetTop when the URL bar consumes the top', () => {
   const box = computeAssistantPanelBox({
     docked: true,
@@ -43,10 +57,11 @@ test('docked panel follows visualViewport offsetTop when the URL bar consumes th
     visualOffsetTop: 47,
     layoutHeight: 844,
     layoutWidth: 390,
+    bannerHeightPx: 44,
   });
   assert.ok(box);
-  assert.equal(box.heightPx, 612);
-  assert.equal(box.topPx, 47);
+  assert.equal(box.heightPx, 568);
+  assert.equal(box.topPx, 91);
 });
 
 test('phone-width floating panel stays above the brain FAB and inside the visual viewport', () => {

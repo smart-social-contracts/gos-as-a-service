@@ -8,7 +8,7 @@ function defaultRepoRoot() {
 }
 
 function livenessScript(repoRoot) {
-	return join(repoRoot, 'cli/gaas/canister_liveness.py');
+	return join(repoRoot, 'scripts/canister_liveness.py');
 }
 
 /**

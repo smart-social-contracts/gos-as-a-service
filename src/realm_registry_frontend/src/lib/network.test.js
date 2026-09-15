@@ -46,6 +46,7 @@ test('detectNetwork maps known hostnames', () => {
 	assert.equal(detectNetwork('staging.gos.earth'), 'staging');
 	assert.equal(detectNetwork('demo.gos.earth'), 'demo');
 	assert.equal(detectNetwork('gos.earth'), 'ic');
+	assert.equal(detectNetwork('realmsgos.org'), 'ic');
 	assert.equal(detectNetwork('registry.realmsgos.org'), 'ic');
 	assert.equal(detectNetwork('localhost'), 'local');
 	assert.equal(detectNetwork('127.0.0.1'), 'local');

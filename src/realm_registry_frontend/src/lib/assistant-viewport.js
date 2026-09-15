@@ -19,6 +19,7 @@ export const PHONE_BREAKPOINT = 768;
  *   visualOffsetTop?: number,
  *   layoutHeight: number,
  *   layoutWidth: number,
+ *   bannerHeightPx?: number,
  * }} input
  * @returns {{ heightPx: number, topPx: number | null, bottomPx: number | null } | null}
  *   `null` means CSS defaults are fine (wide desktop, no chrome overlap).
@@ -30,9 +31,11 @@ export function computeAssistantPanelBox(input) {
     visualOffsetTop = 0,
     layoutHeight,
     layoutWidth,
+    bannerHeightPx = 0,
   } = input;
 
   const hiddenBelow = Math.max(0, layoutHeight - visualOffsetTop - visualHeight);
+  const bannerGap = Math.max(0, Math.round(bannerHeightPx));
   const phone = layoutWidth < PHONE_BREAKPOINT;
   const chromeHidesBottom = hiddenBelow >= 24;
 
@@ -43,8 +46,8 @@ export function computeAssistantPanelBox(input) {
   if (docked) {
     const chromeGap = phone || chromeHidesBottom ? 8 : 0;
     return {
-      heightPx: Math.max(MIN_PANEL_HEIGHT, Math.round(visualHeight) - chromeGap),
-      topPx: Math.round(visualOffsetTop),
+      heightPx: Math.max(MIN_PANEL_HEIGHT, Math.round(visualHeight) - chromeGap - bannerGap),
+      topPx: Math.round(visualOffsetTop) + bannerGap,
       bottomPx: null,
     };
   }

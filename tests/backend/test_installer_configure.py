@@ -89,6 +89,23 @@ def test_configure_maps_registry_backend_id():
     assert payload["cycle_threshold_cycles"] == 3_000_000_000_000
 
 
+def test_configure_ignores_retired_baton_keys():
+    """v2: the baton is a stand_template member; the installer has no baton knobs."""
+    _reset_installer_config()
+    apply_installer_config({"create_stand_baton": True, "baton_wasm_key": "orchestration-baton@1.3.0"})
+    payload = installer_config_payload()
+    assert "create_stand_baton" not in payload
+    assert "baton_wasm_key" not in payload
+
+
+def test_portal_url_to_origin_strips_path():
+    from installer_config import portal_url_to_origin
+
+    assert portal_url_to_origin("https://test.gos.earth/r/my-realm") == "https://test.gos.earth"
+    assert portal_url_to_origin("https://test.gos.earth/") == "https://test.gos.earth"
+    assert portal_url_to_origin("") == ""
+
+
 def test_apply_installer_config_from_json():
     _reset_installer_config()
     from installer_config import apply_installer_config_from_json
