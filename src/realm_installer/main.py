@@ -79,6 +79,8 @@ from installer_config import (
     apply_installer_config,
     configured_cycle_threshold_cycles,
     configured_file_registry_id,
+    configured_nft_canister_id,
+    configured_shared_tokens,
     get_config,
     installer_config_payload,
     require_casals_for_destroy,
@@ -661,7 +663,7 @@ def schedule_registration(job_id_val: str):
                 )).strip()
                 token_cfg = _resolve_token_from_manifest(manifest)
                 token_id = ""
-                nft_id = _shared_nft_canister_id(network)
+                nft_id = configured_nft_canister_id()
                 if token_cfg:
                     if token_cfg.get("deploy_new"):
                         casals_id = (_config().casals_canister_id or "").strip()
@@ -676,6 +678,8 @@ def schedule_registration(job_id_val: str):
                     "file_registry_canister_id": fr_id or None,
                     "marketplace_canister_id": mp_id or None,
                     "installed_version": version or None,
+                    # the realm's shared-ledger catalog: the sheet's, via configure
+                    "shared_tokens": configured_shared_tokens(),
                 }
                 net_lower = network.lower()
                 if network and not (
@@ -1356,108 +1360,29 @@ def _schedule_step_runner(task_id: str, delay_s: int = 0):
     ic.set_timer(Duration(int(delay_s)), _cb)
 
 
-# Shared land-NFT backend per network (Casals infra stand "nft", not per-realm).
-_SHARED_NFT_CANISTERS = {
-    "staging": "ca5ww-5iaaa-aaaac-bfxra-cai",
-    "demo": "6hrip-iiaaa-aaaaf-qdoha-cai",
-    "test": "eelas-yyaaa-aaaao-qps7a-cai",
-}
-
-
-def _shared_nft_canister_id(network: str) -> str:
-    return (_SHARED_NFT_CANISTERS.get((network or "").strip().lower()) or "").strip()
-
-# Shared treasury ledgers keyed by network + symbol (mirrors realm_backend.api.tokens).
-_SHARED_TOKEN_LEDGERS = {
-    "staging": {
-        "REALMS": {
-            "ledger": "cj65k-laaaa-aaaac-bfxqq-cai",
-            "indexer": "cj65k-laaaa-aaaac-bfxqq-cai",
-            "decimals": 8,
-            "token_type": "shared",
-        },
-        "ckBTC": {
-            "ledger": "mxzaz-hqaaa-aaaar-qaada-cai",
-            "indexer": "n5wcd-faaaa-aaaar-qaaea-cai",
-            "decimals": 8,
-            "token_type": "shared",
-        },
-        "ckUSDC": {
-            "ledger": "xckus-ciaaa-aaaam-qbssa-cai",
-            "indexer": "ufqgi-4qaaa-aaaam-qbsna-cai",
-            "decimals": 6,
-            "token_type": "shared",
-        },
-    },
-    "demo": {
-        "REALMS": {
-            "ledger": "xbkkh-syaaa-aaaah-qq3ya-cai",
-            "indexer": "xbkkh-syaaa-aaaah-qq3ya-cai",
-            "decimals": 8,
-            "token_type": "shared",
-        },
-        "ckBTC": {
-            "ledger": "mxzaz-hqaaa-aaaar-qaada-cai",
-            "indexer": "n5wcd-faaaa-aaaar-qaaea-cai",
-            "decimals": 8,
-            "token_type": "shared",
-        },
-        "ckUSDC": {
-            "ledger": "xckus-ciaaa-aaaam-qbssa-cai",
-            "indexer": "ufqgi-4qaaa-aaaam-qbsna-cai",
-            "decimals": 6,
-            "token_type": "shared",
-        },
-    },
-    "test": {
-        "REALMS": {
-            "ledger": "nusyl-jiaaa-aaaae-qj6mq-cai",
-            "indexer": "nusyl-jiaaa-aaaae-qj6mq-cai",
-            "decimals": 8,
-            "token_type": "shared",
-        },
-        "ckBTC": {
-            "ledger": "mxzaz-hqaaa-aaaar-qaada-cai",
-            "indexer": "n5wcd-faaaa-aaaar-qaaea-cai",
-            "decimals": 8,
-            "token_type": "shared",
-        },
-        "ckUSDC": {
-            "ledger": "xckus-ciaaa-aaaam-qbssa-cai",
-            "indexer": "ufqgi-4qaaa-aaaam-qbsna-cai",
-            "decimals": 6,
-            "token_type": "shared",
-        },
-    },
-}
-
-
 def _resolve_token_from_manifest(manifest: dict):
-    """Return treasury wiring dict from manifest.realm.token, or None."""
-    realm_info = manifest.get("realm") or {}
-    token = realm_info.get("token") or {}
-    network = (manifest.get("network") or "staging").strip().lower()
-    shared = _SHARED_TOKEN_LEDGERS.get(network, {})
+    """Return treasury wiring dict from manifest.realm.token, or None.
+
+    `token.existing` names one of the shared ledgers the sheet configured
+    (`configure.shared_tokens`); `token.name` + `token.symbol` mints a new one.
+    """
+    token = (manifest.get("realm") or {}).get("token") or {}
 
     existing = (token.get("existing") or "").strip()
     if existing:
-        cfg = shared.get(existing)
-        if cfg is None:
-            for key, val in shared.items():
-                if key.upper() == existing.upper():
-                    cfg = val
-                    existing = key
-                    break
-        if cfg:
-            return {
-                "symbol": existing,
-                "ledger": cfg["ledger"],
-                "indexer": cfg.get("indexer", cfg["ledger"]),
-                "decimals": cfg.get("decimals", 8),
-                "token_type": cfg.get("token_type", "shared"),
-                "deploy_new": False,
-            }
-        return None
+        shared = configured_shared_tokens()
+        match = next((k for k in shared if k.upper() == existing.upper()), None)
+        if match is None:
+            return None
+        cfg = shared[match]
+        return {
+            "symbol": match,
+            "ledger": cfg["ledger"],
+            "indexer": cfg.get("indexer") or cfg["ledger"],
+            "decimals": int(cfg.get("decimals", 8)),
+            "token_type": "shared",
+            "deploy_new": False,
+        }
 
     name = (token.get("name") or "").strip()
     symbol = (token.get("symbol") or "").strip().upper()

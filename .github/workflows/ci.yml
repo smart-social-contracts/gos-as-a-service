@@ -29,11 +29,16 @@ jobs:
         continue-on-error: true
         run: pip install black && black --check src/ tests/ scripts/
       - name: No principal / canister-id tables outside casals.json
-        # The environment is declared in casals.json; scripts and workflows must
-        # not carry their own copies of ids (they drift, then someone deploys to
-        # the wrong canister). Test fixtures and generated declarations are exempt.
+        # The environment is declared in casals.json; canister code, scripts and
+        # workflows must not carry their own copies of ids (they drift, then a
+        # rebuilt environment points at a deleted canister). Ids reach a canister
+        # at runtime via configure / set_canister_config_json. Test fixtures and
+        # generated declarations are exempt.
         run: |
-          if grep -rnoE '\b[a-z0-9]{5}(-[a-z0-9]{5}){3,10}-[a-z0-9]{3}\b' scripts .github --exclude-dir=node_modules; then
+          if grep -rnoE '\b[a-z0-9]{5}(-[a-z0-9]{5}){3,10}-[a-z0-9]{3}\b' \
+               scripts .github src \
+               --include='*.py' --include='*.yml' --include='*.sh' --include='*.js' --include='*.svelte' --include='ic-domains' --include='ii-alternative-origins' \
+               --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.svelte-kit --exclude-dir=declarations --exclude-dir=__pycache__ --exclude-dir=tests --exclude='*.test.js'; then
             echo "::error::canister/principal ids belong in casals.json (read them with 'casals export')"; exit 1
           fi
           test ! -d cli || { echo "::error::the gaas CLI was deleted in favour of 'casals up'; do not resurrect it"; exit 1; }

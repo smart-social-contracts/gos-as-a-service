@@ -9,7 +9,15 @@
         "provider": "none"
       },
       "portal_url": "http://${canister:realm-registry-frontend}.localhost:8000",
+      "portal_host": "",
+      "ii_alternative_origins": "{\"alternativeOrigins\": [\"http://${canister:realm-registry-frontend}.localhost:8000\"]}",
       "can_test_mode": true,
+      "realms_product": {
+        "$comment": "Realms product canisters live on the Realms GOS conductor (../realms/casals.json); none locally.",
+        "marketplace_id": "",
+        "nft_canister_id": "",
+        "shared_tokens": {}
+      },
       "test_flags": {
         "test_mode": true,
         "ii_bypass": true,
@@ -34,9 +42,38 @@
         "ttl": 60
       },
       "portal_url": "https://gos.earth",
+      "portal_host": "gos.earth",
+      "ii_alternative_origins": "{\"alternativeOrigins\": [\"https://gos.earth\", \"https://${canister:realm-registry-frontend}.icp0.io\"]}",
       "can_test_mode": false,
       "test_flags": {
         "ii_bypass": false
+      },
+      "realms_product": {
+        "$comment": "Product section of the Realms GOS conductor irfdo-ziaaa-aaaai-raswa-cai (../realms/casals.json -e production); ck* are the DFINITY mainnet ledgers.",
+        "marketplace_id": "fxcax-yyaaa-aaaas-amx5q-cai",
+        "nft_canister_id": "flg2g-pyaaa-aaaas-amx7q-cai",
+        "shared_tokens": {
+          "RLM": {
+            "ledger": "ffexo-uiaaa-aaaas-amx6q-cai",
+            "indexer": "ffexo-uiaaa-aaaas-amx6q-cai",
+            "decimals": 8
+          },
+          "ckBTC": {
+            "ledger": "mxzaz-hqaaa-aaaar-qaada-cai",
+            "indexer": "n5wcd-faaaa-aaaar-qaaea-cai",
+            "decimals": 8
+          },
+          "ckUSDC": {
+            "ledger": "xckus-ciaaa-aaaam-qbssa-cai",
+            "indexer": "ufqgi-4qaaa-aaaam-qbsna-cai",
+            "decimals": 6
+          },
+          "ckEURC": {
+            "ledger": "pe5t5-diaaa-aaaar-qahwa-cai",
+            "indexer": "pe5t5-diaaa-aaaar-qahwa-cai",
+            "decimals": 6
+          }
+        }
       },
       "principals": {
         "operator": "rd4en-sizpv-vnamr-6vbfc-uljz5-vvz7c-g4nzy-uflq2-zbj3x-mrwjs-gqe",
@@ -111,6 +148,12 @@
       ]
     }
   },
+  "domains": [
+    {
+      "host": "$env.portal_host",
+      "canister": "realm-registry-frontend"
+    }
+  ],
   "registry": {
     "$comment": "Product wasms are built in this repo and in ../realms before `casals up` (local:; the exact recipes are the build steps of .github/workflows/gaas-e2e.yml); conductor wasms by the Casals CLI (build:). Frontend dists are published as content namespaces.",
     "wasms": [
@@ -194,6 +237,9 @@
                   "args": {
                     "registry_backend_id": "$canister:realm-registry-backend",
                     "file_registry_id": "$canister:file-registry",
+                    "marketplace_id": "$env.realms_product.marketplace_id",
+                    "nft_canister_id": "$env.realms_product.nft_canister_id",
+                    "shared_tokens": "$env.realms_product.shared_tokens",
                     "casals_canister_id": "$self",
                     "casals_section": "Deployments",
                     "portal_url": "$env.portal_url",
@@ -269,7 +315,8 @@
               ],
               "content": "frontend/realm-registry-frontend/main",
               "files": {
-                "/canister_ids.js": "globalThis.__CANISTER_IDS = {\"realm_registry_backend\": \"$stand.backend\", \"realm_installer\": \"$canister:realm-installer\", \"casals_frontend\": \"$canister:casals-frontend\"};\n"
+                "/canister_ids.js": "globalThis.__CANISTER_IDS = {\"realm_registry_backend\": \"$stand.backend\", \"realm_installer\": \"$canister:realm-installer\", \"casals_frontend\": \"$canister:casals-frontend\"};\n",
+                "/.well-known/ii-alternative-origins": "$env.ii_alternative_origins"
               },
               "health": [
                 {
@@ -303,7 +350,10 @@
           "hand_off": true
         },
         "commanders": [
-          { "principal": "$stand.backend", "permissions": "stand.create" }
+          {
+            "principal": "$stand.backend",
+            "permissions": "stand.create"
+          }
         ],
         "canisters": [
           {

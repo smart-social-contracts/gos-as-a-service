@@ -1,14 +1,15 @@
-"""Descriptor-driven installer config (stable storage via InstallerConfig entity)."""
+"""Sheet-driven installer config (stable storage via InstallerConfig entity).
+
+Every environment-specific value — product canister ids, the shared NFT
+canister, the shared token ledgers — arrives through `configure`, called by the
+Casals conductor from the `environments` block of casals.json. The canister
+holds no per-network table of its own: such a table silently points a rebuilt
+environment at a deleted canister.
+"""
 
 import json
 
 from ic_python_db import Entity, Integer, String
-
-# No per-network default ids. The file registry and marketplace are Realms
-# product canisters, re-minted whenever an environment is rebuilt, so a baked-in
-# map silently points a fresh environment at a deleted canister — every package
-# install then fails with "canister not found" instead of "not configured".
-# Callers must get them from the manifest or from `configure`.
 
 
 class InstallerConfig(Entity):
@@ -20,6 +21,10 @@ class InstallerConfig(Entity):
     registry_principal = String(max_length=64, default="")
     file_registry_id = String(max_length=64, default="")
     marketplace_id = String(max_length=64, default="")
+    nft_canister_id = String(max_length=64, default="")
+    # {symbol: {ledger, indexer, decimals}} — the treasury ledgers a realm may
+    # adopt with `token.existing`.
+    shared_tokens_json = String(max_length=4096, default="{}")
     portal_url = String(max_length=512, default="")
     cycle_threshold_cycles = Integer(default=2_000_000_000_000)
 
@@ -57,6 +62,20 @@ def configured_marketplace_id(network: str = "") -> str:
     return (get_config().marketplace_id or "").strip()
 
 
+def configured_nft_canister_id() -> str:
+    """The shared land-NFT canister, or "" when the environment has none."""
+    return (get_config().nft_canister_id or "").strip()
+
+
+def configured_shared_tokens() -> dict:
+    """{symbol: {ledger, indexer, decimals}} from the sheet; {} when unset."""
+    try:
+        value = json.loads(get_config().shared_tokens_json or "{}")
+    except (TypeError, ValueError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
 def portal_url_to_origin(portal_url: str) -> str:
     """Extract scheme://host from a portal base or federation page URL."""
     url = (portal_url or "").strip().rstrip("/")
@@ -84,13 +103,19 @@ def apply_installer_config(params: dict) -> None:
         cfg.registry_principal = (params.get("registry_backend_id") or "").strip()
     if "registry_principal" in params:
         cfg.registry_principal = (params.get("registry_principal") or "").strip()
-    # Empty means "not provided" for the product pointers: `gaas new` and
-    # `realms seed` both call configure, and only seed knows these ids. Treating ""
-    # as "clear" let a later gaas re-run erase them.
-    if (params.get("file_registry_id") or "").strip():
-        cfg.file_registry_id = params["file_registry_id"].strip()
-    if (params.get("marketplace_id") or "").strip():
-        cfg.marketplace_id = params["marketplace_id"].strip()
+    # The sheet is the only caller: a key that is present is applied verbatim,
+    # "" included, so `converged_when: equals_args` can hold.
+    if "file_registry_id" in params:
+        cfg.file_registry_id = (params.get("file_registry_id") or "").strip()
+    if "marketplace_id" in params:
+        cfg.marketplace_id = (params.get("marketplace_id") or "").strip()
+    if "nft_canister_id" in params:
+        cfg.nft_canister_id = (params.get("nft_canister_id") or "").strip()
+    if "shared_tokens" in params:
+        tokens = params.get("shared_tokens") or {}
+        if not isinstance(tokens, dict):
+            raise ValueError("shared_tokens must be an object {symbol: {ledger, indexer, decimals}}")
+        cfg.shared_tokens_json = json.dumps(tokens, sort_keys=True)
     if "casals_canister_id" in params:
         cfg.casals_canister_id = (params.get("casals_canister_id") or "").strip()
     if "casals_section" in params:
@@ -115,6 +140,8 @@ def installer_config_payload() -> dict:
         "registry_backend_id": cfg.registry_principal or "",
         "file_registry_id": cfg.file_registry_id or "",
         "marketplace_id": cfg.marketplace_id or "",
+        "nft_canister_id": cfg.nft_canister_id or "",
+        "shared_tokens": configured_shared_tokens(),
         "casals_canister_id": cfg.casals_canister_id or "",
         "casals_section": cfg.casals_section or "Deployments",
         "portal_url": cfg.portal_url or "",

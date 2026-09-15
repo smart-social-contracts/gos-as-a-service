@@ -16,6 +16,8 @@ from installer_config import (
     apply_installer_config,
     configured_file_registry_id,
     configured_marketplace_id,
+    configured_nft_canister_id,
+    configured_shared_tokens,
     installer_config_payload,
 )
 
@@ -41,17 +43,40 @@ def test_unconfigured_marketplace_is_empty_for_every_network():
         assert configured_marketplace_id(network) == ""
 
 
-def test_configure_ignores_empty_product_pointers():
-    """gaas new configures the installer without knowing these ids; "" must not clear them."""
+def test_configure_applies_present_keys_verbatim():
+    """The sheet is the only caller: "" clears, an absent key leaves the value alone."""
     _reset_installer_config()
     apply_installer_config({"file_registry_id": "fr-1", "marketplace_id": "mp-1"})
-    apply_installer_config(
-        {"file_registry_id": "", "marketplace_id": "", "portal_url": "https://p"}
-    )
+    apply_installer_config({"marketplace_id": "", "portal_url": "https://p"})
     payload = installer_config_payload()
     assert payload["file_registry_id"] == "fr-1"
-    assert payload["marketplace_id"] == "mp-1"
+    assert payload["marketplace_id"] == ""
     assert payload["portal_url"] == "https://p"
+
+
+def test_shared_tokens_and_nft_come_from_configure_only():
+    """No per-network table in the canister: unset means none."""
+    _reset_installer_config()
+    assert configured_nft_canister_id() == ""
+    assert configured_shared_tokens() == {}
+    tokens = {
+        "RLM": {"ledger": "rlm-ledger", "indexer": "rlm-ledger", "decimals": 8},
+        "ckBTC": {"ledger": "btc-ledger", "indexer": "btc-index", "decimals": 8},
+    }
+    apply_installer_config({"nft_canister_id": "nft-1", "shared_tokens": tokens})
+    assert configured_nft_canister_id() == "nft-1"
+    assert configured_shared_tokens() == tokens
+    payload = installer_config_payload()
+    assert payload["nft_canister_id"] == "nft-1"
+    assert payload["shared_tokens"] == tokens  # equals_args in the sheet reads this back
+    apply_installer_config({"shared_tokens": {}})
+    assert configured_shared_tokens() == {}
+
+
+def test_shared_tokens_must_be_an_object():
+    _reset_installer_config()
+    with pytest.raises(ValueError):
+        apply_installer_config({"shared_tokens": ["RLM"]})
 
 
 def test_configure_overrides_file_registry_id():

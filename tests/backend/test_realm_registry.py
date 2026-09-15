@@ -94,7 +94,6 @@ def test_register_realm():
         assert "cannot be empty" in result["error"]
 
         print_success("register_realm tests passed")
-        return True
     except Exception as e:
         print_failure("register_realm tests failed", str(e))
         return False
@@ -121,7 +120,6 @@ def test_get_realm():
         assert "not found" in result["error"]
 
         print_success("get_realm tests passed")
-        return True
     except Exception as e:
         print_failure("get_realm tests failed", str(e))
         return False
@@ -146,7 +144,6 @@ def test_list_realms():
         assert len(realms) == 3, f"Expected 3 realms, got {len(realms)}"
 
         print_success("list_realms tests passed")
-        return True
     except Exception as e:
         print_failure("list_realms tests failed", str(e))
         return False
@@ -174,7 +171,6 @@ def test_remove_realm():
         assert "not found" in result["error"]
 
         print_success("remove_realm tests passed")
-        return True
     except Exception as e:
         print_failure("remove_realm tests failed", str(e))
         return False
@@ -200,7 +196,6 @@ def test_remove_realm_cleans_slugs():
         assert SlugRecord["slug-realm"] is None
 
         print_success("remove_realm slug cleanup tests passed")
-        return True
     except Exception as e:
         print_failure("remove_realm slug cleanup tests failed", str(e))
         return False
@@ -231,7 +226,6 @@ def test_count_realms():
         assert count == 1, f"Expected 1 realm after removal, got {count}"
 
         print_success("count_realms tests passed")
-        return True
     except Exception as e:
         print_failure("count_realms tests failed", str(e))
         return False
@@ -265,7 +259,6 @@ def test_status():
         assert status["commit_datetime"], "commit_datetime should be non-empty"
 
         print_success("status tests passed")
-        return True
     except Exception as e:
         print_failure("status tests failed", str(e))
         return False
@@ -323,7 +316,6 @@ def test_billing_status():
         assert user_result["credits"]["total_spent"] == 30
 
         print_success("billing_status tests passed")
-        return True
     except Exception as e:
         print_failure("billing_status tests failed", str(e))
         return False
