@@ -138,7 +138,12 @@ jobs:
       - name: Build realm frontend, test variant (realms/src/realm_frontend/dist)
         working-directory: realms
         run: |
-          (cd src/realm_frontend && npm install --legacy-peer-deps && REALMS_BUILD_VARIANT=test npm run build && test -f dist/index.html)
+          # Root workspace install (a workspace-local install strands vite away
+          # from the hoisted @sveltejs/kit), then the workspace package the
+          # frontend imports, then the frontend itself.
+          npm install --legacy-peer-deps
+          npm run build --workspace packages/extension-bridge
+          (cd src/realm_frontend && REALMS_BUILD_VARIANT=test npm run build && test -f dist/index.html)
           python3 scripts/check_frontend_variant.py src/realm_frontend/dist test
 
       - name: Fetch ic-tokens token_backend.wasm (realms/.external-wasms)
