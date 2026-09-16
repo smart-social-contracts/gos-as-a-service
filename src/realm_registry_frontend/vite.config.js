@@ -3,7 +3,6 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 import environment from 'vite-plugin-environment';
 import dotenv from 'dotenv';
-import { readFileSync, existsSync } from 'fs';
 import { dirname, join } from 'path';
 import { getBuildTimeValues } from './scripts/build-info.js';
 import {
@@ -11,10 +10,6 @@ import {
   getGaasEnvViteDefine,
   loadGaasEnv,
 } from './scripts/gaas-env.js';
-import {
-  assertCasalsFrontendLiveForBake,
-  assertInstallerLiveForBake,
-} from './scripts/assert-canister-live.js';
 
 dotenv.config({ path: '../../.env' });
 
@@ -40,82 +35,13 @@ function getBuildValues() {
   return getBuildTimeValues(repoRoot);
 }
 
-// Resolve canister IDs from canister_ids.json for the active DFX_NETWORK.
-// Injects IDs directly into Vite's define block (build-time constants) AND
-// into process.env so vite-plugin-environment can also pick them up.
-// This bypasses plugin ordering/timing issues and works in both local dev and CI.
-function getCanisterIdDefines() {
-  const network = process.env.DFX_NETWORK;
-  if (!network) {
-    console.warn('DFX_NETWORK is not set — canister IDs will not be injected at build time.');
-    return {};
-  }
-
-  const idsPath = join(repoRoot, 'canister_ids.json');
-  const defines = {};
-
-  if (!existsSync(idsPath)) return defines;
-
-  try {
-    const allIds = JSON.parse(readFileSync(idsPath, 'utf-8'));
-    for (const [canister, networks] of Object.entries(allIds)) {
-      const id = networks[network] || '';
-      if (id) {
-        const envKey = `CANISTER_ID_${canister.toUpperCase()}`;
-        defines[`import.meta.env.${envKey}`] = JSON.stringify(id);
-        process.env[envKey] = id;
-      }
-    }
-  } catch (e) {
-    console.warn('Failed to read canister_ids.json:', e.message);
-    return defines;
-  }
-
-  assertInstallerLiveForBake(defines['import.meta.env.CANISTER_ID_REALM_INSTALLER']
-    ? JSON.parse(defines['import.meta.env.CANISTER_ID_REALM_INSTALLER'])
-    : '', network, { repoRoot });
-  assertCasalsFrontendLiveForBake(
-    defines['import.meta.env.CANISTER_ID_CASALS_FRONTEND']
-      ? JSON.parse(defines['import.meta.env.CANISTER_ID_CASALS_FRONTEND'])
-      : '',
-    network,
-    { repoRoot }
-  );
-
-  return defines;
-}
-
-// Inject the full canister_ids.json map for runtime resolution (single tarball, multi-env deploy).
-function getCanisterIdsDefine() {
-  const idsPath = join(repoRoot, 'canister_ids.json');
-  if (!existsSync(idsPath)) return {};
-
-  try {
-    const allIds = JSON.parse(readFileSync(idsPath, 'utf-8'));
-    // Only the staging SPA bake must refuse a dead staging installer id.
-    // test/demo `gaas new --network ic` still writes the full map into
-    // __CANISTER_IDS__, but must not require staging.gos.earth to be live.
-    if (process.env.GAAS_ENV === 'staging' || process.env.DFX_NETWORK === 'staging') {
-      assertInstallerLiveForBake(allIds.realm_installer?.staging || '', 'staging', {
-        repoRoot,
-      });
-      for (const [net, id] of Object.entries(allIds.casals_frontend || {})) {
-        assertCasalsFrontendLiveForBake(id || '', net, { repoRoot });
-      }
-    }
-    return { '__CANISTER_IDS__': JSON.stringify(allIds) };
-  } catch (e) {
-    if (String(e.message || '').includes('CANISTER_ID_REALM_INSTALLER')) {
-      throw e;
-    }
-    console.warn('Failed to read canister_ids.json for __CANISTER_IDS__:', e.message);
-    return {};
-  }
-}
+// Canister ids, the network and the portal origin are NOT baked into the
+// bundle: the conductor writes /canister_ids.js into the deployed asset
+// canister (casals.json, realm-registry-frontend `files`), and a local replica
+// supplies CANISTER_ID_* through dfx's env (vite-plugin-environment below).
+// One dist serves every environment.
 
 const buildValues = getBuildValues();
-const canisterDefines = getCanisterIdDefines();
-const canisterIdsDefine = getCanisterIdsDefine();
 const gaasEnvDefine = getGaasEnvViteDefine(gaasEnv);
 
 export default defineConfig({
@@ -135,8 +61,6 @@ export default defineConfig({
     '__BUILD_VERSION__': JSON.stringify(buildValues.version),
     '__BUILD_COMMIT__': JSON.stringify(buildValues.commitHash),
     '__BUILD_TIME__': JSON.stringify(buildValues.buildTime),
-    ...canisterIdsDefine,
-    ...canisterDefines,
     ...gaasEnvDefine,
   },
   optimizeDeps: {

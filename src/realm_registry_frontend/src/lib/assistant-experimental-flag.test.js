@@ -26,31 +26,19 @@ test('experimental notice copy is the go-live string', () => {
 	assert.doesNotMatch(ASSISTANT_EXPERIMENTAL_PROMPT_RULES, /I agree to terms/i);
 });
 
-test('assistant_experimental_notice defaults ON for staging and demo', () => {
-	assert.equal(isAssistantExperimentalNoticeEnabled({ network: 'staging' }), true);
-	assert.equal(isAssistantExperimentalNoticeEnabled({ network: 'demo' }), true);
-	assert.equal(isAssistantExperimentalNoticeEnabled({ network: 'Staging' }), true);
+test('assistant_experimental_notice is OFF unless the registry stored it — no network default', () => {
+	for (const network of ['staging', 'demo', 'Staging', 'test', 'local', 'ic', '']) {
+		assert.equal(isAssistantExperimentalNoticeEnabled({ network }), false, network);
+	}
 });
 
-test('assistant_experimental_notice defaults OFF for test and production', () => {
-	assert.equal(isAssistantExperimentalNoticeEnabled({ network: 'test' }), false);
-	assert.equal(isAssistantExperimentalNoticeEnabled({ network: 'ic' }), false);
-	assert.equal(isAssistantExperimentalNoticeEnabled({ network: '' }), false);
-});
-
-test('explicit flag overrides the network default', () => {
+test('the stored flag is the only switch', () => {
 	assert.equal(
-		isAssistantExperimentalNoticeEnabled({
-			assistantExperimentalNotice: false,
-			network: 'staging',
-		}),
+		isAssistantExperimentalNoticeEnabled({ assistantExperimentalNotice: false, network: 'staging' }),
 		false,
 	);
 	assert.equal(
-		isAssistantExperimentalNoticeEnabled({
-			assistantExperimentalNotice: true,
-			network: 'test',
-		}),
+		isAssistantExperimentalNoticeEnabled({ assistantExperimentalNotice: true, network: 'ic' }),
 		true,
 	);
 });

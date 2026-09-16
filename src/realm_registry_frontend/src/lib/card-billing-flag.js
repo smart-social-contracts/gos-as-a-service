@@ -1,20 +1,16 @@
 /** Go-live copy for disabled portal card checkout. Do not substitute. */
 export const CARD_PAY_UNAVAILABLE_COPY = 'Currently not available';
 
-const DEFAULT_ON_NETWORKS = new Set(['staging', 'demo']);
-
 /**
  * Card checkout stays in the Stripe path; this flag only disables charging.
  *
- * Explicit boolean wins. When the runtime value is unknown, staging/demo
- * default ON so Pay with Card cannot charge on those portals.
+ * The registry's stored flag (casals.json `test_flags.disable_card_billing`)
+ * is the only switch; no network name turns it on.
  *
  * @param {{ disableCardBilling?: boolean, network?: string }} [options]
  */
-export function isCardBillingDisabled({ disableCardBilling, network = '' } = {}) {
-	if (disableCardBilling === true) return true;
-	if (disableCardBilling === false) return false;
-	return DEFAULT_ON_NETWORKS.has(String(network || '').toLowerCase());
+export function isCardBillingDisabled({ disableCardBilling } = {}) {
+	return disableCardBilling === true;
 }
 
 /** True only when the Stripe create-session path may run. */

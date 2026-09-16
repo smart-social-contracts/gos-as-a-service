@@ -2,7 +2,7 @@
 
 Agent guidance for the GOS-as-a-Service platform (registry + installer + wizard UI).
 
-> **WARNING:** `staging.gos.earth` is **LIVE**. Never reinstall staging canisters without explicit human instruction. Prefer read-only queries (`__browse__`, `--query`) when investigating production state.
+> **WARNING:** `gos.earth` is **LIVE**. Never reinstall production canisters without explicit human instruction. Prefer read-only queries (`__browse__`, `--query`) when investigating production state.
 
 ## Repository layout
 
@@ -15,12 +15,17 @@ src/file_registry_frontend/      # File registry admin UI (static assets; releas
 src/declarations/               # Vendored candid bindings for frontend build
 tests/backend/                  # Unit tests (no replica)
 tests/integration/              # Live-replica installer API tests
-scripts/infra_dev_deploy.sh     # Fast dfx deploy (registry | installer)
+casals.json                     # The environments (local, production): every id, host, controller and test flag
 ```
 
-Canister ids live in `casals.json` and the conductor's bindings (`casals export`), not here.
+Canister ids, hosts and per-environment behaviour live in `casals.json` only
+(read live ids with `casals export`). Canisters get theirs at runtime —
+`configure` / `set_canister_config_json` for backends, the conductor-written
+`/canister_ids.js` (`network`, `portal_url`, ids) for frontends. Never add a
+table keyed by network name to code, scripts, workflows or docs; CI rejects id
+literals outside `casals.json`.
 
-Portal hosts: `test.gos.earth`, `demo.gos.earth`, `staging.gos.earth` → **`realm_registry_frontend`**. Realms marketplace hosts (`*.realmsgos.org`) → **`marketplace_frontend`** when declared in the sheet (see below).
+Portal host: `environments.production.portal_host` (`gos.earth`) → **`realm_registry_frontend`**. Realms marketplace hosts (`*.realmsgos.org`) → **`marketplace_frontend`** when declared in the sheet (see below).
 
 The environment is declared in `casals.json` and built with `casals up` (see `docs/OPERATIONS.md` and the Casals repo).
 
@@ -44,38 +49,23 @@ Never `dfx canister delete` on these canisters (or any fat canister) — leftove
 
 **Destroy:** portal/realm teardown uses `delegated_destroy` (installer → Casals) without a multisig vote; the installer **refuses** destroy when `casals_canister_id` is unset (no raw IC delete). Operators and agents must **never** run `dfx canister delete`. Use `casals destroy` or Casals `destroy_stand` / `destroy_canister`. Casals Cycles ops destroy for non-controllers goes through Motoko `DestroyStand` / `DestroyCanister`. Multisig `SetCanisterControllers` only works when the multisig is already an IC controller of the target.
 
-## Registry / wizard UI (staging)
+## Registry / wizard UI
 
 The **create-realm wizard** and **deployment status page** live in
-`src/realm_registry_frontend/` (`staging.gos.earth`).
+`src/realm_registry_frontend/` (`gos.earth`).
 
-**After changing wizard or deployment-progress UI, deploy the registry frontend separately**
+**After changing wizard or deployment-progress UI, deploy the registry frontend**
 or users will see stale behaviour (e.g. deployment stuck at "Queued" while the job is
-actually installing extensions on-chain).
-
-**Staging — use this today:**
-
-```bash
-export TERM=xterm DFX_WARNING=-mainnet_plaintext_identity
-dfx identity use deployer
-
-# Update the LIVE wizard website (required for users to see UI changes)
-scripts/infra_dev_deploy.sh -e staging -f registry -c frontend
-# or both backend + frontend if registry backend changed too:
-# scripts/infra_dev_deploy.sh -e staging -f registry -c both
-```
+actually installing extensions on-chain). The deploy is the sheet's: rebuild the
+dist (`npm run build --workspace=realm_registry_frontend`), then `casals up -e
+production` from the Casals repo converges the `realm-registry-frontend` canister
+(see `docs/OPERATIONS.md`). Never `dfx deploy` a canister the conductor controls.
 
 **Note:** `dfx build realm_registry_backend` may need an explicit basilisk step first if
 it produces no WASM — run
 `python -m basilisk realm_registry_backend src/realm_registry_backend/main.py`, then
 `gzip -kf .basilisk/realm_registry_backend/realm_registry_backend.wasm` before
-`dfx canister install …`.
-
-**Casals rollout (`realm-registry`) — blocked until Casals is upgraded on staging:**
-`realms rollout -e staging -t realm-registry -s frontend -v main` currently fails on
-`upgrade_to` (orchestration governance gate when the stand's section is unset). Until
-Casals is fixed on staging, `infra_dev_deploy.sh` is the supported way to put registry
-UI changes live.
+`dfx canister install …` on a **local** replica.
 
 **Hard-refresh** the browser (Ctrl+Shift+R) after deploy — asset canisters cache aggressively.
 
@@ -95,53 +85,23 @@ Minor clipping in some in-app browsers (Brave, DDG) is usually the browser chrom
 overlapping fixed UI, not a missing page inset — avoid inventing per-browser padding
 unless a real device test shows content is unreachable.
 
-## Fast infra deploy (dev only)
+## Deploying registry / installer changes
 
-While developing registry / installer, skip Casals publish + rollout and
-**deploy directly with `dfx`** from the repo root (~2–5 min per component).
+There is one path per environment: rebuild, then `casals up -e <env>` on
+`casals.json` (`docs/OPERATIONS.md`). `local` is a fresh replica (`casals up -e
+local` builds everything from source); `production` is `gos.earth`. The
+conductor is the controller of every canister it manages, so an imperative
+`dfx deploy --network …` is not a shortcut — it fails, and if it did not it
+would leave the sheet lying.
 
-**Setup (once per shell):**
-
-```bash
-export TERM=xterm
-export DFX_WARNING=-mainnet_plaintext_identity
-dfx identity use deployer
-```
-
-**Deploy:**
+For a local replica without the conductor (single-canister iteration):
 
 ```bash
-# Registry backend only (~2–3 min)
-scripts/infra_dev_deploy.sh -e staging -f registry -c backend
-
-# Registry frontend only (~3–5 min)
-scripts/infra_dev_deploy.sh -e staging -f registry -c frontend
-
-# Both
-scripts/infra_dev_deploy.sh -e staging -f registry -c both
-
-# Installer backend
-scripts/infra_dev_deploy.sh -e test -f installer -c backend
-```
-
-Equivalent raw commands (registry backend example):
-
-```bash
-export TERM=xterm DFX_WARNING=-mainnet_plaintext_identity
 export PATH="$PWD/.venv-basilisk/bin:$PATH"
-export CANISTER_CANDID_PATH=src/realm_registry_backend/realm_registry_backend.did
-export DFX_NETWORK=staging
-dfx build realm_registry_backend --network staging
-dfx canister install <realm-registry-backend> --network staging --mode upgrade \
-  --wasm .basilisk/realm_registry_backend/realm_registry_backend.wasm.gz
-npm run build --workspace=realm_registry_frontend
-dfx deploy realm_registry_frontend --network staging --yes
+dfx start --background --clean
+dfx deploy realm_registry_backend
+npm run build --workspace=realm_registry_frontend && dfx deploy realm_registry_frontend
 ```
-
-| Situation | Path |
-|---|---|
-| Iterating on registry/wizard during development | `scripts/infra_dev_deploy.sh` |
-| Full realm deploy queue E2E on staging/demo | `scripts/test_queue_deployment_e2e.sh` |
 
 ## Credits system
 
@@ -177,7 +137,7 @@ Federation slugs map realms to portal URLs (`/r/{slug}`). Logic lives in `src/re
 | `ggg_conformance` | `1.0` | GGG protocol version |
 | `loader_profile` | `realms-iframe-v1` | How the portal embeds the realm frontend |
 
-Portal URL pattern: `{portal_base}/r/{slug}` (e.g. `https://staging.gos.earth/r/my-realm`).
+Portal URL pattern: `{portal_base}/r/{slug}` (e.g. `https://gos.earth/r/my-realm`); `portal_base` is the registry's configured `portal_url` (casals.json), never derived from a network name.
 
 **`resolve_slug`** returns slug → realm_id, frontend_canister_id, GOS metadata for the portal router.
 
@@ -277,7 +237,7 @@ When enabled, the registry schedules `provision_via_casals(job_id)` after enqueu
 
 Local development can run with `provision_via_casals = 0` (off-Casals path) so contributors need not deploy a local Casals conductor.
 
-Full queue E2E test: `scripts/test_queue_deployment_e2e.sh --network staging`.
+Full queue E2E: `.github/workflows/gaas-e2e.yml` (`casals up -e local`, then a wizard deploy against the local installer).
 
 ## Debugging Python canisters (`__browse__` / `__shell__`)
 
@@ -290,7 +250,7 @@ export TERM=xterm DFX_WARNING=-mainnet_plaintext_identity
 dfx identity use deployer
 
 dfx canister call <realm-registry-backend> __browse__ \
-  '("{\"action\": \"schema\"}")' --query --network staging
+  '("{\"action\": \"schema\"}")' --query --network ic
 ```
 
 ### `__shell__` — Python REPL (update)
@@ -300,14 +260,14 @@ Requires your dfx identity to be a **canister controller**:
 ```bash
 dfx canister call <realm-registry-backend> __shell__ \
   '("from realm_registry_backend.core.models import RealmRecord; print(len(list(RealmRecord.instances())))")' \
-  --network staging --identity deployer
+  --network ic --identity deployer
 ```
 
 List realms quickly:
 
 ```bash
 dfx canister call <realm-registry-backend> list_realms '()' \
-  --query --network staging
+  --query --network ic
 ```
 
 ## Basilisk builds

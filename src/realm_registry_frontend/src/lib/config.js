@@ -8,14 +8,13 @@
 // until get_runtime_flags loads; after that the backend is authoritative.
 
 import { getRegistryRuntimeFlagsSnapshot } from '$lib/stores/registryRuntimeFlags.js';
-import { detectNetwork, getCanisterId } from './network.js';
+import { detectNetwork, getCanisterId, runtimeCanisterIds } from './network.js';
 import { isCardBillingDisabled } from './card-billing-flag.js';
 import { isAssistantExperimentalNoticeEnabled } from './assistant-experimental-flag.js';
 import {
 	resolveBillingServiceUrl,
 	resolveDeployServiceUrl,
-	resolvePortalBaseUrl,
-	resolvePortalHosts
+	resolvePortalBaseUrl
 } from './config-resolvers.js';
 
 const viteEnv = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {};
@@ -32,8 +31,9 @@ function runtimeGaasEnv() {
 }
 
 const gaasEnv = runtimeGaasEnv();
-const network = detectNetwork(undefined, gaasEnv);
-const portalHosts = resolvePortalHosts(viteEnv, gaasEnv, network);
+const runtimeIds = runtimeCanisterIds();
+const network = detectNetwork(undefined, gaasEnv, runtimeIds);
+const portalBaseUrl = resolvePortalBaseUrl(viteEnv, gaasEnv, runtimeIds);
 
 function resolveCanTestMode() {
 	const fromFlags = gaasEnv?.flags?.can_test_mode;
@@ -44,7 +44,7 @@ function resolveCanTestMode() {
 	return undefined;
 }
 
-export { resolveBillingServiceUrl, resolveDeployServiceUrl, resolvePortalBaseUrl, resolvePortalHosts };
+export { resolveBillingServiceUrl, resolveDeployServiceUrl, resolvePortalBaseUrl };
 
 export const CONFIG = {
 	internet_identity_url: viteEnv.VITE_INTERNET_IDENTITY_URL || 'https://identity.ic0.app/',
@@ -52,9 +52,8 @@ export const CONFIG = {
 	federation_portal: viteEnv.VITE_FEDERATION_PORTAL !== 'false',
 	ii_derivation_origin:
 		viteEnv.VITE_II_DERIVATION_ORIGIN ||
-		(viteEnv.VITE_FEDERATION_PORTAL === 'false' ? portalHosts[network] || '' : ''),
-	portal_base_url: resolvePortalBaseUrl(viteEnv, gaasEnv, network),
-	portal_hosts: portalHosts,
+		(viteEnv.VITE_FEDERATION_PORTAL === 'false' ? portalBaseUrl : ''),
+	portal_base_url: portalBaseUrl,
 	deploy_queue_network: network,
 	billing_service_url: resolveBillingServiceUrl(viteEnv, gaasEnv),
 	realm_registry_backend_canister_id:

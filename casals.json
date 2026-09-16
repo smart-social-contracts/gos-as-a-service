@@ -315,7 +315,7 @@
               ],
               "content": "frontend/realm-registry-frontend/main",
               "files": {
-                "/canister_ids.js": "globalThis.__CANISTER_IDS = {\"realm_registry_backend\": \"$stand.backend\", \"realm_installer\": \"$canister:realm-installer\", \"casals_frontend\": \"$canister:casals-frontend\"};\n",
+                "/canister_ids.js": "globalThis.__CANISTER_IDS = {\"realm_registry_backend\": \"$stand.backend\", \"realm_installer\": \"$canister:realm-installer\", \"casals_frontend\": \"$canister:casals-frontend\", \"network\": \"$env.network\", \"portal_url\": \"$env.portal_url\"};\n",
                 "/.well-known/ii-alternative-origins": "$env.ii_alternative_origins"
               },
               "health": [

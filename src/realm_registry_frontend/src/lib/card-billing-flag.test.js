@@ -13,41 +13,23 @@ test('unavailable copy is the go-live string', () => {
 	assert.notEqual(CARD_PAY_UNAVAILABLE_COPY, 'Not available in this demo');
 });
 
-test('disable_card_billing defaults ON for staging and demo', () => {
-	assert.equal(isCardBillingDisabled({ network: 'staging' }), true);
-	assert.equal(isCardBillingDisabled({ network: 'demo' }), true);
-	assert.equal(isCardBillingDisabled({ network: 'Staging' }), true);
-	assert.equal(canStartCardCheckout({ network: 'staging' }), false);
-	assert.equal(canStartCardCheckout({ network: 'demo' }), false);
+test('disable_card_billing is OFF unless the registry stored it — no network default', () => {
+	for (const network of ['staging', 'demo', 'Staging', 'test', 'local', 'ic', '']) {
+		assert.equal(isCardBillingDisabled({ network }), false, network);
+		assert.equal(canStartCardCheckout({ network }), true, network);
+	}
 });
 
-test('disable_card_billing defaults OFF for test and production', () => {
-	assert.equal(isCardBillingDisabled({ network: 'test' }), false);
-	assert.equal(isCardBillingDisabled({ network: 'ic' }), false);
-	assert.equal(isCardBillingDisabled({ network: '' }), false);
-	assert.equal(canStartCardCheckout({ network: 'test' }), true);
-});
-
-test('explicit flag overrides the network default', () => {
-	assert.equal(
-		isCardBillingDisabled({ disableCardBilling: false, network: 'staging' }),
-		false
-	);
-	assert.equal(
-		canStartCardCheckout({ disableCardBilling: false, network: 'staging' }),
-		true
-	);
-	assert.equal(
-		isCardBillingDisabled({ disableCardBilling: true, network: 'test' }),
-		true
-	);
-	assert.equal(canStartCardCheckout({ disableCardBilling: true, network: 'test' }), false);
+test('the stored flag is the only switch', () => {
+	assert.equal(isCardBillingDisabled({ disableCardBilling: true, network: 'ic' }), true);
+	assert.equal(canStartCardCheckout({ disableCardBilling: true, network: 'ic' }), false);
+	assert.equal(isCardBillingDisabled({ disableCardBilling: false, network: 'staging' }), false);
 });
 
 test('Pay with Card label becomes the unavailable state when disabled', () => {
 	assert.equal(
 		cardPayButtonLabel({ network: 'staging', availableLabel: 'Pay with Card' }),
-		'Currently not available'
+		'Pay with Card'
 	);
 	assert.equal(
 		cardPayButtonLabel({

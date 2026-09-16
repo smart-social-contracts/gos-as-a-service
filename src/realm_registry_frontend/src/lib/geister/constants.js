@@ -12,5 +12,5 @@ export const CHAT_REQUEST_TIMEOUT_MS = 360_000;
 
 /** Geister network for this registry deploy. */
 export function geisterNetwork() {
-  return CONFIG.default_deploy_queue_network || 'staging';
+  return CONFIG.default_deploy_queue_network || '';
 }

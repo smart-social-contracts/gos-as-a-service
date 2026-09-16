@@ -19,13 +19,6 @@ DEFAULT_LOADER_PROFILE = "realms-iframe-v1"
 DEFAULT_GOS_IMPLEMENTATION = "realms-gos"
 DEFAULT_GGG_CONFORMANCE = "1.0"
 
-_PORTAL_HOSTS = {
-    "staging": "https://staging.gos.earth",
-    "demo": "https://demo.gos.earth",
-    "test": "https://test.gos.earth",
-    "ic": "https://realmsgos.org",
-    "production": "https://realmsgos.org",
-}
 
 
 def normalize_slug(raw: str) -> str:
@@ -69,6 +62,10 @@ def _validate_slug(slug: str):
 
 
 def _portal_base_url(override: str = "") -> str:
+    """The portal origin this registry serves: the caller's override, else the
+    configured ``portal_url`` (casals.json ``environments.<env>.portal_url`` via
+    ``configure``). Empty when neither is set — the registry never guesses a host
+    from a network name."""
     if override and override.strip():
         return override.strip().rstrip("/")
     configured = get_portal_url()
@@ -77,9 +74,7 @@ def _portal_base_url(override: str = "") -> str:
     cfg = RegistryConfig["portal_base_url"]
     if cfg and cfg.value:
         return cfg.value.rstrip("/")
-    net_cfg = RegistryConfig["portal_network"]
-    network = (net_cfg.value if net_cfg else "staging").strip().lower()
-    return _PORTAL_HOSTS.get(network, _PORTAL_HOSTS["staging"])
+    return ""
 
 
 def _pretty_hostname(slug: str, portal_base: str, explicit: str = "") -> str:
@@ -122,6 +117,8 @@ def claim_slug_by_caller(
         return {"success": False, "error": f"Slug '{normalized}' already claimed"}
 
     portal_base = _portal_base_url(portal_base_url)
+    if not portal_base:
+        return {"success": False, "error": "portal_url is not configured on this registry (configure it from casals.json)"}
     portal_url = f"{portal_base}/r/{normalized}"
     pretty = _pretty_hostname(normalized, portal_base, pretty_hostname)
 

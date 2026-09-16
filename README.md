@@ -15,21 +15,13 @@ GOS-as-a-Service (GaaS) is the platform behind [gos.earth](https://gos.earth): a
 | File registry frontend | `src/file_registry_frontend/` | Static admin UI for the file registry; deployed per-env from release tarballs |
 | Casals (external) | [smart-social-contracts/casals](https://github.com/smart-social-contracts/casals) | Platform provisioner — on-chain canister lifecycle orchestrator |
 
-Casals is an **external platform component**, not built from this repo. The realm installer reaches a Casals conductor at runtime via `InstallerConfig` on the installer canister: `casals_canister_id`, `casals_section`, and `provision_via_casals`. Any conforming Casals conductor can serve a network; today the **realms** fleet operates the conductors per network:
+Casals is an **external platform component**, not built from this repo. The realm installer reaches a Casals conductor at runtime via `InstallerConfig` on the installer canister: `casals_canister_id`, `casals_section`, and `provision_via_casals`. Any conforming Casals conductor can serve an environment.
 
-| Network | Casals conductor |
-|---|---|
-| test | `qthgp-3yaaa-aaaae-agveq-cai` |
-| demo | `jo3cj-faaaa-aaaac-bffea-cai` |
-| staging | `th7fr-bqaaa-aaaan-q6n4q-cai` |
-
-Test and demo keep the realms-era canister IDs. Staging was rebuilt; DNS-mapped frontends (`realm_registry_frontend`, `marketplace_frontend`) were kept.
-
-The environment is declared in `casals.json` and built with `casals up` (see the Casals repo).
+Every environment (`local`, `production`) is declared in [`casals.json`](casals.json) and built and converged with `casals up -e <env>` (see the Casals repo). Canister ids, the portal host, controllers and test flags live only there: canisters receive theirs at runtime (`configure` / `set_canister_config_json`, the conductor-written `/canister_ids.js` for frontends), and `casals export` prints the live ones. No file in this repo carries a per-network table of ids or hosts; CI rejects one.
 
 ```mermaid
 flowchart LR
-  User([User]) --> Wizard[Registry frontend<br/>staging.gos.earth]
+  User([User]) --> Wizard[Registry frontend<br/>gos.earth]
   Wizard -->|request_deployment| RegBE[Registry backend]
   RegBE -->|hold 5 credits| Credits[(Credits DB)]
   RegBE -->|enqueue_deployment| Installer[Realm installer]
@@ -52,7 +44,7 @@ flowchart LR
 
 ## DNS-mapped frontend canisters
 
-**`*.gos.earth`** (`staging.gos.earth`, `demo.gos.earth`, `test.gos.earth`) is mapped in DNS and IC custom-domain tables to **`realm_registry_frontend`** — the wizard + federation site.
+**`gos.earth`** (`environments.production.dns` in `casals.json`) is mapped in DNS and IC custom-domain tables to **`realm_registry_frontend`** — the wizard + federation site.
 
 **`*.realmsgos.org`** is mapped the same way to **`marketplace_frontend`** when that canister is in the sheet.
 

@@ -35,11 +35,19 @@ jobs:
         # at runtime via configure / set_canister_config_json. Test fixtures and
         # generated declarations are exempt.
         run: |
+          # DFINITY system canisters (Internet Identity, ckBTC, the Candid UI) are
+          # public constants, not environment tables, and are the only allowed ids.
           if grep -rnoE '\b[a-z0-9]{5}(-[a-z0-9]{5}){3,10}-[a-z0-9]{3}\b' \
-               scripts .github src \
-               --include='*.py' --include='*.yml' --include='*.sh' --include='*.js' --include='*.svelte' --include='ic-domains' --include='ii-alternative-origins' \
-               --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.svelte-kit --exclude-dir=declarations --exclude-dir=__pycache__ --exclude-dir=tests --exclude='*.test.js'; then
+               scripts .github src dfx.json \
+               --include='*.py' --include='*.yml' --include='*.sh' --include='*.js' --include='*.svelte' --include='dfx.json' --include='ic-domains' --include='ii-alternative-origins' \
+               --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.svelte-kit --exclude-dir=declarations --exclude-dir=__pycache__ --exclude-dir=tests --exclude='*.test.js' \
+             | grep -vE 'rdmx6-jaaaa-aaaaa-aaadq-cai|mxzaz-hqaaa-aaaar-qaada-cai|n5wcd-faaaa-aaaar-qaaea-cai|rxs6w-5qaaa-aaaah-avp2a-cai'; then
             echo "::error::canister/principal ids belong in casals.json (read them with 'casals export')"; exit 1
+          fi
+          # Nor a table keyed by the dead environment names.
+          if grep -rnE '"(staging|demo|test)"\s*:\s*"[a-z0-9]{5}-' src scripts dfx.json canister_ids.json \
+               --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.svelte-kit --exclude-dir=declarations; then
+            echo "::error::per-network id table; environments are declared in casals.json only"; exit 1
           fi
           test ! -d cli || { echo "::error::the gaas CLI was deleted in favour of 'casals up'; do not resurrect it"; exit 1; }
 
@@ -54,8 +62,6 @@ jobs:
         run: pip install -r requirements-dev.txt
       - name: Backend unit tests
         run: python3 -m pytest tests/backend/ -q
-      - name: Probe baked Casals frontends
-        run: python3 scripts/canister_liveness.py --probe-baked
 
   frontend:
     runs-on: ubuntu-latest

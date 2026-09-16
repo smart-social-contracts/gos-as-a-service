@@ -14,19 +14,13 @@ export const ASSISTANT_EXPERIMENTAL_PROMPT_RULES = [
 	'If asked for legal rights, binding rules, or what someone can do in this community as if it were official, say you are unofficial and experimental and point the user to the written notice / codex. Do not invent rules.',
 ].join(' ');
 
-const DEFAULT_ON_NETWORKS = new Set(['staging', 'demo']);
-
 /**
- * Explicit boolean wins. When the runtime value is unknown, staging/demo
- * default ON so gos.earth shows the experimental assistant notice.
+ * The registry's stored flag (casals.json
+ * `test_flags.assistant_experimental_notice`) is the only switch; no network
+ * name turns the notice on.
  *
  * @param {{ assistantExperimentalNotice?: boolean, network?: string }} [options]
  */
-export function isAssistantExperimentalNoticeEnabled({
-	assistantExperimentalNotice,
-	network = '',
-} = {}) {
-	if (assistantExperimentalNotice === true) return true;
-	if (assistantExperimentalNotice === false) return false;
-	return DEFAULT_ON_NETWORKS.has(String(network || '').toLowerCase());
+export function isAssistantExperimentalNoticeEnabled({ assistantExperimentalNotice } = {}) {
+	return assistantExperimentalNotice === true;
 }

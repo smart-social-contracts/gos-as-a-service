@@ -26,10 +26,9 @@ _FLAG_MAP = {
     "assistant_experimental_notice": "test_mode_assistant_experimental_notice",
 }
 
-# Unset disable_card_billing / assistant_experimental_notice default ON for
-# dogfood portal networks (staging/demo).
-_DISABLE_CARD_BILLING_DEFAULT_NETWORKS = frozenset({"staging", "demo"})
-_ASSISTANT_EXPERIMENTAL_NOTICE_DEFAULT_NETWORKS = _DISABLE_CARD_BILLING_DEFAULT_NETWORKS
+# disable_card_billing / assistant_experimental_notice are ordinary stored
+# flags: an environment that wants them sets them in casals.json
+# (``environments.<env>.test_flags``). No network name switches them on.
 
 
 def _config_key(flag_attr: str) -> str:
@@ -51,19 +50,8 @@ def get_flag(name: str, default: bool = False) -> bool:
 
 
 def default_disable_card_billing(network: str | None = None) -> bool:
-    """True when card checkout should be blocked unless the flag is stored."""
-    net = (network if network is not None else get_network() or "").strip().lower()
-    if net in _DISABLE_CARD_BILLING_DEFAULT_NETWORKS:
-        return True
-    if net:
-        return False
-    try:
-        from core.env_config import _network_from_portal_url, get_portal_url
-
-        portal_net = _network_from_portal_url(get_portal_url())
-        return portal_net in _DISABLE_CARD_BILLING_DEFAULT_NETWORKS
-    except Exception:
-        return False
+    """Card checkout is live unless the environment stored the flag."""
+    return False
 
 
 def is_card_billing_disabled(network: str | None = None) -> bool:
@@ -75,19 +63,8 @@ def is_card_billing_disabled(network: str | None = None) -> bool:
 
 
 def default_assistant_experimental_notice(network: str | None = None) -> bool:
-    """True when the registry assistant should show the experimental notice."""
-    net = (network if network is not None else get_network() or "").strip().lower()
-    if net in _ASSISTANT_EXPERIMENTAL_NOTICE_DEFAULT_NETWORKS:
-        return True
-    if net:
-        return False
-    try:
-        from core.env_config import _network_from_portal_url, get_portal_url
-
-        portal_net = _network_from_portal_url(get_portal_url())
-        return portal_net in _ASSISTANT_EXPERIMENTAL_NOTICE_DEFAULT_NETWORKS
-    except Exception:
-        return False
+    """The experimental notice shows only where the environment stored the flag."""
+    return False
 
 
 def is_assistant_experimental_notice_enabled(network: str | None = None) -> bool:

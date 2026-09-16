@@ -117,10 +117,26 @@ def test_portal_url_resolution_prefers_configured():
     assert get_portal_url() == "https://configured.example"
 
 
-def test_portal_url_falls_back_to_network_map():
+def test_portal_url_is_never_guessed_from_a_network_name():
     _clear_env_config()
     RegistryConfig(key="portal_network", value="test")
-    assert _portal_base_url() == "https://test.gos.earth"
+    assert _portal_base_url() == ""
+
+
+def test_claim_slug_refuses_without_a_configured_portal():
+    _clear_env_config()
+    for slug in list(SlugRecord.instances()):
+        slug.delete()
+    for realm in list(RealmRecord.instances()):
+        realm.delete()
+    backend_id = "backend-portal-0"
+    mock_ic.caller.return_value = backend_id
+    assert register_realm_by_caller(
+        "No Portal", url="https://x.example", frontend_canister_id="frontend-portal-0"
+    )["success"]
+    result = claim_slug_by_caller("no-portal", "frontend-portal-0", backend_id)
+    assert result["success"] is False
+    assert "portal_url" in result["error"]
 
 
 def test_claim_slug_uses_configured_portal_base():

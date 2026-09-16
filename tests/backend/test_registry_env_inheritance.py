@@ -75,14 +75,19 @@ def test_can_test_mode_true_rewrites_ic_network():
     assert manifest["network"] == "test"
 
 
-def test_can_test_mode_true_derives_network_from_portal_url():
+def test_can_test_mode_true_takes_the_configured_network_not_the_host():
+    """The registry's network comes from casals.json via configure; a portal host
+    is never sniffed for one, and an unconfigured registry yields "" (the realm
+    then treats it as production and refuses test flags — fail closed)."""
     _clear_registry_config()
-    apply_env_config(
-        {"can_test_mode": True, "portal_url": "https://test.gos.earth"}
-    )
+    apply_env_config({"can_test_mode": True, "portal_url": "https://test.gos.earth"})
 
     manifest = apply_env_inheritance({"network": ""})
-    assert manifest["network"] == "test"
+    assert manifest["network"] == ""
+
+    apply_test_flags({"test_mode": True}, network="local")
+    manifest = apply_env_inheritance({"network": ""})
+    assert manifest["network"] == "local"
 
 
 def test_can_test_mode_false_strips_test_flags():

@@ -34,9 +34,21 @@ test('resolveDeployServiceUrl returns null when gaas-env omits deploy_url', () =
 	);
 });
 
-test('resolvePortalBaseUrl uses gaas-env domain origin', () => {
+test('resolvePortalBaseUrl takes the conductor-written portal_url first', () => {
 	assert.equal(
-		resolvePortalBaseUrl({}, { domain: 'partner.example', network: 'test' }, 'test'),
+		resolvePortalBaseUrl({}, { domain: 'partner.example' }, { portal_url: 'https://gos.earth/' }),
+		'https://gos.earth'
+	);
+});
+
+test('resolvePortalBaseUrl falls back to the gaas-env domain origin', () => {
+	assert.equal(
+		resolvePortalBaseUrl({}, { domain: 'partner.example', network: 'test' }, {}),
 		'https://partner.example'
 	);
+});
+
+test('resolvePortalBaseUrl is empty when this deployment declares no portal', () => {
+	assert.equal(resolvePortalBaseUrl({}, undefined, {}), '');
+	assert.equal(resolvePortalBaseUrl({}, undefined, undefined), '');
 });

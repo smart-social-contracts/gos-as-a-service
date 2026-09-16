@@ -18,55 +18,16 @@ export function normalizeDeployVersion(version) {
   return v.replace(/^v/, '');
 }
 
-/** Canonical federation portal URL for a realm slug. */
+/**
+ * Canonical federation portal URL for a realm slug. The portal origin comes
+ * from this deployment's config (`/canister_ids.js` → CONFIG.portal_base_url);
+ * "" when none is declared, in which case the registry fills in its own
+ * configured portal when the slug is claimed.
+ */
 export function portalUrlForSlug(slug, network, config = {}) {
-  const hosts = {
-    staging: 'https://staging.gos.earth',
-    demo: 'https://demo.gos.earth',
-    test: 'https://test.gos.earth',
-    ic: 'https://realmsgos.org',
-    production: 'https://realmsgos.org',
-  };
-  const base = config.portal_base_url || hosts[network] || hosts.staging;
-  return `${base.replace(/\/$/, '')}/r/${slugify(slug)}`;
-}
-
-function networkTestFlags(network, config = {}) {
-  if (config.can_test_mode === false) {
-    return {};
-  }
-  const net = (network || 'staging').toLowerCase();
-  if (net === 'ic' || net === 'production') {
-    return {};
-  }
-  if (net === 'test') {
-    return {
-      test_mode: true,
-      user_self_registration: true,
-      demo_data: true,
-      ii_bypass: true,
-      skip_terms: true,
-    };
-  }
-  if (net === 'staging') {
-    return {
-      test_mode: true,
-      user_self_registration: true,
-      demo_data: false,
-      ii_bypass: false,
-      skip_terms: false,
-    };
-  }
-  if (net === 'demo') {
-    return {
-      test_mode: true,
-      user_self_registration: true,
-      demo_data: true,
-      ii_bypass: false,
-      skip_terms: false,
-    };
-  }
-  return {};
+  const base = (config.portal_base_url || '').replace(/\/$/, '');
+  if (!base) return '';
+  return `${base}/r/${slugify(slug)}`;
 }
 
 export function networkInfra(network, config) {
@@ -121,7 +82,7 @@ export function buildRealmDeploymentManifest(formData, network, config = {}, opt
 
   const manifest = {
     name,
-    network: network || 'staging',
+    network: network || '',
     deploy_mode: 'install',
     deploy_scope: 'both',
     deploy_version: normalizedVersion,
@@ -140,8 +101,8 @@ export function buildRealmDeploymentManifest(formData, network, config = {}, opt
     manifest.can_test_mode = true;
   }
 
-  const testFlags = networkTestFlags(network, config);
-  if (Object.keys(testFlags).length > 0) manifest.test_flags = testFlags;
+  // Test flags are the registry's to stamp (apply_env_inheritance, from the
+  // environment's casals.json); the wizard sends none of its own.
 
   const slugInput = (formData.slug || '').trim();
   const federationSlug = slugify(slugInput || name);

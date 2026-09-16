@@ -12,6 +12,7 @@ from realm_registry_backend.api.slugs import (
     claim_slug_by_caller,
     resolve_slug_json,
 )
+from realm_registry_backend.core.env_config import apply_env_config
 from realm_registry_backend.core.models import RealmRecord, SlugRecord
 
 mock_ic = basilisk.ic
@@ -22,6 +23,8 @@ def _clear_slugs_and_realms():
         slug.delete()
     for realm in list(RealmRecord.instances()):
         realm.delete()
+    # A claim needs the environment's portal origin (casals.json portal_url).
+    apply_env_config({"portal_url": "https://portal.example"})
 
 
 def _register(backend_id: str, frontend_id: str):

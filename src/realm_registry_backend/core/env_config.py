@@ -194,27 +194,19 @@ _TEST_FLAG_ATTRS = {
     "skip_authentication": "test_mode_skip_authentication",
 }
 
-_PORTAL_HOST_NETWORKS = {
-    "test.gos.earth": "test",
-    "staging.gos.earth": "staging",
-    "demo.gos.earth": "demo",
-}
-
-
 def _is_production_network(network: str) -> bool:
     return (network or "").strip().lower() in _PRODUCTION_NETWORKS
 
 
-def _network_from_portal_url(url: str) -> str:
-    lower = (url or "").strip().lower()
-    for host, net in _PORTAL_HOST_NETWORKS.items():
-        if host in lower:
-            return net
-    return ""
-
-
 def _resolve_logical_network(manifest: dict) -> str:
-    """Pick a non-mainnet logical network for can_test_mode manifests."""
+    """Pick a non-mainnet logical network for can_test_mode manifests.
+
+    The manifest's own (non-production) network wins, then the network this
+    registry was configured with (casals.json ``environments.<env>.network``).
+    Nothing is inferred from a host name; an unconfigured registry yields "" and
+    the realm, which treats an unknown network as production, refuses the test
+    flags — failing closed rather than guessing.
+    """
     incoming = (manifest.get("network") or "").strip()
     if incoming and not _is_production_network(incoming):
         return incoming
@@ -225,11 +217,7 @@ def _resolve_logical_network(manifest: dict) -> str:
     if registry_net and not _is_production_network(registry_net):
         return registry_net
 
-    portal_net = _network_from_portal_url(get_portal_url())
-    if portal_net:
-        return portal_net
-
-    return "test"
+    return ""
 
 
 def _inherited_test_flags_from_registry() -> dict:

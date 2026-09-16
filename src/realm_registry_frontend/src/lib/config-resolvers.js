@@ -1,18 +1,15 @@
 /**
  * Pure config resolution helpers shared by config.js and unit tests.
+ *
+ * The portal origin is declared per environment in casals.json
+ * (`environments.<env>.portal_url`) and reaches this bundle through the
+ * conductor-written `/canister_ids.js` (`portal_url`). There is no table of
+ * hosts by network name here.
  */
 
 /**
  * @typedef {import('../../scripts/gaas-env.js').GaasEnv} GaasEnv
  */
-
-const PORTAL_HOSTS = {
-	staging: 'https://staging.gos.earth',
-	demo: 'https://demo.gos.earth',
-	test: 'https://test.gos.earth',
-	ic: 'https://realmsgos.org',
-	production: 'https://realmsgos.org'
-};
 
 /**
  * @param {string} domain
@@ -25,34 +22,18 @@ export function portalOriginForDomain(domain) {
 /**
  * @param {Record<string, string>} viteEnvOverride
  * @param {GaasEnv | undefined} gaasEnv
- * @param {string} network
- * @returns {Record<string, string>}
+ * @param {{ portal_url?: string | boolean } | undefined} [runtime] - `/canister_ids.js` payload
+ * @returns {string} the portal origin, or "" when this deployment declares none
  */
-export function resolvePortalHosts(viteEnvOverride, gaasEnv, network) {
-	const hosts = { ...PORTAL_HOSTS };
-	if (gaasEnv?.domain) {
-		const envNetwork = gaasEnv.network || 'staging';
-		hosts[envNetwork] = portalOriginForDomain(gaasEnv.domain);
-	}
-	if (viteEnvOverride.VITE_PORTAL_BASE_URL) {
-		hosts[network] = viteEnvOverride.VITE_PORTAL_BASE_URL;
-	}
-	return hosts;
-}
-
-/**
- * @param {Record<string, string>} viteEnvOverride
- * @param {GaasEnv | undefined} gaasEnv
- * @param {string} network
- * @returns {string}
- */
-export function resolvePortalBaseUrl(viteEnvOverride, gaasEnv, network) {
+export function resolvePortalBaseUrl(viteEnvOverride, gaasEnv, runtime) {
 	if (viteEnvOverride.VITE_PORTAL_BASE_URL) return viteEnvOverride.VITE_PORTAL_BASE_URL;
-	const hosts = resolvePortalHosts(viteEnvOverride, gaasEnv, network);
-	if (gaasEnv?.domain) {
-		return hosts[network] || portalOriginForDomain(gaasEnv.domain);
+	if (runtime && typeof runtime.portal_url === 'string' && runtime.portal_url.trim()) {
+		return runtime.portal_url.trim().replace(/\/$/, '');
 	}
-	return hosts[network] || PORTAL_HOSTS.staging;
+	if (gaasEnv?.domain) {
+		return portalOriginForDomain(gaasEnv.domain);
+	}
+	return '';
 }
 
 /**
@@ -76,5 +57,3 @@ export function resolveDeployServiceUrl(viteEnvOverride, gaasEnv) {
 	if (gaasEnv) return gaasEnv.services?.deploy_url ?? null;
 	return 'https://deploy.realmsgos.dev';
 }
-
-export { PORTAL_HOSTS };

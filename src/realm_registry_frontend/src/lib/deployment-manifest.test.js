@@ -6,11 +6,12 @@ import {
   slugify,
 } from './deployment-manifest-core.js';
 
+// CONFIG as resolved from the conductor-written /canister_ids.js of one deployment.
 const TEST_CONFIG = {
   default_deploy_version: 'main',
-  default_deploy_queue_network: 'staging',
+  default_deploy_queue_network: 'local',
   casals_section: 'Deployments',
-  portal_base_url: 'https://staging.gos.earth',
+  portal_base_url: 'http://portal.localhost:8000',
 };
 
 test('buildRealmDeploymentManifest omits codex, token, and branding', () => {
@@ -145,52 +146,52 @@ test('casals block never emits empty subnet strings', () => {
   assert.equal(manifest.casals.subnet_type, undefined);
 });
 
-test('staging still gets test_flags when can_test_mode is true', () => {
-  const manifest = buildRealmDeploymentManifest(
-    { name: 'Staging Realm', gos_implementation: 'realms-gos' },
-    'staging',
-    { ...TEST_CONFIG, can_test_mode: true },
-    { useCasals: false },
-  );
-  assert.equal(manifest.can_test_mode, true);
-  assert.equal(manifest.test_flags.test_mode, true);
-  assert.equal(manifest.test_flags.ii_bypass, false);
+test('the wizard sends no test_flags of its own — the registry stamps the environment\'s', () => {
+  for (const [network, config] of [
+    ['local', { ...TEST_CONFIG, can_test_mode: true }],
+    ['local', TEST_CONFIG],
+    ['ic', { ...TEST_CONFIG, can_test_mode: false }],
+    ['staging', { ...TEST_CONFIG, can_test_mode: true }],
+    ['test', { ...TEST_CONFIG, can_test_mode: true }],
+  ]) {
+    const manifest = buildRealmDeploymentManifest(
+      { name: 'Any Realm', gos_implementation: 'realms-gos' },
+      network,
+      config,
+      { useCasals: false },
+    );
+    assert.equal(manifest.test_flags, undefined, network);
+    assert.equal(manifest.can_test_mode, config.can_test_mode === true ? true : undefined);
+  }
 });
 
-test('staging still gets test_flags when can_test_mode is undefined', () => {
-  const manifest = buildRealmDeploymentManifest(
-    { name: 'Compat Realm', gos_implementation: 'realms-gos' },
+test('federation.portal_url comes from the configured portal, never a host table', () => {
+  const withPortal = buildRealmDeploymentManifest(
+    { name: 'Portal Realm', slug: 'portal-realm' },
+    'ic',
+    { ...TEST_CONFIG, portal_base_url: 'https://gos.earth/' },
+    { useCasals: false },
+  );
+  assert.equal(withPortal.federation.portal_url, 'https://gos.earth/r/portal-realm');
+
+  const withoutPortal = buildRealmDeploymentManifest(
+    { name: 'Portal Realm', slug: 'portal-realm' },
     'staging',
+    { ...TEST_CONFIG, portal_base_url: '' },
+    { useCasals: false },
+  );
+  assert.equal(withoutPortal.federation.portal_url, '');
+  assert.equal(withoutPortal.network, 'staging');
+});
+
+test('an unknown network stays empty rather than becoming an environment', () => {
+  const manifest = buildRealmDeploymentManifest(
+    { name: 'No Net Realm' },
+    '',
     TEST_CONFIG,
     { useCasals: false },
   );
-  assert.equal(manifest.can_test_mode, undefined);
-  assert.equal(manifest.test_flags.test_mode, true);
-});
-
-test('production GaaS omits test_flags when can_test_mode is false', () => {
-  const manifest = buildRealmDeploymentManifest(
-    { name: 'Prod Realm', gos_implementation: 'realms-gos' },
-    'staging',
-    { ...TEST_CONFIG, can_test_mode: false },
-    { useCasals: false },
-  );
-  assert.equal(manifest.test_flags, undefined);
-});
-
-test('test network gets full test flag set when can_test_mode is true', () => {
-  const manifest = buildRealmDeploymentManifest(
-    { name: 'Test Realm', gos_implementation: 'realms-gos' },
-    'test',
-    { ...TEST_CONFIG, can_test_mode: true },
-    { useCasals: false },
-  );
-  assert.equal(manifest.can_test_mode, true);
-  assert.equal(manifest.test_flags.test_mode, true);
-  assert.equal(manifest.test_flags.user_self_registration, true);
-  assert.equal(manifest.test_flags.demo_data, true);
-  assert.equal(manifest.test_flags.ii_bypass, true);
-  assert.equal(manifest.test_flags.skip_terms, true);
+  assert.equal(manifest.network, '');
 });
 
 test('buildRealmDeploymentManifest includes founder from formData', () => {

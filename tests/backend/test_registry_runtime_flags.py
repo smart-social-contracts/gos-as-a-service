@@ -68,22 +68,16 @@ def test_rejects_test_flags_on_mainnet():
         assert "mainnet" in str(exc).lower()
 
 
-def test_disable_card_billing_defaults_on_for_staging_and_demo():
+def test_disable_card_billing_has_no_network_default():
+    """No network name switches charging off: the environment's casals.json
+    test_flags do. Unset means live everywhere."""
     _clear_card_billing_flag()
-    assert default_disable_card_billing("staging") is True
-    assert default_disable_card_billing("demo") is True
-    assert default_disable_card_billing("test") is False
-    assert default_disable_card_billing("ic") is False
+    for net in ("staging", "demo", "test", "local", "ic", ""):
+        assert default_disable_card_billing(net) is False
 
-    apply_test_flags({"test_mode": True}, network="staging")
+    apply_test_flags({"test_mode": True}, network="local")
     payload = get_runtime_flags_payload()
-    assert payload["test_mode_disable_card_billing"] is True
-    assert is_card_billing_disabled() is True
-
-    apply_test_flags({"test_mode": True}, network="demo")
-    assert is_card_billing_disabled() is True
-
-    apply_test_flags({"test_mode": True}, network="test")
+    assert payload["test_mode_disable_card_billing"] is False
     assert is_card_billing_disabled() is False
 
 
@@ -100,13 +94,11 @@ def test_disable_card_billing_explicit_override():
     assert is_card_billing_disabled() is True
 
 
-def test_disable_card_billing_defaults_from_portal_host():
+def test_disable_card_billing_ignores_the_portal_host():
     _clear_card_billing_flag()
     from core.env_config import apply_env_config
 
     apply_env_config({"portal_url": "https://staging.gos.earth"})
-    assert default_disable_card_billing("") is True
-    apply_env_config({"portal_url": "https://test.gos.earth"})
     assert default_disable_card_billing("") is False
 
 
@@ -129,22 +121,14 @@ def test_set_canister_config_json_persists_disable_card_billing():
     assert payload["test_mode_disable_card_billing"] is True
 
 
-def test_assistant_experimental_notice_defaults_on_for_staging_and_demo():
+def test_assistant_experimental_notice_has_no_network_default():
     _clear_card_billing_flag()
-    assert default_assistant_experimental_notice("staging") is True
-    assert default_assistant_experimental_notice("demo") is True
-    assert default_assistant_experimental_notice("test") is False
-    assert default_assistant_experimental_notice("ic") is False
+    for net in ("staging", "demo", "test", "local", "ic", ""):
+        assert default_assistant_experimental_notice(net) is False
 
-    apply_test_flags({"test_mode": True}, network="staging")
+    apply_test_flags({"test_mode": True}, network="local")
     payload = get_runtime_flags_payload()
-    assert payload["test_mode_assistant_experimental_notice"] is True
-    assert is_assistant_experimental_notice_enabled() is True
-
-    apply_test_flags({"test_mode": True}, network="demo")
-    assert is_assistant_experimental_notice_enabled() is True
-
-    apply_test_flags({"test_mode": True}, network="test")
+    assert payload["test_mode_assistant_experimental_notice"] is False
     assert is_assistant_experimental_notice_enabled() is False
 
 
@@ -197,11 +181,11 @@ if __name__ == "__main__":
     test_set_and_read_flags()
     test_set_canister_config_json_wrapper()
     test_rejects_test_flags_on_mainnet()
-    test_disable_card_billing_defaults_on_for_staging_and_demo()
+    test_disable_card_billing_has_no_network_default()
     test_disable_card_billing_explicit_override()
-    test_disable_card_billing_defaults_from_portal_host()
+    test_disable_card_billing_ignores_the_portal_host()
     test_set_canister_config_json_persists_disable_card_billing()
-    test_assistant_experimental_notice_defaults_on_for_staging_and_demo()
+    test_assistant_experimental_notice_has_no_network_default()
     test_assistant_experimental_notice_explicit_override()
     test_set_canister_config_json_persists_assistant_experimental_notice()
     test_set_canister_config_json_persists_casals_frontend()

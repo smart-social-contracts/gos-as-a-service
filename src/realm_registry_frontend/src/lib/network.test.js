@@ -5,116 +5,78 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { detectNetwork, getCanisterId } from './network.js';
 
-const CANISTER_MAP = {
-	realm_registry_backend: {
-		demo: 'rhw4p-gqaaa-aaaac-qbw7q-cai',
-		staging: 'snqhl-daaaa-aaaan-q6n3q-cai',
-		test: 'yhw3g-fyaaa-aaaas-qgorq-cai'
-	},
-	file_registry: {
-		test: 'uq2mu-kaaaa-aaaah-avqcq-cai'
-	}
+// What the conductor writes into /canister_ids.js for a deployment
+// (casals.json, realm-registry-frontend `files`).
+const RUNTIME = {
+	realm_registry_backend: 'aaaaa-aa',
+	realm_installer: 'bbbbb-bb',
+	casals_frontend: 'ccccc-cc',
+	network: 'ic',
+	portal_url: 'https://gos.earth'
 };
 
-const REPO_CANISTER_IDS = JSON.parse(
-	readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../../../../canister_ids.json'), 'utf-8')
-);
-
-// Read from canister_ids.json rather than duplicating the ids: a conductor is
-// re-minted whenever an environment is rebuilt, so a hardcoded copy fails the
-// suite on every rebuild while proving nothing the dead-prefix guard below
-// doesn't already prove.
-const CASALS_BACKEND_IDS = REPO_CANISTER_IDS.casals_backend;
-
-const DEAD_CANISTER_PREFIXES = [
-	'fdr7z',
-	'jj2e5',
-	'rbuam',
-	'fksuf',
-	'hznxf',
-	'gudtl',
-	'h6mrr',
-	'mcqbx',
-	'jo3cj',
-	'rhw4p',
-	'ulsvn',
-	'hvwpv'
-];
-
-test('detectNetwork maps known hostnames', () => {
-	assert.equal(detectNetwork('test.gos.earth'), 'test');
-	assert.equal(detectNetwork('staging.gos.earth'), 'staging');
-	assert.equal(detectNetwork('demo.gos.earth'), 'demo');
-	assert.equal(detectNetwork('gos.earth'), 'ic');
-	assert.equal(detectNetwork('realmsgos.org'), 'ic');
-	assert.equal(detectNetwork('registry.realmsgos.org'), 'ic');
-	assert.equal(detectNetwork('localhost'), 'local');
-	assert.equal(detectNetwork('127.0.0.1'), 'local');
-	assert.equal(detectNetwork('realm_registry_frontend.localhost'), 'local');
+test('detectNetwork takes the conductor-written network first', () => {
+	assert.equal(detectNetwork('whatever.icp0.io', undefined, RUNTIME), 'ic');
+	assert.equal(detectNetwork('localhost', undefined, RUNTIME), 'ic');
+	assert.equal(detectNetwork('gos.earth', undefined, { ...RUNTIME, network: 'local' }), 'local');
 });
 
-test('detectNetwork defaults unknown hostnames to staging', () => {
-	assert.equal(detectNetwork('unknown.example.com'), 'staging');
+test('detectNetwork recognises a local replica host', () => {
+	assert.equal(detectNetwork('localhost', undefined, {}), 'local');
+	assert.equal(detectNetwork('127.0.0.1', undefined, {}), 'local');
+	assert.equal(detectNetwork('realm_registry_frontend.localhost', undefined, {}), 'local');
 });
 
-test('detectNetwork prefers the built-for network on an unknown host', () => {
-	// The raw <canister-id>.icp0.io URL, used before the custom domain is wired.
-	assert.equal(
-		detectNetwork('jzbts-3iaaa-aaaai-ax5tq-cai.icp0.io', {
-			domain: 'test.gos.earth',
-			network: 'test'
-		}),
-		'test'
-	);
+test('detectNetwork never guesses an environment from a host name', () => {
+	for (const host of [
+		'staging.gos.earth',
+		'demo.gos.earth',
+		'test.gos.earth',
+		'gos.earth',
+		'realmsgos.org',
+		'unknown.example.com',
+		'jzbts-3iaaa-aaaai-ax5tq-cai.icp0.io'
+	]) {
+		assert.equal(detectNetwork(host, undefined, {}), '', host);
+	}
 });
 
-test('detectNetwork still prefers a known host over the built-for network', () => {
-	assert.equal(
-		detectNetwork('demo.gos.earth', { domain: 'test.gos.earth', network: 'test' }),
-		'demo'
-	);
+test('detectNetwork falls back to the gaas-env descriptor network', () => {
+	const gaasEnv = { domain: 'partner.example', network: 'custom-net' };
+	assert.equal(detectNetwork('partner.example', gaasEnv, {}), 'custom-net');
+	assert.equal(detectNetwork('some-id.icp0.io', gaasEnv, {}), 'custom-net');
+	assert.equal(detectNetwork('localhost', gaasEnv, {}), 'local');
 });
 
-test('getCanisterId uses the built-for network on an unknown host', () => {
+test('getCanisterId reads the conductor-written ids first', () => {
+	assert.equal(getCanisterId('realm_registry_backend', { runtimeOverride: RUNTIME }), 'aaaaa-aa');
+	assert.equal(getCanisterId('realm_installer', { runtimeOverride: RUNTIME }), 'bbbbb-bb');
+	assert.equal(getCanisterId('casals_frontend', { runtimeOverride: RUNTIME }), 'ccccc-cc');
+	// Non-id keys of the payload are not canister names.
+	assert.equal(getCanisterId('network', { runtimeOverride: { network: 'ic' } }), undefined);
+});
+
+test('getCanisterId falls back to the gaas-env descriptor for its own network', () => {
+	const gaasEnv = {
+		domain: 'partner.example',
+		network: 'partner',
+		canisters: { realm_registry_backend: { partner: 'gaas-canister-id' } }
+	};
 	assert.equal(
 		getCanisterId('realm_registry_backend', {
-			hostname: 'jzbts-3iaaa-aaaai-ax5tq-cai.icp0.io',
-			canisterIdsMap: CANISTER_MAP,
-			gaasEnvOverride: { domain: 'test.gos.earth', network: 'test' }
+			hostname: 'partner.example',
+			runtimeOverride: {},
+			gaasEnvOverride: gaasEnv
 		}),
-		'yhw3g-fyaaa-aaaas-qgorq-cai'
+		'gaas-canister-id'
 	);
 });
 
-test('getCanisterId resolves from injected map by network', () => {
-	assert.equal(
-		getCanisterId('realm_registry_backend', {
-			hostname: 'test.gos.earth',
-			canisterIdsMap: CANISTER_MAP
-		}),
-		'yhw3g-fyaaa-aaaas-qgorq-cai'
-	);
-	assert.equal(
-		getCanisterId('realm_registry_backend', {
-			hostname: 'staging.gos.earth',
-			canisterIdsMap: CANISTER_MAP
-		}),
-		'snqhl-daaaa-aaaan-q6n3q-cai'
-	);
-	assert.equal(
-		getCanisterId('realm_registry_backend', {
-			hostname: 'demo.gos.earth',
-			canisterIdsMap: CANISTER_MAP
-		}),
-		'rhw4p-gqaaa-aaaac-qbw7q-cai'
-	);
-});
-
-test('getCanisterId falls back to env for local network', () => {
+test('getCanisterId falls back to the dfx env on a local replica', () => {
 	assert.equal(
 		getCanisterId('realm_registry_backend', {
 			hostname: 'localhost',
-			canisterIdsMap: CANISTER_MAP,
+			runtimeOverride: {},
 			envOverride: { CANISTER_ID_REALM_REGISTRY_BACKEND: 'local-canister-id' }
 		}),
 		'local-canister-id'
@@ -124,88 +86,23 @@ test('getCanisterId falls back to env for local network', () => {
 test('getCanisterId returns undefined when nothing resolves', () => {
 	assert.equal(
 		getCanisterId('nonexistent_canister', {
-			hostname: 'test.gos.earth',
-			canisterIdsMap: CANISTER_MAP
-		}),
-		undefined
-	);
-	assert.equal(
-		getCanisterId('file_registry', {
-			hostname: 'demo.gos.earth',
-			canisterIdsMap: CANISTER_MAP
+			hostname: 'gos.earth',
+			runtimeOverride: RUNTIME,
+			envOverride: {}
 		}),
 		undefined
 	);
 });
 
-test('detectNetwork resolves gaas-env domain to configured network', () => {
-	const gaasEnv = { domain: 'partner.example', network: 'custom-net' };
-	assert.equal(detectNetwork('partner.example', gaasEnv), 'custom-net');
-	assert.equal(detectNetwork('localhost', gaasEnv), 'local');
-	assert.equal(detectNetwork('test.gos.earth', gaasEnv), 'test');
-});
-
-test('getCanisterId resolves casals_backend from canister_ids.json on portal hostnames', () => {
-	assert.equal(
-		getCanisterId('casals_backend', {
-			hostname: 'test.gos.earth',
-			canisterIdsMap: REPO_CANISTER_IDS
-		}),
-		CASALS_BACKEND_IDS.test
-	);
-	assert.equal(
-		getCanisterId('casals_backend', {
-			hostname: 'staging.gos.earth',
-			canisterIdsMap: REPO_CANISTER_IDS
-		}),
-		CASALS_BACKEND_IDS.staging
-	);
-	assert.equal(
-		getCanisterId('casals_backend', {
-			hostname: 'demo.gos.earth',
-			canisterIdsMap: REPO_CANISTER_IDS
-		}),
-		CASALS_BACKEND_IDS.demo
-	);
-});
-
-test('canister_ids.json bakes a casals_backend per environment, no known-dead prefixes', () => {
-	for (const network of ['test', 'staging', 'demo']) {
-		assert.ok(REPO_CANISTER_IDS.casals_backend?.[network], `missing ${network}`);
+test('the bundle bakes no canister ids, network or portal host', () => {
+	const here = dirname(fileURLToPath(import.meta.url));
+	const viteSource = readFileSync(join(here, '../../vite.config.js'), 'utf-8');
+	assert.doesNotMatch(viteSource, /__CANISTER_IDS__/);
+	assert.doesNotMatch(viteSource, /canister_ids\.json/);
+	assert.doesNotMatch(viteSource, /DFX_NETWORK/);
+	for (const file of ['network.js', 'config-resolvers.js', 'deployment-manifest-core.js']) {
+		const src = readFileSync(join(here, file), 'utf-8');
+		assert.doesNotMatch(src, /gos\.earth|realmsgos\.org/, `${file} carries a host`);
+		assert.doesNotMatch(src, /'staging'|'demo'/, `${file} names an environment`);
 	}
-	const dumped = JSON.stringify(REPO_CANISTER_IDS.casals_backend);
-	for (const prefix of DEAD_CANISTER_PREFIXES) {
-		assert.equal(dumped.includes(prefix), false, `dead prefix ${prefix}`);
-	}
-});
-
-test('portal bake injects every canister_ids.json entry including casals_backend', () => {
-	const viteSource = readFileSync(
-		join(dirname(fileURLToPath(import.meta.url)), '../../vite.config.js'),
-		'utf-8'
-	);
-	assert.match(viteSource, /for \(const \[canister, networks\] of Object\.entries\(allIds\)\)/);
-	assert.match(viteSource, /CANISTER_ID_\$\{canister\.toUpperCase\(\)\}/);
-	assert.match(viteSource, /'__CANISTER_IDS__'/);
-	assert.ok(REPO_CANISTER_IDS.casals_backend);
-});
-
-test('getCanisterId prefers gaas-env canisters map when present', () => {
-	const gaasEnv = {
-		domain: 'partner.example',
-		network: 'partner',
-		canisters: {
-			realm_registry_backend: {
-				partner: 'gaas-canister-id'
-			}
-		}
-	};
-	assert.equal(
-		getCanisterId('realm_registry_backend', {
-			hostname: 'partner.example',
-			canisterIdsMap: CANISTER_MAP,
-			gaasEnvOverride: gaasEnv
-		}),
-		'gaas-canister-id'
-	);
 });
