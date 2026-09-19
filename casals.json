@@ -33,57 +33,6 @@
         "budget_tc": 300
       }
     },
-    "staging": {
-      "network": "ic",
-      "dns": {
-        "provider": "none"
-      },
-      "portal_url": "https://${canister:realm-registry-frontend}.icp0.io",
-      "portal_host": "${canister:realm-registry-frontend}.icp0.io",
-      "ii_alternative_origins": "{\"alternativeOrigins\": [\"https://${canister:realm-registry-frontend}.icp0.io\"]}",
-      "can_test_mode": false,
-      "test_flags": {
-        "ii_bypass": false
-      },
-      "realms_product": {
-        "$comment": "Product section of the Realms *staging* conductor (../realms/casals.json -e staging): fill marketplace_id / nft_canister_id / RLM ledger+indexer from its bindings after it is up. Until then these are the production ids (valid principals, wrong environment). ck* are the DFINITY mainnet ledgers.",
-        "marketplace_id": "fxcax-yyaaa-aaaas-amx5q-cai",
-        "nft_canister_id": "flg2g-pyaaa-aaaas-amx7q-cai",
-        "shared_tokens": {
-          "RLM": {
-            "ledger": "ffexo-uiaaa-aaaas-amx6q-cai",
-            "indexer": "ffexo-uiaaa-aaaas-amx6q-cai",
-            "decimals": 8
-          },
-          "ckBTC": {
-            "ledger": "mxzaz-hqaaa-aaaar-qaada-cai",
-            "indexer": "n5wcd-faaaa-aaaar-qaaea-cai",
-            "decimals": 8
-          },
-          "ckUSDC": {
-            "ledger": "xckus-ciaaa-aaaam-qbssa-cai",
-            "indexer": "ufqgi-4qaaa-aaaam-qbsna-cai",
-            "decimals": 6
-          },
-          "ckEURC": {
-            "ledger": "pe5t5-diaaa-aaaar-qahwa-cai",
-            "indexer": "pe5t5-diaaa-aaaar-qahwa-cai",
-            "decimals": 6
-          }
-        }
-      },
-      "principals": {
-        "operator": "755e2-cbcwn-7m7cb-k37ax-yez2m-q2p5p-rr3ug-neqbx-lxjmi-awsk3-uqe",
-        "signer_2": "7mx7e-iesva-6xdkj-yrrrb-bwfyl-qmwmm-unfhg-zi74g-q3oyl-lz42d-dqe",
-        "signer_3": "55alf-xclhd-rtshz-lk4lo-wav4q-q3a5e-sktkm-zlshq-vvhjs-re6os-wae",
-        "signer_4": "leedy-5gplf-ddm4v-22tvs-yhylw-rs4hz-6ezyu-udzyp-3jhnk-boliz-aae"
-      },
-      "cycles": {
-        "min_balance_tc": 1.0,
-        "budget_tc": 20
-      },
-      "$comment": "Rehearsal of the production deploy on the IC: same sheet, no DNS, canister URLs only; the deploy identity is the multisig operator so every step (proposals, hand-over, retirement) can be driven end to end. Torn down after the rehearsal."
-    },
     "production": {
       "network": "ic",
       "dns": {
