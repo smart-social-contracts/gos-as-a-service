@@ -49,13 +49,13 @@
         "ii_bypass": false
       },
       "realms_product": {
-        "$comment": "Product section of the Realms GOS conductor irfdo-ziaaa-aaaai-raswa-cai (../realms/casals.json -e production); ck* are the DFINITY mainnet ledgers.",
-        "marketplace_id": "fxcax-yyaaa-aaaas-amx5q-cai",
-        "nft_canister_id": "flg2g-pyaaa-aaaas-amx7q-cai",
+        "$comment": "Product section of the Realms GOS conductor gih4j-uaaaa-aaaap-quzya-cai (../realms/casals.json -e production); ck* are the DFINITY mainnet ledgers.",
+        "marketplace_id": "gudgy-daaaa-aaaap-quz2a-cai",
+        "nft_canister_id": "hxpp6-xyaaa-aaaap-quz4q-cai",
         "shared_tokens": {
           "RLM": {
-            "ledger": "ffexo-uiaaa-aaaas-amx6q-cai",
-            "indexer": "ffexo-uiaaa-aaaas-amx6q-cai",
+            "ledger": "hqojk-2aaaa-aaaap-quz4a-cai",
+            "indexer": "hqojk-2aaaa-aaaap-quz4a-cai",
             "decimals": 8
           },
           "ckBTC": {
@@ -83,7 +83,7 @@
       },
       "cycles": {
         "min_balance_tc": 2.0,
-        "budget_tc": 20
+        "budget_tc": 14
       }
     }
   },
@@ -200,7 +200,7 @@
         "family": "realm-backend",
         "version": "main",
         "source": "local:../realms/.basilisk/realm_backend/realm_backend.wasm",
-        "sha256": "299fb2cadca0e923d20cf02716a1c83e0f5aee627f33b964236f83175e900402"
+        "sha256": "14a55a15b3a2a84a522227f1128547d4c630a385f86979ae08307e4a8f7b3e3d"
       },
       {
         "family": "token-backend",
