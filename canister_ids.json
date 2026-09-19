@@ -1,23 +1,26 @@
 {
   "casals_backend": {
-    "production": "6dk2i-uaaaa-aaaal-qxitq-cai"
-  },
-  "casals_file_registry": {
-    "production": "6el44-zyaaa-aaaal-qxita-cai"
-  },
-  "casals_file_registry_frontend": {
-    "production": "7oe6g-3iaaa-aaaal-qxiua-cai"
+    "production": "zdxja-zyaaa-aaaac-bf6qq-cai"
   },
   "casals_frontend": {
-    "production": "6nixa-pqaaa-aaaal-qxisq-cai"
+    "production": "lgmor-aqaaa-aaaaa-qhqea-cai"
   },
   "realm_installer": {
-    "production": "f6bll-oqaaa-aaaas-amx4a-cai"
+    "production": "zysvf-daaaa-aaaac-bf6sa-cai"
   },
   "realm_registry_backend": {
-    "production": "euojr-maaaa-aaaas-amx3a-cai"
+    "production": "z7ttr-oyaaa-aaaac-bf6sq-cai"
   },
   "realm_registry_frontend": {
-    "production": "etppf-byaaa-aaaas-amx3q-cai"
+    "production": "zwqyn-yqaaa-aaaac-bf6ta-cai"
+  },
+  "casals_wasms": {
+    "production": "ja6jz-aiaaa-aaaac-qhfaa-cai"
+  },
+  "file_registry": {
+    "production": "znvei-ciaaa-aaaac-bf6rq-cai"
+  },
+  "multisig": {
+    "production": "zkuc4-pqaaa-aaaac-bf6ra-cai"
   }
 }

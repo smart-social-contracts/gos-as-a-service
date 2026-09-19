@@ -12,10 +12,15 @@ in the Casals repo, with KEEP=1), this script
      reconcile timer to build the stand from the `Deployments` template;
   3. checks the realm frontend serves `/canister_ids.js` pointing at the realm
      backend (written by Casals from the template's `files`), and that the
-     backend answers `status`.
+     backend answers `status`;
+  4. with REALM_CODEX / REALM_EXTENSIONS set, asks for that content the way the
+     wizard does (`realm.codex.package`, `realm.extensions`) and checks the
+     installer fetched it from the file registry into the realm — the content
+     path production depends on (`realms files publish` must have run first).
 
 Usage:  CASALS_HOME=/tmp/e2e-gaas python tests/e2e/deploy_realm.py [realm-name]
-Env:    ENV (default local), IDENTITY (default local-dev), TIMEOUT_S (default 1500)
+Env:    ENV (default local), IDENTITY (default local-dev), TIMEOUT_S (default 1500),
+        REALM_CODEX (codex id[@version]), REALM_EXTENSIONS (comma-separated ids)
 """
 from __future__ import annotations
 
@@ -30,6 +35,8 @@ ENV = os.environ.get("ENV", "local")
 IDENTITY = os.environ.get("IDENTITY", "local-dev")
 HOME = os.environ.get("CASALS_HOME") or os.path.expanduser("~/.casals")
 TIMEOUT_S = int(os.environ.get("TIMEOUT_S", "1500"))
+REALM_CODEX = (os.environ.get("REALM_CODEX") or "").strip()
+REALM_EXTENSIONS = [e.strip() for e in (os.environ.get("REALM_EXTENSIONS") or "").split(",") if e.strip()]
 def _gateway_port() -> str:
     explicit = (os.environ.get("CASALS_REPLICA_PORT") or "").strip()
     if explicit.isdigit():
@@ -129,6 +136,38 @@ def fetch(url: str) -> tuple[int, str]:
         return e.code, ""
 
 
+def _ids(payload) -> set[str]:
+    """Installed ids out of `list_runtime_extensions` ({"runtime_extensions": [...]})
+    or `list_codex_packages` ({"codex_packages": [...]})."""
+    if isinstance(payload, dict):
+        for key in ("runtime_extensions", "codex_packages"):
+            if isinstance(payload.get(key), list):
+                return {str(x) for x in payload[key]}
+        if payload.get("error"):
+            raise Fail(f"realm listing failed: {payload['error']}")
+    return set()
+
+
+def check_content(backend: str) -> dict:
+    """With REALM_CODEX / REALM_EXTENSIONS: wait until the realm reports them installed."""
+    want_codex = REALM_CODEX.partition("@")[0]
+    if not want_codex and not REALM_EXTENSIONS:
+        return {}
+    deadline = time.time() + 600
+    seen_ext: set[str] = set()
+    seen_cdx: set[str] = set()
+    while time.time() < deadline:
+        seen_ext = _ids(call_json(backend, "list_runtime_extensions", query=True))
+        seen_cdx = _ids(call_json(backend, "list_codex_packages", query=True)) if want_codex else set()
+        if set(REALM_EXTENSIONS) <= seen_ext and (not want_codex or want_codex in seen_cdx):
+            return {"extensions": sorted(seen_ext), "codices": sorted(seen_cdx)}
+        time.sleep(15)
+    raise Fail(
+        f"content missing after install: extensions want {REALM_EXTENSIONS} have {sorted(seen_ext)}; "
+        f"codex want {want_codex or '-'} have {sorted(seen_cdx)}"
+    )
+
+
 def main() -> int:
     name = sys.argv[1] if len(sys.argv) > 1 else f"e2e-realm-{int(time.time()) % 100000}"
     casals_id = conductor_backend()
@@ -147,11 +186,14 @@ def main() -> int:
         "realm": {
             "name": name, "display_name": name,
             "manifesto": f"Welcome to {name}.", "welcome_message": f"Welcome to {name}!",
-            "open_registration": False, "extensions": [],
+            "open_registration": False, "extensions": list(REALM_EXTENSIONS),
         },
         "casals": {"section": "Deployments", "stand": name},
         "federation": {"slug": name, "portal_url": f"{portal}/r/{name}"},
     }
+    if REALM_CODEX:
+        codex_id, _, codex_version = REALM_CODEX.partition("@")
+        manifest["realm"]["codex"] = {"package": codex_id, **({"version": codex_version} if codex_version else {})}
     res = call_json(registry, "request_deployment", json.dumps(manifest))
     if not res.get("success"):
         raise Fail(f"request_deployment: {res}")
@@ -196,10 +238,13 @@ def main() -> int:
         raise Fail(f"{url}: canister_ids.js HTTP {code} (names backend: {backend in js}), index.html HTTP {html_code}")
     icp("canister", "call", backend, "status", "()", "--query")  # the realm backend answers
 
+    installed = check_content(backend)
+
     print(json.dumps({
         "ok": True, "realm": name, "job_id": job_id, "job_status": view.get("status"),
         "backend": backend, "frontend": frontend, "frontend_url": url,
         "portal_url": f"{portal}/r/{name}", "casals_members": sorted(k for k in live if k.startswith(name)),
+        **installed,
     }, indent=2))
     return 0
 
