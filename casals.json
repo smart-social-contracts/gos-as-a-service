@@ -239,7 +239,7 @@
                 "$multisig"
               ],
               "cycles": {
-                "min_balance_tc": 30
+                "min_balance_tc": 2
               }
             }
           ]
