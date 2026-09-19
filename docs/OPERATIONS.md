@@ -41,6 +41,22 @@ the sheet, nothing else.
 
 `casals show` / the conductor frontend list every realm stand like any other.
 
+## Custom domain, after `up`
+
+`casals up` does not touch DNS. `gos.earth` → `realm-registry-frontend` (the
+sheet's `domains` block) is applied with the Realms product CLI, which reads
+the canister id from the GaaS conductor:
+
+```sh
+# from realms/, CASALS_HOME pointing at the bindings `casals up` wrote
+realms domains check ../gos-as-a-service/casals.json -e production
+export CLOUDFLARE_API_TOKEN=…     # Zone:Read + DNS:Edit on gos.earth; never commit it
+realms domains apply ../gos-as-a-service/casals.json -e production
+```
+
+Run `apply` before destroying a previous portal frontend; see
+`realms/docs/OPERATIONS.md` for what it does.
+
 ## Checks
 
 ```sh
