@@ -57,6 +57,32 @@ realms domains apply ../gos-as-a-service/casals.json -e production
 Run `apply` before destroying a previous portal frontend; see
 `realms/docs/OPERATIONS.md` for what it does.
 
+## Content, after `up`
+
+The installer fetches a new realm's codex and extensions from this orchestra's
+`file-registry` (`installer.config.file_registry_id`), and the portal stores
+user branding there. `casals up` leaves it empty; the sheet grants what its
+writers need (config rows on `file-registry`):
+
+- `grant_publish {namespace: "*"}` → the operator: `realms files publish` may
+  write every `ext/…` / `codex/…` namespace.
+- `set_config {auto_grant_publishers: true}`: a portal user's branding upload
+  (signed by the user) creates its namespace and makes them its publisher.
+- `grant_publish {namespace: "_approvers"}` → the Realms marketplace, whose
+  `review_listing` stamps approvals on the registry a listing names.
+
+Then publish the packages, from the `realms` checkout, as the operator:
+
+```sh
+casals -e production export ../gos-as-a-service/casals.json     # bindings: file-registry
+export DFX_HSM_PIN=…                                              # hardware key; passed to every icp call
+realms files publish -n ic --registry <file-registry> --identity prod-identity
+```
+
+A realm minted afterwards with a codex (`realm.codex.package`) or extensions
+gets them from here. CI (`gaas-e2e.yml`) publishes `dominion` + `hello_world`
+and mints `ci-realm` with both; the run fails if the realm does not list them.
+
 ## Checks
 
 ```sh
