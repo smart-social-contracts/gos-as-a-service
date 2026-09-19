@@ -164,7 +164,7 @@
         "family": "file-registry",
         "version": "main",
         "source": "local:../file-registry/.basilisk/ic_file_registry/ic_file_registry.wasm",
-        "sha256": "fe216683b8d229f32ca0b1788637c56368aa4d8b462e2c5d52e63d21b62ed782"
+        "sha256": "c87daf02e0427bd6ea8231216184e7b4959978f5f421dfb93886d940268da211"
       },
       {
         "family": "orchestration-multisig",
@@ -240,7 +240,52 @@
               ],
               "cycles": {
                 "min_balance_tc": 2
-              }
+              },
+              "config": [
+                {
+                  "$comment": "Packages the installer fetches (ext/…, codex/…) are published here by the operator with `realms files publish`; controllers cannot upload.",
+                  "method": "grant_publish",
+                  "args": {
+                    "namespace": "*",
+                    "principal": "$principal:operator"
+                  },
+                  "converged_when": {
+                    "query": "get_acl",
+                    "contains": {
+                      "*": [
+                        "$principal:operator"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "$comment": "Portal branding uploads are signed by the end user, who becomes publisher of the fresh namespace (see realm_registry_frontend branding-upload.js).",
+                  "method": "set_config",
+                  "args": {
+                    "auto_grant_publishers": true
+                  },
+                  "converged_when": {
+                    "query": "get_config",
+                    "equals_args": true
+                  }
+                },
+                {
+                  "$comment": "First-party listings on the Realms marketplace point at this registry; its review_listing stamps approvals here, so it must be an _approvers publisher.",
+                  "method": "grant_publish",
+                  "args": {
+                    "namespace": "_approvers",
+                    "principal": "$env.realms_product.marketplace_id"
+                  },
+                  "converged_when": {
+                    "query": "get_acl",
+                    "contains": {
+                      "_approvers": [
+                        "$env.realms_product.marketplace_id"
+                      ]
+                    }
+                  }
+                }
+              ]
             }
           ]
         },
