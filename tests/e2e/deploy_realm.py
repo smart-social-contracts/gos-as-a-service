@@ -30,7 +30,18 @@ ENV = os.environ.get("ENV", "local")
 IDENTITY = os.environ.get("IDENTITY", "local-dev")
 HOME = os.environ.get("CASALS_HOME") or os.path.expanduser("~/.casals")
 TIMEOUT_S = int(os.environ.get("TIMEOUT_S", "1500"))
-GATEWAY = "http://127.0.0.1:8000"
+def _gateway_port() -> str:
+    explicit = (os.environ.get("CASALS_REPLICA_PORT") or "").strip()
+    if explicit.isdigit():
+        return explicit
+    url = (os.environ.get("CASALS_NETWORK_URL") or "").strip()
+    if url.rsplit(":", 1)[-1].isdigit():
+        return url.rsplit(":", 1)[-1]
+    return "8000"
+
+
+GATEWAY = os.environ.get("CASALS_NETWORK_URL", "http://127.0.0.1:8000").rstrip("/")
+GATEWAY_PORT = _gateway_port()
 
 
 class Fail(Exception):
@@ -123,7 +134,7 @@ def main() -> int:
     casals_id = conductor_backend()
     b = bindings(casals_id)
     registry, installer = b["realm-registry-backend"], b["realm-installer"]
-    portal = f"http://{b['realm-registry-frontend']}.localhost:8000"
+    portal = f"http://{b['realm-registry-frontend']}.localhost:{GATEWAY_PORT}"
     print(f"conductor {casals_id}  registry {registry}  installer {installer}")
 
     manifest = {
@@ -172,7 +183,7 @@ def main() -> int:
     if live[f"{name}-backend"] != backend or live[f"{name}-frontend"] != frontend:
         raise Fail("installer and Casals disagree on the realm's canister ids")
 
-    url = f"http://{frontend}.localhost:8000"
+    url = f"http://{frontend}.localhost:{GATEWAY_PORT}"
     # The conductor syncs the dist on its timer, a slice per tick: wait for the
     # generated config and the app shell.
     for _ in range(60):

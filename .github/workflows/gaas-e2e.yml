@@ -20,6 +20,7 @@ env:
   DFX_VERSION: "0.32.0"
   CASALS_VERSION: "main"
   REALMS_VERSION: "main"
+  FILE_REGISTRY_VERSION: "main"
   IC_TOKENS_VERSION: "0.1.0"
   # The whole GaaS environment is `casals.json`; the Casals e2e harness builds it
   # from an empty replica and grades it, then a realm is born the way the portal
@@ -36,8 +37,9 @@ jobs:
     timeout-minutes: 120
     steps:
       # The sheet resolves `local:` sources against its own directory:
-      # `../realms/...` for the realm stand template, `.basilisk/...` for the
-      # platform wasms. The three repos must therefore be siblings.
+      # `../realms/...` for the realm stand template, `../file-registry/...` for
+      # the platform file registry, `.basilisk/...` for the platform wasms. The
+      # four repos must therefore be siblings.
       - uses: actions/checkout@v4
         with:
           path: gos-as-a-service
@@ -57,6 +59,16 @@ jobs:
           ref: ${{ env.REALMS_VERSION }}
           path: realms
           submodules: recursive
+
+      # The platform file registry (branding, extension packages) is the
+      # standalone file-registry canister; casals.json reads its wasm from
+      # ../file-registry/.basilisk (sibling checkout).
+      - name: Checkout file-registry (platform file registry wasm)
+        uses: actions/checkout@v4
+        with:
+          repository: smart-social-contracts/file-registry
+          ref: ${{ env.FILE_REGISTRY_VERSION }}
+          path: file-registry
 
       - uses: actions/setup-python@v5
         with:
@@ -105,6 +117,12 @@ jobs:
           test "$icp_principal" = "$dfx_principal"
 
       # ── product wasms referenced by casals.json as `local:` ─────────────────
+      - name: Build platform file registry (file-registry/.basilisk/ic_file_registry)
+        working-directory: file-registry
+        run: |
+          make build
+          ls -l .basilisk/ic_file_registry/ic_file_registry.wasm
+
       - name: Build GaaS platform backends (realm_installer, realm_registry_backend)
         working-directory: gos-as-a-service
         run: |

@@ -104,23 +104,14 @@
         "$multisig"
       ]
     },
-    "file_registry": {
-      "wasm": "file-registry",
-      "kind": "backend",
-      "mode": "managed",
-      "controllers": [
-        "$self"
-      ],
-      "cycles": {
-        "min_balance_tc": 30
-      }
-    },
-    "file_registry_frontend": {
-      "wasm": "file-registry-frontend",
+    "wasms": {
+      "$comment": "WASM store (casals-wasms): the certified-assets canister every artifact Casals installs is served from (Casals issue #48). The operator stays a controller so `casals up` can upload into it — the deployer locally, prod-identity in production.",
+      "wasm": "certified-assets@0.3.0",
       "kind": "frontend",
       "mode": "managed",
       "controllers": [
-        "$self"
+        "$self",
+        "$principal:operator"
       ]
     },
     "commanders": [
@@ -136,7 +127,7 @@
   },
   "governance": {
     "multisig": {
-      "wasm": "orchestration-multisig@1.5.0",
+      "wasm": "orchestration-multisig@1.6.0",
       "kind": "backend",
       "mode": "managed",
       "signers": [
@@ -155,52 +146,67 @@
     }
   ],
   "registry": {
-    "$comment": "Product wasms are built in this repo and in ../realms before `casals up` (local:; the exact recipes are the build steps of .github/workflows/gaas-e2e.yml); conductor wasms by the Casals CLI (build:). Frontend dists are published as content namespaces.",
+    "$comment": "Product wasms are built in this repo, ../realms and ../file-registry before `casals up` (local:; the exact recipes are the build steps of .github/workflows/gaas-e2e.yml); the conductor wasm by the Casals CLI (build:). Frontend dists are published as content namespaces. Production requires a sha256 pin on every row: run `casals pin casals.json` after building and commit the result.",
     "wasms": [
       {
         "family": "casals-backend",
         "version": "main",
-        "source": "build:casals_backend"
+        "source": "build:casals_backend",
+        "sha256": "659f9c0d0a863a3ff839e572efd5e7ebe1e7bcec0999875662af08b97397abe9"
+      },
+      {
+        "family": "certified-assets",
+        "version": "0.3.0",
+        "source": "local:seed/templates/certified-assets@0.3.0.wasm.gz",
+        "sha256": "75df75f39763077fd0333b4ac46ba03b2b23ec313fa85f79a2097bd98bb363d1"
       },
       {
         "family": "file-registry",
         "version": "main",
-        "source": "build:ic_file_registry"
+        "source": "local:../file-registry/.basilisk/ic_file_registry/ic_file_registry.wasm",
+        "sha256": "fe216683b8d229f32ca0b1788637c56368aa4d8b462e2c5d52e63d21b62ed782"
       },
       {
         "family": "orchestration-multisig",
-        "version": "1.5.0",
-        "source": "local:seed/templates/orchestration-multisig@1.5.0.wasm.gz"
+        "version": "1.6.0",
+        "source": "local:seed/templates/orchestration-multisig@1.6.0.wasm.gz",
+        "sha256": "c8d3adecf9bea8d9e7811cfa5d9eda8f61723c770f85132b91c8b2cffb37974f"
       },
       {
         "family": "orchestration-baton",
-        "version": "1.3.0",
-        "source": "local:seed/templates/orchestration-baton@1.3.0.wasm.gz"
+        "version": "1.5.1",
+        "source": "local:seed/templates/orchestration-baton@1.5.1.wasm.gz",
+        "sha256": "2143faa8bc8e8e516ff065d30149ca2439aef733a0a23b8e104710e89a9b9ae1"
       },
       {
         "family": "certified-assets",
         "version": "1.0.0",
-        "source": "local:seed/templates/hello-world-frontend.wasm.gz"
+        "source": "local:seed/templates/hello-world-frontend.wasm.gz",
+        "sha256": "63d122d0149a29f4e48603efdd7d2bce656a6a83bac1e3207897c68e8e225bb6"
       },
       {
         "family": "realm-installer",
         "version": "main",
-        "source": "local:.basilisk/realm_installer/realm_installer.wasm"
+        "source": "local:.basilisk/realm_installer/realm_installer.wasm",
+        "sha256": "7f3f1bc9b628c345b3d029d58b2f1fa131c0400a04eca6af0448744b3d389bed"
       },
       {
         "family": "realm-registry-backend",
         "version": "main",
-        "source": "local:.basilisk/realm_registry_backend/realm_registry_backend.wasm"
+        "source": "local:.basilisk/realm_registry_backend/realm_registry_backend.wasm",
+        "sha256": "ab73950b693bc4877251d271fdf615430e3b7a4a747ef20c109a682f06731356"
       },
       {
         "family": "realm-backend",
         "version": "main",
-        "source": "local:../realms/.basilisk/realm_backend/realm_backend.wasm"
+        "source": "local:../realms/.basilisk/realm_backend/realm_backend.wasm",
+        "sha256": "299fb2cadca0e923d20cf02716a1c83e0f5aee627f33b964236f83175e900402"
       },
       {
         "family": "token-backend",
         "version": "0.1.0",
-        "source": "local:../realms/.external-wasms/token_backend.wasm"
+        "source": "local:../realms/.external-wasms/token_backend.wasm",
+        "sha256": "b3f1db3a3f6b928bdb00d49c9396c87004690e5a23a487384ba0c308ae7e685f"
       }
     ],
     "publish": [
@@ -217,8 +223,27 @@
   "sections": [
     {
       "name": "Infra",
-      "description": "Realm installer and realm registry (the *.gos.earth portal).",
+      "description": "Realm installer, realm registry (the *.gos.earth portal) and the platform file registry.",
       "stands": [
+        {
+          "name": "file-registry",
+          "description": "Platform artifact store (realm branding, extension packages, deployment manifests) — a GaaS product canister, not Casals' WASM store (that is conductor.wasms). Before the store existed it was the conductor's file_registry; the conductor re-homes that row here under the same canister id, so the data stays.",
+          "canisters": [
+            {
+              "name": "file-registry",
+              "kind": "backend",
+              "mode": "managed",
+              "wasm": "file-registry@main",
+              "controllers": [
+                "$self",
+                "$multisig"
+              ],
+              "cycles": {
+                "min_balance_tc": 30
+              }
+            }
+          ]
+        },
         {
           "name": "installer",
           "canisters": [
@@ -337,6 +362,10 @@
         "created_by": "$canister:realm-installer",
         "baton": {
           "commanders": [
+            {
+              "principal": "$multisig",
+              "weight": 2
+            },
             "$self",
             "$stand.backend"
           ],
@@ -360,12 +389,11 @@
             "name": "{stand}-baton",
             "kind": "backend",
             "mode": "managed",
-            "wasm": "orchestration-baton@1.3.0",
+            "wasm": "orchestration-baton@1.5.1",
             "install_arg": {
               "top_commander": "$self"
             },
             "controllers": [
-              "$self",
               "$multisig"
             ]
           },
