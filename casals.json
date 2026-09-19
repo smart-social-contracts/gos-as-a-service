@@ -164,7 +164,7 @@
         "family": "file-registry",
         "version": "main",
         "source": "local:../file-registry/.basilisk/ic_file_registry/ic_file_registry.wasm",
-        "sha256": "c87daf02e0427bd6ea8231216184e7b4959978f5f421dfb93886d940268da211"
+        "sha256": "9f46abefddbaaa596c0a6849b82cc84c89b9458e7c3ed6fe7a6a7cb8c58d0792"
       },
       {
         "family": "orchestration-multisig",
