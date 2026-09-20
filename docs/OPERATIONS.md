@@ -19,10 +19,29 @@ ic-tokens release. Then, from the Casals repo:
 python -m casals_cli.main -e local --identity local-dev up ../gos-as-a-service/casals.json --yes
 ```
 
-The same command with `-e ic` and the environment's deployer identity is the
-production procedure; the differences between environments (principals,
+The same command with `-e production` and the environment's deployer identity
+is the production procedure; the differences between environments (principals,
 budgets, flags such as `test_flags.ii_bypass`) are the `environments` block of
-the sheet, nothing else.
+the sheet, nothing else. Production additionally requires `sha256` pins on
+every `registry.wasms` and `registry.publish` row (`casals pin casals.json`
+after building; bundles hash as in `Casals/docs/BUNDLES.md`), reads the
+conductor id from `$CASALS_HOME/<orchestra>.production.json` (set
+`CASALS_HOME` to where the first `up` wrote it — a missing binding is a stop,
+not a silent second conductor), and with a touch-policy hardware key wants
+`--upload-identity <plaintext identity>` for the store uploads of step 4.
+
+### Realms are untracked by a routine `up`
+
+Realm stands are minted by the installer from the `Realms` section's
+`stand_template`. Marking that section `"sync": "manual"` (Casals #51) keeps a
+platform change — a bumped realm wasm or realm frontend bundle in the template
+— from being rolled onto every existing realm by the next `up` or by the
+reconcile timer: the conductor still builds each new mint to completion (the
+mint is the request), then freezes the stand. Drift shows per realm under
+*manual* on the Plan page / `casals plan`; roll a realm on purpose with
+`casals up casals.json --stand realm-<x>` (or the whole section with
+`--section Realms`). The e2e corpus' `dynamic-stands` orchestra runs exactly
+this shape.
 
 ## What happens when a realm is deployed
 
