@@ -7,6 +7,7 @@ on:
       - "src/**"
       - "dfx.json"
       - "tests/e2e/**"
+      - "scripts/up.sh"
       - ".github/workflows/gaas-e2e.yml"
   workflow_dispatch:
 
@@ -116,112 +117,45 @@ jobs:
           echo "icp=$icp_principal dfx=$dfx_principal"
           test "$icp_principal" = "$dfx_principal"
 
-      # ── product wasms referenced by casals.json as `local:` ─────────────────
-      - name: Build platform file registry (file-registry/.basilisk/ic_file_registry)
-        working-directory: file-registry
-        run: |
-          make build
-          ls -l .basilisk/ic_file_registry/ic_file_registry.wasm
-
-      - name: Build GaaS platform backends (realm_installer, realm_registry_backend)
+      # ── product wasms and dists referenced by casals.json as `local:` ───────
+      # scripts/up.sh owns the build recipes (platform file registry wasm,
+      # installer + registry backends, portal, the realm halves from ../realms,
+      # the token wasm) so that CI, local_up.sh and a production deploy build
+      # the same way. The gaas `local` environment hands new realms test flags
+      # (test_mode, ii_bypass) through the installer; a production-variant realm
+      # wasm refuses them, so the realm halves are built as the test variant here.
+      - name: Build everything the sheet references (scripts/up.sh --build-only)
         working-directory: gos-as-a-service
         run: |
-          CANISTER_CANDID_PATH="$PWD/src/realm_installer/realm_installer.did" \
-            python3 -m basilisk realm_installer src/realm_installer/main.py
-          CANISTER_CANDID_PATH="$PWD/src/realm_registry_backend/realm_registry_backend.did" \
-            python3 -m basilisk realm_registry_backend src/realm_registry_backend/main.py
-          ls -l .basilisk/realm_installer/realm_installer.wasm \
-                .basilisk/realm_registry_backend/realm_registry_backend.wasm
+          export TERM=xterm
+          scripts/up.sh -e local --build-only
 
-      - name: Build GaaS portal (realm_registry_frontend/dist)
+      # ── the environment: casals up, graded, populated, and a realm born ─────
+      # The same script, remaining phases:
+      #  - the Casals harness starts the local replica, funds `local-dev`, then
+      #    grades the sheet (fresh: converges from nothing, plan empty, oracle
+      #    PASS; idempotent: a second up changes nothing; runtime_stand: a stand
+      #    minted at runtime via create_stand converges) and leaves it up;
+      #  - `casals up` provisions canisters, not content: the product CLI then
+      #    publishes the packages the installer fetches into new realms to the
+      #    GaaS file registry (a codex without dependencies and one extension
+      #    keep the step short; production publishes everything);
+      #  - --smoke-realm: a realm is born the way the portal does it —
+      #    request_deployment → installer create_stand → conductor builds the
+      #    stand from the `Deployments` template → the realm frontend serves
+      #    /canister_ids.js pointing at a backend that answers `status` — and,
+      #    because the manifest names the codex and the extension, the installer
+      #    fetched them from the file registry into the realm (fails otherwise).
+      - name: casals up + publish + verify + portal-path realm (scripts/up.sh)
         working-directory: gos-as-a-service
-        run: |
-          npm ci --legacy-peer-deps
-          dfx generate realm_registry_backend
-          dfx generate realm_installer
-          npm run build --workspace=realm_registry_frontend
-          test -f src/realm_registry_frontend/dist/index.html
-
-      # The gaas `local` environment hands new realms test flags (test_mode,
-      # ii_bypass) through the installer; a production-variant realm wasm
-      # refuses them, so the realm halves are built as the test variant here.
-      - name: Build realm backend, test variant (realms/.basilisk/realm_backend)
-        working-directory: realms
-        run: |
-          python3 -m pip install -r requirements.txt
-          CANISTER_CANDID_PATH="$PWD/src/realm_backend/realm_backend.did" \
-            python3 scripts/pack_realm_backend.py --variant test
-          ls -l .basilisk/realm_backend/realm_backend.wasm
-
-      - name: Build realm frontend, test variant (realms/src/realm_frontend/dist)
-        working-directory: realms
-        run: |
-          # Root workspace install (a workspace-local install strands vite away
-          # from the hoisted @sveltejs/kit), then the workspace package the
-          # frontend imports, then the frontend itself.
-          npm install --legacy-peer-deps
-          npm run build --workspace packages/extension-bridge
-          (cd src/realm_frontend && REALMS_BUILD_VARIANT=test npm run build && test -f dist/index.html)
-          python3 scripts/check_frontend_variant.py src/realm_frontend/dist test
-
-      - name: Fetch ic-tokens token_backend.wasm (realms/.external-wasms)
-        working-directory: realms
-        run: |
-          mkdir -p .external-wasms
-          curl -fsSL "https://github.com/smart-social-contracts/ic-tokens/releases/download/v${IC_TOKENS_VERSION}/token_backend.wasm" \
-            -o .external-wasms/token_backend.wasm
-          ls -l .external-wasms/token_backend.wasm
-
-      # ── the environment: casals up from an empty replica, graded ────────────
-      # run_e2e.py starts the local replica itself (`icp network start -e local`),
-      # funds `local-dev`, then runs the scenarios against the gaas sheet:
-      #   fresh          — `casals up` converges from nothing, `plan` empty, oracle PASS
-      #   idempotent     — a second `up` changes nothing (covers adopt/heal re-runs)
-      #   runtime_stand  — a stand minted at runtime via create_stand converges
-      # KEEP=1 leaves the replica and the orchestra up for the next step.
-      - name: casals up gaas sheet + e2e scenarios (Casals harness)
-        working-directory: Casals
         env:
-          KEEP: "1"
           SCENARIOS: fresh,idempotent,runtime_stand
-        run: |
-          export TERM=xterm
-          python3 tests/e2e/run_e2e.py ../gos-as-a-service/casals.json
-
-      # ── content: what the installer will fetch into realms ──────────────────
-      # `casals up` provisions canisters, not content. The sheet granted the
-      # operator (`local-dev` here) publish rights on the GaaS file-registry;
-      # the product CLI uploads the packages. A codex without dependencies and
-      # one extension keep the step short; production publishes everything.
-      - name: Publish first-party packages to the GaaS file registry
-        working-directory: realms
-        env:
-          CASALS_HOME: ${{ env.CASALS_HOME }}/gaas
-        run: |
-          export TERM=xterm
-          (cd ../Casals && python3 -m casals_cli.main -e local --identity local-dev export ../gos-as-a-service/casals.json) > /tmp/gaas-export.json
-          FILE_REGISTRY=$(python3 -c 'import json; print(json.load(open("/tmp/gaas-export.json"))["bindings"]["file-registry"])')
-          NETWORK_URL=$(python3 -c "import json; print(json.load(open('$CASALS_HOME/gaas.local.json'))['network_url'])")
-          echo "file-registry = $FILE_REGISTRY on $NETWORK_URL"
-          pip install -e cli >/dev/null
-          realms files publish --network "$NETWORK_URL" --registry "$FILE_REGISTRY" --identity local-dev \
-            --codices dominion --extensions hello_world
-
-      # ── a realm is born the way the portal does it ──────────────────────────
-      # request_deployment → installer create_stand → conductor builds the stand
-      # from the `Deployments` template → realm frontend serves /canister_ids.js
-      # pointing at a backend that answers `status` — and, because the manifest
-      # names a codex and an extension, the installer fetched them from the
-      # file registry into the realm (fails if publishing is missing).
-      - name: Deploy a realm through the portal path
-        working-directory: gos-as-a-service
-        env:
           TIMEOUT_S: "1500"
           REALM_CODEX: dominion
           REALM_EXTENSIONS: hello_world
         run: |
           export TERM=xterm
-          python3 tests/e2e/deploy_realm.py ci-realm
+          scripts/up.sh -e local --skip-build --yes --codices dominion --extensions hello_world --smoke-realm ci-realm
 
       - name: Show orchestra state on failure
         if: failure()

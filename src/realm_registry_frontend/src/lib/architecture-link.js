@@ -3,7 +3,8 @@
  *
  * Never invent a canister URL. An empty casalsUrl must not navigate anywhere.
  * The principal comes from ``get_runtime_flags`` on the registry backend
- * (survives ``realms seed``). No bake-time fallback.
+ * (written by the sheet's ``configure`` row on every ``casals up``). No
+ * bake-time fallback.
  *
  * @param {string} [casalsUrl]
  * @returns {string}

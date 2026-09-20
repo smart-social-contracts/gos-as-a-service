@@ -1178,7 +1178,8 @@ def set_canister_config_json(args: text) -> text:
     skip_terms, skip_passport_zkproof, skip_authentication, disable_card_billing,
     assistant_experimental_notice.
     casals_frontend_canister_id is the live Casals UI principal (Infrastructure
-    link); ``realms seed`` updates it after ``casals new`` without a portal rebuild.
+    link); the sheet's ``configure`` row rewrites it on every ``casals up``, so a
+    re-minted Casals frontend needs no portal rebuild.
 
     Controller-only. Returns: {"success": bool, "message"?: str, "error"?: str}.
     """

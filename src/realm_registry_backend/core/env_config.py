@@ -77,8 +77,10 @@ def get_installer_id() -> str:
 def get_casals_frontend_canister_id() -> str:
     """Casals frontend principal for the portal Infrastructure link.
 
-    Survives ``realms seed`` (registry backend is not destroyed). Seed writes
-    the new ID after ``casals new`` so the SPA does not need a WASM rebuild.
+    Runtime config, not a build-time constant: the sheet's ``configure`` row
+    writes it on every ``casals up`` (``casals_frontend_canister_id:
+    $canister:casals-frontend``), so a re-minted Casals frontend needs no
+    portal rebuild.
     """
     cfg = RegistryConfig[_CASALS_FRONTEND_KEY]
     return (cfg.value if cfg else "").strip()

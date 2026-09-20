@@ -1567,8 +1567,9 @@ def _start_extensions_for_job(job, manifest: dict) -> Async[None]:
     if not registry_id:
         raise RuntimeError(
             "no file registry: manifest carries no file_registry_canister_id and the "
-            "installer has none configured (run `realms seed`, or POST configure with "
-            "file_registry_id) — refusing to install packages from nowhere"
+            "installer has none configured (the sheet's `configure` row sets file_registry_id "
+            "on `casals up`; or call configure with file_registry_id) — refusing to install "
+            "packages from nowhere"
         )
     realm_registry_id = (
         (manifest.get("realm_registry_canister_id") or manifest.get("registry_canister_id") or "").strip()

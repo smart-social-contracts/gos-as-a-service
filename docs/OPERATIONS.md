@@ -6,14 +6,52 @@ realm stand is built from — is declared in [`casals.json`](../casals.json).
 The Casals runbook (`Casals/docs/OPERATIONS.md`) explains the commands; this
 page is what is specific to GaaS.
 
+## One command
+
+[`scripts/up.sh`](../scripts/up.sh) takes a clean checkout to a converged,
+populated, DNS-mapped GaaS orchestra and is safe to re-run:
+
+```sh
+# production, from gos-as-a-service/ with Casals, realms and file-registry as sibling checkouts
+export DFX_HSM_PIN=…                 # the hardware key behind --identity
+export CLOUDFLARE_API_TOKEN=…        # Zone:Read + DNS:Edit on gos.earth; never commit it
+export CASALS_HOME=…                 # where the first `up` wrote gaas.production.json (default ~/.casals)
+scripts/up.sh -e production --identity prod-identity --upload-identity <plaintext identity> --yes
+
+scripts/up.sh -e local --yes --smoke-realm first-realm   # a laptop: same phases on a local replica,
+                                                          # then a realm born through the portal path
+scripts/up.sh -e production --identity prod-identity --publish-only   # only the packages changed
+# roll a new realm build onto the realms that already exist (a release, not an up)
+casals -e production --identity prod-identity upgrade casals.json --wasm realm-backend --section Deployments
+casals -e production --identity prod-identity upgrade casals.json --content frontend/realm-assets/main
+```
+
+Phases, each printed with a header and each idempotent:
+
+| phase | what it runs | skip with |
+|---|---|---|
+| preflight | tools, python deps, identity, `DFX_HSM_PIN` / `CLOUDFLARE_API_TOKEN` / bindings present (production) | — |
+| build | every `local:` source of the sheet: platform registry wasm, installer + registry backends, portal, realm halves in `../realms`, token wasm | `--skip-build`; `--build-only` stops here |
+| pin | `casals pin casals.json`; production stops to have you commit changed pins unless `--yes` | — |
+| up | `casals up` (locally through the Casals e2e harness: replica, funding, fresh + idempotent + runtime_stand grading); builds what the sheet declares, a no-op once built | — |
+| export | `casals export` → the live ids (never a table in the repo) | — |
+| domains | `realms domains apply` (`gos.earth` → `realm-registry-frontend`) when `dns.provider` is not `none` | `--no-domains` |
+| publish | `realms files publish` → the GaaS `file-registry` the installer fetches from | `--skip-publish`; `--publish-only` runs just this |
+| verify | `casals plan` empty, registry lists the published namespaces, `--smoke-realm` mints a realm, URLs printed | — |
+
+`--extensions a,b` / `--codices x` narrow what is published (CI publishes
+`dominion` + `hello_world` and mints `ci-realm` with both). `realms/scripts/local_up.sh --gaas`
+wraps this script for a laptop. The rest of this page is what those phases
+do, one at a time, for when you need to run or debug a single step.
+
 ## Build, then `up`
 
 The sheet references product wasms and frontend dists as `local:` paths, so
-build them first (the exact recipes are the build steps of
-[`.github/workflows/gaas-e2e.yml`](../.github/workflows/gaas-e2e.yml)):
-installer and registry backends with basilisk, the portal with `npm run build`,
-the realm backend and frontend in `../realms`, the token wasm from the
-ic-tokens release. Then, from the Casals repo:
+build them first (`scripts/up.sh -e <env> --build-only`; CI runs the same
+phase): installer and registry backends with basilisk, the portal with
+`npm run build`, the realm backend and frontend in `../realms`, the platform
+file registry wasm in `../file-registry`, the token wasm from the ic-tokens
+release. Then, from the Casals repo:
 
 ```sh
 python -m casals_cli.main -e local --identity local-dev up ../gos-as-a-service/casals.json --yes
@@ -30,28 +68,29 @@ conductor id from `$CASALS_HOME/<orchestra>.production.json` (set
 not a silent second conductor), and with a touch-policy hardware key wants
 `--upload-identity <plaintext identity>` for the store uploads of step 4.
 
-### Realms are untracked by a routine `up`
+### Existing realms are not touched by `up`
 
-Realm stands are minted by the installer from the `Realms` section's
-`stand_template`. Marking that section `"sync": "manual"` (Casals #51) keeps a
-platform change — a bumped realm wasm or realm frontend bundle in the template
-— from being rolled onto every existing realm by the next `up` or by the
-reconcile timer: the conductor still builds each new mint to completion (the
-mint is the request), then freezes the stand. Drift shows per realm under
-*manual* on the Plan page / `casals plan`; roll a realm on purpose with
-`casals up casals.json --stand realm-<x>` (or the whole section with
-`--section Realms`). The e2e corpus' `dynamic-stands` orchestra runs exactly
-this shape.
+Realm stands are minted by the installer from the `Deployments` section's
+`stand_template`, and each mint builds itself (Casals #52: `create_stand`
+arms a one-shot build for that stand). `casals up` builds what the sheet
+declares and is a no-op afterwards — a bumped realm wasm or realm frontend
+bundle in the template reaches new mints only. Rolling it onto realms that
+already exist is a release: `casals upgrade casals.json --wasm realm-backend
+--section Deployments` (or `--stand realm-<x>` for one), `casals upgrade casals.json
+--content frontend/realm-assets/main` for the frontend bundle. Baton-governed
+members come back as `pending` until the baton's other commanders approve.
+The e2e corpus' `dynamic-stands` orchestra runs exactly this shape.
 
 ## What happens when a realm is deployed
 
 1. The portal wizard calls `realm-registry-backend.request_deployment(manifest)`.
 2. The installer calls the conductor's `create_stand({section: "Deployments",
    name, members})` — its entire contract with Casals — and polls `get_tree`.
-3. The conductor builds the stand from the `Deployments` template on its
-   reconcile timer (`conductor.settings.reconcile_interval_secs`): baton,
-   realm backend, realm frontend, optional token; controllers, baton hand-off,
-   `/canister_ids.js` and `.ic-assets.json5` all come from the template.
+3. The conductor builds the stand from the `Deployments` template on a
+   one-shot timer armed by `create_stand` (a failed round shows as the stand's
+   `build_error` in `get_tree`): baton, realm backend, realm frontend, optional
+   token; controllers, baton hand-off, `/canister_ids.js` and
+   `.ic-assets.json5` all come from the template.
 4. Once the members are `installed` the installer bootstraps the realm
    (`enter_setup`, `configure_canister_ids`, `grant_frontend_access`) and
    registers it.
@@ -99,12 +138,15 @@ realms files publish -n ic --registry <file-registry> --identity prod-identity
 ```
 
 A realm minted afterwards with a codex (`realm.codex.package`) or extensions
-gets them from here. CI (`gaas-e2e.yml`) publishes `dominion` + `hello_world`
-and mints `ci-realm` with both; the run fails if the realm does not list them.
+gets them from here. This is the publish phase of `scripts/up.sh`
+(`--publish-only` runs just it). CI (`gaas-e2e.yml`) runs the script with
+`--codices dominion --extensions hello_world --smoke-realm ci-realm`; the run
+fails if the realm does not list them.
 
 ## Checks
 
 ```sh
+scripts/up.sh -e local --skip-build --yes        # up + publish + verify again: must report no changes
 # from Casals/: converge + idempotency + a runtime stand, oracle-graded
 KEEP=1 SCENARIOS=fresh,idempotent,runtime_stand python tests/e2e/run_e2e.py ../gos-as-a-service/casals.json
 # from here: a realm born the way the portal does it
