@@ -121,8 +121,7 @@
       }
     ],
     "settings": {
-      "orchestra_name": "gaas",
-      "reconcile_interval_secs": 30
+      "orchestra_name": "gaas"
     }
   },
   "governance": {
