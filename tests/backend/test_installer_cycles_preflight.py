@@ -53,15 +53,12 @@ def test_typical_realm_requires_seven_trillion_for_baton_backend_frontend():
     assert required == 7_000_000_000_000
 
 
-def test_new_token_counts_the_optional_template_member():
-    manifest = {**_manifest(), "realm": {"token": {"name": "Alpha Token", "symbol": "ALP"}}}
-    assert estimate_canister_creation_count(manifest) == 4
-    assert estimate_conductor_cycles_required(manifest) == 9_000_000_000_000
-
-
-def test_existing_ledger_adds_no_canister():
-    manifest = {**_manifest(), "realm": {"token": {"existing": "ckBTC"}}}
-    assert estimate_canister_creation_count(manifest) == 3
+def test_a_token_in_an_old_manifest_does_not_add_a_canister():
+    named = {**_manifest(), "realm": {"token": {"name": "Alpha Token", "symbol": "ALP"}}}
+    existing = {**_manifest(), "realm": {"token": {"existing": "ckBTC"}}}
+    assert estimate_canister_creation_count(named) == 3
+    assert estimate_canister_creation_count(existing) == 3
+    assert estimate_conductor_cycles_required(named) == 7_000_000_000_000
 
 
 def test_deploy_scope_does_not_change_the_template_shape():

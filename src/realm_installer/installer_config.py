@@ -22,8 +22,8 @@ class InstallerConfig(Entity):
     file_registry_id = String(max_length=64, default="")
     marketplace_id = String(max_length=64, default="")
     nft_canister_id = String(max_length=64, default="")
-    # {symbol: {ledger, indexer, decimals}} — the treasury ledgers a realm may
-    # adopt with `token.existing`.
+    # {symbol: {ledger, indexer, decimals}} — shared ledgers the installer can
+    # pass to a realm. The launch manifest does not select one.
     shared_tokens_json = String(max_length=4096, default="{}")
     portal_url = String(max_length=512, default="")
     cycle_threshold_cycles = Integer(default=2_000_000_000_000)

@@ -12,12 +12,9 @@ from __future__ import annotations
 CANISTER_INSTALLED = "installed"
 
 
-def stand_required_members(stand: str, *, with_token: bool) -> list[str]:
+def stand_required_members(stand: str) -> list[str]:
     """Template members the installer must see installed before bootstrapping."""
-    members = [f"{stand}-backend", f"{stand}-frontend"]
-    if with_token:
-        members.append(f"{stand}-token")
-    return members
+    return [f"{stand}-backend", f"{stand}-frontend"]
 
 
 def installed_stand_canisters(tree: dict, stand: str) -> dict[str, str]:

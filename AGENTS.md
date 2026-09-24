@@ -27,7 +27,7 @@ literals outside `casals.json`.
 
 Portal host: `environments.production.portal_host` (`gos.earth`) → **`realm_registry_frontend`**. Realms marketplace hosts (`*.realmsgos.org`) → **`marketplace_frontend`** when declared in the sheet (see below).
 
-The environment is declared in `casals.json` and built with `casals up` (see `docs/OPERATIONS.md` and the Casals repo). **One command** does the whole thing — build → `casals pin` → `casals up` → `casals export` → `realms domains apply` → `realms files publish` → verify: `scripts/up.sh -e production --identity prod-identity --upload-identity <plain> --yes` (with `DFX_HSM_PIN`, `CLOUDFLARE_API_TOKEN`, `CASALS_HOME` set); `scripts/up.sh -e local --yes` on a laptop, or `realms/scripts/local_up.sh --gaas` for both orchestras.
+The environment is declared in `casals.json` and built with `casals up` (see `docs/OPERATIONS.md` and the Casals repo). **One command** does the whole thing — build → `casals pin` → `casals up` → `casals export` → `realms domains apply` → `realms files publish` → verify: `scripts/up.sh -e production --identity <session> --yes` where `<session>` is a short-lived `icp identity delegation` from `prod-identity` — one HSM touch for the run (`Casals/docs/OPERATIONS.md`, "Hardware keys") — with `DFX_HSM_PIN`, `CLOUDFLARE_API_TOKEN`, `CASALS_HOME` set; `scripts/up.sh -e local --yes` on a laptop, or `realms/scripts/local_up.sh --gaas` for both orchestras.
 
 ## DNS-mapped frontends — why we keep `realm_registry_frontend` and `marketplace_frontend`
 

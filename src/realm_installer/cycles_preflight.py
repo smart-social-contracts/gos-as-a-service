@@ -18,16 +18,13 @@ FILE_REGISTRY_CANISTER_NAME = "file-registry"
 
 
 def estimate_canister_creation_count(manifest: dict) -> int:
-    """Count canisters the conductor will create for this stand from the
-    ``stand_template``: baton + backend + frontend, plus the optional token
-    when the wizard chose a new one (``realm.token.name``/``symbol`` set and no
-    ``existing`` ledger)."""
-    count = 3
-    token = (manifest.get("realm") or {}).get("token") or {}
-    if not (token.get("existing") or "").strip() and (token.get("name") or "").strip() \
-            and (token.get("symbol") or "").strip():
-        count += 1
-    return count
+    """Canisters the conductor creates for one stand: baton, backend, frontend.
+
+    The launch manifest does not ask for a token. ``manifest`` is unused; the
+    count is the stand template, not the wizard form.
+    """
+    del manifest
+    return 3
 
 
 def estimate_conductor_cycles_required(manifest: dict) -> int:

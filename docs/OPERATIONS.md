@@ -13,10 +13,12 @@ populated, DNS-mapped GaaS orchestra and is safe to re-run:
 
 ```sh
 # production, from gos-as-a-service/ with Casals, realms and file-registry as sibling checkouts
-export DFX_HSM_PIN=…                 # the hardware key behind --identity
+export DFX_HSM_PIN=…                 # the hardware key (needed for the one delegation signature)
 export CLOUDFLARE_API_TOKEN=…        # Zone:Read + DNS:Edit on gos.earth; never commit it
 export CASALS_HOME=…                 # where the first `up` wrote gaas.production.json (default ~/.casals)
-scripts/up.sh -e production --identity prod-identity --upload-identity <plaintext identity> --yes
+# prod-session: a short-lived `icp identity delegation` from prod-identity — one touch for the run
+# (recipe: Casals/docs/OPERATIONS.md, "Hardware keys")
+scripts/up.sh -e production --identity prod-session --yes
 
 scripts/up.sh -e local --yes --smoke-realm first-realm   # a laptop: same phases on a local replica,
                                                           # then a realm born through the portal path
@@ -61,12 +63,13 @@ The same command with `-e production` and the environment's deployer identity
 is the production procedure; the differences between environments (principals,
 budgets, flags such as `test_flags.ii_bypass`) are the `environments` block of
 the sheet, nothing else. Production additionally requires `sha256` pins on
-every `registry.wasms` and `registry.publish` row (`casals pin casals.json`
+every `registry.wasms` and `registry.bundles` row (`casals pin casals.json`
 after building; bundles hash as in `Casals/docs/BUNDLES.md`), reads the
 conductor id from `$CASALS_HOME/<orchestra>.production.json` (set
 `CASALS_HOME` to where the first `up` wrote it — a missing binding is a stop,
-not a silent second conductor), and with a touch-policy hardware key wants
-`--upload-identity <plaintext identity>` for the store uploads of step 4.
+not a silent second conductor), and with a touch-policy hardware key is run
+as a short-lived `icp identity delegation` session identity so the whole run
+costs one touch (`Casals/docs/OPERATIONS.md`, "Hardware keys").
 
 ### Existing realms are not touched by `up`
 

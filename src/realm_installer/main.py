@@ -657,21 +657,7 @@ def schedule_registration(job_id_val: str):
             test_flags = manifest.get("test_flags") or {}
             test_flags_json = json.dumps(test_flags) if test_flags else ""
             if backend_id:
-                realm_info = manifest.get("realm") or {}
-                stand = ((manifest.get("casals") or {}).get("stand") or _slugify(
-                    realm_info.get("name") or realm_name
-                )).strip()
-                token_cfg = _resolve_token_from_manifest(manifest)
-                token_id = ""
                 nft_id = configured_nft_canister_id()
-                if token_cfg:
-                    if token_cfg.get("deploy_new"):
-                        casals_id = (_config().casals_canister_id or "").strip()
-                        token_id = yield from _lookup_stand_token_id(
-                            casals_id, stand, job_id_val
-                        )
-                    else:
-                        token_id = token_cfg.get("ledger", "")
 
                 link_payload = {
                     "frontend_canister_id": frontend_id or None,
@@ -690,21 +676,8 @@ def schedule_registration(job_id_val: str):
                     link_payload["can_test_mode"] = True
                 if test_flags_json:
                     link_payload["test_flags_json"] = test_flags_json
-                if token_id:
-                    link_payload["token_canister_id"] = token_id
                 if nft_id:
                     link_payload["nft_canister_id"] = nft_id
-                if token_cfg:
-                    link_payload["accounting_currency"] = token_cfg.get("symbol", "REALMS")
-                    link_payload["accounting_currency_decimals"] = token_cfg.get(
-                        "decimals", 8
-                    )
-                    link_payload["treasury_token_symbol"] = token_cfg.get("symbol", "REALMS")
-                    if token_cfg.get("indexer"):
-                        link_payload["treasury_token_indexer_id"] = token_cfg["indexer"]
-                    link_payload["treasury_token_type"] = token_cfg.get(
-                        "token_type", "realm"
-                    )
 
                 link_json = json.dumps(
                     {k: v for k, v in link_payload.items() if v is not None}
@@ -723,7 +696,7 @@ def schedule_registration(job_id_val: str):
                 else:
                     jlog(job_id_val).info(
                         f"set_canister_config_json: frontend={frontend_id}, "
-                        f"token={token_id or '–'}, nft={nft_id or '–'}, "
+                        f"nft={nft_id or '–'}, "
                         f"file_registry={fr_id}, marketplace={mp_id}, "
                         f"version={version}, network={network}, "
                         f"test_flags={test_flags_json}"
@@ -1358,66 +1331,6 @@ def _schedule_step_runner(task_id: str, delay_s: int = 0):
                 pass
 
     ic.set_timer(Duration(int(delay_s)), _cb)
-
-
-def _resolve_token_from_manifest(manifest: dict):
-    """Return treasury wiring dict from manifest.realm.token, or None.
-
-    `token.existing` names one of the shared ledgers the sheet configured
-    (`configure.shared_tokens`); `token.name` + `token.symbol` mints a new one.
-    """
-    token = (manifest.get("realm") or {}).get("token") or {}
-
-    existing = (token.get("existing") or "").strip()
-    if existing:
-        shared = configured_shared_tokens()
-        match = next((k for k in shared if k.upper() == existing.upper()), None)
-        if match is None:
-            return None
-        cfg = shared[match]
-        return {
-            "symbol": match,
-            "ledger": cfg["ledger"],
-            "indexer": cfg.get("indexer") or cfg["ledger"],
-            "decimals": int(cfg.get("decimals", 8)),
-            "token_type": "shared",
-            "deploy_new": False,
-        }
-
-    name = (token.get("name") or "").strip()
-    symbol = (token.get("symbol") or "").strip().upper()
-    if name and symbol:
-        return {
-            "symbol": symbol,
-            "name": name,
-            "decimals": 8,
-            "token_type": "realm",
-            "deploy_new": True,
-        }
-    return None
-
-
-def _wants_new_stand_token(manifest: dict) -> bool:
-    """True when the wizard chose ``token.new`` — the stand then gets the
-    optional ``{stand}-token`` template member."""
-    token_cfg = _resolve_token_from_manifest(manifest)
-    return bool(token_cfg and token_cfg.get("deploy_new"))
-
-
-def _lookup_stand_token_id(casals_id: str, stand: str, job_id: str):
-    """Generator: resolve the per-stand realm token canister (``{stand}-token``)."""
-    if not casals_id or not stand:
-        return ""
-    try:
-        casals = CasalsService(Principal.from_str(casals_id))
-        tree_res: CallResult = yield casals.get_tree()
-        token_id = _casals_find_canister(_casals_ok(tree_res), stand, f"{stand}-token")
-        if token_id:
-            jlog(job_id).info(f"resolved stand token {token_id} ({stand}-token)")
-        return token_id
-    except Exception as e:
-        jlog(job_id).warning(f"Casals token lookup failed (non-fatal): {e}")
-        return ""
 
 
 def _fetch_codex_dependency_ids(registry_id: str, codex_id: str, version=None) -> Async[list]:
@@ -2703,7 +2616,7 @@ _STAND_READY_RECHECK_S = 30
 def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerConfig, casals_id: str):
     """Declare the realm stand and, once the conductor has built it, bootstrap it.
 
-    Every canister of a stand (baton, backend, frontend, optional token) is
+    Every canister of a stand (baton, backend, frontend) is
     declared by the section's ``stand_template`` in the sheet — WASMs, install
     args, controllers, ``/canister_ids.js``, commanders. The installer's whole
     Casals interaction is ``create_stand`` plus reading ``get_tree`` until the
@@ -2718,7 +2631,6 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
     section = (cas.get("section") or cfg.casals_section or "Deployments").strip()
     stand = (cas.get("stand") or _slugify(realm_name)).strip()
     subnet, subnet_type = casals_placement_from_cfg(cas)
-    want_token = _wants_new_stand_token(manifest)
 
     casals = CasalsService(Principal.from_str(casals_id))
 
@@ -2741,17 +2653,16 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
     # 1. Declare the stand. Idempotent: on an existing stand this is a member
     # union and answers created=false, so a re-kick converges instead of failing.
     stand_args = build_stand_create_args(section, stand, f"realm {realm_name}", subnet, subnet_type)
-    stand_args["members"] = [f"{stand}-token"] if want_token else []
     stand_res: CallResult = yield casals.create_stand(json.dumps(stand_args))
     created = _casals_ok(stand_res).get("created")
     jlog(job_id).info(
         f"stand '{stand}' declared in '{section}' (created={created}, "
-        f"members={stand_args['members']}, subnet={subnet or '–'}, subnet_type={subnet_type or '–'})"
+        f"subnet={subnet or '–'}, subnet_type={subnet_type or '–'})"
     )
 
     # 2. Wait for the conductor to build it.
     tree_res: CallResult = yield casals.get_tree()
-    required = stand_required_members(stand, with_token=want_token)
+    required = stand_required_members(stand)
     ready, missing = stand_readiness(_casals_ok(tree_res), stand, required)
     if missing:
         jlog(job_id).info(
@@ -2772,8 +2683,7 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
     job.assets_verified = 1
     job.registry_canister_id = job.registry_canister_id or (manifest.get("registry_canister_id") or "").strip()
     jlog(job_id).info(
-        f"stand '{stand}' installed: backend={backend_id} frontend={frontend_id} "
-        f"token={ready.get(f'{stand}-token') or '–'}"
+        f"stand '{stand}' installed: backend={backend_id} frontend={frontend_id}"
     )
 
     # 3. Inject the Casals block into the realm's manifest_data so the

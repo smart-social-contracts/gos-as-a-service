@@ -24,11 +24,8 @@ def _tree(stand: str, canisters: list[dict]) -> dict:
     }
 
 
-def test_required_members_include_token_only_when_requested():
-    assert stand_required_members("alpha", with_token=False) == ["alpha-backend", "alpha-frontend"]
-    assert stand_required_members("alpha", with_token=True) == [
-        "alpha-backend", "alpha-frontend", "alpha-token",
-    ]
+def test_required_members_are_backend_and_frontend():
+    assert stand_required_members("alpha") == ["alpha-backend", "alpha-frontend"]
 
 
 def test_created_but_not_installed_is_not_ready():
@@ -37,7 +34,7 @@ def test_created_but_not_installed_is_not_ready():
         {"name": "alpha-backend", "canister_id": "be-1", "status": "created"},
         {"name": "alpha-frontend", "canister_id": "", "status": "pending"},
     ])
-    ready, missing = stand_readiness(tree, "alpha", stand_required_members("alpha", with_token=False))
+    ready, missing = stand_readiness(tree, "alpha", stand_required_members("alpha"))
     assert ready == {"alpha-baton": "b-1"}
     assert missing == ["alpha-backend", "alpha-frontend"]
 
@@ -48,24 +45,22 @@ def test_ready_when_every_required_member_is_installed():
         {"name": "alpha-backend", "canister_id": "be-1", "status": "installed"},
         {"name": "alpha-frontend", "canister_id": "fe-1", "status": "installed"},
     ])
-    ready, missing = stand_readiness(tree, "alpha", stand_required_members("alpha", with_token=False))
+    ready, missing = stand_readiness(tree, "alpha", stand_required_members("alpha"))
     assert missing == []
     assert ready["alpha-backend"] == "be-1"
     assert ready["alpha-frontend"] == "fe-1"
 
 
-def test_token_member_gates_readiness_when_requested():
+def test_token_is_not_a_required_stand_member():
     canisters = [
         {"name": "alpha-backend", "canister_id": "be-1", "status": "installed"},
         {"name": "alpha-frontend", "canister_id": "fe-1", "status": "installed"},
+        {"name": "alpha-token", "canister_id": "tk-1", "status": "installed"},
     ]
-    _, missing = stand_readiness(_tree("alpha", canisters), "alpha",
-                                 stand_required_members("alpha", with_token=True))
-    assert missing == ["alpha-token"]
-    canisters.append({"name": "alpha-token", "canister_id": "tk-1", "status": "installed"})
     ready, missing = stand_readiness(_tree("alpha", canisters), "alpha",
-                                     stand_required_members("alpha", with_token=True))
+                                     stand_required_members("alpha"))
     assert missing == []
+    assert "alpha-token" not in stand_required_members("alpha")
     assert ready["alpha-token"] == "tk-1"
 
 
@@ -75,5 +70,5 @@ def test_other_stands_and_missing_stand_are_ignored():
     ])
     assert installed_stand_canisters(tree, "alpha") == {}
     assert installed_stand_canisters({}, "alpha") == {}
-    _, missing = stand_readiness(tree, "alpha", stand_required_members("alpha", with_token=False))
+    _, missing = stand_readiness(tree, "alpha", stand_required_members("alpha"))
     assert missing == ["alpha-backend", "alpha-frontend"]
