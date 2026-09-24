@@ -7,7 +7,6 @@ on:
       - "src/**"
       - "dfx.json"
       - "tests/e2e/**"
-      - "scripts/up.sh"
       - ".github/workflows/gaas-e2e.yml"
   workflow_dispatch:
 
@@ -21,8 +20,6 @@ env:
   DFX_VERSION: "0.32.0"
   CASALS_VERSION: "main"
   REALMS_VERSION: "main"
-  FILE_REGISTRY_VERSION: "main"
-  IC_TOKENS_VERSION: "0.1.0"
   # The whole GaaS environment is `casals.json`; the Casals e2e harness builds it
   # from an empty replica and grades it, then a realm is born the way the portal
   # does it. Both scripts share one CASALS_HOME (bindings) and one icp identity.
@@ -37,10 +34,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
-      # The sheet resolves `local:` sources against its own directory:
-      # `../realms/...` for the realm stand template, `../file-registry/...` for
-      # the platform file registry, `.basilisk/...` for the platform wasms. The
-      # four repos must therefore be siblings.
+      # The sheet installs release artifacts. realms is a sibling because
+      # `realms files publish` reads codices and extensions from that checkout.
       - uses: actions/checkout@v4
         with:
           path: gos-as-a-service
@@ -61,16 +56,6 @@ jobs:
           path: realms
           submodules: recursive
 
-      # The platform file registry (branding, extension packages) is the
-      # standalone file-registry canister; casals.json reads its wasm from
-      # ../file-registry/.basilisk (sibling checkout).
-      - name: Checkout file-registry (platform file registry wasm)
-        uses: actions/checkout@v4
-        with:
-          repository: smart-social-contracts/file-registry
-          ref: ${{ env.FILE_REGISTRY_VERSION }}
-          path: file-registry
-
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -79,8 +64,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      # dfx is only used for `dfx generate` (portal candid declarations) and to
-      # mint the shared identity; the replica and every deploy go through icp.
+      # dfx only mints the shared identity; the replica and every deploy go through icp.
       - name: Install dfx
         run: |
           curl -fsSL "https://github.com/dfinity/sdk/releases/download/${DFX_VERSION}/dfx-${DFX_VERSION}-x86_64-linux.tar.gz" -o /tmp/dfx.tar.gz
@@ -117,45 +101,35 @@ jobs:
           echo "icp=$icp_principal dfx=$dfx_principal"
           test "$icp_principal" = "$dfx_principal"
 
-      # ── product wasms and dists referenced by casals.json as `local:` ───────
-      # scripts/up.sh owns the build recipes (platform file registry wasm,
-      # installer + registry backends, portal, the realm halves from ../realms,
-      # the token wasm) so that CI, local_up.sh and a production deploy build
-      # the same way. The gaas `local` environment hands new realms test flags
-      # (test_mode, ii_bypass) through the installer; a production-variant realm
-      # wasm refuses them, so the realm halves are built as the test variant here.
-      - name: Build everything the sheet references (scripts/up.sh --build-only)
-        working-directory: gos-as-a-service
-        run: |
-          export TERM=xterm
-          scripts/up.sh -e local --build-only
-
-      # ── the environment: casals up, graded, populated, and a realm born ─────
-      # The same script, remaining phases:
-      #  - the Casals harness starts the local replica, funds `local-dev`, then
-      #    grades the sheet (fresh: converges from nothing, plan empty, oracle
-      #    PASS; idempotent: a second up changes nothing; runtime_stand: a stand
-      #    minted at runtime via create_stand converges) and leaves it up;
-      #  - `casals up` provisions canisters, not content: the product CLI then
-      #    publishes the packages the installer fetches into new realms to the
-      #    GaaS file registry (a codex without dependencies and one extension
-      #    keep the step short; production publishes everything);
-      #  - --smoke-realm: a realm is born the way the portal does it —
-      #    request_deployment → installer create_stand → conductor builds the
-      #    stand from the `Deployments` template → the realm frontend serves
-      #    /canister_ids.js pointing at a backend that answers `status` — and,
-      #    because the manifest names the codex and the extension, the installer
-      #    fetched them from the file registry into the realm (fails otherwise).
-      - name: casals up + publish + verify + portal-path realm (scripts/up.sh)
-        working-directory: gos-as-a-service
+      # The Casals harness starts the local replica, funds local-dev, then grades
+      # the sheet (fresh, idempotent, runtime_stand) and leaves it up. The sheet
+      # downloads its release artifacts; nothing here is built from source.
+      - name: casals up (e2e harness)
+        working-directory: Casals
         env:
           SCENARIOS: fresh,idempotent,runtime_stand
+          KEEP: "1"
+        run: |
+          export TERM=xterm
+          python3 tests/e2e/run_e2e.py ../gos-as-a-service/casals.json
+
+      # casals up provisions canisters, not content. Publish the codex and
+      # extension the smoke realm asks for, then mint it the way the portal does.
+      - name: Publish dominion and hello_world, then mint ci-realm
+        working-directory: gos-as-a-service
+        env:
           TIMEOUT_S: "1500"
           REALM_CODEX: dominion
           REALM_EXTENSIONS: hello_world
         run: |
           export TERM=xterm
-          scripts/up.sh -e local --skip-build --yes --codices dominion --extensions hello_world --smoke-realm ci-realm
+          python3 -m pip install -q -e ../realms/cli
+          EXPORT=$(cd ../Casals && CASALS_HOME="$CASALS_HOME/gaas" python3 -m casals_cli.main -e local --identity local-dev export ../gos-as-a-service/casals.json)
+          FILE_REGISTRY=$(printf '%s' "$EXPORT" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("bindings",{}).get("file-registry",""))')
+          NETWORK_URL=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("network_url",""))' "$CASALS_HOME/gaas/gaas.local.json")
+          test -n "$FILE_REGISTRY"
+          (cd ../realms && realms files publish --network "$NETWORK_URL" --registry "$FILE_REGISTRY" --identity local-dev --codices dominion --extensions hello_world)
+          python3 tests/e2e/deploy_realm.py ci-realm
 
       - name: Show orchestra state on failure
         if: failure()

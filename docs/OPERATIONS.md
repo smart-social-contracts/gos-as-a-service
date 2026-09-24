@@ -6,54 +6,37 @@ realm stand is built from — is declared in [`casals.json`](../casals.json).
 The Casals runbook (`Casals/docs/OPERATIONS.md`) explains the commands; this
 page is what is specific to GaaS.
 
-## One command
+## Commands
 
-[`scripts/up.sh`](../scripts/up.sh) takes a clean checkout to a converged,
-populated, DNS-mapped GaaS orchestra and is safe to re-run:
+The sheet installs release artifacts, so there is no local build step. From
+the Casals checkout, with `gos-as-a-service` and `realms` as siblings:
 
 ```sh
-# production, from gos-as-a-service/ with Casals, realms and file-registry as sibling checkouts
-export DFX_HSM_PIN=…                 # the hardware key (needed for the one delegation signature)
-export CLOUDFLARE_API_TOKEN=…        # Zone:Read + DNS:Edit on gos.earth; never commit it
-export CASALS_HOME=…                 # where the first `up` wrote gaas.production.json (default ~/.casals)
 # prod-session: a short-lived `icp identity delegation` from prod-identity — one touch for the run
 # (recipe: Casals/docs/OPERATIONS.md, "Hardware keys")
-scripts/up.sh -e production --identity prod-session --yes
+export CASALS_HOME=…                 # where the first `up` wrote gaas.production.json (default ~/.casals)
 
-scripts/up.sh -e local --yes --smoke-realm first-realm   # a laptop: same phases on a local replica,
-                                                          # then a realm born through the portal path
-scripts/up.sh -e production --identity prod-identity --publish-only   # only the packages changed
-# roll a new realm build onto the realms that already exist (a release, not an up)
-casals -e production --identity prod-identity upgrade casals.json --wasm realm-backend --section Deployments
-casals -e production --identity prod-identity upgrade casals.json --content frontend/realm-assets/main
+# first create of this orchestra (no gaas.production.json yet)
+python3 -m casals_cli.main -e production --identity prod-session up ../gos-as-a-service/casals.json --bootstrap --yes
+# a later run, once bindings exist
+python3 -m casals_cli.main -e production --identity prod-session up ../gos-as-a-service/casals.json --yes
 ```
 
-Phases, each printed with a header and each idempotent:
+`casals up` does not write DNS and does not publish codices. Those are the
+next two commands (`Custom domain` and `Content` below). A laptop uses the
+Casals e2e harness, then the same publish step; `realms/scripts/local_up.sh --gaas`
+runs that plus one realm minted through the portal.
 
-| phase | what it runs | skip with |
-|---|---|---|
-| preflight | tools, python deps, identity, `DFX_HSM_PIN` / `CLOUDFLARE_API_TOKEN` / bindings present (production) | — |
-| build | every `local:` source of the sheet: platform registry wasm, installer + registry backends, portal, realm halves in `../realms`, token wasm | `--skip-build`; `--build-only` stops here |
-| pin | `casals pin casals.json`; production stops to have you commit changed pins unless `--yes` | — |
-| up | `casals up` (locally through the Casals e2e harness: replica, funding, fresh + idempotent + runtime_stand grading); builds what the sheet declares, a no-op once built | — |
-| export | `casals export` → the live ids (never a table in the repo) | — |
-| domains | `realms domains apply` (`gos.earth` → `realm-registry-frontend`) when `dns.provider` is not `none` | `--no-domains` |
-| publish | `realms files publish` → the GaaS `file-registry` the installer fetches from | `--skip-publish`; `--publish-only` runs just this |
-| verify | `casals plan` empty, registry lists the published namespaces, `--smoke-realm` mints a realm, URLs printed | — |
+```sh
+# roll a new realm build onto the realms that already exist (a release, not an up)
+python3 -m casals_cli.main -e production --identity prod-session upgrade ../gos-as-a-service/casals.json --wasm realm-backend --section Deployments
+python3 -m casals_cli.main -e production --identity prod-session upgrade ../gos-as-a-service/casals.json --content frontend/realm-assets/main
+```
 
-`--extensions a,b` / `--codices x` narrow what is published (CI publishes
-`dominion` + `hello_world` and mints `ci-realm` with both). `realms/scripts/local_up.sh --gaas`
-wraps this script for a laptop. The rest of this page is what those phases
-do, one at a time, for when you need to run or debug a single step.
+## `up`
 
-## Build, then `up`
-
-The sheet references product wasms and frontend dists as `local:` paths, so
-build them first (`scripts/up.sh -e <env> --build-only`; CI runs the same
-phase): installer and registry backends with basilisk, the portal with
-`npm run build`, the realm backend and frontend in `../realms`, the platform
-file registry wasm in `../file-registry`, the token wasm from the ic-tokens
-release. Then, from the Casals repo:
+The registry rows are `release:` pins. `casals up` downloads them and
+converges the orchestra. From the Casals repo:
 
 ```sh
 python -m casals_cli.main -e local --identity local-dev up ../gos-as-a-service/casals.json --yes
@@ -63,8 +46,8 @@ The same command with `-e production` and the environment's deployer identity
 is the production procedure; the differences between environments (principals,
 budgets, flags such as `test_flags.ii_bypass`) are the `environments` block of
 the sheet, nothing else. Production additionally requires `sha256` pins on
-every `registry.wasms` and `registry.bundles` row (`casals pin casals.json`
-after building; bundles hash as in `Casals/docs/BUNDLES.md`), reads the
+every `registry.wasms` and `registry.bundles` row (bundles hash as in
+`Casals/docs/BUNDLES.md`), reads the
 conductor id from `$CASALS_HOME/<orchestra>.production.json` (set
 `CASALS_HOME` to where the first `up` wrote it — a missing binding is a stop,
 not a silent second conductor), and with a touch-policy hardware key is run
@@ -141,15 +124,13 @@ realms files publish -n ic --registry <file-registry> --identity prod-identity
 ```
 
 A realm minted afterwards with a codex (`realm.codex.package`) or extensions
-gets them from here. This is the publish phase of `scripts/up.sh`
-(`--publish-only` runs just it). CI (`gaas-e2e.yml`) runs the script with
-`--codices dominion --extensions hello_world --smoke-realm ci-realm`; the run
-fails if the realm does not list them.
+gets them from here. CI (`gaas-e2e.yml`) publishes `dominion` and
+`hello_world`, then mints `ci-realm`; the run fails if the realm does not
+list them.
 
 ## Checks
 
 ```sh
-scripts/up.sh -e local --skip-build --yes        # up + publish + verify again: must report no changes
 # from Casals/: converge + idempotency + a runtime stand, oracle-graded
 KEEP=1 SCENARIOS=fresh,idempotent,runtime_stand python tests/e2e/run_e2e.py ../gos-as-a-service/casals.json
 # from here: a realm born the way the portal does it

@@ -17,7 +17,7 @@ GOS-as-a-Service (GaaS) is the platform behind [gos.earth](https://gos.earth): a
 
 Casals is an **external platform component**, not built from this repo. The realm installer reaches a Casals conductor at runtime via `InstallerConfig` on the installer canister: `casals_canister_id`, `casals_section`, and `provision_via_casals`. Any conforming Casals conductor can serve an environment.
 
-Every environment (`local`, `production`) is declared in [`casals.json`](casals.json) and built and converged with `casals up -e <env>` (see the Casals repo); [`scripts/up.sh -e <env>`](scripts/up.sh) runs the whole deploy — build, pin, `casals up`, DNS, package publish, verify — in one command ([docs/OPERATIONS.md](docs/OPERATIONS.md)). Canister ids, the portal host, controllers and test flags live only there: canisters receive theirs at runtime (`configure` / `set_canister_config_json`, the conductor-written `/canister_ids.js` for frontends), and `casals export` prints the live ones. No file in this repo carries a per-network table of ids or hosts; CI rejects one.
+Every environment (`local`, `production`) is declared in [`casals.json`](casals.json) and converged with `casals up -e <env>` (see the Casals repo). DNS is `realms domains apply` and package publish is `realms files publish` ([docs/OPERATIONS.md](docs/OPERATIONS.md)). Canister ids, the portal host, controllers and test flags live only there: canisters receive theirs at runtime (`configure` / `set_canister_config_json`, the conductor-written `/canister_ids.js` for frontends), and `casals export` prints the live ones. No file in this repo carries a per-network table of ids or hosts; CI rejects one.
 
 ```mermaid
 flowchart LR
