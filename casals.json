@@ -147,8 +147,8 @@
       {
         "family": "realm-backend",
         "version": "main",
-        "source": "release:smart-social-contracts/realms@v0.5.1:realm_backend.wasm.gz",
-        "sha256": "c94353a8f3c97f08a067034dfbfe579fe10bd85e2feb1537a5463016b3243e29"
+        "source": "release:smart-social-contracts/realms@v0.5.2:realm_backend.wasm.gz",
+        "sha256": "c19e338ae32cf1f4c2c4c069183fe327dba18ddd665438cf09ea82ba0cbb1185"
       }
     ],
     "bundles": [
@@ -159,8 +159,8 @@
       },
       {
         "path": "frontend/realm-assets/main",
-        "source": "release:smart-social-contracts/realms@v0.5.1:realm_frontend.tar.gz",
-        "sha256": "91945e927cf4c5c330628a0f7867129cb7de66530ed0d3773abe146cfeb829c5"
+        "source": "release:smart-social-contracts/realms@v0.5.2:realm_frontend.tar.gz",
+        "sha256": "38b078371035e136e3863042026835c64ac2183d21bd4ea3abc35a72a0207c7b"
       },
       {
         "$comment": "Casals UI from the Casals v0.3.2 release. Ships with `casals upgrade --content frontend/casals-ui/main`.",
