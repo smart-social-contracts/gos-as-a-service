@@ -5,6 +5,7 @@
   import { _ } from 'svelte-i18n';
   import MapView from '$lib/components/MapView.svelte';
   import { casalsFrontendUrl } from '$lib/architecture-link.js';
+  import { runtimeCanisterIds } from '$lib/network.js';
   import { registryRuntimeFlags } from '$lib/stores/registryRuntimeFlags.js';
   import RegistryHeader from '$lib/components/RegistryHeader.svelte';
   import RegistryEdgeTabs from '$lib/components/RegistryEdgeTabs.svelte';
@@ -74,7 +75,10 @@
     }, 420);
   }
 
-  $: casalsUrl = casalsFrontendUrl($registryRuntimeFlags.casalsFrontendCanisterId);
+  $: casalsUrl = casalsFrontendUrl(
+    $registryRuntimeFlags.casalsFrontendCanisterId,
+    runtimeCanisterIds()?.casals_url,
+  );
 
   function isLocalDevelopment() {
     return (

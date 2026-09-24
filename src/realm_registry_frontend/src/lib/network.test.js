@@ -54,6 +54,10 @@ test('getCanisterId reads the conductor-written ids first', () => {
 	assert.equal(getCanisterId('casals_frontend', { runtimeOverride: RUNTIME }), 'ccccc-cc');
 	// Non-id keys of the payload are not canister names.
 	assert.equal(getCanisterId('network', { runtimeOverride: { network: 'ic' } }), undefined);
+	assert.equal(
+		getCanisterId('casals_url', { runtimeOverride: { casals_url: 'https://casals.gos.earth' } }),
+		undefined
+	);
 });
 
 test('getCanisterId falls back to the gaas-env descriptor for its own network', () => {

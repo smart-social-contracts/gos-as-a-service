@@ -20,11 +20,16 @@ test('architectureHref returns the provided Casals URL', () => {
 	);
 });
 
-test('casalsFrontendUrl is live-registry only', () => {
+test('casalsFrontendUrl prefers the configured URL, else the live principal', () => {
+	assert.equal(
+		casalsFrontendUrl('nfs6d-saaaa-aaaae-qkjya-cai', 'https://casals.gos.earth'),
+		'https://casals.gos.earth'
+	);
 	assert.equal(
 		casalsFrontendUrl('nfs6d-saaaa-aaaae-qkjya-cai'),
 		'https://nfs6d-saaaa-aaaae-qkjya-cai.icp0.io'
 	);
+	assert.equal(casalsFrontendUrl('', '  '), '');
 	assert.equal(casalsFrontendUrl(''), '');
 	assert.equal(casalsFrontendUrl(undefined), '');
 });
@@ -64,9 +69,10 @@ test('portal source and canister_ids no longer mention fdr7z', () => {
 	assert.equal(idsSource.includes('fdr7z'), false);
 });
 
-test('Infrastructure link uses only the live registry Casals principal', () => {
+test('Infrastructure link prefers casals_url, else the live registry principal', () => {
 	assert.match(pageSource, /casalsFrontendUrl\(/);
 	assert.match(pageSource, /registryRuntimeFlags/);
+	assert.match(pageSource, /casals_url/);
 	assert.equal(pageSource.includes('CANISTER_ID_CASALS_FRONTEND'), false);
 	assert.equal(pageSource.includes("getCanisterId('casals_frontend')"), false);
 });

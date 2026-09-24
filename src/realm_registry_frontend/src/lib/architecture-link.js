@@ -15,10 +15,16 @@ export function architectureHref(casalsUrl) {
 }
 
 /**
+ * Prefer the conductor-written ``casals_url`` (https://casals.gos.earth).
+ * Fall back to the live registry principal as an icp0.io URL.
+ *
  * @param {string} [runtimeId] live ``casals_frontend_canister_id`` from the registry
+ * @param {string} [casalsUrl] ``casals_url`` from ``/canister_ids.js``
  * @returns {string}
  */
-export function casalsFrontendUrl(runtimeId) {
+export function casalsFrontendUrl(runtimeId, casalsUrl) {
+	const configured = typeof casalsUrl === 'string' ? casalsUrl.trim() : '';
+	if (configured) return configured;
 	const id = String(runtimeId || '').trim();
 	return id ? `https://${id}.icp0.io` : '';
 }
