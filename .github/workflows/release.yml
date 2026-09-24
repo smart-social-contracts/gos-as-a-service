@@ -90,8 +90,12 @@ jobs:
           dfx generate realm_registry_backend
           dfx generate realm_installer
           npm run build --workspace=realm_registry_frontend
-          tar czf realm_registry_frontend.tar.gz -C src/realm_registry_frontend/dist .
-          echo "Frontend tarball: $(stat -c%s realm_registry_frontend.tar.gz) bytes"
+          git clone --depth 1 https://github.com/smart-social-contracts/Casals /tmp/casals
+          (cd /tmp/casals && PYTHONPATH=src python3 -m casals_cli.bundle \
+            "$GITHUB_WORKSPACE/src/realm_registry_frontend/dist" \
+            -o "$GITHUB_WORKSPACE/realm_registry_frontend.tar.gz" \
+            --manifest "$GITHUB_WORKSPACE/realm_registry_frontend.manifest.json")
+          echo "Frontend bundle: $(stat -c%s realm_registry_frontend.tar.gz) bytes"
           # Generates dist/version (GET /version asset) before packaging
           npm run build --workspace=file_registry_frontend
           tar czf file_registry_frontend.tar.gz -C src/file_registry_frontend/dist .
@@ -107,6 +111,20 @@ jobs:
                    file_registry_frontend.tar.gz; do
             [ -f "$f" ] && sha256sum "$f" >> checksums.txt
           done
+          python3 - << 'PY' >> checksums.txt
+          import gzip, hashlib, json, pathlib
+          print("# module sha256 (decompressed wasm; pin this on registry.wasms)")
+          for name in (
+              "realm_registry_backend.wasm.gz",
+              "realm_installer.wasm.gz",
+              "file_registry.wasm.gz",
+          ):
+              data = gzip.decompress(pathlib.Path(name).read_bytes())
+              print(f"{hashlib.sha256(data).hexdigest()}  {name} (module)")
+          man = json.load(open("realm_registry_frontend.manifest.json"))
+          print("# bundle hash (pin this on registry.bundles)")
+          print(f"{man['bundle_sha256']}  realm_registry_frontend.tar.gz (bundle)")
+          PY
           cat checksums.txt
 
       - name: Create GitHub Release
@@ -123,5 +141,6 @@ jobs:
             file_registry.wasm.gz
             file_registry.did
             realm_registry_frontend.tar.gz
+            realm_registry_frontend.manifest.json
             file_registry_frontend.tar.gz
             checksums.txt
