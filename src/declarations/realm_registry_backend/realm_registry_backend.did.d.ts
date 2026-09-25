@@ -526,6 +526,9 @@ export interface _SERVICE {
     [string, bigint, string, string],
     AddCreditsResult
   >,
+  'issue_voucher' : ActorMethod<[string, bigint], string>,
+  'redeem_voucher' : ActorMethod<[string], string>,
+  'my_voucher_redemptions' : ActorMethod<[], string>,
   'billing_status' : ActorMethod<[], GetBillingStatusResult>,
   'claim_slug' : ActorMethod<
     [

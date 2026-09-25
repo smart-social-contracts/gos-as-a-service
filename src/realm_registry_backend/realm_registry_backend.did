@@ -165,6 +165,9 @@ service : (text) -> {
   "set_pretty_hostname_status" : (text, text) -> (GenericResult);
   "get_credits" : (text) -> (GetCreditsResult) query;
   "add_credits" : (text, nat64, text, text) -> (AddCreditsResult);
+  "issue_voucher" : (text, nat64) -> (text);
+  "redeem_voucher" : (text) -> (text);
+  "my_voucher_redemptions" : () -> (text) query;
   "deduct_credits" : (text, nat64, text) -> (DeductCreditsResult);
   "get_transactions" : (text, nat64) -> (TransactionHistoryResult) query;
   "billing_status" : () -> (GetBillingStatusResult) query;

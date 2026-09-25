@@ -17,6 +17,24 @@ class UserCredits(Entity, TimestampedMixin):
         }
 
 
+class Voucher(Entity, TimestampedMixin):
+    """Single-use credit voucher. The alias is the sha256 checksum, never the code."""
+
+    __alias__ = "checksum"
+    checksum = String()
+    credits = Integer()
+    redeemer = String()
+    redeemed_at = Float()
+
+    def to_dict(self) -> dict:
+        return {
+            "checksum": self.checksum or "",
+            "credits": self.credits or 0,
+            "redeemer": self.redeemer or "",
+            "redeemed_at": self.redeemed_at or 0,
+        }
+
+
 class CreditTransaction(Entity, TimestampedMixin):
     __alias__ = "id"
     id = String()

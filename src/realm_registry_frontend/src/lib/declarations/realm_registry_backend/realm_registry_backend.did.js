@@ -75,6 +75,9 @@ export const idlFactory = ({ IDL }) => {
         [AddCreditsResult],
         [],
       ),
+    'issue_voucher' : IDL.Func([IDL.Text, IDL.Nat64], [IDL.Text], []),
+    'redeem_voucher' : IDL.Func([IDL.Text], [IDL.Text], []),
+    'my_voucher_redemptions' : IDL.Func([], [IDL.Text], ['query']),
     'billing_status' : IDL.Func([], [GetBillingStatusResult], ['query']),
     'claim_slug' : IDL.Func(
         [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text],

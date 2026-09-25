@@ -498,12 +498,13 @@
   }
 
   async function loadVouchers() {
-    if (!userPrincipal || !billingEnabled) return;
+    if (!userPrincipal) return;
     try {
-      const response = await fetch(`${BILLING_SERVICE_URL}/voucher/redemptions/${userPrincipal.toText()}`);
-      if (response.ok) {
-        redeemedVouchers = await response.json();
-      }
+      const { getAuthenticatedRegistryActor } = await import('$lib/canisters.js');
+      const actor = await getAuthenticatedRegistryActor();
+      const raw = await actor.my_voucher_redemptions();
+      const parsed = JSON.parse(raw || '[]');
+      redeemedVouchers = Array.isArray(parsed) ? parsed : [];
     } catch (err) {
       console.error('Failed to load vouchers:', err);
     }
@@ -517,38 +518,19 @@
     voucherSuccess = null;
     
     try {
-      const { buildBillingIdentityPayload, II_REQUIRED_MESSAGE } = await import('$lib/ii-proof.js');
-      let billingExtras;
-      try {
-        billingExtras = await buildBillingIdentityPayload();
-      } catch (err) {
-        voucherError = err?.message === II_REQUIRED_MESSAGE ? II_REQUIRED_MESSAGE : (err?.message || II_REQUIRED_MESSAGE);
-        return;
-      }
-
-      const response = await fetch(`${BILLING_SERVICE_URL}/voucher/redeem`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          principal_id: userPrincipal.toText(),
-          code: voucherCode.trim(),
-          ...billingExtras,
-        }),
-      });
-      
-      const data = await response.json();
-      
-      if (!response.ok || !data.success) {
-        voucherError = data.message || data.detail || 'Failed to redeem voucher';
+      const { getAuthenticatedRegistryActor } = await import('$lib/canisters.js');
+      const actor = await getAuthenticatedRegistryActor();
+      const raw = await actor.redeem_voucher(voucherCode.trim());
+      const data = JSON.parse(raw || '{}');
+      if (!data.success) {
+        voucherError = data.error || data.message || 'Failed to redeem voucher';
         return;
       }
       
       voucherSuccess = data.message;
       voucherCode = '';
-      if (data.data && data.data.balance != null) {
-        balance = Number(data.data.balance);
+      if (data.balance != null) {
+        balance = Number(data.balance);
       }
       await Promise.all([loadCredits(), loadVouchers()]);
       
@@ -837,11 +819,9 @@
                     <li class="purchase-item">
                       <div class="purchase-info">
                         <span class="purchase-amount">+{voucher.credits} {$_('dashboard.credits_unit')}</span>
-                        <span class="purchase-date">Code: {voucher.code}</span>
+                        <span class="purchase-date">{voucher.redeemed_at ? new Date(voucher.redeemed_at * 1000).toLocaleString() : ''}</span>
                       </div>
-                      <span class="voucher-badge" class:active={voucher.status === 'active'}>
-                        {voucher.status === 'active' ? 'Active' : 'Used'}
-                      </span>
+                      <span class="voucher-badge">Used</span>
                     </li>
                   {/each}
                 </ul>

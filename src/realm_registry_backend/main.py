@@ -597,6 +597,36 @@ def add_credits(principal_id: text, amount: nat64,
         return {"Err": str(e)}
 
 @update
+def issue_voucher(checksum: text, credits: nat64) -> text:
+    """Controller-only. Store a sha256 checksum. The plaintext code is never sent."""
+    try:
+        from api.vouchers import issue_voucher as _issue
+
+        return json.dumps(_issue(checksum, int(credits), is_controller=ic.is_controller(ic.caller())))
+    except Exception as e:
+        return json.dumps({"success": False, "error": str(e)})
+
+@update
+def redeem_voucher(code: text) -> text:
+    """Hash the caller's code, credit ic.caller(), and mark that checksum used."""
+    try:
+        from api.vouchers import redeem_voucher as _redeem
+
+        return json.dumps(_redeem(code, ic.caller().to_str()))
+    except Exception as e:
+        return json.dumps({"success": False, "error": str(e)})
+
+@query
+def my_voucher_redemptions() -> text:
+    """Credits and time for vouchers this caller redeemed. No codes or checksums."""
+    try:
+        from api.vouchers import redemptions_for
+
+        return json.dumps(redemptions_for(ic.caller().to_str()))
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+@update
 def deduct_credits(principal_id: text, amount: nat64,
                    description: text = "Credit spend") -> DeductCreditsResult:
     try:
