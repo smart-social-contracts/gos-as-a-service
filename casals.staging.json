@@ -1,0 +1,365 @@
+{
+  "version": 2,
+  "name": "gaas",
+  "description": "Governance Operating System-as-a-Service platform",
+  "environments": {
+    "staging": {
+      "network": "ic",
+      "$comment": "Staging on mainnet. Operator is dev-identity. Hosts are staging.gos.earth and casals.staging.gos.earth.",
+      "dns": {
+        "provider": "cloudflare",
+        "zone": "gos.earth",
+        "token_env": "CLOUDFLARE_API_TOKEN",
+        "ttl": 60
+      },
+      "portal_url": "https://staging.gos.earth",
+      "casals_url": "https://casals.staging.gos.earth",
+      "principals": {
+        "operator": "2c2o3-dbhre-c7wf6-gqujk-wtusq-bqpyk-cv74a-jz35f-2wnzn-bil5z-2qe",
+        "committee": "kpbof-gom7k-b4gsj-sfmka-fvbac-y72nv-sb7f2-b4v4e-4557j-erlzq-2qe",
+        "$comment": "access-code slot: admin=CASALS (everything)",
+        "admin": "sha256:0ee72a3fff6256024f93326689d0ac6e371020c41cfa925c30e4dfa63b4d9980",
+        "$comment_deployer": "The identity that ran casals up. It is a controller of the governance multisig only.",
+        "deployer": "$deployer"
+      },
+      "cycles": {
+        "budget_tc": 15
+      }
+    }
+  },
+  "conductor": {
+    "backend": {
+      "wasm": "casals-backend",
+      "kind": "backend",
+      "mode": "managed",
+      "controllers": [
+        "$multisig"
+      ]
+    },
+    "frontend": {
+      "wasm": "casals-frontend",
+      "kind": "frontend",
+      "mode": "managed",
+      "content": "frontend/casals-ui/main",
+      "controllers": [
+        "$self",
+        "$multisig"
+      ]
+    },
+    "store": {
+      "$comment": "WASM store",
+      "wasm": "certified-assets@0.3.0",
+      "kind": "frontend",
+      "mode": "managed",
+      "controllers": [
+        "$self",
+        "$multisig"
+      ]
+    },
+    "commanders": [
+      {
+        "principal": "$principal:operator",
+        "permissions": "*"
+      },
+      {
+        "principal": "$principal:admin",
+        "permissions": "*"
+      }
+    ],
+    "settings": {
+      "orchestra_name": "gaas"
+    }
+  },
+  "governance": {
+    "multisig": {
+      "wasm": "orchestration-multisig@1.6.0",
+      "kind": "backend",
+      "mode": "managed",
+      "signers": [
+        "$principal:operator",
+        "$principal:committee"
+      ],
+      "threshold": 1,
+      "controllers": [
+        "$multisig",
+        "$deployer"
+      ]
+    }
+  },
+  "domains": [
+    {
+      "host": "staging.gos.earth",
+      "canister": "realm-registry-frontend"
+    },
+    {
+      "host": "casals.staging.gos.earth",
+      "canister": "casals-frontend"
+    }
+  ],
+  "registry": {
+    "wasms": [
+      {
+        "family": "casals-backend",
+        "version": "main",
+        "source": "release:smart-social-contracts/Casals@v0.3.3:casals_backend.wasm.gz",
+        "sha256": "1dce5edb5766123b64b820b6d2c1d38417c68601b6bf46daf4edc4b907f4748b"
+      },
+      {
+        "family": "certified-assets",
+        "version": "0.3.0",
+        "source": "release:smart-social-contracts/Casals@v0.3.2:certified-assets@0.3.0.wasm.gz",
+        "sha256": "75df75f39763077fd0333b4ac46ba03b2b23ec313fa85f79a2097bd98bb363d1"
+      },
+      {
+        "family": "certified-assets",
+        "version": "1.0.0",
+        "source": "release:smart-social-contracts/Casals@v0.3.2:certified-assets@1.0.0.wasm.gz",
+        "sha256": "63d122d0149a29f4e48603efdd7d2bce656a6a83bac1e3207897c68e8e225bb6"
+      },
+      {
+        "family": "orchestration-multisig",
+        "version": "1.6.0",
+        "source": "release:smart-social-contracts/Casals@v0.3.2:orchestration-multisig@1.6.0.wasm.gz",
+        "sha256": "c8d3adecf9bea8d9e7811cfa5d9eda8f61723c770f85132b91c8b2cffb37974f"
+      },
+      {
+        "family": "orchestration-baton",
+        "version": "1.5.1",
+        "source": "release:smart-social-contracts/Casals@v0.3.2:orchestration-baton@1.5.1.wasm.gz",
+        "sha256": "2143faa8bc8e8e516ff065d30149ca2439aef733a0a23b8e104710e89a9b9ae1"
+      },
+      {
+        "family": "file-registry",
+        "version": "main",
+        "source": "release:smart-social-contracts/gos-as-a-service@v0.3.4:file_registry.wasm.gz",
+        "sha256": "2cd95df0c9200480a3094fc8985e402708ff8712f727ebd5204f6e93d7762153"
+      },
+      {
+        "family": "realm-installer",
+        "version": "main",
+        "source": "release:smart-social-contracts/gos-as-a-service@v0.3.4:realm_installer.wasm.gz",
+        "sha256": "e47e1b8e3b4a1a818c0bacc75c1f80e08ac83a3ac8519c28cf42a524236e1856"
+      },
+      {
+        "family": "realm-registry-backend",
+        "version": "main",
+        "source": "release:smart-social-contracts/gos-as-a-service@v0.3.4:realm_registry_backend.wasm.gz",
+        "sha256": "fe826d8041358421caccc3146915f777066e9e5dc2ad8096379605360e53e939"
+      },
+      {
+        "family": "realm-backend",
+        "version": "main",
+        "source": "release:smart-social-contracts/realms@v0.5.2:realm_backend.wasm.gz",
+        "sha256": "c19e338ae32cf1f4c2c4c069183fe327dba18ddd665438cf09ea82ba0cbb1185"
+      }
+    ],
+    "bundles": [
+      {
+        "path": "frontend/realm-registry-frontend/main",
+        "source": "release:smart-social-contracts/gos-as-a-service@v0.3.4:realm_registry_frontend.tar.gz",
+        "sha256": "6ba93fadb4f9055a1a744fe6b50cc408d47c65f19753d3bcde269afbf821e6d1"
+      },
+      {
+        "path": "frontend/realm-assets/main",
+        "source": "release:smart-social-contracts/realms@v0.5.2:realm_frontend.tar.gz",
+        "sha256": "38b078371035e136e3863042026835c64ac2183d21bd4ea3abc35a72a0207c7b"
+      },
+      {
+        "$comment": "Casals UI from the Casals v0.3.2 release. Ships with `casals upgrade --content frontend/casals-ui/main`.",
+        "path": "frontend/casals-ui/main",
+        "source": "release:smart-social-contracts/Casals@v0.3.3:casals_frontend.tar.gz",
+        "sha256": "ddcbbcf11cefb2560cb8226f35f282b7f8652b70ef698173c910022342f25cdb"
+      }
+    ]
+  },
+  "sections": [
+    {
+      "name": "Infra",
+      "description": "Realm installer, realm registry (the gos.earth portal) and the platform file registry.",
+      "stands": [
+        {
+          "name": "file-registry",
+          "description": "Platform artifact buffer (deployment temporary artifacts, such as manifests, etc.)",
+          "canisters": [
+            {
+              "name": "file-registry",
+              "kind": "backend",
+              "mode": "managed",
+              "wasm": "file-registry@main",
+              "controllers": [
+                "$self",
+                "$multisig"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "installer",
+          "canisters": [
+            {
+              "name": "realm-installer",
+              "kind": "backend",
+              "mode": "managed",
+              "wasm": "realm-installer@main",
+              "controllers": [
+                "$self",
+                "$multisig"
+              ],
+              "config": [
+                {
+                  "method": "configure",
+                  "args": {
+                    "registry_backend_id": "$canister:realm-registry-backend",
+                    "file_registry_id": "$canister:file-registry",
+                    "casals_canister_id": "$self",
+                    "casals_section": "Deployments",
+                    "portal_url": "$env.portal_url",
+                    "provision_via_casals": true
+                  },
+                  "converged_when": {
+                    "query": "get_installer_config",
+                    "equals_args": true
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "realm-registry",
+          "canisters": [
+            {
+              "name": "realm-registry-backend",
+              "kind": "backend",
+              "mode": "managed",
+              "wasm": "realm-registry-backend@main",
+              "controllers": [
+                "$self",
+                "$multisig"
+              ],
+              "config": [
+                {
+                  "method": "configure",
+                  "args": {
+                    "portal_url": "$env.portal_url",
+                    "installer_id": "$canister:realm-installer",
+                    "casals_frontend_canister_id": "$canister:casals-frontend"
+                  },
+                  "converged_when": {
+                    "query": "get_env_config",
+                    "equals_args": true
+                  }
+                }
+              ]
+            },
+            {
+              "name": "realm-registry-frontend",
+              "kind": "frontend",
+              "mode": "managed",
+              "wasm": "certified-assets@1.0.0",
+              "controllers": [
+                "$self",
+                "$multisig"
+              ],
+              "content": "frontend/realm-registry-frontend/main",
+              "files": {
+                "/canister_ids.js": "globalThis.__CANISTER_IDS={realm_registry_backend:\"$stand.backend\",realm_installer:\"$canister:realm-installer\",file_registry:\"$canister:file-registry\",casals_backend:\"$canister:casals-backend\",network:\"$env.network\",portal_url:\"$env.portal_url\",casals_url:\"$env.casals_url\"};\n"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Deployments",
+      "description": "Realm stands. The installer mints one with create_stand; the conductor builds it from this template and hands the backend, frontend, and quarters to the stand baton. A realm grows itself: its backend (a stand commander) calls create_stand for the next quarter.",
+      "stand_template": {
+        "name_pattern": "*",
+        "created_by": "$canister:realm-installer",
+        "baton": {
+          "commanders": [
+            {
+              "principal": "$multisig",
+              "weight": 2
+            },
+            "$self",
+            "$stand.backend"
+          ],
+          "threshold": 2,
+          "manages": [
+            "backend",
+            "frontend",
+            "quarter"
+          ],
+          "hand_off": "sole"
+        },
+        "commanders": [
+          {
+            "principal": "$stand.backend",
+            "permissions": "stand.create"
+          }
+        ],
+        "canisters": [
+          {
+            "name": "{stand}-baton",
+            "kind": "backend",
+            "mode": "managed",
+            "wasm": "orchestration-baton@1.5.1",
+            "install_arg": {
+              "top_commander": "$self"
+            },
+            "controllers": [
+              "$multisig"
+            ]
+          },
+          {
+            "name": "{stand}-backend",
+            "kind": "backend",
+            "mode": "managed",
+            "wasm": "realm-backend@main",
+            "install_arg": "(\"$canister:realm-installer\")",
+            "controllers": [
+              "$stand.baton"
+            ]
+          },
+          {
+            "name": "{stand}-frontend",
+            "kind": "frontend",
+            "mode": "managed",
+            "wasm": "certified-assets@1.0.0",
+            "controllers": [
+              "$stand.baton"
+            ],
+            "content": "frontend/realm-assets/main",
+            "files": {
+              "/canister_ids.js": "globalThis.__CANISTER_IDS={realm_backend:\"$stand.backend\",internet_identity:\"https://identity.ic0.app\"};\n"
+            },
+            "health": [
+              {
+                "http": "/index.html",
+                "status": 200
+              }
+            ]
+          },
+          {
+            "name": "{stand}-quarter-{n}",
+            "kind": "backend",
+            "mode": "managed",
+            "wasm": "realm-backend@main",
+            "install_arg": "(\"\")",
+            "optional": true,
+            "controllers": [
+              "$stand.baton"
+            ]
+          }
+        ]
+      },
+      "stands": []
+    }
+  ],
+  "cycles": {
+    "min_balance_tc": 0.5,
+    "top_up_from": "$self",
+    "conductor_min_balance_tc": 2.0
+  }
+}
