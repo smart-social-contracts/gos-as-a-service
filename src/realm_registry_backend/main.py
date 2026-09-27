@@ -597,12 +597,23 @@ def add_credits(principal_id: text, amount: nat64,
         return {"Err": str(e)}
 
 @update
-def issue_voucher(checksum: text, credits: nat64) -> text:
-    """Controller-only. Store a sha256 checksum. The plaintext code is never sent."""
+def issue_voucher(args: text) -> text:
+    """Controller-only. One JSON text: {"checksum","credits"}.
+
+    Casals ``call_canister`` sends a single text argument. The plaintext code
+    is never sent.
+    """
     try:
         from api.vouchers import issue_voucher as _issue
 
-        return json.dumps(_issue(checksum, int(credits), is_controller=ic.is_controller(ic.caller())))
+        payload = json.loads(args) if args else {}
+        if not isinstance(payload, dict):
+            return json.dumps({"success": False, "error": "expected a JSON object"})
+        return json.dumps(_issue(
+            payload.get("checksum", ""),
+            int(payload.get("credits")),
+            is_controller=ic.is_controller(ic.caller()),
+        ))
     except Exception as e:
         return json.dumps({"success": False, "error": str(e)})
 

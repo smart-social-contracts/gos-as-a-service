@@ -1,7 +1,6 @@
 """Single-use credit vouchers. The canister stores sha256 checksums only."""
 
 import hashlib
-import re
 import time
 
 from core.models import CreditTransaction, UserCredits, Voucher
@@ -9,7 +8,6 @@ from ic_python_logging import get_logger
 
 logger = get_logger("vouchers")
 
-_CHECKSUM_RE = re.compile(r"^sha256:([0-9a-f]{64})$")
 MIN_CREDITS = 1
 MAX_CREDITS = 10_000
 INVALID = "invalid voucher code"
@@ -28,11 +26,21 @@ def checksum_for_code(code: str) -> str:
     return f"sha256:{digest}"
 
 
+def _sha256_hex(value: str) -> bool:
+    if len(value) != 64:
+        return False
+    for ch in value:
+        if ch not in "0123456789abcdef":
+            return False
+    return True
+
+
 def parse_checksum(value: str) -> str:
     text = (value or "").strip().lower()
     if not text.startswith("sha256:"):
         text = f"sha256:{text}"
-    if not _CHECKSUM_RE.match(text):
+    digest = text[7:]
+    if not _sha256_hex(digest):
         raise ValueError("checksum must be sha256: and 64 hex characters")
     return text
 

@@ -13,6 +13,7 @@
         "ttl": 60
       },
       "portal_url": "https://gos.earth",
+      "gos_environment": "production",
       "casals_url": "https://casals.gos.earth",
       "principals": {
         "operator": "rd4en-sizpv-vnamr-6vbfc-uljz5-vvz7c-g4nzy-uflq2-zbj3x-mrwjs-gqe",
@@ -211,6 +212,7 @@
                   "args": {
                     "registry_backend_id": "$canister:realm-registry-backend",
                     "file_registry_id": "$canister:file-registry",
+                    "gos_environment": "$env.gos_environment",
                     "casals_canister_id": "$self",
                     "casals_section": "Deployments",
                     "portal_url": "$env.portal_url",
@@ -263,7 +265,7 @@
               ],
               "content": "frontend/realm-registry-frontend/main",
               "files": {
-                "/canister_ids.js": "globalThis.__CANISTER_IDS={realm_registry_backend:\"$stand.backend\",realm_installer:\"$canister:realm-installer\",file_registry:\"$canister:file-registry\",casals_backend:\"$canister:casals-backend\",network:\"$env.network\",portal_url:\"$env.portal_url\",casals_url:\"$env.casals_url\"};\n"
+                "/canister_ids.js": "globalThis.__CANISTER_IDS={realm_registry_backend:\"$stand.backend\",realm_installer:\"$canister:realm-installer\",file_registry:\"$canister:file-registry\",casals_backend:\"$canister:casals-backend\",network:\"$env.network\",portal_url:\"$env.portal_url\",casals_url:\"$env.casals_url\",gos_environment:\"$env.gos_environment\"};\n"
               }
             }
           ]
@@ -273,7 +275,8 @@
     {
       "name": "Deployments",
       "description": "Realm stands. The installer mints one with create_stand; the conductor builds it from this template and hands the backend, frontend, and quarters to the stand baton. A realm grows itself: its backend (a stand commander) calls create_stand for the next quarter.",
-      "stand_template": {
+      "arrangements": {
+       "stand_template": {
         "name_pattern": "*",
         "created_by": "$canister:realm-installer",
         "baton": {
@@ -319,7 +322,9 @@
             "wasm": "realm-backend@main",
             "install_arg": "(\"$canister:realm-installer\")",
             "controllers": [
-              "$stand.baton"
+              "$stand.baton",
+              "$multisig",
+              "$this"
             ]
           },
           {
@@ -328,7 +333,14 @@
             "mode": "managed",
             "wasm": "certified-assets@1.0.0",
             "controllers": [
-              "$stand.baton"
+              "$stand.baton",
+              "$stand.backend"
+            ],
+            "grants": [
+              {
+                "principal": "$stand.backend",
+                "permission": "Commit"
+              }
             ],
             "content": "frontend/realm-assets/main",
             "files": {
@@ -349,10 +361,13 @@
             "install_arg": "(\"\")",
             "optional": true,
             "controllers": [
-              "$stand.baton"
+              "$stand.baton",
+              "$multisig",
+              "$this"
             ]
           }
         ]
+        }
       },
       "stands": []
     }

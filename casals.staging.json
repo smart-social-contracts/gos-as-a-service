@@ -13,10 +13,12 @@
         "ttl": 60
       },
       "portal_url": "https://staging.gos.earth",
+      "gos_environment": "staging",
       "casals_url": "https://casals.staging.gos.earth",
       "principals": {
         "operator": "2c2o3-dbhre-c7wf6-gqujk-wtusq-bqpyk-cv74a-jz35f-2wnzn-bil5z-2qe",
         "committee": "kpbof-gom7k-b4gsj-sfmka-fvbac-y72nv-sb7f2-b4v4e-4557j-erlzq-2qe",
+        "ii_signer": "borqn-eqcrs-g6bwo-hi4fc-6m4de-wl7y5-ibula-53i6y-w6syp-zb6qm-nae",
         "$comment": "access-code slot: admin=CASALS (everything)",
         "admin": "sha256:0ee72a3fff6256024f93326689d0ac6e371020c41cfa925c30e4dfa63b4d9980",
         "$comment_deployer": "The identity that ran casals up. It is a controller of the governance multisig only.",
@@ -62,6 +64,10 @@
         "permissions": "*"
       },
       {
+        "principal": "$principal:ii_signer",
+        "permissions": "*"
+      },
+      {
         "principal": "$principal:admin",
         "permissions": "*"
       }
@@ -77,7 +83,8 @@
       "mode": "managed",
       "signers": [
         "$principal:operator",
-        "$principal:committee"
+        "$principal:committee",
+        "$principal:ii_signer"
       ],
       "threshold": 1,
       "controllers": [
@@ -211,6 +218,7 @@
                   "args": {
                     "registry_backend_id": "$canister:realm-registry-backend",
                     "file_registry_id": "$canister:file-registry",
+                    "gos_environment": "$env.gos_environment",
                     "casals_canister_id": "$self",
                     "casals_section": "Deployments",
                     "portal_url": "$env.portal_url",
@@ -263,7 +271,7 @@
               ],
               "content": "frontend/realm-registry-frontend/main",
               "files": {
-                "/canister_ids.js": "globalThis.__CANISTER_IDS={realm_registry_backend:\"$stand.backend\",realm_installer:\"$canister:realm-installer\",file_registry:\"$canister:file-registry\",casals_backend:\"$canister:casals-backend\",network:\"$env.network\",portal_url:\"$env.portal_url\",casals_url:\"$env.casals_url\"};\n"
+                "/canister_ids.js": "globalThis.__CANISTER_IDS={realm_registry_backend:\"$stand.backend\",realm_installer:\"$canister:realm-installer\",file_registry:\"$canister:file-registry\",casals_backend:\"$canister:casals-backend\",network:\"$env.network\",portal_url:\"$env.portal_url\",casals_url:\"$env.casals_url\",gos_environment:\"$env.gos_environment\"};\n"
               }
             }
           ]
@@ -273,7 +281,8 @@
     {
       "name": "Deployments",
       "description": "Realm stands. The installer mints one with create_stand; the conductor builds it from this template and hands the backend, frontend, and quarters to the stand baton. A realm grows itself: its backend (a stand commander) calls create_stand for the next quarter.",
-      "stand_template": {
+      "arrangements": {
+        "stand_template": {
         "name_pattern": "*",
         "created_by": "$canister:realm-installer",
         "baton": {
@@ -319,7 +328,9 @@
             "wasm": "realm-backend@main",
             "install_arg": "(\"$canister:realm-installer\")",
             "controllers": [
-              "$stand.baton"
+              "$stand.baton",
+              "$multisig",
+              "$this"
             ]
           },
           {
@@ -328,7 +339,14 @@
             "mode": "managed",
             "wasm": "certified-assets@1.0.0",
             "controllers": [
-              "$stand.baton"
+              "$stand.baton",
+              "$stand.backend"
+            ],
+            "grants": [
+              {
+                "principal": "$stand.backend",
+                "permission": "Commit"
+              }
             ],
             "content": "frontend/realm-assets/main",
             "files": {
@@ -349,10 +367,13 @@
             "install_arg": "(\"\")",
             "optional": true,
             "controllers": [
-              "$stand.baton"
+              "$stand.baton",
+              "$multisig",
+              "$this"
             ]
           }
         ]
+        }
       },
       "stands": []
     }
