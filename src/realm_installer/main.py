@@ -54,7 +54,7 @@ from deploy_resume import (
 )
 from claim_args import build_claim_slug_args
 from stand_create_args import build_stand_create_args, casals_placement_from_cfg
-from stand_readiness import stand_readiness, stand_required_members
+from stand_readiness import stand_build_gate, stand_readiness, stand_required_members
 from manifest_access import can_view_deployment_manifest
 from bootstrap import (
     configure_canister_ids_args,
@@ -2666,10 +2666,25 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
         f"subnet={subnet or '–'}, subnet_type={subnet_type or '–'})"
     )
 
-    # 2. Wait for the conductor to build it.
+    # 2. Wait until the conductor has installed the canisters and finished
+    # uploading the frontend. ``installed`` is only the wasm. ``built`` is
+    # the plan with nothing left, including /index.html.
     tree_res: CallResult = yield casals.get_tree()
+    tree = _casals_ok(tree_res)
     required = stand_required_members(stand)
-    ready, missing = stand_readiness(_casals_ok(tree_res), stand, required)
+    ready, missing = stand_readiness(tree, stand, required)
+    if not missing:
+        gate, detail = stand_build_gate(tree, stand)
+        if gate == "failed":
+            job.assets_verified = 0
+            job.status = "failed"
+            job.error = f"stand '{stand}' did not finish: {detail}"[:1990]
+            job.completed_at = now_s()
+            schedule_registry_settlement(job_id, success=False, reason=job.error)
+            jlog(job_id).error(job.error)
+            return _provision_ok_for_job(job_id, job)
+        if gate == "waiting":
+            missing = [detail]
     if missing:
         jlog(job_id).info(
             f"stand '{stand}' not ready yet (waiting for {', '.join(missing)}); "
@@ -2683,7 +2698,8 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
     frontend_id = ready[f"{stand}-frontend"]
     job.backend_canister_id = backend_id
     job.frontend_canister_id = frontend_id
-    # Casals verified the module hashes and synced the bundle when it installed them.
+    # Reached only after stand_build_gate says built, so the frontend files
+    # including /index.html have been synced.
     job.wasm_verified = 1
     job.frontend_wasm_verified = 1
     job.assets_verified = 1

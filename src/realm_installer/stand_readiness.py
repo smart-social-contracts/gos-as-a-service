@@ -39,3 +39,32 @@ def stand_readiness(tree: dict, stand: str, required: list[str]) -> tuple[dict[s
     installed = installed_stand_canisters(tree, stand)
     missing = [m for m in required if m not in installed]
     return installed, missing
+
+
+def _stand_node(tree: dict, stand: str) -> dict | None:
+    for sec in (tree or {}).get("sections") or []:
+        for st in sec.get("stands") or []:
+            if (st.get("name") or "").strip() == stand:
+                return st
+    return None
+
+
+def stand_build_gate(tree: dict, stand: str) -> tuple[str, str]:
+    """Whether a stand whose canisters are installed has finished its files.
+
+    Casals sets ``status: installed`` when the wasm is on the canister, then
+    keeps uploading the frontend. ``built`` becomes true only when that plan
+    has nothing left, which includes the ``/index.html`` health check.
+    ``build_error`` is why a build stopped.
+
+    Returns ``("ready", "")``, ``("waiting", reason)``, or ``("failed", reason)``.
+    """
+    node = _stand_node(tree, stand)
+    if node is None:
+        return "waiting", f"{stand} is not in the conductor tree"
+    error = (node.get("build_error") or "").strip()
+    if error:
+        return "failed", error
+    if not node.get("built"):
+        return "waiting", f"{stand} frontend assets are still uploading"
+    return "ready", ""
