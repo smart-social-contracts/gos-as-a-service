@@ -94,7 +94,8 @@ export const CONFIG = {
 		viteEnv.VITE_CASALS_BACKEND_CANISTER_ID ||
 		viteEnv.CANISTER_ID_CASALS_BACKEND ||
 		'',
-	can_test_mode: resolveCanTestMode()
+	can_test_mode: resolveCanTestMode(),
+	gos_environment: (runtimeIds && runtimeIds.gos_environment) || gaasEnv?.name || ''
 };
 
 function _readFlag(envKey, urlParam) {

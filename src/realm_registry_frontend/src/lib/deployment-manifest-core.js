@@ -101,6 +101,11 @@ export function buildRealmDeploymentManifest(formData, network, config = {}, opt
     manifest.can_test_mode = true;
   }
 
+  const gosEnvironment = (config.gos_environment || '').trim().toLowerCase();
+  if (gosEnvironment) {
+    manifest.gos_environment = gosEnvironment;
+  }
+
   // Test flags are the registry's to stamp (apply_env_inheritance, from the
   // environment's casals.json); the wizard sends none of its own.
 

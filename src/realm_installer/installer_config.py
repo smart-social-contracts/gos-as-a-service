@@ -20,6 +20,8 @@ class InstallerConfig(Entity):
     casals_section = String(max_length=64, default="Deployments")
     registry_principal = String(max_length=64, default="")
     file_registry_id = String(max_length=64, default="")
+    # Logical name only (production, staging, test, demo). Not a canister id.
+    gos_environment = String(max_length=32, default="")
     marketplace_id = String(max_length=64, default="")
     nft_canister_id = String(max_length=64, default="")
     # {symbol: {ledger, indexer, decimals}} — shared ledgers the installer can
@@ -50,6 +52,11 @@ def get_config() -> InstallerConfig:
     if cfg is None:
         cfg = InstallerConfig(key="singleton")
     return cfg
+
+
+def configured_gos_environment() -> str:
+    """The logical environment name this installer stamps on new realms."""
+    return (get_config().gos_environment or "").strip().lower()
 
 
 def configured_file_registry_id(network: str = "") -> str:
@@ -107,6 +114,8 @@ def apply_installer_config(params: dict) -> None:
     # "" included, so `converged_when: equals_args` can hold.
     if "file_registry_id" in params:
         cfg.file_registry_id = (params.get("file_registry_id") or "").strip()
+    if "gos_environment" in params:
+        cfg.gos_environment = (params.get("gos_environment") or "").strip().lower()
     if "marketplace_id" in params:
         cfg.marketplace_id = (params.get("marketplace_id") or "").strip()
     if "nft_canister_id" in params:
@@ -139,6 +148,7 @@ def installer_config_payload() -> dict:
         "success": True,
         "registry_backend_id": cfg.registry_principal or "",
         "file_registry_id": cfg.file_registry_id or "",
+        "gos_environment": cfg.gos_environment or "",
         "marketplace_id": cfg.marketplace_id or "",
         "nft_canister_id": cfg.nft_canister_id or "",
         "shared_tokens": configured_shared_tokens(),

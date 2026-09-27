@@ -15,6 +15,7 @@ from installer_config import (
     InstallerConfig,
     apply_installer_config,
     configured_file_registry_id,
+    configured_gos_environment,
     configured_marketplace_id,
     configured_nft_canister_id,
     configured_shared_tokens,
@@ -35,6 +36,13 @@ def test_unconfigured_file_registry_is_empty_for_every_network():
     _reset_installer_config()
     for network in ("test", "demo", "staging", ""):
         assert configured_file_registry_id(network) == ""
+
+
+def test_gos_environment_is_a_name_not_a_canister_id():
+    _reset_installer_config()
+    apply_installer_config({"gos_environment": "Staging"})
+    assert configured_gos_environment() == "staging"
+    assert installer_config_payload()["gos_environment"] == "staging"
 
 
 def test_unconfigured_marketplace_is_empty_for_every_network():

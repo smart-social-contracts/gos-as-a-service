@@ -33,6 +33,7 @@ test('buildRealmDeploymentManifest omits codex, token, and branding', () => {
 
   assert.equal(manifest.name, 'Test Realm');
   assert.equal(manifest.network, 'staging');
+  assert.equal(manifest.gos_environment, undefined);
   assert.equal(manifest.deploy_version, '0.4.0');
   assert.equal(manifest.gos.implementation, 'realms-gos');
   assert.equal(manifest.realm.name, 'Test Realm');
@@ -163,6 +164,17 @@ test('the wizard sends no test_flags of its own — the registry stamps the envi
     assert.equal(manifest.test_flags, undefined, network);
     assert.equal(manifest.can_test_mode, config.can_test_mode === true ? true : undefined);
   }
+});
+
+test('gos_environment is copied from config and is not the IC network', () => {
+  const manifest = buildRealmDeploymentManifest(
+    { name: 'Env Realm', slug: 'env-realm' },
+    'ic',
+    { ...TEST_CONFIG, gos_environment: 'Staging' },
+    { useCasals: false },
+  );
+  assert.equal(manifest.network, 'ic');
+  assert.equal(manifest.gos_environment, 'staging');
 });
 
 test('federation.portal_url comes from the configured portal, never a host table', () => {

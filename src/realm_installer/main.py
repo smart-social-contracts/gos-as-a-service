@@ -79,6 +79,7 @@ from installer_config import (
     apply_installer_config,
     configured_cycle_threshold_cycles,
     configured_file_registry_id,
+    configured_gos_environment,
     configured_nft_canister_id,
     configured_shared_tokens,
     get_config,
@@ -662,6 +663,11 @@ def schedule_registration(job_id_val: str):
                 link_payload = {
                     "frontend_canister_id": frontend_id or None,
                     "file_registry_canister_id": fr_id or None,
+                    "gos_environment": (
+                        (manifest.get("gos_environment") or "").strip().lower()
+                        or configured_gos_environment()
+                        or None
+                    ),
                     "marketplace_canister_id": mp_id or None,
                     "installed_version": version or None,
                     # the realm's shared-ledger catalog: the sheet's, via configure

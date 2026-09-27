@@ -35,7 +35,7 @@ export function runtimeCanisterIds() {
 }
 
 /** Keys of `/canister_ids.js` that describe the environment rather than name a canister. */
-const RUNTIME_META_KEYS = new Set(['network', 'portal_url', 'casals_url']);
+const RUNTIME_META_KEYS = new Set(['network', 'portal_url', 'casals_url', 'gos_environment']);
 
 function isLocalHostname(hostname) {
 	return hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.localhost');
