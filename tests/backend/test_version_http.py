@@ -18,16 +18,6 @@ from realm_registry_backend.api import status as registry_status  # noqa: E402
 import version_http as installer_version_http  # noqa: E402
 
 
-def _load_file_registry_main():
-    path = os.path.join(_REPO_ROOT, "src", "file_registry", "main.py")
-    spec = importlib.util.spec_from_file_location("file_registry_main_version", path)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["file_registry_main_version"] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-file_registry_main = _load_file_registry_main()
 
 _REQ = {"method": "GET", "url": "/version", "headers": [], "body": b""}
 
@@ -120,26 +110,3 @@ def test_installer_version_stamped_fields(monkeypatch):
     assert "version" not in payload  # VERSION_STAMP left unstamped
 
 
-# ── file_registry ──────────────────────────────────────────────────────
-
-
-def test_file_registry_version_ok_unstamped():
-    resp = file_registry_main._handle_http(dict(_REQ))
-    payload = _assert_contract(resp, "file_registry")
-    _assert_unstamped_omits(payload)
-
-
-def test_file_registry_version_stamped_fields(monkeypatch):
-    monkeypatch.setattr(file_registry_main, "_SHA_STAMP", "a1b2c3d")
-    monkeypatch.setattr(file_registry_main, "_BUILT_AT_STAMP", "2026-08-29T13:04:05Z")
-    payload = file_registry_main._version_payload()
-    assert payload["sha"] == "a1b2c3d"
-    assert payload["built_at"] == "2026-08-29T13:04:05Z"
-
-
-def test_file_registry_existing_routes_untouched():
-    # Root still lists namespaces; unknown paths still 404 through namespaces.
-    resp = file_registry_main._handle_http({**_REQ, "url": "/"})
-    assert resp["status_code"] == 200
-    resp = file_registry_main._handle_http({**_REQ, "url": "/no/such/ns"})
-    assert resp["status_code"] == 404

@@ -57,7 +57,7 @@ jobs:
           BUILT_AT_ISO="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
           echo "${TAG}" > version.txt
           for f in src/realm_registry_backend/api/status.py src/realm_installer/main.py \
-                   src/realm_installer/version_http.py src/file_registry/main.py; do
+                   src/realm_installer/version_http.py; do
             sed -i "s/VERSION_PLACEHOLDER/${TAG}/g; s/COMMIT_HASH_PLACEHOLDER/${COMMIT}/g; s/COMMIT_DATETIME_PLACEHOLDER/${NOW}/g; s/BUILT_AT_ISO_PLACEHOLDER/${BUILT_AT_ISO}/g" "$f"
           done
           sed -i "s/BASILISK_VERSION_PLACEHOLDER/0.14.2/g; s/IC_PYTHON_DB_VERSION_PLACEHOLDER/0.11.0/g; s/IC_PYTHON_LOGGING_VERSION_PLACEHOLDER/0.3.4/g" \
@@ -77,12 +77,6 @@ jobs:
           gzip -kf .basilisk/realm_installer/realm_installer.wasm
           cp .basilisk/realm_installer/realm_installer.wasm.gz ./realm_installer.wasm.gz
           cp src/realm_installer/realm_installer.did ./realm_installer.did
-
-          export CANISTER_CANDID_PATH="$(pwd)/src/file_registry/file_registry.did"
-          python -m basilisk file_registry src/file_registry/main.py
-          gzip -kf .basilisk/file_registry/file_registry.wasm
-          cp .basilisk/file_registry/file_registry.wasm.gz ./file_registry.wasm.gz
-          cp src/file_registry/file_registry.did ./file_registry.did
 
       - name: Build frontend
         run: |
@@ -106,7 +100,6 @@ jobs:
           echo "# SHA-256 checksums for release assets" > checksums.txt
           for f in realm_registry_backend.wasm.gz realm_registry_backend.did \
                    realm_installer.wasm.gz realm_installer.did \
-                   file_registry.wasm.gz file_registry.did \
                    realm_registry_frontend.tar.gz \
                    file_registry_frontend.tar.gz; do
             [ -f "$f" ] && sha256sum "$f" >> checksums.txt
@@ -117,7 +110,6 @@ jobs:
           for name in (
               "realm_registry_backend.wasm.gz",
               "realm_installer.wasm.gz",
-              "file_registry.wasm.gz",
           ):
               data = gzip.decompress(pathlib.Path(name).read_bytes())
               print(f"{hashlib.sha256(data).hexdigest()}  {name} (module)")
@@ -138,8 +130,6 @@ jobs:
             realm_registry_backend.did
             realm_installer.wasm.gz
             realm_installer.did
-            file_registry.wasm.gz
-            file_registry.did
             realm_registry_frontend.tar.gz
             realm_registry_frontend.manifest.json
             file_registry_frontend.tar.gz

@@ -24,29 +24,6 @@
       "type": "custom",
       "wasm": ".basilisk/realm_installer/realm_installer.wasm"
     },
-    "file_registry": {
-      "build": "python -m basilisk file_registry src/file_registry/main.py",
-      "candid": "src/file_registry/file_registry.did",
-      "declarations": {
-        "node_compatibility": true
-      },
-      "gzip": true,
-      "metadata": [
-        {
-          "name": "candid:service"
-        }
-      ],
-      "tech_stack": {
-        "cdk": {
-          "basilisk": {}
-        },
-        "language": {
-          "python": {}
-        }
-      },
-      "type": "custom",
-      "wasm": ".basilisk/file_registry/file_registry.wasm"
-    },
     "file_registry_frontend": {
       "source": [
         "src/file_registry_frontend/dist"

@@ -138,8 +138,8 @@
       {
         "family": "file-registry",
         "version": "main",
-        "source": "release:smart-social-contracts/gos-as-a-service@v0.3.4:file_registry.wasm.gz",
-        "sha256": "2cd95df0c9200480a3094fc8985e402708ff8712f727ebd5204f6e93d7762153"
+        "source": "release:smart-social-contracts/file-registry@v0.1.1:file_registry.wasm.gz",
+        "sha256": "05ec042b1ed6944db2b3b69a781938f5f6ac5d7353490413b8b02b2149bd58e5"
       },
       {
         "family": "realm-installer",
