@@ -331,7 +331,7 @@
           bind:this={iframeEl}
           title="Realm {slug}"
           src={iframeSrc}
-          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals"
           referrerpolicy="no-referrer"
           on:load={onIframeLoad}
           class="realm-frame"

@@ -49,7 +49,9 @@ export function realmIframeUrl(frontendCanisterId, slug, subPath = '') {
 	});
 	if (!base) return '';
 	const path = normalizeRealmIframePath(subPath);
-	const q = new URLSearchParams({ portal: '1', slug: slug || '' });
+	// `shell` changes the iframe URL when the realm shell is replaced, so the
+	// browser does not keep a cached copy of the previous document.
+	const q = new URLSearchParams({ portal: '1', slug: slug || '', shell: '2' });
 	return `${base}${path}?${q.toString()}`;
 }
 
