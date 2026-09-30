@@ -1,5 +1,6 @@
 <script>
   import { _ } from 'svelte-i18n';
+  import { MAINTAINER_CONTACT_URL } from '$lib/maintainer.js';
 
   const faqs = [
     {
@@ -104,7 +105,7 @@
 
     <div class="contact-section">
       <h2>Still have questions?</h2>
-      <p>Contact us at <a href="mailto:support@realmsgos.org">support@realmsgos.org</a></p>
+      <p>This site is built and maintained by <a href={MAINTAINER_CONTACT_URL}>realmsgos.org</a>.</p>
     </div>
   </div>
 </div>

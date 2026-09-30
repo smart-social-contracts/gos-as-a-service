@@ -86,6 +86,7 @@
       </div>
 
       <div class="center-meta">
+        <a href="/about" class="meta-link meta-about">{$_('hub.about')}</a>
         <div class="meta-icons">
           <a
             href="https://github.com/smart-social-contracts/gos-as-a-service"
@@ -212,6 +213,11 @@
     display: flex;
     align-items: center;
     gap: 0.4rem;
+  }
+
+  .meta-about {
+    font-size: 0.625rem;
+    text-underline-offset: 0.15em;
   }
 
   .meta-link {

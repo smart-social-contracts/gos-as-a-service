@@ -18,11 +18,20 @@
     "open": "Abrir menú de Realms",
     "close": "Cerrar menú de Realms",
     "tour_title": "¿Qué es esto?",
+    "about": "Acerca de",
     "tour_desc": "Globo, navegador y asistente",
     "marketplace_desc": "Extensiones y servicios",
     "create_realm_desc": "Desplegar un realm",
     "architecture_desc": "Arquitectura Casals",
     "language_desc": "Idioma de la interfaz"
+  },
+  "about": {
+    "title": "Acerca de",
+    "back": "Volver",
+    "body_before": "Este sitio web está construido y mantenido por ",
+    "body_after": ". Sigue ese enlace para ponerte en contacto.",
+    "link": "realmsgos.org",
+    "footer": "Construido y mantenido por realmsgos.org"
   },
   "modal": {
     "title": "Crear un Reino",
@@ -97,7 +106,7 @@
     "globe_title": "Explorar el globo",
     "globe_body": "Los realms aparecen en este mapa 3D. Haz clic en un pin brillante para volar allí y ver sus detalles.",
     "rail_title": "Acciones rápidas",
-    "rail_body": "Abre el botón de cuadrícula / apps (arriba a la izquierda) para tour, Launch a new realm, Infrastructure e idioma. Inicia sesión con Internet Identity arriba a la derecha.",
+    "rail_body": "Abre el botón de cuadrícula / apps (arriba a la izquierda) para el tour, Acerca de, Launch a new realm, Infrastructure e idioma. Inicia sesión con Internet Identity arriba a la derecha.",
     "browse_title": "Explorar realms",
     "browse_body": "Abre el navegador de realms para buscar, filtrar por etapa y recorrer la lista.",
     "panel_title": "Navegador de realms",

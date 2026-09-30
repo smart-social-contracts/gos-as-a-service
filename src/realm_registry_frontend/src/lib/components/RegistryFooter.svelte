@@ -3,6 +3,7 @@
   import { realmPanelOpen } from '$lib/realm-panel-chrome.js';
   import { testMode } from '$lib/stores/registryRuntimeFlags.js';
   import TestFlagsModal from '$lib/components/TestFlagsModal.svelte';
+  import { MAINTAINER_CONTACT_URL } from '$lib/maintainer.js';
 
   export let version = '';
   export let commitHash = '';
@@ -13,6 +14,7 @@
 
 {#if !$realmPanelOpen}
 <footer class="registry-footer registry-desktop-only">
+  <a class="about-link" href={MAINTAINER_CONTACT_URL} rel="noopener noreferrer">{$_('about.footer')}</a>
   <div class="footer-meta">
     <a href="https://github.com/smart-social-contracts/gos-as-a-service" target="_blank" rel="noopener noreferrer" class="github-link" aria-label="GitHub">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -64,6 +66,16 @@
     color: var(--text-faint);
     pointer-events: auto;
     text-align: center;
+  }
+
+  .about-link {
+    color: var(--text-faint);
+    text-decoration: none;
+  }
+
+  .about-link:hover {
+    color: var(--text-tertiary);
+    text-decoration: underline;
   }
 
   .footer-ic,

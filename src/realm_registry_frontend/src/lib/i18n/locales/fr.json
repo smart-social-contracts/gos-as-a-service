@@ -18,11 +18,20 @@
     "open": "Ouvrir le menu Realms",
     "close": "Fermer le menu Realms",
     "tour_title": "Qu'est-ce que c'est ?",
+    "about": "À propos",
     "tour_desc": "Globe, navigateur & assistant",
     "marketplace_desc": "Extensions & services",
     "create_realm_desc": "Déployer un royaume",
     "architecture_desc": "Architecture Casals",
     "language_desc": "Langue de l'interface"
+  },
+  "about": {
+    "title": "À propos",
+    "back": "Retour",
+    "body_before": "Ce site est construit et maintenu par ",
+    "body_after": ". Suivez ce lien pour prendre contact.",
+    "link": "realmsgos.org",
+    "footer": "Construit et maintenu par realmsgos.org"
   },
   "modal": {
     "title": "Créer un Royaume",
@@ -97,7 +106,7 @@
     "globe_title": "Explorer le globe",
     "globe_body": "Les royaumes apparaissent sur cette carte 3D. Cliquez sur une épingle lumineuse pour vous y rendre et voir les détails.",
     "rail_title": "Actions rapides",
-    "rail_body": "Ouvrez le bouton grille / apps (en haut à gauche) pour la visite, Launch a new realm, Infrastructure et la langue. Connectez-vous avec Internet Identity en haut à droite.",
+    "rail_body": "Ouvrez le bouton grille / apps (en haut à gauche) pour la visite, À propos, Launch a new realm, Infrastructure et la langue. Connectez-vous avec Internet Identity en haut à droite.",
     "browse_title": "Parcourir les royaumes",
     "browse_body": "Ouvrez le navigateur pour rechercher, filtrer par phase et parcourir la liste.",
     "panel_title": "Navigateur de royaumes",

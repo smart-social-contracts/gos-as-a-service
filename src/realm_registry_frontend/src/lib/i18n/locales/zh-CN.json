@@ -18,11 +18,20 @@
     "open": "打开 Realms 菜单",
     "close": "关闭 Realms 菜单",
     "tour_title": "这是什么？",
+    "about": "关于",
     "tour_desc": "地球仪、浏览器与助手",
     "marketplace_desc": "扩展与服务",
     "create_realm_desc": "部署新 Realm",
     "architecture_desc": "Casals 架构",
     "language_desc": "界面语言"
+  },
+  "about": {
+    "title": "关于",
+    "back": "返回",
+    "body_before": "本网站由 ",
+    "body_after": " 构建并维护。通过该链接即可联系。",
+    "link": "realmsgos.org",
+    "footer": "由 realmsgos.org 构建并维护"
   },
   "modal": {
     "title": "创建领域",
@@ -97,7 +106,7 @@
     "globe_title": "探索地球仪",
     "globe_body": "Realm 显示在这张 3D 地图上。点击发光图钉可飞往该位置并查看详情。",
     "rail_title": "快捷操作",
-    "rail_body": "点击左上角的网格/应用按钮打开导览、Launch a new realm、基础设施和语言。右上角使用 Internet Identity 登录。",
+    "rail_body": "点击左上角的网格/应用按钮打开导览、关于、Launch a new realm、基础设施和语言。右上角使用 Internet Identity 登录。",
     "browse_title": "浏览 Realm",
     "browse_body": "打开 Realm 浏览器以搜索、按阶段筛选并浏览列表。",
     "panel_title": "Realm 浏览器",

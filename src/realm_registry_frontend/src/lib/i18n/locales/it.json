@@ -18,11 +18,20 @@
     "open": "Apri menu Realms",
     "close": "Chiudi menu Realms",
     "tour_title": "Cos'è questo?",
+    "about": "Informazioni",
     "tour_desc": "Globo, browser e assistente",
     "marketplace_desc": "Estensioni e servizi",
     "create_realm_desc": "Distribuisci un realm",
     "architecture_desc": "Architettura Casals",
     "language_desc": "Lingua dell'interfaccia"
+  },
+  "about": {
+    "title": "Informazioni",
+    "back": "Indietro",
+    "body_before": "Questo sito è costruito e mantenuto da ",
+    "body_after": ". Segui quel link per metterti in contatto.",
+    "link": "realmsgos.org",
+    "footer": "Costruito e mantenuto da realmsgos.org"
   },
   "modal": {
     "title": "Crea un Reame",
@@ -97,7 +106,7 @@
     "globe_title": "Esplora il globo",
     "globe_body": "I realm compaiono su questa mappa 3D. Clicca su un pin luminoso per volarci e aprire i dettagli.",
     "rail_title": "Azioni rapide",
-    "rail_body": "Apri il pulsante griglia / apps (in alto a sinistra) per tour, Launch a new realm, Infrastructure e lingua. Accedi con Internet Identity in alto a destra.",
+    "rail_body": "Apri il pulsante griglia / apps (in alto a sinistra) per il tour, Informazioni, Launch a new realm, Infrastructure e lingua. Accedi con Internet Identity in alto a destra.",
     "browse_title": "Sfoglia i realm",
     "browse_body": "Apri il browser dei realm per cercare, filtrare per fase e scorrere l'elenco.",
     "panel_title": "Browser dei realm",
