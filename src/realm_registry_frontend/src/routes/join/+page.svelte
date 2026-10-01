@@ -5,15 +5,27 @@
   import { login, isAuthenticated, getPrincipal } from '$lib/auth.js';
 
   let loading = true;
+  let signingIn = false;
   let error = '';
   let principalText = '';
   let rememberMe = false;
 
   $: returnTo = $page.url.searchParams.get('returnTo') || '/';
+  $: realmLabel = realmLabelFromReturn(returnTo);
+
+  function realmLabelFromReturn(value) {
+    const path = (value || '').split('?')[0];
+    const match = path.match(/^\/r\/([^/]+)/);
+    if (!match) return '';
+    try {
+      return decodeURIComponent(match[1]);
+    } catch {
+      return match[1];
+    }
+  }
 
   onMount(async () => {
     try {
-      // Restore remember-me preference
       try {
         rememberMe = localStorage.getItem('portal:remember_me') === '1';
       } catch {
@@ -33,7 +45,7 @@
   });
 
   async function handleLogin() {
-    loading = true;
+    signingIn = true;
     error = '';
     try {
       const { principal } = await login({ rememberMe });
@@ -46,109 +58,191 @@
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     } finally {
-      loading = false;
+      signingIn = false;
     }
   }
 </script>
 
 <svelte:head>
-  <title>Sign in — Realms Federation</title>
+  <title>Sign in — Realms</title>
 </svelte:head>
 
-<main class="join-page">
-  <div class="card">
+<main class="signin">
+  <section class="panel" aria-busy={loading || signingIn}>
     <h1>Sign in</h1>
-    <p class="subtitle">Internet Identity — one account for every realm on this portal.</p>
+    {#if realmLabel}
+      <p class="return">You will return to <span>{realmLabel}</span>.</p>
+    {/if}
 
-    {#if loading && !error}
-      <p>Checking session…</p>
+    {#if loading}
+      <p class="status" role="status">
+        <span class="spinner" aria-hidden="true"></span>
+        Checking your session
+      </p>
     {:else}
       {#if error}
-        <p class="error">{error}</p>
+        <p class="error" role="alert">{error}</p>
       {/if}
-      <button type="button" class="btn-primary" on:click={handleLogin} disabled={loading}>
-        Sign in with Internet Identity
+      <button type="button" class="submit" on:click={handleLogin} disabled={signingIn}>
+        {#if signingIn}
+          <span class="spinner spinner--on-dark" aria-hidden="true"></span>
+          Opening Internet Identity
+        {:else}
+          Sign in with Internet Identity
+        {/if}
       </button>
-      <label class="remember-me">
-        <input type="checkbox" bind:checked={rememberMe} />
+      <label class="remember">
+        <input type="checkbox" bind:checked={rememberMe} disabled={signingIn} />
         <span>Remember me for 7 days</span>
       </label>
-      <p class="ttl-hint">
-        {rememberMe
-          ? 'You will stay signed in for 7 days.'
-          : 'You will stay signed in for 8 hours.'}
-      </p>
     {/if}
 
     {#if principalText}
-      <p class="hint">Signed in as <code>{principalText}</code></p>
+      <p class="principal">Signed in as <code>{principalText}</code></p>
     {/if}
-  </div>
+  </section>
 </main>
 
 <style>
-  .join-page {
-    min-height: 70vh;
+  .signin {
+    min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 2rem;
-  }
-  .card {
-    max-width: 420px;
-    width: 100%;
-    padding: 2rem;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(0, 0, 0, 0.25);
-  }
-  h1 {
-    margin: 0 0 0.5rem;
-    font-size: 1.5rem;
-  }
-  .subtitle {
-    margin: 0 0 1.5rem;
-    opacity: 0.85;
-    font-size: 0.95rem;
-  }
-  .btn-primary {
-    width: 100%;
-    padding: 0.75rem 1rem;
+    padding: 2rem 1.25rem;
+    background: var(--bg, #fafafa);
+    color: var(--text-primary, #171717);
+    font-family: var(--font-family, Inter, ui-sans-serif, system-ui, sans-serif);
     font-size: 1rem;
-    cursor: pointer;
-    border-radius: 8px;
-    border: none;
-    background: #4f46e5;
-    color: white;
+    line-height: 1.5;
   }
-  .btn-primary:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
+
+  .panel {
+    width: 100%;
+    max-width: 24rem;
+    padding: 2.25rem 1.75rem 1.75rem;
+    background: var(--surface, #fff);
+    border: 1px solid var(--border, #e5e5e5);
+    border-radius: 1rem;
+    box-shadow: 0 1px 2px rgba(23, 23, 23, 0.04), 0 16px 40px rgba(23, 23, 23, 0.06);
+    text-align: center;
   }
-  .error {
-    color: #f87171;
-    margin-bottom: 1rem;
+
+  h1 {
+    margin: 0;
+    font-size: 1.375rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
   }
-  .remember-me {
+
+  .return {
+    margin: 0.75rem 0 0;
+    color: var(--text-tertiary, #737373);
+    font-size: 0.8125rem;
+  }
+
+  .return span {
+    color: var(--text-primary, #171717);
+    font-weight: 500;
+  }
+
+  .status {
     display: flex;
     align-items: center;
+    justify-content: center;
+    gap: 0.625rem;
+    margin: 1.75rem 0 0.25rem;
+    color: var(--text-secondary, #525252);
+    font-size: 0.875rem;
+  }
+
+  .error {
+    margin: 1.25rem 0 0;
+    padding: 0.625rem 0.75rem;
+    border-radius: 0.5rem;
+    background: #fef2f2;
+    color: #b91c1c;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+  }
+
+  .submit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    margin-top: 1.5rem;
+    padding: 0.75rem 1rem;
+    border: none;
+    border-radius: 0.5rem;
+    background: #171717;
+    color: #fff;
+    font: inherit;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .submit:hover:not(:disabled) {
+    background: #404040;
+  }
+
+  .submit:disabled {
+    background: #a3a3a3;
+    cursor: wait;
+  }
+
+  .remember {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     gap: 0.5rem;
     margin-top: 1rem;
-    font-size: 0.9rem;
+    color: var(--text-secondary, #525252);
+    font-size: 0.875rem;
     cursor: pointer;
   }
-  .remember-me input {
+
+  .remember input {
+    width: 1rem;
+    height: 1rem;
+    margin: 0;
+    accent-color: #171717;
     cursor: pointer;
   }
-  .ttl-hint {
-    margin-top: 0.5rem;
-    font-size: 0.8rem;
-    opacity: 0.7;
-  }
-  .hint {
-    margin-top: 1rem;
-    font-size: 0.85rem;
-    opacity: 0.8;
+
+  .principal {
+    margin: 1rem 0 0;
+    color: var(--text-tertiary, #737373);
+    font-size: 0.75rem;
     word-break: break-all;
+  }
+
+  .principal code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  .spinner {
+    width: 0.875rem;
+    height: 0.875rem;
+    border: 2px solid #e5e5e5;
+    border-top-color: #525252;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+
+  .spinner--on-dark {
+    border-color: rgba(255, 255, 255, 0.35);
+    border-top-color: #fff;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 </style>

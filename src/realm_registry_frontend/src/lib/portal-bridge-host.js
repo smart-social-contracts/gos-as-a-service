@@ -10,8 +10,9 @@ const BRIDGE_VERSION = '1';
  * @param {{ slug: string, backendCanisterId: string, frontendCanisterId: string, env?: string }} realm
  * @param {{ onAuthState?: (needsLogin: boolean) => void, onFocus?: (focus: { source: string, uri: string, label?: string } | null) => void, onAssistantOpen?: () => void, onUiReady?: () => void }} [opts]
  *   `onAuthState(true)` fires when the iframe asks for a delegation but the
- *   portal has no session (the page should offer II sign-in on this origin);
- *   `onAuthState(false)` fires once a delegation is delivered.
+ *   portal has no session. Sign-in itself is `auth:open-login`, which leaves
+ *   this embed for the portal `/join` page. `onAuthState(false)` fires once a
+ *   delegation is delivered.
  *   `onFocus` receives document focus pushed from the iframe (`focus:push`);
  *   payload may be null to clear.
  *   `onAssistantOpen` fires when the iframe requests opening the mundus assistant.
@@ -49,6 +50,18 @@ export function attachPortalBridge(iframe, realm, opts = {}) {
 					: null;
 				await sendDelegation(lastSessionKeyDer, msg.payload?.interactive === true);
 				break;
+			case 'auth:open-login': {
+				const requested = msg.payload?.returnPath;
+				const path =
+					typeof requested === 'string' &&
+					requested.startsWith('/') &&
+					!requested.startsWith('//')
+						? requested
+						: '/join';
+				const returnTo = portalPath(realm.slug, path);
+				window.location.assign(`/join?returnTo=${encodeURIComponent(returnTo)}`);
+				break;
+			}
 			case 'nav:push': {
 				const path = msg.payload?.path || '/';
 				const full = portalPath(realm.slug, path);
@@ -93,9 +106,8 @@ export function attachPortalBridge(iframe, realm, opts = {}) {
 			if (!sessionPublicKeyDer?.length) return;
 			const identity = await getIdentity();
 			if (!identity) {
-				// Only user-initiated requests raise the portal's sign-in overlay;
-				// silent probes at bridge init would flash it on every visit. The
-				// iframe keeps waiting either way (auth:pending is not fatal).
+				// No session. A Sign in click navigates via auth:open-login;
+				// a probe just waits. Neither one covers the realm with a card.
 				if (interactive) opts.onAuthState?.(true);
 				post({
 					type: 'auth:pending',
@@ -161,7 +173,8 @@ export function attachPortalBridge(iframe, realm, opts = {}) {
 				slug: realm.slug,
 				backendCanisterId: realm.backendCanisterId,
 				frontendCanisterId: realm.frontendCanisterId,
-				env: realm.env || ''
+				env: realm.env || '',
+				origin: window.location.origin
 			}
 		});
 		iframe.contentWindow.postMessage(
