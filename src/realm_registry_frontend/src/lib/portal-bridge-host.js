@@ -22,6 +22,8 @@ const BRIDGE_VERSION = '1';
 export function attachPortalBridge(iframe, realm, opts = {}) {
 	let port = null;
 	let disposed = false;
+	/** Bumped on logout so an in-flight delegation is not delivered afterwards. */
+	let authEpoch = 0;
 	/** @type {Uint8Array | null} */
 	let lastSessionKeyDer = null;
 
@@ -50,6 +52,19 @@ export function attachPortalBridge(iframe, realm, opts = {}) {
 					: null;
 				await sendDelegation(lastSessionKeyDer, msg.payload?.interactive === true);
 				break;
+			case 'auth:logout': {
+				authEpoch += 1;
+				lastSessionKeyDer = null;
+				try {
+					const { logout } = await import('$lib/auth.js');
+					await logout();
+				} catch (e) {
+					console.error('[portal-bridge] logout failed:', e);
+				}
+				post({ type: 'auth:logout', payload: {} });
+				opts.onAuthState?.(false);
+				break;
+			}
 			case 'auth:open-login': {
 				const requested = msg.payload?.returnPath;
 				const path =
@@ -102,9 +117,11 @@ export function attachPortalBridge(iframe, realm, opts = {}) {
 	};
 
 	async function sendDelegation(sessionPublicKeyDer, interactive = false) {
+		const epoch = authEpoch;
 		try {
 			if (!sessionPublicKeyDer?.length) return;
 			const identity = await getIdentity();
+			if (epoch !== authEpoch) return;
 			if (!identity) {
 				// No session. A Sign in click navigates via auth:open-login;
 				// a probe just waits. Neither one covers the realm with a card.
@@ -135,6 +152,7 @@ export function attachPortalBridge(iframe, realm, opts = {}) {
 				}
 			}
 			if (lastErr || !scoped) throw lastErr || new Error('delegation failed');
+			if (epoch !== authEpoch) return;
 			post({
 				type: 'auth:delegation',
 				payload: {
