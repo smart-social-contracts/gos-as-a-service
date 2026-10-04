@@ -150,7 +150,7 @@
       {
         "family": "realm-backend",
         "version": "main",
-        "source": "release:smart-social-contracts/realms@v0.5.2:realm_backend.wasm.gz",
+        "source": "release:smart-social-contracts/realms-gos@v0.5.2:realm_backend.wasm.gz",
         "sha256": "c19e338ae32cf1f4c2c4c069183fe327dba18ddd665438cf09ea82ba0cbb1185"
       }
     ],
@@ -162,7 +162,7 @@
       },
       {
         "path": "frontend/realm-assets/main",
-        "source": "release:smart-social-contracts/realms@v0.5.2:realm_frontend.tar.gz",
+        "source": "release:smart-social-contracts/realms-gos@v0.5.2:realm_frontend.tar.gz",
         "sha256": "38b078371035e136e3863042026835c64ac2183d21bd4ea3abc35a72a0207c7b"
       },
       {

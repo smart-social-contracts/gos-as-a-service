@@ -2,7 +2,7 @@
 
 GOS-as-a-Service (GaaS) is the platform behind [gos.earth](https://gos.earth): an **implementation-agnostic** realm registry and deployment installer. It hosts the create-realm wizard, slug federation portal (`/r/{slug}`), credits billing, and the queue that provisions new realms via Casals.
 
-**Realms GOS** ([smart-social-contracts/realms](https://github.com/smart-social-contracts/realms)) is the first (and currently only) GOS implementation. That repo consumes **prebuilt WASM and frontend tarballs** from this repo's GitHub Releases — it no longer builds registry/installer artifacts itself.
+**Realms GOS** ([smart-social-contracts/realms-gos](https://github.com/smart-social-contracts/realms-gos)) is the first (and currently only) GOS implementation. That repo consumes **prebuilt WASM and frontend tarballs** from this repo's GitHub Releases — it no longer builds registry/installer artifacts itself.
 
 ## Architecture
 
@@ -108,7 +108,7 @@ python3 -m pytest tests/backend/ -q
 | Repository | Role |
 |---|---|
 | [smart-social-contracts/casals](https://github.com/smart-social-contracts/casals) | Platform provisioner (on-chain canister lifecycle) |
-| [smart-social-contracts/realms](https://github.com/smart-social-contracts/realms) | First GOS implementation + fleet operator (Casals conductors per network) |
+| [smart-social-contracts/realms-gos](https://github.com/smart-social-contracts/realms-gos) | First GOS implementation + fleet operator (Casals conductors per network) |
 
 ## Relationship to Realms GOS
 
