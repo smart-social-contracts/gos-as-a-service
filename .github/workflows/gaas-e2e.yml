@@ -51,7 +51,7 @@ jobs:
       - name: Checkout realms (realm backend/frontend the stand template installs)
         uses: actions/checkout@v4
         with:
-          repository: smart-social-contracts/realms
+          repository: smart-social-contracts/realms-gos
           ref: ${{ env.REALMS_VERSION }}
           path: realms
           submodules: recursive

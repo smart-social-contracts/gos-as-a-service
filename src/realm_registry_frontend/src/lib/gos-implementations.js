@@ -6,7 +6,7 @@
 
 /** GitHub docs for the Generalized Global Governance (GGG) standard. */
 export const GGG_DOCS_URL =
-	'https://github.com/smart-social-contracts/realms/blob/main/docs/reference/CORE_ENTITIES.md';
+	'https://github.com/smart-social-contracts/realms-gos/blob/main/docs/reference/CORE_ENTITIES.md';
 
 const DEFAULT_GOS_METADATA = {
 	'realms-gos': {

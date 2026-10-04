@@ -8,7 +8,7 @@ export {
 } from './deployment-manifest-core.js';
 
 const REALMS_RELEASE_BASE =
-  'https://github.com/smart-social-contracts/realms/releases/download';
+  'https://github.com/smart-social-contracts/realms-gos/releases/download';
 
 /**
  * Resolve release asset checksums from build-time config (avoids CORS-blocked
