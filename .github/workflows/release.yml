@@ -100,7 +100,7 @@ jobs:
           echo "# SHA-256 checksums for release assets" > checksums.txt
           for f in realm_registry_backend.wasm.gz realm_registry_backend.did \
                    realm_installer.wasm.gz realm_installer.did \
-                   realm_registry_frontend.tar.gz \
+                   realm_registry_frontend.tar.gz realm_registry_frontend.manifest.json \
                    file_registry_frontend.tar.gz; do
             [ -f "$f" ] && sha256sum "$f" >> checksums.txt
           done
@@ -125,6 +125,9 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
           generate_release_notes: true
+          # Stays a draft until the checksum file is signed with the release key
+          # (smart-social-contracts/.github scripts/sign-release.sh).
+          draft: true
           files: |
             realm_registry_backend.wasm.gz
             realm_registry_backend.did
