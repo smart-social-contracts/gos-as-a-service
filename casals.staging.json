@@ -148,8 +148,8 @@
       {
         "family": "realm-backend",
         "version": "main",
-        "source": "release:smart-social-contracts/realms-gos@v0.6.1:realm-backend-v0.6.1.wasm.gz",
-        "sha256": "93a59c8d8bc464ec9900ff2678dfee4631a5e8be1ee26c1274523fb114498993"
+        "source": "release:smart-social-contracts/realms-gos@v0.6.3:realm-backend-v0.6.3.wasm.gz",
+        "sha256": "c4ee073abb40434e542cf1adb68ca22af7258fdbaf956c663666bf3567b629dc"
       }
     ],
     "bundles": [
@@ -160,8 +160,8 @@
       },
       {
         "path": "frontend/realm-assets/main",
-        "source": "release:smart-social-contracts/realms-gos@v0.6.1:realm-frontend-v0.6.1.tar.gz",
-        "sha256": "3b7d8c82fb8ceb49727c41987735ef5bc32bb60fe61c392364a34e6c0e6f9879"
+        "source": "release:smart-social-contracts/realms-gos@v0.6.3:realm-frontend-v0.6.3.tar.gz",
+        "sha256": "949b54a6c2812ea77f29cff5df2861e9789576fbe084e1c064a2ef798194e9e0"
       },
       {
         "$comment": "Casals UI from the pinned Casals release. Ships with `casals upgrade --content frontend/casals-ui/main`.",
