@@ -22,6 +22,9 @@
         "$comment_deployer": "The identity that ran casals up. It is a controller of the governance multisig only.",
         "deployer": "$deployer"
       },
+      "realms_product": {
+        "marketplace_id": "$orchestra:realms-product/marketplace-backend"
+      },
       "cycles": {
         "budget_tc": 40
       }
@@ -215,6 +218,22 @@
                   "converged_when": {
                     "query": "get_config",
                     "equals_args": true
+                  }
+                },
+                {
+                  "$comment": "First-party listings on the Realms marketplace point at this registry; its review_listing stamps approvals here, so it must be an _approvers publisher.",
+                  "method": "grant_publish",
+                  "args": {
+                    "namespace": "_approvers",
+                    "principal": "$env.realms_product.marketplace_id"
+                  },
+                  "converged_when": {
+                    "query": "get_acl",
+                    "contains": {
+                      "_approvers": [
+                        "$env.realms_product.marketplace_id"
+                      ]
+                    }
                   }
                 }
               ]
