@@ -8,7 +8,8 @@ import tempfile
 from pathlib import Path
 
 # Load main.py without pulling the full canister runtime.
-_main_path = Path(__file__).resolve().parents[3] / "file-registry" / "src" / "main.py"
+_registry_dir = os.environ.get("FILE_REGISTRY_DIR") or Path(__file__).resolve().parents[3] / "file-registry"
+_main_path = Path(_registry_dir) / "src" / "main.py"
 _spec = importlib.util.spec_from_file_location("file_registry_main", _main_path)
 _main = importlib.util.module_from_spec(_spec)
 sys.modules["file_registry_main"] = _main
