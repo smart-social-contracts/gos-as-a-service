@@ -16,8 +16,7 @@
       "gos_environment": "production",
       "casals_url": "https://casals.gos.earth",
       "principals": {
-        "operator": "rd4en-sizpv-vnamr-6vbfc-uljz5-vvz7c-g4nzy-uflq2-zbj3x-mrwjs-gqe",
-        "committee": "kpbof-gom7k-b4gsj-sfmka-fvbac-y72nv-sb7f2-b4v4e-4557j-erlzq-2qe",
+        "operator": "$deployer",
         "$comment": "access-code slot: admin=CASALS (everything)",
         "admin": "sha256:0ee72a3fff6256024f93326689d0ac6e371020c41cfa925c30e4dfa63b4d9980",
         "$comment_deployer": "The identity that ran casals up. It is a controller of the governance multisig only.",
@@ -77,8 +76,7 @@
       "kind": "backend",
       "mode": "managed",
       "signers": [
-        "$principal:operator",
-        "$principal:committee"
+        "$principal:operator"
       ],
       "threshold": 1,
       "controllers": [
@@ -190,6 +188,35 @@
               "controllers": [
                 "$self",
                 "$multisig"
+              ],
+              "config": [
+                {
+                  "$comment": "Packages the installer fetches (ext/…, codex/…) are published here by the operator with `realms files publish`; controllers cannot upload.",
+                  "method": "grant_publish",
+                  "args": {
+                    "namespace": "*",
+                    "principal": "$principal:operator"
+                  },
+                  "converged_when": {
+                    "query": "get_acl",
+                    "contains": {
+                      "*": [
+                        "$principal:operator"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "$comment": "Portal branding uploads are signed by the end user, who becomes publisher of the fresh namespace (see realm_registry_frontend branding-upload.js).",
+                  "method": "set_config",
+                  "args": {
+                    "auto_grant_publishers": true
+                  },
+                  "converged_when": {
+                    "query": "get_config",
+                    "equals_args": true
+                  }
+                }
               ]
             }
           ]
