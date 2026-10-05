@@ -3,8 +3,18 @@ import test from 'node:test';
 import {
   buildRealmDeploymentManifest,
   networkInfra,
+  realmsReleaseAssetName,
   slugify,
 } from './deployment-manifest-core.js';
+
+test('realmsReleaseAssetName keeps old names and stamps v0.6.1+', () => {
+  assert.equal(realmsReleaseAssetName('realm_backend.wasm.gz', 'v0.4.0'), 'realm_backend.wasm.gz');
+  assert.equal(realmsReleaseAssetName('realm_backend.wasm.gz', 'v0.6.0'), 'realm_backend.wasm.gz');
+  assert.equal(realmsReleaseAssetName('realm_backend.wasm.gz', 'v0.6.1'), 'realm-backend-v0.6.1.wasm.gz');
+  assert.equal(realmsReleaseAssetName('realm_frontend.tar.gz', '0.7.0'), 'realm-frontend-v0.7.0.tar.gz');
+  assert.equal(realmsReleaseAssetName('realm_frontend.tar.gz', 'v1.0.0'), 'realm-frontend-v1.0.0.tar.gz');
+  assert.equal(realmsReleaseAssetName('realm_backend.wasm.gz', 'main'), 'realm_backend.wasm.gz');
+});
 
 // CONFIG as resolved from the conductor-written /canister_ids.js of one deployment.
 const TEST_CONFIG = {

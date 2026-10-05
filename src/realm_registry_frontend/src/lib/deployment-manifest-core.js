@@ -19,6 +19,23 @@ export function normalizeDeployVersion(version) {
 }
 
 /**
+ * File name of a realms-gos release asset. From v0.6.1 on the release stamps
+ * the tag on every name (realm_backend.wasm.gz ships as
+ * realm-backend-v0.6.1.wasm.gz); older releases keep the unversioned names.
+ */
+export function realmsReleaseAssetName(name, tag) {
+  const m = /^v?(\d+)\.(\d+)\.(\d+)/.exec((tag || '').trim());
+  if (!m) return name;
+  const [major, minor, patch] = m.slice(1).map(Number);
+  const stamped = major > 0 || minor > 6 || (minor === 6 && patch >= 1);
+  if (!stamped) return name;
+  const dot = name.indexOf('.');
+  const stem = dot < 0 ? name : name.slice(0, dot);
+  const ext = dot < 0 ? '' : name.slice(dot);
+  return `${stem.replaceAll('_', '-')}-v${major}.${minor}.${patch}${ext}`;
+}
+
+/**
  * Canonical federation portal URL for a realm slug. The portal origin comes
  * from this deployment's config (`/canister_ids.js` → CONFIG.portal_base_url);
  * "" when none is declared, in which case the registry fills in its own

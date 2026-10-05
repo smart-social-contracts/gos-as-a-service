@@ -1,5 +1,8 @@
 import { CONFIG } from './config.js';
-import { buildRealmDeploymentManifest as buildRealmDeploymentManifestWithConfig } from './deployment-manifest-core.js';
+import {
+  buildRealmDeploymentManifest as buildRealmDeploymentManifestWithConfig,
+  realmsReleaseAssetName,
+} from './deployment-manifest-core.js';
 
 export {
   slugify,
@@ -26,8 +29,8 @@ function releaseChecksums(tag) {
 /** Legacy GitHub release URLs (fallback when Casals is unavailable). */
 function buildLegacyArtifactRefs(tag) {
   const cs = releaseChecksums(tag);
-  const backendUrl = `${REALMS_RELEASE_BASE}/${tag}/realm_backend.wasm.gz`;
-  const frontendUrl = `${REALMS_RELEASE_BASE}/${tag}/realm_frontend.tar.gz`;
+  const backendUrl = `${REALMS_RELEASE_BASE}/${tag}/${realmsReleaseAssetName('realm_backend.wasm.gz', tag)}`;
+  const frontendUrl = `${REALMS_RELEASE_BASE}/${tag}/${realmsReleaseAssetName('realm_frontend.tar.gz', tag)}`;
   return {
     artifacts: {
       realm_backend: backendUrl,
