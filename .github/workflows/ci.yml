@@ -55,12 +55,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Checkout file-registry (the release casals.json pins)
+        uses: actions/checkout@v4
+        with:
+          repository: smart-social-contracts/file-registry
+          ref: v0.1.1
+          path: file-registry
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install Python test deps
         run: pip install -r requirements-dev.txt
       - name: Backend unit tests
+        env:
+          FILE_REGISTRY_DIR: ${{ github.workspace }}/file-registry
         run: python3 -m pytest tests/backend/ -q
 
   frontend:

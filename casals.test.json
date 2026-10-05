@@ -3,18 +3,18 @@
   "name": "gaas",
   "description": "Governance Operating System-as-a-Service platform",
   "environments": {
-    "staging": {
+    "test": {
       "network": "ic",
-      "$comment": "Staging on mainnet. Operator is dev-identity. Hosts are staging.gos.earth and casals.staging.gos.earth.",
+      "$comment": "Test on mainnet. Operator is dev-identity. Hosts are test.gos.earth and casals.test.gos.earth.",
       "dns": {
         "provider": "cloudflare",
         "zone": "gos.earth",
         "token_env": "CLOUDFLARE_API_TOKEN",
         "ttl": 60
       },
-      "portal_url": "https://staging.gos.earth",
-      "gos_environment": "staging",
-      "casals_url": "https://casals.staging.gos.earth",
+      "portal_url": "https://test.gos.earth",
+      "gos_environment": "test",
+      "casals_url": "https://casals.test.gos.earth",
       "principals": {
         "operator": "$deployer",
         "$comment": "access-code slot: admin=CASALS (everything)",
@@ -87,11 +87,11 @@
   },
   "domains": [
     {
-      "host": "staging.gos.earth",
+      "host": "test.gos.earth",
       "canister": "realm-registry-frontend"
     },
     {
-      "host": "casals.staging.gos.earth",
+      "host": "casals.test.gos.earth",
       "canister": "casals-frontend"
     }
   ],
