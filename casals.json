@@ -17,8 +17,8 @@
       "casals_url": "https://casals.gos.earth",
       "principals": {
         "operator": "$deployer",
-        "$comment": "access-code slot: admin=CASALS (everything)",
-        "admin": "sha256:0ee72a3fff6256024f93326689d0ac6e371020c41cfa925c30e4dfa63b4d9980",
+        "$comment": "Unclaimed access-code slot. Whoever redeems it becomes a conductor commander with full access. The code is not stored in this file.",
+        "admin": "sha256:54f37582880030555448c7ff7b148ade534eb69df89c922a819189ec711aa9ed",
         "$comment_deployer": "The identity that ran casals up. It is a controller of the governance multisig only.",
         "deployer": "$deployer"
       },
