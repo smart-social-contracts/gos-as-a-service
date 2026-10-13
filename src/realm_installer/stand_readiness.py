@@ -49,6 +49,10 @@ def _stand_node(tree: dict, stand: str) -> dict | None:
     return None
 
 
+def stand_declared(tree: dict, stand: str) -> bool:
+    return _stand_node(tree, stand) is not None
+
+
 def stand_build_gate(tree: dict, stand: str) -> tuple[str, str]:
     """Whether a stand whose canisters are installed has finished its files.
 

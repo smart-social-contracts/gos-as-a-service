@@ -286,6 +286,16 @@ def test_retry_keeps_error_and_resumes_instead_of_reprovisioning():
     assert "_resume_deploy_task" in gen
 
 
+def test_cycles_preflight_skipped_once_stand_is_declared():
+    """Re-kicks while the stand builds must not demand the creation cost again."""
+    src = _installer_source()
+    body = src.split("def _provision_via_casals_body", 1)[1].split("def _provision_ok_for_job", 1)[0]
+    guard = body.index("if not stand_declared(tree, stand):")
+    assert guard < body.index("check_cycles_preflight(")
+    assert body.index("check_cycles_preflight(") < body.index("casals.create_stand(")
+    assert body.index("casals.create_stand(") < body.rindex("casals.get_tree()") < body.index("stand_build_gate(")
+
+
 def test_deploy_task_id_is_not_minted_from_the_clock():
     """Wall-clock task ids collided across stands provisioned in the same round."""
     src = _installer_source()

@@ -9,9 +9,16 @@ sys.path.insert(0, os.path.join(_REPO_ROOT, "src/realm_installer"))
 from stand_readiness import (
     installed_stand_canisters,
     stand_build_gate,
+    stand_declared,
     stand_readiness,
     stand_required_members,
 )
+
+
+def test_stand_declared():
+    assert stand_declared(_tree("alpha", []), "alpha") is True
+    assert stand_declared(_tree("alpha", []), "beta") is False
+    assert stand_declared({}, "alpha") is False
 
 
 def _tree(stand: str, canisters: list[dict]) -> dict:
