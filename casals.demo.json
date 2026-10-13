@@ -26,7 +26,7 @@
         "marketplace_id": "$orchestra:realms-product/marketplace-backend"
       },
       "cycles": {
-        "budget_tc": 15
+        "budget_tc": 40
       }
     }
   },
