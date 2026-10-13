@@ -293,6 +293,7 @@ def test_cycles_preflight_skipped_once_stand_is_declared():
     guard = body.index("if not stand_declared(tree, stand):")
     assert guard < body.index("check_cycles_preflight(")
     assert body.index("check_cycles_preflight(") < body.index("casals.create_stand(")
+    assert body.index("casals.create_stand(") < body.rindex("casals.get_tree()") < body.index("stand_build_gate(")
 
 
 def test_deploy_task_id_is_not_minted_from_the_clock():

@@ -2673,6 +2673,9 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
     # 2. Wait until the conductor has installed the canisters and finished
     # uploading the frontend. ``installed`` is only the wasm. ``built`` is
     # the plan with nothing left, including /index.html.
+    # Re-read: create_stand above clears a stopped build's error and re-arms it.
+    tree_res = yield casals.get_tree()
+    tree = _casals_ok(tree_res)
     required = stand_required_members(stand)
     ready, missing = stand_readiness(tree, stand, required)
     if not missing:
