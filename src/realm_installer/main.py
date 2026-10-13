@@ -54,7 +54,7 @@ from deploy_resume import (
 )
 from claim_args import build_claim_slug_args
 from stand_create_args import build_stand_create_args, casals_placement_from_cfg
-from stand_readiness import stand_build_gate, stand_readiness, stand_required_members
+from stand_readiness import stand_build_gate, stand_declared, stand_readiness, stand_required_members
 from manifest_access import can_view_deployment_manifest
 from bootstrap import (
     configure_canister_ids_args,
@@ -2640,21 +2640,25 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
 
     casals = CasalsService(Principal.from_str(casals_id))
 
-    cycles_res: CallResult = yield casals.get_cycles_cached()
     file_registry_id = resolve_file_registry_id(
         manifest,
         network=network,
         configured_id=(cfg.file_registry_id or "").strip() or configured_file_registry_id(network),
     )
-    preflight_err = check_cycles_preflight(
-        parse_cycles_report(unwrap_call_result(cycles_res)),
-        casals_canister_id=casals_id,
-        required_conductor_cycles=estimate_conductor_cycles_required(manifest),
-        file_registry_id=file_registry_id,
-        file_registry_min_cycles=configured_cycle_threshold_cycles(),
-    )
-    if preflight_err:
-        raise RuntimeError(preflight_err)
+    tree_res: CallResult = yield casals.get_tree()
+    tree = _casals_ok(tree_res)
+    # Once declared, the stand's creation cost is already spent; re-checking it on every re-kick fails healthy jobs.
+    if not stand_declared(tree, stand):
+        cycles_res: CallResult = yield casals.get_cycles_cached()
+        preflight_err = check_cycles_preflight(
+            parse_cycles_report(unwrap_call_result(cycles_res)),
+            casals_canister_id=casals_id,
+            required_conductor_cycles=estimate_conductor_cycles_required(manifest),
+            file_registry_id=file_registry_id,
+            file_registry_min_cycles=configured_cycle_threshold_cycles(),
+        )
+        if preflight_err:
+            raise RuntimeError(preflight_err)
 
     # 1. Declare the stand. Idempotent: on an existing stand this is a member
     # union and answers created=false, so a re-kick converges instead of failing.
@@ -2669,8 +2673,6 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
     # 2. Wait until the conductor has installed the canisters and finished
     # uploading the frontend. ``installed`` is only the wasm. ``built`` is
     # the plan with nothing left, including /index.html.
-    tree_res: CallResult = yield casals.get_tree()
-    tree = _casals_ok(tree_res)
     required = stand_required_members(stand)
     ready, missing = stand_readiness(tree, stand, required)
     if not missing:
