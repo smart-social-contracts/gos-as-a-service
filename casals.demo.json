@@ -5,7 +5,7 @@
   "environments": {
     "demo": {
       "network": "ic",
-      "$comment": "Demo on mainnet. Operator is dev-identity. Hosts are demo.gos.earth and casals.demo.gos.earth.",
+      "$comment": "Demo on mainnet, run as production. Operator is prod-identity (YubiKey), through an icp delegation from it. Hosts are demo.gos.earth and casals.demo.gos.earth.",
       "dns": {
         "provider": "cloudflare",
         "zone": "gos.earth",
@@ -17,8 +17,8 @@
       "casals_url": "https://casals.demo.gos.earth",
       "principals": {
         "operator": "$deployer",
-        "$comment": "access-code slot: admin=CASALS (everything)",
-        "admin": "sha256:0ee72a3fff6256024f93326689d0ac6e371020c41cfa925c30e4dfa63b4d9980",
+        "$comment": "Unclaimed access-code slot with full access. casals up mints the code and prints it once.",
+        "admin": "$new_access_code",
         "$comment_deployer": "The identity that ran casals up. It is a controller of the governance multisig only.",
         "deployer": "$deployer"
       },
