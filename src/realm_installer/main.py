@@ -142,18 +142,17 @@ class FileRegistryService(Service):
     def get_extension_manifest(self, args: text) -> text: ...
 
 class CasalsService(Service):
-    """Casals v2 declarative API. All endpoints take a single JSON `args`
-    string and return a JSON string ({"ok": true, ...} | {"ok": false, "error": …}).
-    The installer only declares a stand (`create_stand`) and waits for the
-    conductor to build it from the section's `stand_template` (`get_tree`)."""
+    """The Casals conductor: JSON text in, JSON text out ({"ok": true, ...} | {"ok": false, "error": …}).
+    The installer only declares a stand (`stand_create`) and waits for the
+    conductor to build it from the section's template (`orchestra_get`)."""
     @service_query
-    def get_tree(self) -> text: ...
+    def orchestra_get(self, args: text) -> text: ...
     @service_query
-    def get_cycles_cached(self) -> text: ...
+    def cycles_get(self, args: text) -> text: ...
     @service_update
-    def create_stand(self, args: text) -> text: ...
+    def stand_create(self, args: text) -> text: ...
     @service_update
-    def destroy_stand(self, args: text) -> text: ...
+    def stand_destroy(self, args: text) -> text: ...
 
 # ── Entities ───────────────────────────────────────────────────────────
 
@@ -1807,7 +1806,7 @@ def _cycles_preflight_gen(manifest: dict, cfg: InstallerConfig):
         return None
 
     casals = CasalsService(Principal.from_str(casals_id))
-    cycles_res: CallResult = yield casals.get_cycles_cached()
+    cycles_res: CallResult = yield casals.cycles_get("{}")
     cycles_report = parse_cycles_report(unwrap_call_result(cycles_res))
 
     network = (manifest.get("network") or "").strip()
@@ -2300,12 +2299,12 @@ def _destroy_realm_canisters_gen(job, job_id: text, backend_id: text, frontend_i
         "backend_canister_id": backend_id,
         "frontend_canister_id": frontend_id,
     }
-    destroy_res: CallResult = yield casals.destroy_stand(json.dumps(payload))
+    destroy_res: CallResult = yield casals.stand_destroy(json.dumps(payload))
     parsed = _casals_ok(destroy_res)
     errors = parsed.get("errors") or []
     reclaimed = int(parsed.get("total_cycles_reclaimed") or 0)
     jlog(job_id).info(
-        f"casals destroy_stand stand={stand} "
+        f"casals stand_destroy stand={stand} "
         f"total_cycles_reclaimed={reclaimed} "
         f"canisters={len(parsed.get('destroyed') or [])} failed={len(errors)}"
     )
@@ -2625,7 +2624,7 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
     Every canister of a stand (baton, backend, frontend) is
     declared by the section's ``stand_template`` in the sheet — WASMs, install
     args, controllers, ``/canister_ids.js``, commanders. The installer's whole
-    Casals interaction is ``create_stand`` plus reading ``get_tree`` until the
+    Casals interaction is ``stand_create`` plus reading ``orchestra_get`` until the
     members it needs are installed; the conductor converges on its own timer.
     """
     manifest = json.loads(job.manifest_json or "{}")
@@ -2645,11 +2644,11 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
         network=network,
         configured_id=(cfg.file_registry_id or "").strip() or configured_file_registry_id(network),
     )
-    tree_res: CallResult = yield casals.get_tree()
+    tree_res: CallResult = yield casals.orchestra_get("{}")
     tree = _casals_ok(tree_res)
     # Once declared, the stand's creation cost is already spent; re-checking it on every re-kick fails healthy jobs.
     if not stand_declared(tree, stand):
-        cycles_res: CallResult = yield casals.get_cycles_cached()
+        cycles_res: CallResult = yield casals.cycles_get("{}")
         preflight_err = check_cycles_preflight(
             parse_cycles_report(unwrap_call_result(cycles_res)),
             casals_canister_id=casals_id,
@@ -2663,7 +2662,7 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
     # 1. Declare the stand. Idempotent: on an existing stand this is a member
     # union and answers created=false, so a re-kick converges instead of failing.
     stand_args = build_stand_create_args(section, stand, f"realm {realm_name}", subnet, subnet_type)
-    stand_res: CallResult = yield casals.create_stand(json.dumps(stand_args))
+    stand_res: CallResult = yield casals.stand_create(json.dumps(stand_args))
     created = _casals_ok(stand_res).get("created")
     jlog(job_id).info(
         f"stand '{stand}' declared in '{section}' (created={created}, "
@@ -2673,8 +2672,8 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
     # 2. Wait until the conductor has installed the canisters and finished
     # uploading the frontend. ``installed`` is only the wasm. ``built`` is
     # the plan with nothing left, including /index.html.
-    # Re-read: create_stand above clears a stopped build's error and re-arms it.
-    tree_res = yield casals.get_tree()
+    # Re-read: stand_create above clears a stopped build's error and re-arms it.
+    tree_res = yield casals.orchestra_get("{}")
     tree = _casals_ok(tree_res)
     required = stand_required_members(stand)
     ready, missing = stand_readiness(tree, stand, required)
@@ -2714,7 +2713,7 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
     )
 
     # 3. Inject the Casals block into the realm's manifest_data so the
-    # auto-scale loop can grow its own stand (`create_stand` with the next
+    # auto-scale loop can grow its own stand (`stand_create` with the next
     # `{stand}-quarter-{n}` template member; gated on manifest_data.casals in
     # _quarter_casals_args).
     casals_config = {
@@ -2797,7 +2796,7 @@ def retry_deployment(job_id: text) -> ResultProvision:
 @update
 def provision_via_casals(job_id: text) -> Async[ResultProvision]:
     """Drive on-chain provisioning of a pending job through Casals: declare the
-    realm stand (``create_stand``) and, once the conductor has built it from the
+    realm stand (``stand_create``) and, once the conductor has built it from the
     section's ``stand_template``, hand off to the same domain tail as the
     off-chain path (bootstrap -> extensions/codices -> registration -> credit
     settlement). While the stand is still being built the job stays in

@@ -1,15 +1,15 @@
 """Pure helpers for "is the conductor done building this stand?" (no IC imports).
 
-The installer declares a stand with ``create_stand`` and the Casals conductor
-materialises its canisters from the section's ``stand_template`` on its own
-reconcile timer. These helpers read the ``get_tree`` JSON to decide when the
-members the installer needs are usable.
+The installer declares a stand with ``stand_create`` and the Casals conductor
+builds its canisters from the section's template on its own timer. These
+helpers read the ``orchestra_get`` JSON (``canisters`` and ``stands``) to decide
+when the members the installer needs are usable.
 """
 
 from __future__ import annotations
 
-# ``Canister.status`` value Casals reports once code is installed and hash-verified.
-CANISTER_INSTALLED = "installed"
+# Canister statuses once code is installed and hash-verified (``ready`` = also handed off).
+CANISTER_INSTALLED = ("installed", "ready")
 
 
 def stand_required_members(stand: str) -> list[str]:
@@ -17,58 +17,36 @@ def stand_required_members(stand: str) -> list[str]:
     return [f"{stand}-backend", f"{stand}-frontend"]
 
 
-def installed_stand_canisters(tree: dict, stand: str) -> dict[str, str]:
-    """``name -> canister_id`` for every canister of ``stand`` that has an id and
-    is ``installed``. Canisters that are merely created (no code yet) are omitted."""
-    out: dict[str, str] = {}
-    for sec in (tree or {}).get("sections") or []:
-        for st in sec.get("stands") or []:
-            if (st.get("name") or "").strip() != stand:
-                continue
-            for c in st.get("canisters") or []:
-                name = (c.get("name") or "").strip()
-                cid = (c.get("canister_id") or "").strip()
-                if name and cid and (c.get("status") or "").strip() == CANISTER_INSTALLED:
-                    out[name] = cid
-    return out
+def installed_stand_canisters(view: dict, stand: str) -> dict[str, str]:
+    """``name -> canister_id`` for every installed canister of ``stand``."""
+    return {c["name"]: c["canister_id"] for c in (view or {}).get("canisters") or []
+            if c.get("stand") == stand and c.get("canister_id") and c.get("status") in CANISTER_INSTALLED}
 
 
-def stand_readiness(tree: dict, stand: str, required: list[str]) -> tuple[dict[str, str], list[str]]:
+def stand_readiness(view: dict, stand: str, required: list[str]) -> tuple[dict[str, str], list[str]]:
     """Return ``(installed, missing)``: the stand's installed canisters by name,
     and the ``required`` members that are not installed yet (empty when ready)."""
-    installed = installed_stand_canisters(tree, stand)
-    missing = [m for m in required if m not in installed]
-    return installed, missing
+    installed = installed_stand_canisters(view, stand)
+    return installed, [m for m in required if m not in installed]
 
 
-def _stand_node(tree: dict, stand: str) -> dict | None:
-    for sec in (tree or {}).get("sections") or []:
-        for st in sec.get("stands") or []:
-            if (st.get("name") or "").strip() == stand:
-                return st
-    return None
+def _stand_node(view: dict, stand: str) -> dict | None:
+    return next((s for s in (view or {}).get("stands") or [] if s.get("name") == stand), None)
 
 
-def stand_declared(tree: dict, stand: str) -> bool:
-    return _stand_node(tree, stand) is not None
+def stand_declared(view: dict, stand: str) -> bool:
+    return _stand_node(view, stand) is not None
 
 
-def stand_build_gate(tree: dict, stand: str) -> tuple[str, str]:
-    """Whether a stand whose canisters are installed has finished its files.
-
-    Casals sets ``status: installed`` when the wasm is on the canister, then
-    keeps uploading the frontend. ``built`` becomes true only when that plan
-    has nothing left, which includes the ``/index.html`` health check.
-    ``build_error`` is why a build stopped.
-
-    Returns ``("ready", "")``, ``("waiting", reason)``, or ``("failed", reason)``.
-    """
-    node = _stand_node(tree, stand)
+def stand_build_gate(view: dict, stand: str) -> tuple[str, str]:
+    """``("ready", "")``, ``("waiting", reason)`` or ``("failed", reason)``: the
+    conductor sets ``built_at`` once every member is installed, its files are
+    served and controllers are handed over; ``build_error`` is why a build stopped."""
+    node = _stand_node(view, stand)
     if node is None:
         return "waiting", f"{stand} is not in the conductor tree"
-    error = (node.get("build_error") or "").strip()
-    if error:
-        return "failed", error
-    if not node.get("built"):
-        return "waiting", f"{stand} frontend assets are still uploading"
+    if (node.get("build_error") or "").strip():
+        return "failed", node["build_error"].strip()
+    if not node.get("built_at"):
+        return "waiting", f"{stand} is still being built"
     return "ready", ""

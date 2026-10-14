@@ -1,4 +1,4 @@
-"""Pure helpers for Casals create_stand JSON arguments (no IC/basilisk imports)."""
+"""Pure helpers for Casals stand_create JSON arguments (no IC/basilisk imports)."""
 
 
 def casals_placement_from_cfg(casals_cfg: dict) -> tuple[str, str]:

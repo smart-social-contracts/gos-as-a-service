@@ -8,7 +8,7 @@ in the Casals repo, with KEEP=1), this script
   1. calls `realm-registry-backend.request_deployment(manifest)` as the operator,
      exactly what the portal wizard sends;
   2. polls the installer's job until it leaves the provisioning/bootstrap states —
-     the installer only calls Casals `create_stand` and waits for the conductor's
+     the installer only calls Casals `stand_create` and waits for the conductor's
      reconcile timer to build the stand from the `Deployments` template;
   3. checks the realm frontend serves `/canister_ids.js` pointing at the realm
      backend (written by Casals from the template's `files`), and that the

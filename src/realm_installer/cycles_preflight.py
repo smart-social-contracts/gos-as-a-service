@@ -45,7 +45,7 @@ def resolve_file_registry_id(manifest: dict, *, network: str, configured_id: str
 
 
 def parse_cycles_report(raw: str | dict | Any) -> dict:
-    """Parse a Casals ``get_cycles_cached`` JSON payload."""
+    """Parse a Casals ``cycles_get`` JSON payload."""
     if isinstance(raw, dict):
         return raw
     text = (raw if isinstance(raw, str) else str(raw or "")).strip()

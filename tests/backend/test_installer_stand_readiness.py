@@ -21,14 +21,13 @@ def test_stand_declared():
     assert stand_declared({}, "alpha") is False
 
 
-def _tree(stand: str, canisters: list[dict]) -> dict:
+def _tree(stand: str, canisters: list[dict], built_at: int = 0, build_error: str = "") -> dict:
+    """An ``orchestra_get`` reply: canisters carry their stand; stands their build state."""
     return {
-        "sections": [
-            {"name": "Infra", "stands": [{"name": "platform", "canisters": [
-                {"name": "file-registry", "canister_id": "fr-1", "status": "installed"},
-            ]}]},
-            {"name": "Deployments", "stands": [{"name": stand, "canisters": canisters}]},
-        ]
+        "canisters": [{"name": "file-registry", "canister_id": "fr-1", "status": "ready", "stand": "platform"},
+                      *({**c, "stand": stand} for c in canisters)],
+        "stands": [{"name": "platform", "built_at": 1, "build_error": ""},
+                   {"name": stand, "built_at": built_at, "build_error": build_error}],
     }
 
 
@@ -73,19 +72,16 @@ def test_token_is_not_a_required_stand_member():
 
 
 def _built_tree(stand: str, built: bool, build_error: str = "") -> dict:
-    tree = _tree(stand, [
+    return _tree(stand, [
         {"name": f"{stand}-backend", "canister_id": "be-1", "status": "installed"},
-        {"name": f"{stand}-frontend", "canister_id": "fe-1", "status": "installed"},
-    ])
-    tree["sections"][1]["stands"][0]["built"] = built
-    tree["sections"][1]["stands"][0]["build_error"] = build_error
-    return tree
+        {"name": f"{stand}-frontend", "canister_id": "fe-1", "status": "ready"},
+    ], built_at=1700000000 if built else 0, build_error=build_error)
 
 
 def test_installed_wasm_is_not_ready_while_assets_are_still_uploading():
     gate, detail = stand_build_gate(_built_tree("alpha", built=False), "alpha")
     assert gate == "waiting"
-    assert "uploading" in detail
+    assert "being built" in detail
 
 
 def test_build_error_fails_the_stand():
