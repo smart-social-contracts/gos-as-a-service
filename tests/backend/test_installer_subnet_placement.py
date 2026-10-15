@@ -30,7 +30,7 @@ def test_subnet_type_placement():
         "section": "Deployments",
         "name": "my-realm",
         "description": "realm My Realm",
-        "subnet_type": "european",
+        "subnet": "type:european",
     }
 
 
@@ -60,7 +60,6 @@ def test_both_set_subnet_wins():
         "description": "realm My Realm",
         "subnet": _EXPLICIT_SUBNET,
     }
-    assert "subnet_type" not in args
 
 
 def test_whitespace_only_treated_as_absent():

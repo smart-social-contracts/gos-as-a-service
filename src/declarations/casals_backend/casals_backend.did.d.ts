@@ -329,7 +329,7 @@ export interface _SERVICE {
   'list_pool' : ActorMethod<[], string>,
   'list_principal_aliases' : ActorMethod<[], string>,
   'list_sections' : ActorMethod<[], string>,
-  'list_subnets' : ActorMethod<[], string>,
+  'subnet_list' : ActorMethod<[string], string>,
   'orchestration_configure_baton' : ActorMethod<[string], string>,
   'orchestration_execute_action' : ActorMethod<[string], string>,
   'orchestration_hand_to_baton' : ActorMethod<[string], string>,

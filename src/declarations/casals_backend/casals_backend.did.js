@@ -44,7 +44,7 @@ export const idlFactory = ({ IDL }) => {
     'list_pool' : IDL.Func([], [IDL.Text], ['query']),
     'list_principal_aliases' : IDL.Func([], [IDL.Text], ['query']),
     'list_sections' : IDL.Func([], [IDL.Text], ['query']),
-    'list_subnets' : IDL.Func([], [IDL.Text], []),
+    'subnet_list' : IDL.Func([IDL.Text], [IDL.Text], ['query']),
     'orchestration_configure_baton' : IDL.Func([IDL.Text], [IDL.Text], []),
     'orchestration_execute_action' : IDL.Func([IDL.Text], [IDL.Text], []),
     'orchestration_hand_to_baton' : IDL.Func([IDL.Text], [IDL.Text], []),

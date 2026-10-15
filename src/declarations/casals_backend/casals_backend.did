@@ -146,7 +146,7 @@ service : {
   "deploy_sheet" : (text) -> (text);
   "apply_arrangement" : (text) -> (text);
   "set_subnet_whitelist" : (text) -> (text);
-  "list_subnets" : () -> (text);
+  "subnet_list" : (text) -> (text) query;
   "refresh_fx" : () -> (text);
   "estimate_deploy" : (text) -> (text) query;
   "provision_assets" : (text) -> (text);

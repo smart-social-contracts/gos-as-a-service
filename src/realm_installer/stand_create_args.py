@@ -18,5 +18,5 @@ def build_stand_create_args(
     if subnet:
         args["subnet"] = subnet
     elif subnet_type:
-        args["subnet_type"] = subnet_type
+        args["subnet"] = f"type:{subnet_type}"
     return args

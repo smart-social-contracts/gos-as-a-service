@@ -22,7 +22,7 @@ let actorPromise = null;
 
 async function createCasalsActor() {
   if (isBuildingOrTesting()) {
-    return { list_subnets: async () => '[]' };
+    return { subnet_list: async () => '[]' };
   }
 
   const resolvedCanisterId = requireCasalsBackendCanisterId(
@@ -56,6 +56,6 @@ function getActorPromise() {
 
 export async function listSubnets() {
   const actor = await getActorPromise();
-  const raw = await actor.list_subnets();
+  const raw = await actor.subnet_list('{}');
   return parseSubnetList(raw);
 }
