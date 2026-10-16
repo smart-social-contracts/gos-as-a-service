@@ -107,13 +107,7 @@
             aria-label={$_('footer.built_on_ic')}
             title={$_('footer.built_on_ic')}
           >
-            <img
-              src="/images/internet-computer-icp-logo.svg"
-              alt=""
-              width="16"
-              height="16"
-              class="ic-logo"
-            />
+            <span class="meta-ic">{$_('footer.built_on_ic')}</span>
           </a>
         </div>
         <span class="meta-version">{versionLabel}</span>
@@ -232,8 +226,9 @@
     color: var(--text-tertiary);
   }
 
-  .ic-logo {
-    display: block;
+  .meta-ic {
+    font-size: 0.625rem;
+    white-space: nowrap;
   }
 
   .meta-version {

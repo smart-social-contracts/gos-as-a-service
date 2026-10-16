@@ -68,8 +68,8 @@ test('leftover platform paths include clover and GOS planet, not /custom/logo.pn
   assert.equal(pathnameFromAssetUrl('https://example.icp0.io/custom/logo.png'), '/custom/logo.png');
 });
 
-test('host splash mark is the GOS orb under /images/, never leftover /custom/logo.png', () => {
-  assert.equal(HOST_SPLASH_MARK_PATH, '/images/logo_sphere_only.svg');
+test('host splash mark is the GaaS logo under /images/, never leftover /custom/logo.png', () => {
+  assert.equal(HOST_SPLASH_MARK_PATH, '/images/logo.png');
   assert.equal(isLeftoverPlatformLogoPath(HOST_SPLASH_MARK_PATH), true);
   assert.equal(isRealmBrandLogoPath(HOST_SPLASH_MARK_PATH), false);
 });

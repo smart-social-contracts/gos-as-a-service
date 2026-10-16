@@ -92,7 +92,7 @@ export const LEFTOVER_PLATFORM_LOGO_PATHS = [
 ];
 
 /** Host chrome on the portal load screen — not a realm brand. */
-export const HOST_SPLASH_MARK_PATH = '/images/logo_sphere_only.svg';
+export const HOST_SPLASH_MARK_PATH = '/images/logo.png';
 
 /**
  * SHA-256 of platform leftovers that must never be painted as a realm brand.

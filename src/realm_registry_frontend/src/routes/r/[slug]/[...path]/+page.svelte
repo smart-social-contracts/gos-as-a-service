@@ -41,24 +41,52 @@
   let splashLogoUrl = '';
   let splashLogoLocked = false;
   let splashValidateToken = 0;
+  // True once the realm's runtime flags (configured logo_url) have been read.
+  let splashInputsFinal = false;
+  // True once we know whether the realm has a brand; until then the loader hides the host mark.
+  let splashBrandSettled = false;
+  let splashSettleTimer = null;
+
+  function clearSplashSettleTimer() {
+    if (splashSettleTimer) {
+      clearTimeout(splashSettleTimer);
+      splashSettleTimer = null;
+    }
+  }
 
   function resetSplashLogo() {
     splashLogoUrl = '';
     splashLogoLocked = false;
+    splashInputsFinal = false;
+    splashBrandSettled = false;
     splashValidateToken += 1;
+    clearSplashSettleTimer();
+    if (browser) {
+      splashSettleTimer = setTimeout(() => {
+        splashSettleTimer = null;
+        splashBrandSettled = true;
+      }, 4000);
+    }
+  }
+
+  function settleSplashBrand() {
+    splashBrandSettled = true;
+    clearSplashSettleTimer();
   }
 
   function onSplashRealmLogoLoad() {
     splashLogoLocked = true;
+    settleSplashBrand();
   }
 
   $: splashLogoInputs = splashLogoInputFromPortal({ splashHint: data.splashHint, realm });
   $: splashLogoCandidate = firstSplashLogoUrl(splashLogoInputs);
   $: splashPreloadUrl = splashLogoCandidate;
 
-  function queueSplashLogoValidation(inputs, candidate) {
+  function queueSplashLogoValidation(inputs, candidate, inputsFinal) {
     if (!browser || !candidate) {
       if (!splashLogoLocked) splashLogoUrl = '';
+      if (inputsFinal) settleSplashBrand();
       return;
     }
     const token = ++splashValidateToken;
@@ -67,13 +95,14 @@
       if (token !== splashValidateToken) return;
       if (accepted) {
         splashLogoUrl = accepted;
-      } else if (!splashLogoLocked) {
-        splashLogoUrl = '';
+      } else {
+        if (!splashLogoLocked) splashLogoUrl = '';
+        if (inputsFinal) settleSplashBrand();
       }
     })();
   }
 
-  $: queueSplashLogoValidation(splashLogoInputs, splashLogoCandidate);
+  $: queueSplashLogoValidation(splashLogoInputs, splashLogoCandidate, splashInputsFinal);
 
   $: slug = $page.params.slug;
   $: subPath = $page.url.pathname.replace(new RegExp(`^/r/${slug}`), '') || '/';
@@ -95,6 +124,7 @@
     unsubAuth();
     stopCreatingPoll();
     clearIframeReadyFallback();
+    clearSplashSettleTimer();
     bridge?.dispose?.();
     portalDocumentFocus.set(null);
   });
@@ -182,6 +212,7 @@
     const flags = await fetchRealmRuntimeFlags(data.backend_canister_id);
     const logoUrl = String(flags?.logo_url || flags?.realm_logo || '').trim();
     realm = { ...realm, logoUrl };
+    splashInputsFinal = true;
     writeSplashBrandHint(data.slug || slug, {
       frontendCanisterId: data.frontend_canister_id,
       configuredLogoUrl: logoUrl,
@@ -306,7 +337,12 @@
         aria-live="polite"
         transition:fade={{ duration: 300 }}
       >
-        <RealmsSphereLoader size={128} logoUrl={splashLogoUrl} on:realmLogoLoad={onSplashRealmLogoLoad} />
+        <RealmsSphereLoader
+          size={128}
+          logoUrl={splashLogoUrl}
+          pending={!splashBrandSettled}
+          on:realmLogoLoad={onSplashRealmLogoLoad}
+        />
         <p class="loading-label">{iframeLoaded ? 'Preparing realm…' : 'Loading realm'}</p>
       </div>
     {/if}

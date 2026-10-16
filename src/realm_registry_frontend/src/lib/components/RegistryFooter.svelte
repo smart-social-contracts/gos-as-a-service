@@ -33,7 +33,6 @@
 
   <div class="footer-ic">
     <a href="https://internetcomputer.org" target="_blank" rel="noopener noreferrer" class="ic-link">
-      <img src="/images/internet-computer-icp-logo.svg" alt="Internet Computer Logo" width="20" height="20" class="ic-logo" />
       <span>{$_('footer.built_on_ic')}</span>
     </a>
     {#if $testMode}

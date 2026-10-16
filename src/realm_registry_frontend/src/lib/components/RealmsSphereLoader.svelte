@@ -2,10 +2,12 @@
   import { createEventDispatcher } from 'svelte';
   import { HOST_SPLASH_MARK_PATH } from '$lib/realm-utils.js';
 
-  /** Realms GOS host orb — portal chrome while a realm iframe is preparing. */
+  /** GaaS platform logo — portal chrome while a realm iframe is preparing. */
   export let size = 128;
-  /** Optional realm branding logo; falls back to the host orb on error or while loading. */
+  /** Optional realm branding logo; falls back to the host mark on error. */
   export let logoUrl = '';
+  /** While the realm brand is unresolved, paint only the halo so the host mark never flashes first. */
+  export let pending = false;
 
   const dispatch = createEventDispatcher();
 
@@ -20,7 +22,7 @@
   }
 
   $: showRealmLogo = !!activeLogoUrl && !realmFailed && realmLoaded;
-  $: showFallback = !activeLogoUrl || realmFailed || !realmLoaded;
+  $: showFallback = activeLogoUrl ? realmFailed : !pending;
 
   function handleRealmLoad() {
     realmLoaded = true;
@@ -52,7 +54,7 @@
       alt=""
       class="sphere-mark sphere-mark--fallback"
       width={size}
-      height={Math.round(size * (448 / 398))}
+      height={Math.round(size * (485 / 514))}
     />
   {/if}
 </div>
@@ -88,8 +90,7 @@
   .sphere-mark--fallback {
     width: calc(var(--sphere-size, 128px) * 0.86);
     height: auto;
-    /* Black SVG → mid-gray (#737373). */
-    filter: brightness(0) invert(0.45) drop-shadow(0 8px 18px rgba(115, 115, 115, 0.28));
+    filter: drop-shadow(0 8px 18px rgba(115, 115, 115, 0.28));
     animation: sphere-breathe-fallback 2.2s ease-in-out infinite;
   }
 
@@ -111,12 +112,12 @@
     100% {
       opacity: 0.78;
       transform: scale(0.96);
-      filter: brightness(0) invert(0.45) drop-shadow(0 4px 10px rgba(115, 115, 115, 0.18));
+      filter: drop-shadow(0 4px 10px rgba(115, 115, 115, 0.18));
     }
     50% {
       opacity: 1;
       transform: scale(1.04);
-      filter: brightness(0) invert(0.45) drop-shadow(0 12px 24px rgba(115, 115, 115, 0.32));
+      filter: drop-shadow(0 12px 24px rgba(115, 115, 115, 0.32));
     }
   }
 
@@ -154,7 +155,7 @@
     .sphere-mark--fallback {
       opacity: 0.92;
       transform: none;
-      filter: brightness(0) invert(0.45) drop-shadow(0 6px 14px rgba(115, 115, 115, 0.22));
+      filter: drop-shadow(0 6px 14px rgba(115, 115, 115, 0.22));
     }
 
     .sphere-mark--realm.sphere-mark--visible {
