@@ -103,8 +103,8 @@
       {
         "family": "casals-backend",
         "version": "main",
-        "source": "release:smart-social-contracts/Casals@v0.7.0-rc11:casals_backend.wasm.gz",
-        "sha256": "9e064aa7c8685d8e3bb273a699ce920777f4f7c540bce3e0d37221a559db2787"
+        "source": "release:smart-social-contracts/Casals@v0.7.0-rc12:casals_backend.wasm.gz",
+        "sha256": "2906b1142d7aa3975ad2f16aa166ad0e702cf83fafcc9475d101418c984a071b"
       },
       {
         "family": "certified-assets",
@@ -181,8 +181,8 @@
       {
         "$comment": "Casals UI from the pinned Casals release. Ships with `casals upgrade --content frontend/casals-ui/main`.",
         "path": "frontend/casals-ui/main",
-        "source": "release:smart-social-contracts/Casals@v0.7.0-rc11:casals_frontend.tar.gz",
-        "sha256": "15d097d8b9c8a749686d8c96ce2a7170eb52616af52199c2b6bfeea1e227fbf4"
+        "source": "release:smart-social-contracts/Casals@v0.7.0-rc12:casals_frontend.tar.gz",
+        "sha256": "e58aea38f8a9a62f808ab149390c71156a0ce3dfc7a79738f805bbbbc0c9364d"
       }
     ]
   },
