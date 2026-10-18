@@ -103,8 +103,8 @@
       {
         "family": "casals-backend",
         "version": "main",
-        "source": "release:smart-social-contracts/Casals@v0.7.0-rc13:casals_backend.wasm.gz",
-        "sha256": "9657bb5dbaa88a42c73e2b6401bcfb1f3ee5a2ac739b04b9344eeb63ce5d234f"
+        "source": "release:smart-social-contracts/Casals@v0.7.0-rc14:casals_backend.wasm.gz",
+        "sha256": "f9f04d5745e78b150d9244e50b789f6af92d8d50a52dd18cc80d18cb3ab8980d"
       },
       {
         "family": "certified-assets",
@@ -137,6 +137,12 @@
         "sha256": "9944dd40a2aabbdd56afa12852d405ccb629f553d0f97fc87a259bff4fb701e8"
       },
       {
+        "family": "orchestration-baton",
+        "version": "2.0.1",
+        "source": "release:smart-social-contracts/Casals@v0.7.0-rc14:orchestration-baton@2.0.1.wasm.gz",
+        "sha256": "d6d670065dca6a7b316b8f9c3982f38981113f5327fe8f0b52f3618fb8c6f4d3"
+      },
+      {
         "family": "casals-maintenance",
         "version": "1.0.0",
         "source": "release:smart-social-contracts/Casals@v0.7.0-rc11:casals-maintenance@1.0.0.wasm.gz",
@@ -165,6 +171,12 @@
         "version": "main",
         "source": "release:smart-social-contracts/realms-gos@v0.6.4:realm-backend-v0.6.4.wasm.gz",
         "sha256": "80d829121f3c0a82b1bb6eff257467894445abc8f2f9ad159caa75ebd550d4bf"
+      },
+      {
+        "family": "realm-backend",
+        "version": "0.7.0-rc3",
+        "source": "release:smart-social-contracts/realms-gos@v0.7.0-rc3:realm-backend-v0.7.0-rc3.wasm.gz",
+        "sha256": "882b3b7c5b42ca66f5ae4953fc55d133ec1b5683fc1a498769f7346c71a5da5b"
       }
     ],
     "bundles": [
@@ -179,10 +191,16 @@
         "sha256": "cc2ec08b0cb43c7572ec0cb3719d0d71e3c7b5827657b247b641f9ca1dc0d63e"
       },
       {
+        "$comment": "The namespace `casals upgrade --release` gives realm 0.7.0-rc3's frontend, so new realms and released ones share it.",
+        "path": "release/realm/0.7.0-rc3/frontend",
+        "source": "release:smart-social-contracts/realms-gos@v0.7.0-rc3:realm-frontend-v0.7.0-rc3.tar.gz",
+        "sha256": "e987083c267483bf9f6e0018ba5390319e86aace17ea4101bf999cf09711d1cf"
+      },
+      {
         "$comment": "Casals UI from the pinned Casals release. Ships with `casals upgrade --content frontend/casals-ui/main`.",
         "path": "frontend/casals-ui/main",
-        "source": "release:smart-social-contracts/Casals@v0.7.0-rc13:casals_frontend.tar.gz",
-        "sha256": "349bc64e104457a6d81cca6ff753a61ef06954c462b461ffa00ce8d2939cd4e2"
+        "source": "release:smart-social-contracts/Casals@v0.7.0-rc14:casals_frontend.tar.gz",
+        "sha256": "d36a6ea44696ba387e23938a62c7cc326379bf118e73291db7ae3b4db9ad9b3f"
       }
     ]
   },
@@ -365,7 +383,7 @@
             "name": "{stand}-baton",
             "kind": "backend",
             "mode": "managed",
-            "wasm": "orchestration-baton@1.6.1",
+            "wasm": "orchestration-baton@2.0.1",
             "install_arg": {
               "top_commander": "$self"
             },
@@ -377,7 +395,7 @@
             "name": "{stand}-backend",
             "kind": "backend",
             "mode": "managed",
-            "wasm": "realm-backend@main",
+            "wasm": "realm-backend@0.7.0-rc3",
             "install_arg": "(\"$canister:realm-installer\")",
             "controllers": [
               "$stand.baton",
@@ -400,7 +418,7 @@
                 "permission": "Commit"
               }
             ],
-            "content": "frontend/realm-assets/main",
+            "content": "release/realm/0.7.0-rc3/frontend",
             "files": {
               "/canister_ids.js": "globalThis.__CANISTER_IDS={realm_backend:\"$stand.backend\",internet_identity:\"https://identity.ic0.app\"};\n"
             },
@@ -415,7 +433,7 @@
             "name": "{stand}-quarter-{n}",
             "kind": "backend",
             "mode": "managed",
-            "wasm": "realm-backend@main",
+            "wasm": "realm-backend@0.7.0-rc3",
             "install_arg": "(\"\")",
             "optional": true,
             "controllers": [
