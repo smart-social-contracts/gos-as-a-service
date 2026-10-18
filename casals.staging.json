@@ -103,8 +103,8 @@
       {
         "family": "casals-backend",
         "version": "main",
-        "source": "release:smart-social-contracts/Casals@v0.7.0-rc9:casals_backend.wasm.gz",
-        "sha256": "d097b7856455fb1a1e32c64615535dd4ccd47dfae2a3a03d08a9cd5b9d269646"
+        "source": "release:smart-social-contracts/Casals@v0.7.0-rc11:casals_backend.wasm.gz",
+        "sha256": "9e064aa7c8685d8e3bb273a699ce920777f4f7c540bce3e0d37221a559db2787"
       },
       {
         "family": "certified-assets",
@@ -129,6 +129,18 @@
         "version": "1.6.1",
         "source": "release:smart-social-contracts/Casals@v0.7.0-rc8:orchestration-baton@1.6.1.wasm.gz",
         "sha256": "17d48d24c0d17c6020e54cb770cb58839da78d7907d905bdf6748de2d732aef4"
+      },
+      {
+        "family": "orchestration-baton",
+        "version": "2.0.0",
+        "source": "release:smart-social-contracts/Casals@v0.7.0-rc11:orchestration-baton@2.0.0.wasm.gz",
+        "sha256": "9944dd40a2aabbdd56afa12852d405ccb629f553d0f97fc87a259bff4fb701e8"
+      },
+      {
+        "family": "casals-maintenance",
+        "version": "1.0.0",
+        "source": "release:smart-social-contracts/Casals@v0.7.0-rc11:casals-maintenance@1.0.0.wasm.gz",
+        "sha256": "7a3e471c7c6d6ff136946dfd89ae770ce7cc98d37e4b4ad7f2a8107d8349b76f"
       },
       {
         "family": "file-registry",
@@ -169,8 +181,8 @@
       {
         "$comment": "Casals UI from the pinned Casals release. Ships with `casals upgrade --content frontend/casals-ui/main`.",
         "path": "frontend/casals-ui/main",
-        "source": "release:smart-social-contracts/Casals@v0.7.0-rc9:casals_frontend.tar.gz",
-        "sha256": "a8e7a4e988c40f762a9c26e8aab20e18a6dce6048d6f0173781d8ed886dc62cc"
+        "source": "release:smart-social-contracts/Casals@v0.7.0-rc11:casals_frontend.tar.gz",
+        "sha256": "15d097d8b9c8a749686d8c96ce2a7170eb52616af52199c2b6bfeea1e227fbf4"
       }
     ]
   },
