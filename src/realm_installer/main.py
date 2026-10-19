@@ -54,7 +54,13 @@ from deploy_resume import (
 )
 from claim_args import build_claim_slug_args
 from stand_create_args import build_stand_create_args, casals_placement_from_cfg
-from stand_readiness import stand_build_gate, stand_declared, stand_readiness, stand_required_members
+from stand_readiness import (
+    realm_casals_block,
+    stand_build_gate,
+    stand_declared,
+    stand_readiness,
+    stand_required_members,
+)
 from manifest_access import can_view_deployment_manifest
 from bootstrap import (
     configure_canister_ids_args,
@@ -2715,13 +2721,8 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
     # 3. Inject the Casals block into the realm's manifest_data so the
     # auto-scale loop can grow its own stand (`stand_create` with the next
     # `{stand}-quarter-{n}` template member; gated on manifest_data.casals in
-    # _quarter_casals_args).
-    casals_config = {
-        "stand": stand,
-        "casals_canister_id": casals_id,
-        "registry_canister_id": file_registry_id,
-        "frontend_canister_id": frontend_id,
-    }
+    # _quarter_casals_args) and its votes reach the stand's baton.
+    casals_config = realm_casals_block(stand, casals_id, file_registry_id, ready)
     casals_config_json = json.dumps(casals_config).replace('\\', '\\\\').replace('"', '\\"')
     try:
         qpc_result: CallResult = yield ic.call_raw(
