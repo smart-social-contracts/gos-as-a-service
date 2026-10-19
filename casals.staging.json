@@ -381,6 +381,9 @@
         "canisters": [
           {
             "name": "{stand}-baton",
+            "cycles": {
+              "min_balance_tc": 5
+            },
             "kind": "backend",
             "mode": "managed",
             "wasm": "orchestration-baton@2.0.1",
