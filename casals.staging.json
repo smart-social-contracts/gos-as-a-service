@@ -103,8 +103,8 @@
       {
         "family": "casals-backend",
         "version": "main",
-        "source": "release:smart-social-contracts/Casals@v0.7.0-rc16:casals_backend.wasm.gz",
-        "sha256": "8eeefa9a9ad4e33559b5a605c9bc29f62933d2306b6562faa6351da334e9f996"
+        "source": "release:smart-social-contracts/Casals@v0.7.0-rc18:casals_backend.wasm.gz",
+        "sha256": "4fa69827f75e43b3661895ea78eb66ecc2cb50dcb27c7a6120d6ecbe1127c92f"
       },
       {
         "family": "certified-assets",
@@ -143,6 +143,12 @@
         "sha256": "d6d670065dca6a7b316b8f9c3982f38981113f5327fe8f0b52f3618fb8c6f4d3"
       },
       {
+        "family": "orchestration-baton",
+        "version": "2.1.0",
+        "source": "release:smart-social-contracts/Casals@v0.7.0-rc18:orchestration-baton@2.1.0.wasm.gz",
+        "sha256": "77ce8fd15f4bc2a3866edde2b2bcb9c40ae799a76046a69165c8d9cd98040356"
+      },
+      {
         "family": "casals-maintenance",
         "version": "1.0.0",
         "source": "release:smart-social-contracts/Casals@v0.7.0-rc11:casals-maintenance@1.0.0.wasm.gz",
@@ -174,9 +180,9 @@
       },
       {
         "family": "realm-backend",
-        "version": "0.7.0-rc3",
-        "source": "release:smart-social-contracts/realms-gos@v0.7.0-rc3:realm-backend-v0.7.0-rc3.wasm.gz",
-        "sha256": "882b3b7c5b42ca66f5ae4953fc55d133ec1b5683fc1a498769f7346c71a5da5b"
+        "version": "0.7.0-rc5",
+        "source": "release:smart-social-contracts/realms-gos@v0.7.0-rc5:realm-backend-v0.7.0-rc5.wasm.gz",
+        "sha256": "e7d35b18a4669dedd1acd5702d588b108a9b52bff727aeefb774f84e865a2021"
       }
     ],
     "bundles": [
@@ -191,16 +197,16 @@
         "sha256": "cc2ec08b0cb43c7572ec0cb3719d0d71e3c7b5827657b247b641f9ca1dc0d63e"
       },
       {
-        "$comment": "The namespace `casals upgrade --release` gives realm 0.7.0-rc3's frontend, so new realms and released ones share it.",
-        "path": "release/realm/0.7.0-rc3/frontend",
-        "source": "release:smart-social-contracts/realms-gos@v0.7.0-rc3:realm-frontend-v0.7.0-rc3.tar.gz",
-        "sha256": "e987083c267483bf9f6e0018ba5390319e86aace17ea4101bf999cf09711d1cf"
+        "$comment": "The namespace `casals upgrade --release` gives realm 0.7.0-rc5's frontend, so new realms and released ones share it.",
+        "path": "release/realm/0.7.0-rc5/frontend",
+        "source": "release:smart-social-contracts/realms-gos@v0.7.0-rc5:realm-frontend-v0.7.0-rc5.tar.gz",
+        "sha256": "6647119e1b083fb6f09a22816dd5e65635ce2c54958c6861b7f460ccb2e17f3b"
       },
       {
         "$comment": "Casals UI from the pinned Casals release. Ships with `casals upgrade --content frontend/casals-ui/main`.",
         "path": "frontend/casals-ui/main",
-        "source": "release:smart-social-contracts/Casals@v0.7.0-rc16:casals_frontend.tar.gz",
-        "sha256": "9b52da062211b0f0525e5670eb05652f433346c84ad59a5467c13e86e5e13bed"
+        "source": "release:smart-social-contracts/Casals@v0.7.0-rc18:casals_frontend.tar.gz",
+        "sha256": "0dc8f2c0676b7ae11ddd96baa37f3f8a203f0ce7f9f3ecd18a2d89e80fcec801"
       }
     ]
   },
@@ -386,7 +392,7 @@
             },
             "kind": "backend",
             "mode": "managed",
-            "wasm": "orchestration-baton@2.0.1",
+            "wasm": "orchestration-baton@2.1.0",
             "install_arg": {
               "top_commander": "$self"
             },
@@ -398,7 +404,7 @@
             "name": "{stand}-backend",
             "kind": "backend",
             "mode": "managed",
-            "wasm": "realm-backend@0.7.0-rc3",
+            "wasm": "realm-backend@0.7.0-rc5",
             "install_arg": "(\"$canister:realm-installer\")",
             "controllers": [
               "$stand.baton",
@@ -421,7 +427,7 @@
                 "permission": "Commit"
               }
             ],
-            "content": "release/realm/0.7.0-rc3/frontend",
+            "content": "release/realm/0.7.0-rc5/frontend",
             "files": {
               "/canister_ids.js": "globalThis.__CANISTER_IDS={realm_backend:\"$stand.backend\",internet_identity:\"https://identity.ic0.app\"};\n"
             },
@@ -436,7 +442,7 @@
             "name": "{stand}-quarter-{n}",
             "kind": "backend",
             "mode": "managed",
-            "wasm": "realm-backend@0.7.0-rc3",
+            "wasm": "realm-backend@0.7.0-rc5",
             "install_arg": "(\"\")",
             "optional": true,
             "controllers": [
