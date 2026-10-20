@@ -1,21 +1,17 @@
 <script>
-  /** Minimal wireframe globe — used while the MapLibre globe or realm data loads. */
+  import { HOST_SPLASH_MARK_PATH } from '$lib/realm-utils.js';
+
+  /** Platform logo while the MapLibre globe or realm data loads. */
   export let label = '';
-  /** SVG diameter in px */
+  /** Mark diameter in px */
   export let size = 56;
 </script>
 
 <div class="globe-loader" style="--globe-size: {size}px" role="status" aria-live="polite">
-  <svg class="globe-svg" viewBox="0 0 64 64" aria-hidden="true">
-    <g class="globe-spin">
-      <circle cx="32" cy="32" r="28" fill="none" stroke="currentColor" stroke-width="1" class="ring outer" />
-      <ellipse cx="32" cy="32" rx="28" ry="11" fill="none" stroke="currentColor" stroke-width="1" class="ring lat" />
-      <ellipse cx="32" cy="32" rx="28" ry="20" fill="none" stroke="currentColor" stroke-width="1" class="ring lat faint" />
-      <ellipse cx="32" cy="32" rx="11" ry="28" fill="none" stroke="currentColor" stroke-width="1" class="ring meridian" />
-      <ellipse cx="32" cy="32" rx="22" ry="28" fill="none" stroke="currentColor" stroke-width="1" class="ring meridian faint" />
-      <circle cx="32" cy="6" r="2.25" fill="currentColor" class="orbit-dot" />
-    </g>
-  </svg>
+  <div class="mark-stage">
+    <span class="mark-glow" aria-hidden="true"></span>
+    <img class="mark" src={HOST_SPLASH_MARK_PATH} alt="" width={size} height={size} />
+  </div>
   {#if label}
     <span class="globe-loader-label">{label}</span>
   {/if}
@@ -31,40 +27,33 @@
     color: var(--text-faint, #a3a3a3);
   }
 
-  .globe-svg {
+  .mark-stage {
+    position: relative;
     width: var(--globe-size);
     height: var(--globe-size);
-    overflow: visible;
+    display: grid;
+    place-items: center;
   }
 
-  .globe-spin {
-    transform-origin: 32px 32px;
-    animation: globe-rotate 18s linear infinite;
+  .mark-glow {
+    position: absolute;
+    inset: -28%;
+    border-radius: 50%;
+    background: radial-gradient(
+      circle,
+      rgba(115, 115, 115, 0.22) 0%,
+      rgba(163, 163, 163, 0.08) 38%,
+      transparent 68%
+    );
+    animation: logo-glow 2.4s ease-in-out infinite;
   }
 
-  .ring.outer {
-    opacity: 0.35;
-  }
-
-  .ring.lat {
-    opacity: 0.55;
-  }
-
-  .ring.lat.faint {
-    opacity: 0.28;
-  }
-
-  .ring.meridian {
-    opacity: 0.4;
-  }
-
-  .ring.meridian.faint {
-    opacity: 0.22;
-  }
-
-  .orbit-dot {
-    opacity: 0.7;
-    filter: drop-shadow(0 0 3px rgba(115, 115, 115, 0.35));
+  .mark {
+    position: relative;
+    z-index: 1;
+    width: var(--globe-size);
+    height: var(--globe-size);
+    object-fit: contain;
   }
 
   .globe-loader-label {
@@ -74,19 +63,23 @@
     color: var(--text-faint, #a3a3a3);
   }
 
-  @keyframes globe-rotate {
-    to {
-      transform: rotate(360deg);
+  @keyframes logo-glow {
+    0%,
+    100% {
+      transform: scale(0.92);
+      opacity: 0.55;
+    }
+    50% {
+      transform: scale(1.08);
+      opacity: 1;
     }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .globe-spin {
+    .mark-glow {
       animation: none;
-    }
-
-    .orbit-dot {
-      opacity: 0.45;
+      opacity: 0.7;
+      transform: none;
     }
   }
 </style>

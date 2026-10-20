@@ -122,7 +122,7 @@
 
       filteredRealms = realms;
       // Paint the globe as soon as the registry directory is back. Details and
-      // zone hexes fill in afterwards — do not hold the wireframe overlay.
+      // zone hexes fill in afterwards — do not hold the loading overlay.
       loading = false;
       globeLoading = false;
 
