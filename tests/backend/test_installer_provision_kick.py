@@ -296,6 +296,14 @@ def test_cycles_preflight_skipped_once_stand_is_declared():
     assert body.index("casals.stand_create(") < body.rindex("casals.orchestra_get(") < body.index("stand_build_gate(")
 
 
+def test_the_installer_reads_its_stand_not_the_whole_orchestra():
+    """Conductor list ops are paged; the installer asks for its one stand and the file-registry row."""
+    src = _installer_source()
+    assert 'casals.orchestra_get("{}")' not in src and 'casals.cycles_get("{}")' not in src
+    assert src.count('casals.orchestra_get(json.dumps({"stand": stand}))') == 2
+    assert src.count('casals.cycles_get(json.dumps({"canister": FILE_REGISTRY_CANISTER_NAME}))') == 2
+
+
 def test_deploy_task_id_is_not_minted_from_the_clock():
     """Wall-clock task ids collided across stands provisioned in the same round."""
     src = _installer_source()

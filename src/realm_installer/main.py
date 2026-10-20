@@ -13,6 +13,7 @@ import traceback
 from typing import Tuple
 
 from cycles_preflight import (
+    FILE_REGISTRY_CANISTER_NAME,
     check_cycles_preflight,
     estimate_conductor_cycles_required,
     parse_cycles_report,
@@ -1812,7 +1813,7 @@ def _cycles_preflight_gen(manifest: dict, cfg: InstallerConfig):
         return None
 
     casals = CasalsService(Principal.from_str(casals_id))
-    cycles_res: CallResult = yield casals.cycles_get("{}")
+    cycles_res: CallResult = yield casals.cycles_get(json.dumps({"canister": FILE_REGISTRY_CANISTER_NAME}))
     cycles_report = parse_cycles_report(unwrap_call_result(cycles_res))
 
     network = (manifest.get("network") or "").strip()
@@ -2650,11 +2651,11 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
         network=network,
         configured_id=(cfg.file_registry_id or "").strip() or configured_file_registry_id(network),
     )
-    tree_res: CallResult = yield casals.orchestra_get("{}")
+    tree_res: CallResult = yield casals.orchestra_get(json.dumps({"stand": stand}))
     tree = _casals_ok(tree_res)
     # Once declared, the stand's creation cost is already spent; re-checking it on every re-kick fails healthy jobs.
     if not stand_declared(tree, stand):
-        cycles_res: CallResult = yield casals.cycles_get("{}")
+        cycles_res: CallResult = yield casals.cycles_get(json.dumps({"canister": FILE_REGISTRY_CANISTER_NAME}))
         preflight_err = check_cycles_preflight(
             parse_cycles_report(unwrap_call_result(cycles_res)),
             casals_canister_id=casals_id,
@@ -2679,7 +2680,7 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
     # uploading the frontend. ``installed`` is only the wasm. ``built`` is
     # the plan with nothing left, including /index.html.
     # Re-read: stand_create above clears a stopped build's error and re-arms it.
-    tree_res = yield casals.orchestra_get("{}")
+    tree_res = yield casals.orchestra_get(json.dumps({"stand": stand}))
     tree = _casals_ok(tree_res)
     required = stand_required_members(stand)
     ready, missing = stand_readiness(tree, stand, required)
