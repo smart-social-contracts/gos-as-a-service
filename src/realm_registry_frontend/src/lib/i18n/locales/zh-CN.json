@@ -17,7 +17,8 @@
   "hub": {
     "open": "打开 Realms 菜单",
     "close": "关闭 Realms 菜单",
-    "tour_title": "这是什么？",
+    "what_is_this": "这是什么？",
+    "tutorial": "教程",
     "about": "关于",
     "tour_desc": "地球仪、浏览器与助手",
     "marketplace_desc": "扩展与服务",
@@ -96,7 +97,7 @@
     "progress": "第 {{current}} 步，共 {{total}} 步",
     "start": "开始导览",
     "replay": "开始导览",
-    "intro_title": "这是什么？",
+    "intro_title": "教程",
     "intro_lead": "您正在了解一种组织人类的新方式。",
     "intro_body": "地图上的每个图钉都是一个治理操作系统（GOS）。与传统政府不同，GOS 透明且可审计 — 它运行在 Internet Computer 这一去中心化计算网络上。",
     "intro_ic_link": "访问 internetcomputer.org 了解更多",
@@ -106,7 +107,7 @@
     "globe_title": "探索地球仪",
     "globe_body": "Realm 显示在这张 3D 地图上。点击发光图钉可飞往该位置并查看详情。",
     "rail_title": "快捷操作",
-    "rail_body": "点击左上角的网格/应用按钮打开导览、关于、Launch a new realm、基础设施和语言。右上角使用 Internet Identity 登录。",
+    "rail_body": "点击左上角的网格/应用按钮打开“这是什么？”（简短演示）、教程、Launch a new realm、基础设施和语言。右上角使用 Internet Identity 登录。",
     "browse_title": "浏览 Realm",
     "browse_body": "打开 Realm 浏览器以搜索、按阶段筛选并浏览列表。",
     "panel_title": "Realm 浏览器",
@@ -118,7 +119,7 @@
     "stats_title": "实时统计",
     "stats_body": "Realm 数量、用户、位置、阶段分布和版本信息一览。",
     "complete_title": "准备就绪",
-    "complete_body": "导览到此结束！您可以自由探索——旋转地球仪、浏览 Realm、向助手提问。随时打开 Realms 菜单可重新观看导览。"
+    "complete_body": "导览到此结束！您可以自由探索——旋转地球仪、浏览 Realm、向助手提问。随时打开 Realms 菜单并选择“教程”可重新观看导览。"
   },
   "time": {
     "just_now": "刚刚",

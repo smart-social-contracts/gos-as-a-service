@@ -17,7 +17,8 @@
   "hub": {
     "open": "Ouvrir le menu Realms",
     "close": "Fermer le menu Realms",
-    "tour_title": "Qu'est-ce que c'est ?",
+    "what_is_this": "Qu'est-ce que c'est ?",
+    "tutorial": "Tutoriel",
     "about": "À propos",
     "tour_desc": "Globe, navigateur & assistant",
     "marketplace_desc": "Extensions & services",
@@ -96,7 +97,7 @@
     "progress": "{{current}} sur {{total}}",
     "start": "Faire la visite",
     "replay": "Faire la visite",
-    "intro_title": "Qu'est-ce que c'est ?",
+    "intro_title": "Tutoriel",
     "intro_lead": "Vous découvrez une nouvelle façon d'organiser l'humanité.",
     "intro_body": "Chaque épingle sur cette carte est un Governance Operative System (GOS). Contrairement aux gouvernements traditionnels, un GOS est transparent et auditable — et il fonctionne sur Internet Computer, un réseau informatique décentralisé.",
     "intro_ic_link": "En savoir plus sur internetcomputer.org",
@@ -106,7 +107,7 @@
     "globe_title": "Explorer le globe",
     "globe_body": "Les royaumes apparaissent sur cette carte 3D. Cliquez sur une épingle lumineuse pour vous y rendre et voir les détails.",
     "rail_title": "Actions rapides",
-    "rail_body": "Ouvrez le bouton grille / apps (en haut à gauche) pour la visite, À propos, Launch a new realm, Infrastructure et la langue. Connectez-vous avec Internet Identity en haut à droite.",
+    "rail_body": "Ouvrez le bouton grille / apps (en haut à gauche) pour Qu'est-ce que c'est ? (une courte présentation), le Tutoriel, Launch a new realm, Infrastructure et la langue. Connectez-vous avec Internet Identity en haut à droite.",
     "browse_title": "Parcourir les royaumes",
     "browse_body": "Ouvrez le navigateur pour rechercher, filtrer par phase et parcourir la liste.",
     "panel_title": "Navigateur de royaumes",
@@ -118,7 +119,7 @@
     "stats_title": "Statistiques en direct",
     "stats_body": "Nombre de royaumes, utilisateurs, emplacements, phases et version en un coup d'œil.",
     "complete_title": "C'est parti",
-    "complete_body": "C'est tout ! Vous êtes libre d'explorer — faites tourner le globe, parcourez les royaumes et posez vos questions à l'assistant. Ouvrez le menu Realms à tout moment pour refaire la visite."
+    "complete_body": "C'est tout ! Vous êtes libre d'explorer — faites tourner le globe, parcourez les royaumes et posez vos questions à l'assistant. Ouvrez le menu Realms et choisissez Tutoriel à tout moment pour refaire la visite."
   },
   "time": {
     "just_now": "à l'instant",

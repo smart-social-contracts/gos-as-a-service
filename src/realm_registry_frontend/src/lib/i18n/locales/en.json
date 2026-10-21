@@ -17,7 +17,8 @@
   "hub": {
     "open": "Open Realms menu",
     "close": "Close Realms menu",
-    "tour_title": "What is this?",
+    "what_is_this": "What is this?",
+    "tutorial": "Tutorial",
     "about": "About"
   },
 
@@ -84,7 +85,7 @@
     "progress": "{{current}} of {{total}}",
     "start": "Take a tour",
     "replay": "Take a tour",
-    "intro_title": "What is this?",
+    "intro_title": "Tutorial",
     "intro_lead": "You're looking at a new way to organize humanity.",
     "intro_body": "Every pin on this map is a Governance Operative System (GOS). Unlike traditional governments, a GOS is transparent and auditable — and it runs on the Internet Computer, a decentralized computing network.",
     "intro_ic_link": "Learn more at internetcomputer.org",
@@ -94,7 +95,7 @@
     "globe_title": "Explore the globe",
     "globe_body": "Realms appear on this 3D map. Click a glowing pin to fly there and open its details.",
     "rail_title": "Quick actions",
-    "rail_body": "Open the grid / apps button (top left) for the tour, About, Launch a new realm, Infrastructure, and language. Sign in with Internet Identity from the top right.",
+    "rail_body": "Open the grid / apps button (top left) for What is this? (a short presentation), the Tutorial, Launch a new realm, Infrastructure, and language. Sign in with Internet Identity from the top right.",
     "browse_title": "Browse realms",
     "browse_body": "Open the realm browser to search, filter by stage, and scroll the list of registered realms.",
     "panel_title": "Realm browser",
@@ -106,7 +107,7 @@
     "stats_title": "Live registry stats",
     "stats_body": "Realm count, users, locations, stage breakdown, and build version at a glance.",
     "complete_title": "You're all set",
-    "complete_body": "That's everything! You're free to explore — spin the globe, browse realms, and ask the assistant anything. Open the Realms menu anytime to replay this tour."
+    "complete_body": "That's everything! You're free to explore — spin the globe, browse realms, and ask the assistant anything. Open the Realms menu and pick Tutorial anytime to replay this tour."
   },
   "time": {
     "just_now": "just now",

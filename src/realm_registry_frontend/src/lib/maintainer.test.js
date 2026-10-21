@@ -18,8 +18,8 @@ test('about copy names realmsgos.org and points at its contact link', () => {
 	assert.match(page, /MAINTAINER_CONTACT_URL/);
 	assert.match(page, /about\.body_before/);
 	assert.match(page, /about\.link/);
-	const header = readFileSync(join(here, 'components/RegistryHeader.svelte'), 'utf-8');
-	assert.match(header, /href="\/about"/);
+	const mobileChrome = readFileSync(join(here, 'components/RegistryMobileChrome.svelte'), 'utf-8');
+	assert.match(mobileChrome, /href="\/about"/);
 	const footer = readFileSync(join(here, 'components/RegistryFooter.svelte'), 'utf-8');
 	assert.match(footer, /MAINTAINER_CONTACT_URL/);
 	assert.match(footer, /about\.footer/);

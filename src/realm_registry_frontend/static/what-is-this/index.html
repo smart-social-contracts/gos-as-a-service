@@ -1,0 +1,1470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>gos.earth · Think of our world as a computer · When the world computer malfunctions · Governance Operating System</title>
+  <style>
+    :root {
+      --gray-50: #fafafa;
+      --gray-100: #f0f0f0;
+      --gray-200: #e5e5e5;
+      --gray-300: #d4d4d4;
+      --gray-400: #a3a3a3;
+      --gray-500: #737373;
+      --gray-600: #525252;
+      --gray-700: #404040;
+      --gray-800: #262626;
+      --gray-900: #171717;
+      --text: var(--gray-900);
+      --muted: var(--gray-600);
+      --border: var(--gray-200);
+      --panel: #ffffff;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body { height: 100%; overflow: hidden; }
+
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: var(--panel);
+      color: var(--text);
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .deck {
+      width: 100%;
+      height: 100vh;
+      height: 100dvh;
+      background: var(--panel);
+      padding: 1.25rem 2.5rem 1rem;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+    }
+
+    .viewport {
+      flex: 1;
+      min-height: 0;
+      position: relative;
+      user-select: text;
+      -webkit-user-select: text;
+    }
+
+    .dots, footer { user-select: none; -webkit-user-select: none; }
+
+    .page {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      z-index: 0;
+      transition: opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.45s;
+    }
+
+    .page.active {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      z-index: 2;
+    }
+
+    .page-step {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 0;
+      transition: opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .page-step.active { opacity: 1; pointer-events: auto; z-index: 1; }
+
+    .arch-box {
+      width: 100%;
+      height: 100%;
+      border: 2px solid var(--gray-800);
+      border-radius: 8px;
+      padding: 2rem 2.2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .box-header {
+      border-bottom: 2px solid var(--gray-900);
+      padding-bottom: 0.75rem;
+      flex-shrink: 0;
+    }
+
+    .box-header h2 {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .box-header p {
+      font-size: 0.95rem;
+      color: var(--muted);
+      margin-top: 0.25rem;
+    }
+
+    .fn-ref {
+      font-size: 0.52em;
+      font-weight: 650;
+      vertical-align: super;
+      line-height: 0;
+      margin-left: 0.12em;
+      color: var(--gray-500);
+    }
+
+    .slide-footnotes {
+      border-top: 1px solid var(--gray-200);
+      padding-top: 0.65rem;
+      margin-top: auto;
+      flex-shrink: 0;
+    }
+
+    .slide-footnotes p {
+      font-size: 0.72rem;
+      color: var(--gray-500);
+      line-height: 1.45;
+    }
+
+    .slide-footnotes .fn-mark {
+      font-weight: 650;
+      margin-right: 0.35em;
+      color: var(--gray-600);
+    }
+
+    .box-body {
+      flex: 1;
+      display: flex;
+      align-items: center;
+    }
+
+    .box-body ul {
+      list-style: none;
+      font-size: 1.05rem;
+      line-height: 1.7;
+      color: var(--gray-700);
+      width: 100%;
+    }
+
+    .box-body li { padding-left: 1rem; position: relative; margin-bottom: 0.2rem; }
+    .box-body li strong { color: var(--text); font-weight: 650; }
+
+    footer {
+      margin-top: 0.75rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    footer .site { font-size: 1.17rem; color: var(--gray-500); }
+
+    .dots {
+      display: flex;
+      gap: 0.35rem;
+      justify-content: center;
+      margin-top: 0.45rem;
+      flex-wrap: wrap;
+    }
+
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--gray-200);
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      transition: background 0.3s, transform 0.3s;
+    }
+
+    .dot.active { background: var(--gray-900); transform: scale(1.2); }
+
+    .arch-box.gos-box-slide {
+      position: relative;
+      width: min(64rem, 58%);
+      height: auto;
+      flex: none;
+      padding: 2.7rem 3rem;
+      gap: 1.8rem;
+    }
+
+    .page-step:has(.gos-box-slide):not(:has(.title-slide)):not(:has(.section-divider-slide)) {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .arch-box.gos-box-slide .box-body ul.bullets-hollow > li {
+      padding-left: 2rem;
+      margin-bottom: 0.65rem;
+    }
+
+    .arch-box.gos-box-slide .box-body ul.bullets-hollow > li.depth-1 {
+      padding-left: 3.75rem;
+      margin-bottom: 0.5rem;
+      font-size: 0.9em;
+      color: var(--gray-600);
+    }
+
+    .arch-box.gos-box-slide .box-body ul.bullets-hollow > li::before {
+      content: "";
+      position: absolute;
+      left: 0.35rem;
+      top: 0.68em;
+      width: 0.45rem;
+      height: 0.45rem;
+      border: 1.5px solid var(--gray-600);
+      border-radius: 50%;
+      background: transparent;
+    }
+
+    .arch-box.gos-box-slide .box-body ul.bullets-hollow > li.depth-1::before {
+      left: 2.1rem;
+      width: 0.38rem;
+      height: 0.38rem;
+    }
+
+    .arch-box.title-slide {
+      width: min(92%, 46rem);
+      height: auto;
+      padding: 3rem 2.75rem;
+      border: 2px solid var(--gray-800);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 0;
+    }
+
+    .page-step:has(.title-slide) {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .title-slide .title-main {
+      font-size: 2.75rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      margin-bottom: 0.55rem;
+    }
+
+    .title-slide .title-sub {
+      font-size: 1.15rem;
+      color: var(--gray-500);
+      margin-bottom: 2rem;
+    }
+
+    .title-slide .agenda-rule {
+      width: 3rem;
+      height: 1px;
+      background: var(--gray-300);
+      margin-bottom: 1.25rem;
+    }
+
+    .title-slide .agenda-label {
+      font-size: 0.85rem;
+      font-weight: 650;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--gray-500);
+      margin-bottom: 0.85rem;
+    }
+
+    .title-slide .agenda-topics {
+      list-style: none;
+      text-align: left;
+      width: 100%;
+      max-width: 36rem;
+    }
+
+    .title-slide .agenda-topics.bullets-hollow > li {
+      position: relative;
+      padding-left: 1.875rem;
+      margin-bottom: 0.55rem;
+      font-size: 1.05rem;
+      color: var(--gray-600);
+      line-height: 1.4;
+    }
+
+    .title-slide .agenda-topics.bullets-hollow > li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0.58em;
+      width: 0.54rem;
+      height: 0.54rem;
+      border: 1.5px solid var(--gray-500);
+      border-radius: 50%;
+      background: transparent;
+    }
+
+    .arch-box.section-divider-slide {
+      width: min(92%, 46rem);
+      height: auto;
+      padding: 3rem 2.75rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+
+    .page-step:has(.section-divider-slide) {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .section-divider-slide .box-header {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    .section-divider-slide .box-header h2 {
+      font-size: 2.75rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .section-divider-slide .box-header p {
+      margin-top: 0.55rem;
+      font-size: 1.15rem;
+      color: var(--gray-500);
+    }
+
+    .gos-mapping-table,
+    .gaas-components-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+    }
+
+    .gos-mapping-table th,
+    .gos-mapping-table td,
+    .gaas-components-table th,
+    .gaas-components-table td {
+      border: 1.5px solid var(--gray-300);
+      padding: 0.85rem 1rem;
+      text-align: left;
+      vertical-align: top;
+      line-height: 1.45;
+    }
+
+    .gos-mapping-table th,
+    .gaas-components-table th {
+      background: var(--gray-100);
+      font-weight: 650;
+      color: var(--gray-800);
+    }
+
+    .gos-mapping-table td:first-child,
+    .gaas-components-table td:first-child {
+      font-weight: 650;
+      color: var(--text);
+      width: 22%;
+    }
+
+    .gos-mapping-table tr:nth-child(even) td,
+    .gaas-components-table tr:nth-child(even) td {
+      background: var(--gray-50);
+    }
+
+    .deployment-flow {
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+      width: 100%;
+    }
+
+    .deployment-step {
+      display: grid;
+      grid-template-columns: 2.5rem 7rem 1fr;
+      gap: 0.75rem;
+      align-items: start;
+      padding: 0.65rem 0.75rem;
+      border: 1.5px solid var(--gray-300);
+      border-radius: 6px;
+      background: var(--gray-50);
+    }
+
+    .deployment-step-num {
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      border: 1.5px solid var(--gray-800);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: 700;
+      background: #fff;
+    }
+
+    .deployment-step-label {
+      font-weight: 650;
+      font-size: 0.95rem;
+      color: var(--text);
+      padding-top: 0.35rem;
+    }
+
+    .deployment-step-desc {
+      font-size: 0.92rem;
+      color: var(--gray-600);
+      line-height: 1.45;
+      padding-top: 0.3rem;
+    }
+
+    .deployment-step-desc code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.88em;
+      background: var(--gray-100);
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+    }
+
+    .arch-box.wide-slide { width: min(78rem, 92%); }
+
+    .mundus-diagram {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+      padding: 0.25rem 0;
+    }
+
+    .mundus-abstract-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+    }
+
+    .mundus-ghost-realm {
+      border: 1.5px dashed var(--gray-500);
+      border-radius: 6px;
+      padding: 0.5rem 0.95rem;
+      font-size: 0.95rem;
+      font-weight: 650;
+      color: var(--gray-600);
+      background: var(--gray-50);
+      text-align: center;
+    }
+
+    .mundus-ghost-realm.more {
+      border-style: dotted;
+      letter-spacing: 0.12em;
+      color: var(--gray-500);
+    }
+
+    .mundus-connector {
+      display: flex;
+      align-items: center;
+      gap: 0.2rem;
+      color: var(--gray-500);
+      font-size: 0.9rem;
+      font-weight: 650;
+    }
+
+    .mundus-connector-line {
+      width: 1.4rem;
+      height: 1px;
+      background: var(--gray-400);
+    }
+
+    .mundus-platform-badge {
+      border: 2px solid var(--gray-800);
+      border-radius: 6px;
+      padding: 0.45rem 1rem;
+      font-size: 0.88rem;
+      font-weight: 700;
+      background: var(--gray-100);
+    }
+
+    .mundus-bridge {
+      align-self: center;
+      width: 1px;
+      height: 0.85rem;
+      background: var(--gray-400);
+    }
+
+    .mundus-realm-expanded {
+      display: flex;
+      flex-direction: column;
+      border: 2px solid var(--gray-900);
+      border-radius: 7px;
+      padding: 0.85rem 1rem 1rem;
+      gap: 0.65rem;
+      background: var(--gray-100);
+    }
+
+    .mundus-realm-expanded-label {
+      font-size: 1.05rem;
+      font-weight: 700;
+    }
+
+    .mundus-realm-expanded-label span {
+      display: block;
+      margin-top: 0.12rem;
+      font-size: 0.88rem;
+      font-weight: 500;
+      color: var(--gray-600);
+    }
+
+    .mundus-upper-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.55rem;
+    }
+
+    .mundus-box {
+      border: 1.5px solid var(--gray-700);
+      border-radius: 6px;
+      padding: 0.65rem 0.75rem;
+      background: #fff;
+    }
+
+    .mundus-box.mundus-extensions {
+      background: var(--gray-50);
+      background-image: repeating-linear-gradient(
+        -45deg, transparent, transparent 5px,
+        rgba(0, 0, 0, 0.028) 5px, rgba(0, 0, 0, 0.028) 6px
+      );
+    }
+
+    .mundus-box-name {
+      font-size: 1.05rem;
+      font-weight: 700;
+    }
+
+    .mundus-box-desc {
+      font-size: 0.85rem;
+      color: var(--gray-600);
+      margin-top: 0.2rem;
+      line-height: 1.35;
+    }
+
+    .mundus-example-chip {
+      display: inline-block;
+      border: 1px solid var(--gray-400);
+      border-radius: 999px;
+      padding: 0.15rem 0.5rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--gray-700);
+      background: #fff;
+      margin: 0.25rem 0.25rem 0 0;
+    }
+
+    .mundus-box.ggg {
+      border-width: 2px;
+      border-color: var(--gray-800);
+      background: var(--gray-200);
+      padding: 0.75rem 0.85rem;
+    }
+
+    .mundus-box.ggg .mundus-box-name { font-size: 1.2rem; }
+
+    .ggg-stages {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+      margin-top: 0.45rem;
+    }
+
+    .ggg-stage {
+      font-size: 0.72rem;
+      font-weight: 650;
+      border: 1px solid var(--gray-600);
+      border-radius: 4px;
+      padding: 0.15rem 0.4rem;
+      background: #fff;
+    }
+
+    .gaas-fleet {
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+      width: 100%;
+      height: 100%;
+    }
+
+    .gaas-platform-head {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      border-bottom: 2px solid var(--gray-900);
+      padding-bottom: 0.65rem;
+    }
+
+    .gaas-platform-logos {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+    }
+
+    .gaas-platform-box {
+      border: 1.5px solid var(--gray-700);
+      border-radius: 6px;
+      padding: 0.45rem 0.75rem;
+      font-size: 0.82rem;
+      font-weight: 650;
+      background: var(--gray-50);
+    }
+
+    .gaas-platform-plus {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--gray-500);
+    }
+
+    .gaas-platform-head h2 {
+      font-size: 1.35rem;
+      font-weight: 700;
+    }
+
+    .gaas-platform-head p {
+      font-size: 0.88rem;
+      color: var(--gray-600);
+    }
+
+    .gaas-platform-conductor {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.65rem;
+      padding: 0.55rem 0;
+    }
+
+    .gaas-conductor-box {
+      border: 2px solid var(--gray-800);
+      border-radius: 6px;
+      padding: 0.5rem 1.25rem;
+      font-size: 0.95rem;
+      font-weight: 700;
+      background: var(--gray-100);
+    }
+
+    .gaas-platform-orchestrates {
+      font-size: 0.72rem;
+      font-weight: 650;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--gray-500);
+      text-align: center;
+    }
+
+    .realms-fleet-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0.45rem;
+    }
+
+    .realm-chip {
+      border: 1.5px solid var(--gray-700);
+      border-radius: 5px;
+      padding: 0.38rem 0.35rem;
+      text-align: center;
+      font-size: 0.68rem;
+      font-weight: 650;
+      background: #fff;
+      line-height: 1.2;
+    }
+
+    .realm-chip small {
+      display: block;
+      font-size: 0.52rem;
+      font-weight: 500;
+      color: var(--gray-500);
+      margin-top: 0.12rem;
+    }
+
+    .realm-chip.more {
+      border-style: dashed;
+      color: var(--gray-500);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--gray-50);
+    }
+
+    @media (max-width: 900px) {
+      .deck { padding: 0.85rem 1rem 0.75rem; }
+      .arch-box.gos-box-slide { width: 100%; padding: 1.5rem 1.25rem; }
+      .box-header h2 { font-size: 1.5rem; }
+      .section-divider-slide .box-header h2,
+      .title-slide .title-main { font-size: 1.85rem; }
+      .deployment-step { grid-template-columns: 2rem 1fr; }
+      .deployment-step-label { grid-column: 2; padding-top: 0; }
+      .deployment-step-desc { grid-column: 1 / -1; }
+      .mundus-upper-row { grid-template-columns: 1fr; }
+      .realms-fleet-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    .arch-box.wc-slide { border: none; }
+
+    .globe-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
+      transform-origin: 0 0;
+      pointer-events: none;
+      opacity: 0;
+      animation: wc-fade-in 0.9s ease-out both;
+    }
+
+    @keyframes wc-fade-in { from { opacity: 0; } }
+
+    .deck > footer, .deck > .dots { position: relative; z-index: 3; }
+
+    .wf-slide,
+    .gos-slide {
+      position: absolute;
+      inset: 0;
+    }
+
+    .gos-slide {
+      display: flex;
+      align-items: center;
+      gap: 3.5rem;
+      padding: 0 1.5rem;
+    }
+
+    .gos-globe-slot {
+      flex: none;
+      height: 82%;
+      aspect-ratio: 1;
+    }
+
+    .gos-side {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 1.6rem;
+    }
+
+    .gos-left { order: -1; }
+
+    .gos-right { align-items: center; }
+
+    .gos-link {
+      font-size: 2rem;
+      font-weight: 650;
+      letter-spacing: -0.01em;
+      color: var(--text);
+      text-decoration: none;
+      transition: color 0.2s, opacity 0.45s ease-out, transform 0.45s cubic-bezier(0.2, 0.7, 0.2, 1);
+    }
+
+    .gos-link:hover { color: rgb(47, 95, 95); }
+
+    .gos-legend {
+      display: flex;
+      flex-direction: column;
+      gap: 0.9rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .gos-legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      font-size: 1.2rem;
+      font-weight: 650;
+    }
+
+    .gos-badge {
+      flex: none;
+      display: grid;
+      place-items: center;
+      width: 2.4rem;
+      height: 2.4rem;
+      border-radius: 50%;
+      border: 1.5px solid rgba(38, 38, 38, 0.55);
+      background: #fff;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: rgba(64, 64, 64, 0.7);
+    }
+
+    .gos-badge img { width: auto; height: 1.65rem; }
+
+    .gos-badge-other {
+      border-style: dashed;
+      background: #f3f3f3;
+    }
+
+    .gos-head {
+      border-bottom: 2px solid var(--gray-900);
+      padding-bottom: 0.7rem;
+      margin-bottom: 0.3rem;
+    }
+
+    .gos-head h2 { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+
+    .gos-kicker {
+      font-size: 0.85rem;
+      font-weight: 650;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--gray-500);
+      margin-bottom: 0.35rem;
+    }
+
+    .gos-point { display: flex; flex-direction: column; gap: 0.3rem; }
+    .gos-label { font-size: 1.35rem; font-weight: 650; line-height: 1.25; }
+    .gos-note { font-size: 1.08rem; color: var(--gray-500); line-height: 1.4; }
+
+    .wf-globe-slot {
+      position: absolute;
+      top: 50%;
+      left: -8%;
+      height: 115%;
+      aspect-ratio: 1;
+      transform: translate(-50%, -50%);
+    }
+
+    .wf-content {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 29%;
+      right: 6%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 2.4rem;
+    }
+
+    .wf-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 2.4rem;
+    }
+
+    .wf-item {
+      display: grid;
+      grid-template-columns: 10.5rem minmax(0, 1fr);
+      column-gap: 2rem;
+      align-items: center;
+    }
+
+    .wf-art svg { display: block; width: 10.5rem; height: 10.5rem; }
+
+    .wf-world, .wf-pc { display: flex; align-items: baseline; gap: 0.9rem; min-width: 0; }
+    .wf-world { font-size: 2.1rem; line-height: 1.25; }
+    .wf-world .wc-note { font-size: 0.65em; }
+    .wf-pc { font-size: 1.3rem; margin-top: 0.55rem; color: var(--gray-600); }
+    .wf-world .wc-label { font-weight: 700; }
+    .wf-pc .wc-label { font-weight: 600; color: var(--gray-700); white-space: normal; }
+    .wf-pc .wc-note { font-size: 1em; }
+
+    .wf-pc svg {
+      width: 1.2rem;
+      height: 1.2rem;
+      flex-shrink: 0;
+      align-self: center;
+      color: var(--gray-400);
+    }
+
+    .wf-coin { animation: wf-coin 3.2s ease-in infinite; }
+    .wf-slice { animation: wf-slice 4s ease-in-out infinite alternate; }
+    .wf-heat { animation: wf-heat 2.4s ease-out infinite; }
+
+    @keyframes wf-coin {
+      0%, 15% { transform: translateY(0); opacity: 1; }
+      70% { transform: translateY(38px); opacity: 1; }
+      85%, 100% { transform: translateY(38px); opacity: 0; }
+    }
+    @keyframes wf-slice { from { transform: translate(2px, -2.5px); } to { transform: translate(9px, -11px); } }
+    @keyframes wf-heat {
+      0% { opacity: 0; transform: translateY(4px); }
+      40% { opacity: 1; }
+      100% { opacity: 0; transform: translateY(-6px); }
+    }
+    @keyframes wf-spread-0 { 0%, 8% { fill: #e9e9e9; } 14%, 86% { fill: #525252; } 100% { fill: #e9e9e9; } }
+    .wf-hex.wf-d0 { animation: wf-spread-0 8s ease-in-out infinite; }
+    @keyframes wf-spread-1 { 0%, 23% { fill: #e9e9e9; } 29%, 86% { fill: #525252; } 100% { fill: #e9e9e9; } }
+    .wf-hex.wf-d1 { animation: wf-spread-1 8s ease-in-out infinite; }
+    @keyframes wf-spread-2 { 0%, 38% { fill: #e9e9e9; } 44%, 86% { fill: #525252; } 100% { fill: #e9e9e9; } }
+    .wf-hex.wf-d2 { animation: wf-spread-2 8s ease-in-out infinite; }
+    @keyframes wf-spread-3 { 0%, 53% { fill: #e9e9e9; } 59%, 86% { fill: #525252; } 100% { fill: #e9e9e9; } }
+    .wf-hex.wf-d3 { animation: wf-spread-3 8s ease-in-out infinite; }
+    @keyframes wf-spread-4 { 0%, 68% { fill: #e9e9e9; } 74%, 86% { fill: #525252; } 100% { fill: #e9e9e9; } }
+    .wf-hex.wf-d4 { animation: wf-spread-4 8s ease-in-out infinite; }
+
+    .wc {
+      --wc-gap: 6rem;
+      width: 100%;
+      display: grid;
+      align-items: center;
+      row-gap: 0.95rem;
+    }
+
+    .wc-col-head {
+      grid-row: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.1rem;
+    }
+
+    .wc-art {
+      width: 17rem;
+      height: 17rem;
+      display: block;
+    }
+
+    .wc-halo { transform-origin: 130px 130px; animation: wc-breathe 6s ease-in-out infinite; }
+    .wc-core { transform-origin: 130px 130px; animation: wc-breathe 6s ease-in-out infinite; animation-delay: -3s; }
+    .wc-pulses path { stroke-dasharray: 7 93; animation: wc-pulse 5.5s linear infinite; }
+
+    .wc-cell {
+      display: flex;
+      align-items: baseline;
+      gap: 0.75rem;
+      font-size: 1.3rem;
+      line-height: 1.3;
+    }
+
+    .wc-cell.wc-mirror { flex-direction: row-reverse; text-align: right; }
+
+    .wc-label { font-weight: 650; color: var(--text); white-space: nowrap; }
+    .wc-note { font-size: 0.8em; color: var(--gray-500); }
+
+    .wc-frag,
+    .wf-item {
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.45s ease-out, transform 0.45s cubic-bezier(0.2, 0.7, 0.2, 1);
+    }
+
+    .wc-frag.shown,
+    .wf-item.shown { opacity: 1; transform: none; }
+
+    .wc-frag:not(.shown), .wf-item:not(.shown) { pointer-events: none; }
+
+    .wc-arrow {
+      align-self: center;
+      justify-self: center;
+      width: 5.5rem;
+      color: var(--gray-400);
+    }
+
+    .wc-arrow svg { display: block; width: 100%; }
+
+    .page.active .wc-col-head > svg,
+    .page.active .wc-arrow { animation: wc-rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: calc(var(--c) * 0.25s); }
+    .wc-arrow { margin-bottom: 1.1rem; }
+    .wc-cell.wc-frag.shown:not(.wc-mirror) { transition-delay: 0.12s; }
+
+    @keyframes wc-rise { from { opacity: 0; transform: translateY(10px); } }
+    @keyframes wc-breathe { 0%, 100% { opacity: 0.65; transform: scale(0.94); } 50% { opacity: 1; transform: scale(1.04); } }
+    @keyframes wc-pulse { from { stroke-dashoffset: 7; } to { stroke-dashoffset: -100; } }
+
+    @media (prefers-reduced-motion: reduce) {
+      .page.active .wc *, .page.active .wc { animation: none !important; }
+      .wc-frag, .wf-item { transition: none; transform: none; }
+      .globe-canvas, .wf-art * { animation: none !important; }
+      .wc-pulses { display: none; }
+    }
+
+    @media (max-width: 900px) {
+      .wc { --wc-gap: 2.5rem; }
+      .wc-art { width: 8rem; height: 8rem; }
+      .wc-cell { font-size: 1rem; }
+      .wc-arrow { width: 2rem; }
+    }
+
+  </style>
+</head>
+<body>
+  <article class="deck">
+    <div class="viewport" id="viewport">
+
+        <div class="page active" data-slide="0" data-steps="1">
+            
+            <div class="page-step active">
+              <section class="gos-slide">
+                <div class="gos-side"></div>
+                <div class="gos-globe-slot" data-globe-slot></div>
+                <div class="gos-side"></div>
+              </section>
+            </div>
+        </div>
+
+        <div class="page" data-slide="1" data-steps="1">
+            
+            <div class="page-step active">
+              <section class="arch-box gos-box-slide wide-slide wc-slide">
+                <header class="box-header">
+                  <h2>Think of our world as a computer</h2>
+                </header>
+                <div class="box-body">
+                  <div class="wc" style="grid-template-columns: minmax(0, 1fr) var(--wc-gap) minmax(0, 1fr)">
+                    <div class="wc-col-head" style="grid-column:1;--c:0"><div class="wc-art" data-globe-slot></div></div><div class="wc-col-head" style="grid-column:3;--c:1"><svg class="wc-art" viewBox="0 0 260 260" fill="none" aria-hidden="true">
+  <defs>
+    <radialGradient id="wc-halo">
+      <stop offset="0" stop-color="#d4d4d4" stop-opacity="0.6"/>
+      <stop offset="0.55" stop-color="#e5e5e5" stop-opacity="0.25"/>
+      <stop offset="1" stop-color="#e5e5e5" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="wc-fade-g">
+      <stop offset="0.35" stop-color="#fff"/>
+      <stop offset="1" stop-color="#000"/>
+    </radialGradient>
+    <mask id="wc-fade" maskUnits="userSpaceOnUse" x="0" y="0" width="260" height="260">
+      <rect width="260" height="260" fill="url(#wc-fade-g)"/>
+    </mask>
+  </defs>
+  <circle class="wc-halo" cx="130" cy="130" r="128" fill="url(#wc-halo)"/>
+  <g mask="url(#wc-fade)">
+    <g stroke="#d4d4d4" stroke-width="1.4" stroke-linejoin="round"><path d="M176.0 100.0L192.0 100.0L204.0 88.0L234.0 88.0"/><path d="M176.0 115.0L192.0 115.0L204.0 103.0L218.0 103.0"/><path d="M176.0 130.0L248.0 130.0"/><path d="M176.0 145.0L192.0 145.0L204.0 157.0L222.0 157.0"/><path d="M176.0 160.0L192.0 160.0L204.0 172.0L240.0 172.0"/><path d="M160.0 176.0L160.0 192.0L172.0 204.0L172.0 248.0"/><path d="M145.0 176.0L145.0 192.0L157.0 204.0L157.0 222.0"/><path d="M130.0 176.0L130.0 240.0"/><path d="M115.0 176.0L115.0 192.0L103.0 204.0L103.0 234.0"/><path d="M100.0 176.0L100.0 192.0L88.0 204.0L88.0 218.0"/><path d="M84.0 160.0L68.0 160.0L56.0 172.0L20.0 172.0"/><path d="M84.0 145.0L68.0 145.0L56.0 157.0L26.0 157.0"/><path d="M84.0 130.0L42.0 130.0"/><path d="M84.0 115.0L68.0 115.0L56.0 103.0L12.0 103.0"/><path d="M84.0 100.0L68.0 100.0L56.0 88.0L38.0 88.0"/><path d="M100.0 84.0L100.0 68.0L88.0 56.0L88.0 42.0"/><path d="M115.0 84.0L115.0 68.0L103.0 56.0L103.0 12.0"/><path d="M130.0 84.0L130.0 38.0"/><path d="M145.0 84.0L145.0 68.0L157.0 56.0L157.0 20.0"/><path d="M160.0 84.0L160.0 68.0L172.0 56.0L172.0 26.0"/></g>
+    <g stroke="#c4c4c4" stroke-width="1.3" fill="#fff"><circle cx="234.0" cy="88.0" r="2.6"/><circle cx="218.0" cy="103.0" r="2.6"/><circle cx="248.0" cy="130.0" r="2.6"/><circle cx="222.0" cy="157.0" r="2.6"/><circle cx="240.0" cy="172.0" r="2.6"/><circle cx="172.0" cy="248.0" r="2.6"/><circle cx="157.0" cy="222.0" r="2.6"/><circle cx="130.0" cy="240.0" r="2.6"/><circle cx="103.0" cy="234.0" r="2.6"/><circle cx="88.0" cy="218.0" r="2.6"/><circle cx="20.0" cy="172.0" r="2.6"/><circle cx="26.0" cy="157.0" r="2.6"/><circle cx="42.0" cy="130.0" r="2.6"/><circle cx="12.0" cy="103.0" r="2.6"/><circle cx="38.0" cy="88.0" r="2.6"/><circle cx="88.0" cy="42.0" r="2.6"/><circle cx="103.0" cy="12.0" r="2.6"/><circle cx="130.0" cy="38.0" r="2.6"/><circle cx="157.0" cy="20.0" r="2.6"/><circle cx="172.0" cy="26.0" r="2.6"/></g>
+    <g class="wc-pulses" stroke="#737373" stroke-width="1.8" stroke-linecap="round"><path d="M176.0 100.0L192.0 100.0L204.0 88.0L234.0 88.0" pathLength="100" style="animation-delay:-0.00s"/><path d="M176.0 115.0L192.0 115.0L204.0 103.0L218.0 103.0" pathLength="100" style="animation-delay:-1.65s"/><path d="M176.0 130.0L248.0 130.0" pathLength="100" style="animation-delay:-3.30s"/><path d="M176.0 145.0L192.0 145.0L204.0 157.0L222.0 157.0" pathLength="100" style="animation-delay:-4.95s"/><path d="M176.0 160.0L192.0 160.0L204.0 172.0L240.0 172.0" pathLength="100" style="animation-delay:-1.10s"/><path d="M160.0 176.0L160.0 192.0L172.0 204.0L172.0 248.0" pathLength="100" style="animation-delay:-2.75s"/><path d="M145.0 176.0L145.0 192.0L157.0 204.0L157.0 222.0" pathLength="100" style="animation-delay:-4.40s"/><path d="M130.0 176.0L130.0 240.0" pathLength="100" style="animation-delay:-0.55s"/><path d="M115.0 176.0L115.0 192.0L103.0 204.0L103.0 234.0" pathLength="100" style="animation-delay:-2.20s"/><path d="M100.0 176.0L100.0 192.0L88.0 204.0L88.0 218.0" pathLength="100" style="animation-delay:-3.85s"/><path d="M84.0 160.0L68.0 160.0L56.0 172.0L20.0 172.0" pathLength="100" style="animation-delay:-0.00s"/><path d="M84.0 145.0L68.0 145.0L56.0 157.0L26.0 157.0" pathLength="100" style="animation-delay:-1.65s"/><path d="M84.0 130.0L42.0 130.0" pathLength="100" style="animation-delay:-3.30s"/><path d="M84.0 115.0L68.0 115.0L56.0 103.0L12.0 103.0" pathLength="100" style="animation-delay:-4.95s"/><path d="M84.0 100.0L68.0 100.0L56.0 88.0L38.0 88.0" pathLength="100" style="animation-delay:-1.10s"/><path d="M100.0 84.0L100.0 68.0L88.0 56.0L88.0 42.0" pathLength="100" style="animation-delay:-2.75s"/><path d="M115.0 84.0L115.0 68.0L103.0 56.0L103.0 12.0" pathLength="100" style="animation-delay:-4.40s"/><path d="M130.0 84.0L130.0 38.0" pathLength="100" style="animation-delay:-0.55s"/><path d="M145.0 84.0L145.0 68.0L157.0 56.0L157.0 20.0" pathLength="100" style="animation-delay:-2.20s"/><path d="M160.0 84.0L160.0 68.0L172.0 56.0L172.0 26.0" pathLength="100" style="animation-delay:-3.85s"/></g>
+  </g>
+  <rect x="86" y="86" width="88" height="88" rx="12" fill="#e9e9e9"/>
+  <rect x="103" y="103" width="54" height="54" rx="7" fill="#f9f9f9"/>
+  <circle class="wc-core" cx="130" cy="130" r="10" fill="#e9e9e9"/>
+</svg></div><div class="wc-arrow" style="grid-column:2;grid-row:1;--c:1" aria-hidden="true"><svg viewBox="0 0 64 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h54M11 3 5 8l6 5M53 3l6 5-6 5"/></svg></div><div class="wc-cell wc-frag wc-mirror" data-frag="1" style="grid-column:1;grid-row:2"><span class="wc-label">The Earth</span><span class="wc-note">land, water, resources</span></div><div class="wc-cell wc-frag" data-frag="1" style="grid-column:3;grid-row:2"><span class="wc-label">Hardware</span><span class="wc-note">memory, CPU, disk</span></div><div class="wc-cell wc-frag wc-mirror" data-frag="2" style="grid-column:1;grid-row:3"><span class="wc-label">People</span><span class="wc-note">citizens, residents, members</span></div><div class="wc-cell wc-frag" data-frag="2" style="grid-column:3;grid-row:3"><span class="wc-label">Users</span><span class="wc-note">everyone who logs in</span></div><div class="wc-cell wc-frag wc-mirror" data-frag="3" style="grid-column:1;grid-row:4"><span class="wc-label">Officials</span><span class="wc-note">civil servants, mayors, presidents</span></div><div class="wc-cell wc-frag" data-frag="3" style="grid-column:3;grid-row:4"><span class="wc-label">Admins</span><span class="wc-note">keep it running, manage access</span></div><div class="wc-cell wc-frag wc-mirror" data-frag="4" style="grid-column:1;grid-row:5"><span class="wc-label">Governments &amp; institutions</span><span class="wc-note">how a society is run</span></div><div class="wc-cell wc-frag" data-frag="4" style="grid-column:3;grid-row:5"><span class="wc-label">Operating system</span><span class="wc-note">Windows, macOS, Linux</span></div><div class="wc-cell wc-frag wc-mirror" data-frag="5" style="grid-column:1;grid-row:6"><span class="wc-label">Laws &amp; policies</span><span class="wc-note">who may do what</span></div><div class="wc-cell wc-frag" data-frag="5" style="grid-column:3;grid-row:6"><span class="wc-label">Permissions &amp; settings</span><span class="wc-note">who can open which file</span></div><div class="wc-cell wc-frag wc-mirror" data-frag="6" style="grid-column:1;grid-row:7"><span class="wc-label">Public services</span><span class="wc-note">tax office, land registry, courts</span></div><div class="wc-cell wc-frag" data-frag="6" style="grid-column:3;grid-row:7"><span class="wc-label">Apps</span><span class="wc-note">email, banking, maps</span></div><div class="wc-cell wc-frag wc-mirror" data-frag="7" style="grid-column:1;grid-row:8"><span class="wc-label">Elections &amp; new laws</span><span class="wc-note">how the rules change</span></div><div class="wc-cell wc-frag" data-frag="7" style="grid-column:3;grid-row:8"><span class="wc-label">Software updates</span><span class="wc-note">new versions, fixes</span></div>
+                  </div>
+                </div>
+                
+              </section>
+            </div>
+        </div>
+
+        <div class="page" data-slide="2" data-steps="1">
+            
+            <div class="page-step active">
+              <section class="wf-slide">
+                <div class="wf-globe-slot" data-globe-slot></div>
+                <div class="wf-content">
+                  <header class="box-header">
+                    <h2>When the world computer malfunctions</h2>
+                  </header>
+                  <ol class="wf-list">
+                    <li class="wf-item" data-frag="1"><div class="wf-art"><svg viewBox="0 0 120 120" fill="none" aria-hidden="true">
+  <defs><clipPath id="wf-under"><rect x="0" y="74" width="120" height="46"/></clipPath></defs>
+  <g clip-path="url(#wf-under)"><circle class="wf-coin" cx="30" cy="70" r="5.5" fill="#525252"/></g>
+  <rect x="16" y="12" width="88" height="62" rx="6" fill="#f9f9f9" stroke="#a3a3a3" stroke-width="1.75"/>
+  <path d="M30 36 60 22 90 36z" fill="#e9e9e9"/>
+  <rect x="37.0" y="39" width="6" height="21" fill="#e9e9e9"/><rect x="50.3" y="39" width="6" height="21" fill="#e9e9e9"/><rect x="63.7" y="39" width="6" height="21" fill="#e9e9e9"/><rect x="77.0" y="39" width="6" height="21" fill="#e9e9e9"/>
+  <rect x="32" y="60" width="56" height="5" rx="1" fill="#e9e9e9"/>
+  <rect x="54" y="74" width="12" height="18" fill="#e9e9e9"/>
+  <path d="M8 92h104" stroke="#a3a3a3" stroke-width="1.75" stroke-linecap="round"/>
+  <path d="M17 99v12a4 4 0 0 0 4 4h18a4 4 0 0 0 4-4v-12" stroke="#737373" stroke-width="2" stroke-linecap="round"/>
+</svg></div><div><div class="wf-world"><span class="wc-label">Corruption</span><span class="wc-note">hidden deals, abuse of power</span></div><div class="wf-pc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M10 2.5v3.5M14 2.5v3.5M10 18v3.5M14 18v3.5M2.5 10H6M2.5 14H6M18 10h3.5M18 14h3.5"/></svg><span class="wc-label">An admin who abuses their access</span><span class="wc-note">and deletes the logs</span></div></div></li><li class="wf-item" data-frag="2"><div class="wf-art"><svg viewBox="0 0 120 120" fill="none" aria-hidden="true">
+  <defs><clipPath id="wf-rest"><path d="M56 68 87.95 56.37A34 34 0 1 1 61.9 34.52z"/></clipPath></defs>
+  <path d="M56 68 87.95 56.37A34 34 0 1 1 61.9 34.52z" fill="#e9e9e9"/>
+  <g clip-path="url(#wf-rest)" stroke="#f9f9f9" stroke-width="2.5">
+    <ellipse cx="56" cy="68" rx="14" ry="34"/><path d="M20 68h72M24 51h64M24 85h64"/>
+  </g>
+  <path class="wf-slice" d="M56 68 61.9 34.52A34 34 0 0 1 87.95 56.37z" fill="#525252"/>
+  <g stroke="#a3a3a3" stroke-width="1.75" stroke-linecap="round"><path class="wf-heat" d="M26 30q-3-4 0-8t0-8" style="animation-delay:-0s"/><path class="wf-heat" d="M36 30q-3-4 0-8t0-8" style="animation-delay:-0.8s"/><path class="wf-heat" d="M46 30q-3-4 0-8t0-8" style="animation-delay:-1.6s"/></g>
+</svg></div><div><div class="wf-world"><span class="wc-label">Resource misuse</span><span class="wc-note">wasted taxes, a worn-out planet</span></div><div class="wf-pc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M10 2.5v3.5M14 2.5v3.5M10 18v3.5M14 18v3.5M2.5 10H6M2.5 14H6M18 10h3.5M18 14h3.5"/></svg><span class="wc-label">A few programs hog the memory</span><span class="wc-note">and the machine overheats</span></div></div></li><li class="wf-item" data-frag="3"><div class="wf-art"><svg viewBox="0 0 120 120" aria-hidden="true"><polygon class="wf-hex wf-d0" points="21.9,49.9 30.7,54.9 30.7,65.1 21.9,70.1 13.1,65.1 13.1,54.9"/><polygon class="wf-hex wf-d1" points="31.4,66.4 40.2,71.4 40.2,81.6 31.4,86.6 22.7,81.6 22.7,71.4"/><polygon class="wf-hex wf-d2" points="40.9,82.9 49.7,87.9 49.7,98.1 40.9,103.1 32.2,98.1 32.2,87.9"/><polygon class="wf-hex wf-d1" points="31.4,33.4 40.2,38.4 40.2,48.6 31.4,53.6 22.7,48.6 22.7,38.4"/><polygon class="wf-hex wf-d1" points="40.9,49.9 49.7,54.9 49.7,65.1 40.9,70.1 32.2,65.1 32.2,54.9"/><polygon class="wf-hex wf-d2" points="50.5,66.4 59.2,71.4 59.2,81.6 50.5,86.6 41.7,81.6 41.7,71.4"/><polygon class="wf-hex wf-d3" points="60.0,82.9 68.8,87.9 68.8,98.1 60.0,103.1 51.2,98.1 51.2,87.9"/><polygon class="wf-hex wf-d2" points="40.9,16.9 49.7,21.9 49.7,32.1 40.9,37.1 32.2,32.1 32.2,21.9"/><polygon class="wf-hex wf-d2" points="50.5,33.4 59.2,38.4 59.2,48.6 50.5,53.6 41.7,48.6 41.7,38.4"/><polygon class="wf-hex wf-d2" points="60.0,49.9 68.8,54.9 68.8,65.1 60.0,70.1 51.2,65.1 51.2,54.9"/><polygon class="wf-hex wf-d3" points="69.5,66.4 78.3,71.4 78.3,81.6 69.5,86.6 60.8,81.6 60.8,71.4"/><polygon class="wf-hex wf-d4" points="79.1,82.9 87.8,87.9 87.8,98.1 79.1,103.1 70.3,98.1 70.3,87.9"/><polygon class="wf-hex wf-d3" points="60.0,16.9 68.8,21.9 68.8,32.1 60.0,37.1 51.2,32.1 51.2,21.9"/><polygon class="wf-hex wf-d3" points="69.5,33.4 78.3,38.4 78.3,48.6 69.5,53.6 60.8,48.6 60.8,38.4"/><polygon class="wf-hex wf-d3" points="79.1,49.9 87.8,54.9 87.8,65.1 79.1,70.1 70.3,65.1 70.3,54.9"/><polygon class="wf-hex wf-d4" points="88.6,66.4 97.3,71.4 97.3,81.6 88.6,86.6 79.8,81.6 79.8,71.4"/><polygon class="wf-hex wf-d4" points="79.1,16.9 87.8,21.9 87.8,32.1 79.1,37.1 70.3,32.1 70.3,21.9"/><polygon class="wf-hex wf-d4" points="88.6,33.4 97.3,38.4 97.3,48.6 88.6,53.6 79.8,48.6 79.8,38.4"/><polygon class="wf-hex wf-d4" points="98.1,49.9 106.9,54.9 106.9,65.1 98.1,70.1 89.3,65.1 89.3,54.9"/></svg></div><div><div class="wf-world"><span class="wc-label">Wars</span><span class="wc-note">taking land and resources by force</span></div><div class="wf-pc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M10 2.5v3.5M14 2.5v3.5M10 18v3.5M14 18v3.5M2.5 10H6M2.5 14H6M18 10h3.5M18 14h3.5"/></svg><span class="wc-label">Viruses that take over the machine</span><span class="wc-note">and trick its users</span></div></div></li>
+                  </ol>
+                </div>
+              </section>
+            </div>
+        </div>
+
+        <div class="page" data-slide="3" data-steps="1">
+            
+            <div class="page-step active">
+              <section class="gos-slide">
+                <div class="gos-globe-slot" data-globe-slot data-globe-layer="realms"></div>
+                <div class="gos-side gos-left"><header class="gos-head wc-frag" data-frag="1"><div class="gos-kicker">GOS</div><h2>Governance Operating System</h2></header><div class="gos-point wc-frag" data-frag="1"><span class="gos-label">Substrate on which our civilization is built</span></div><div class="gos-point wc-frag" data-frag="2"><span class="gos-label">Enables cooperation scalability globally</span></div><div class="gos-point wc-frag" data-frag="3"><span class="gos-label">Respects user autonomy</span></div><div class="gos-point wc-frag" data-frag="4"><span class="gos-label">Transparent, programmable, efficient</span></div><div class="gos-point wc-frag" data-frag="5"><span class="gos-label">Public good (like the Internet)</span></div></div>
+                <div class="gos-side gos-right"><div class="gos-legend wc-frag" data-frag="1"><div class="gos-legend-item"><span class="gos-badge gos-badge-realms"><img src="assets/logo_sphere_only.svg" alt=""></span>Realms GOS</div><div class="gos-legend-item"><span class="gos-badge gos-badge-other">?</span>Other GOS</div></div><a class="gos-link wc-frag" data-frag="6" href="https://gos.earth" target="_blank" rel="noopener noreferrer">https://gos.earth</a></div>
+              </section>
+            </div>
+        </div>
+    </div>
+    <footer>
+      <span class="site">gos.earth</span>
+    </footer>
+    <nav class="dots" id="dots" aria-label="Slide navigation"></nav>
+  </article>
+  <script>
+(function () {
+  const pages = Array.from(document.querySelectorAll('.page'));
+  const dotsEl = document.getElementById('dots');
+  const sceneMap = [];
+  const pageStart = [];
+  let sceneIndex = 0;
+
+  pages.forEach((page, pageIdx) => {
+    const frags = Array.from(page.querySelectorAll('[data-frag]'), (f) => parseInt(f.dataset.frag, 10));
+    const steps = Math.max(parseInt(page.dataset.steps || '1', 10), 1 + Math.max(0, ...frags));
+    pageStart.push(sceneMap.length);
+    for (let s = 0; s < steps; s++) sceneMap.push({ pageIdx, stepIdx: s });
+  });
+
+  function renderDots(activePage) {
+    if (!dotsEl) return;
+    dotsEl.innerHTML = '';
+    pages.forEach((_, i) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'dot' + (i === activePage ? ' active' : '');
+      btn.setAttribute('aria-label', 'Slide ' + (i + 1));
+      btn.addEventListener('click', () => window.__goToScene(pageStart[i] + 1));
+      dotsEl.appendChild(btn);
+    });
+  }
+
+  function applyScene(idx) {
+    if (!sceneMap.length) return 0;
+    sceneIndex = Math.max(0, Math.min(idx, sceneMap.length - 1));
+    const { pageIdx, stepIdx } = sceneMap[sceneIndex];
+    pages.forEach((page, pi) => {
+      const active = pi === pageIdx;
+      page.classList.toggle('active', active);
+      const steps = page.querySelectorAll('.page-step');
+      steps.forEach((step, si) => {
+        step.classList.toggle('active', active && (steps.length === 1 || si === stepIdx));
+      });
+      page.querySelectorAll('[data-frag]').forEach((f) => {
+        f.classList.toggle('shown', active && parseInt(f.dataset.frag, 10) <= stepIdx);
+      });
+    });
+    renderDots(pageIdx);
+    window.dispatchEvent(new CustomEvent('deck:scene', { detail: { pageIdx, stepIdx } }));
+    const hash = '#' + (sceneIndex + 1);
+    if (location.hash !== hash) history.replaceState(null, '', hash);
+    return sceneIndex + 1;
+  }
+
+  window.__goToScene = function (n) {
+    const target = Math.max(1, Math.min(parseInt(n, 10) || 1, sceneMap.length));
+    return applyScene(target - 1);
+  };
+
+  function sceneFromHash() {
+    const m = /^#(\d+)$/.exec(location.hash);
+    return m ? parseInt(m[1], 10) : 1;
+  }
+
+  applyScene(sceneFromHash() - 1);
+  window.addEventListener('hashchange', () => applyScene(sceneFromHash() - 1));
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ' || e.key === 'PageDown') {
+      e.preventDefault();
+      window.__goToScene(sceneIndex + 2);
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'PageUp') {
+      e.preventDefault();
+      window.__goToScene(sceneIndex);
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      window.__goToScene(1);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      window.__goToScene(sceneMap.length);
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (e.button !== 0 || e.target.closest('a, button, .dots')) return;
+    if (String(window.getSelection())) return;
+    window.__goToScene(sceneIndex + 2);
+  });
+})();
+
+  </script>
+  <script src="assets/d3-array.min.js"></script>
+  <script src="assets/d3-geo.min.js"></script>
+  <script src="assets/land-50m.js"></script>
+  <script src="assets/realms.js"></script>
+  <script>
+(function () {
+  const viewport = document.getElementById('viewport');
+  if (!viewport || !window.d3 || !window.WORLD_LAND) return;
+  const canvas = document.createElement('canvas');
+  canvas.className = 'globe-canvas';
+  canvas.setAttribute('aria-hidden', 'true');
+  viewport.prepend(canvas);
+  const ctx = canvas.getContext('2d');
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const DEG_PER_SECOND = 2;
+  const MOVE_MS = 1800;
+  const MOVE = `transform ${MOVE_MS}ms cubic-bezier(0.65, 0, 0.35, 1), opacity 0.6s ease`;
+  const projection = d3.geoOrthographic().clipAngle(90).precision(0.6);
+  const path = d3.geoPath(projection, ctx);
+  const sphere = { type: 'Sphere' };
+  let size = 0;
+  let scale = 1;
+
+  const DATA = window.GOS_REALMS || { realms: [], links: [], grid: [] };
+  const REALMS = DATA.realms.map((r) => r.center);
+  const LINKS = DATA.links;
+  const TEAL = '107, 163, 163';
+  const TEAL_DARK = '47, 95, 95';
+  const glowStart = REALMS.map(() => -1e9);
+  let nextGlow = 0;
+  const gridByRing = {};
+  DATA.grid.forEach((c) => (gridByRing[c.ring] = gridByRing[c.ring] || []).push(c.polygon));
+  let layer = null;
+  let layerAlpha = 0;
+  let layerTarget = 0;
+  let layerTimer = 0;
+  const travelers = [];
+  let nextMessage = 0;
+  let nextPerson = 0;
+  const logo = new Image();
+  logo.src = 'assets/logo_sphere_only.svg';
+
+  const activeSlot = () => document.querySelector('.page.active [data-globe-slot]');
+
+  function place(animate) {
+    const slot = activeSlot();
+    canvas.style.transition = animate && !still ? MOVE : 'opacity 0.6s ease';
+    clearTimeout(layerTimer);
+    const wanted = slot && slot.dataset.globeLayer;
+    if (wanted !== layer) layerTarget = 0;
+    if (wanted) {
+      layerTimer = setTimeout(() => { layer = wanted; layerTarget = 1; }, animate && !still ? MOVE_MS * 0.8 : 0);
+    }
+    if (!slot) { canvas.style.opacity = '0'; return; }
+    const r = slot.getBoundingClientRect();
+    const v = viewport.getBoundingClientRect();
+    scale = r.width / size;
+    canvas.style.transform = `translate(${r.left - v.left}px, ${r.top - v.top}px) scale(${scale})`;
+    canvas.style.opacity = '1';
+  }
+
+  function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    size = Math.max(...Array.from(document.querySelectorAll('[data-globe-slot]'), (s) => s.getBoundingClientRect().width));
+    canvas.width = Math.round(size * dpr);
+    canvas.height = Math.round(size * dpr);
+    canvas.style.width = canvas.style.height = size + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    projection.translate([size / 2, size / 2]).scale(size / 2 - 1);
+  }
+
+  const cellPath = (polygon) => path({ type: 'Polygon', coordinates: [polygon] });
+  const linePath = (a, b) => path({ type: 'LineString', coordinates: [a, b] });
+
+  function envelope(x, y, k) {
+    const w = 9 * k, h = 6.5 * k;
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#404040';
+    ctx.lineWidth = 1.3 * k;
+    ctx.beginPath(); ctx.rect(x - w / 2, y - h / 2, w, h); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x - w / 2, y - h / 2); ctx.lineTo(x, y + h * 0.1); ctx.lineTo(x + w / 2, y - h / 2); ctx.stroke();
+  }
+
+  function person(x, y, k) {
+    ctx.fillStyle = '#262626';
+    ctx.beginPath(); ctx.arc(x, y - 4.5 * k, 2.8 * k, 0, 2 * Math.PI); ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y + 4.5 * k, 5 * k, Math.PI, 2 * Math.PI); ctx.fill();
+  }
+
+  function badge(x, y, k, gos, glowing) {
+    const r = 14 * k;
+    ctx.save();
+    ctx.shadowColor = glowing ? `rgba(${TEAL}, 0.9)` : 'rgba(0, 0, 0, 0.18)';
+    ctx.shadowBlur = (glowing ? 12 : 5) * k * (window.devicePixelRatio || 1);
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI);
+    ctx.fillStyle = gos === 'realms' ? '#fff' : '#f3f3f3';
+    ctx.fill();
+    ctx.restore();
+    ctx.lineWidth = 1.2 * k;
+    ctx.strokeStyle = glowing ? `rgb(${TEAL_DARK})` : 'rgba(38, 38, 38, 0.55)';
+    if (gos === 'realms') {
+      ctx.stroke();
+      if (logo.complete && logo.naturalWidth) {
+        const h = 1.6 * r, w = h * logo.naturalWidth / logo.naturalHeight;
+        ctx.drawImage(logo, x - w / 2, y - h / 2, w, h);
+      }
+    } else {
+      ctx.setLineDash([2.4 * k, 2 * k]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(64, 64, 64, 0.7)';
+      ctx.font = `700 ${15 * k}px system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('?', x, y + 0.5 * k);
+    }
+  }
+
+  function spawn(now) {
+    if (now > nextMessage) {
+      const [a, b] = LINKS[Math.floor(Math.random() * LINKS.length)];
+      const flip = Math.random() < 0.5;
+      travelers.push({ from: flip ? b : a, to: flip ? a : b, t0: now, dur: 2600 + Math.random() * 1800, kind: 'message' });
+      nextMessage = now + 280 + Math.random() * 360;
+    }
+    if (now > nextPerson) {
+      const [a, b] = LINKS[Math.floor(Math.random() * LINKS.length)];
+      const flip = Math.random() < 0.5;
+      travelers.push({ from: flip ? b : a, to: flip ? a : b, t0: now, dur: 6500 + Math.random() * 2500, kind: 'person' });
+      nextPerson = now + 1600 + Math.random() * 1400;
+    }
+  }
+
+  function drawRealms(now) {
+    const k = 1 / scale;
+    const dpr = window.devicePixelRatio || 1;
+    const rot = projection.rotate();
+    const center = [-rot[0], -rot[1]];
+    const facing = (p) => Math.cos(d3.geoDistance(p, center));
+    ctx.save();
+    ctx.globalAlpha = layerAlpha;
+
+    ctx.lineWidth = 0.8 * k;
+    Object.keys(gridByRing).forEach((ring) => {
+      ctx.strokeStyle = `rgba(64, 64, 64, ${Math.max(0.03, 0.2 - ring * 0.035)})`;
+      ctx.beginPath();
+      gridByRing[ring].forEach(cellPath);
+      ctx.stroke();
+    });
+
+    ctx.setLineDash([4 * k, 5 * k]);
+    ctx.lineWidth = 1.2 * k;
+    ctx.strokeStyle = 'rgba(82, 82, 82, 0.4)';
+    ctx.beginPath();
+    LINKS.forEach(([a, b]) => linePath(REALMS[a], REALMS[b]));
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    const glowingRealms = new Set();
+    DATA.realms.forEach((realm, i) => {
+      if (facing(realm.center) < -0.3) return;
+      ctx.beginPath();
+      realm.cells.forEach((c) => cellPath(c.polygon));
+      ctx.fillStyle = 'rgba(64, 64, 64, 0.16)';
+      ctx.fill();
+      ctx.lineWidth = 0.9 * k;
+      ctx.strokeStyle = 'rgba(38, 38, 38, 0.45)';
+      ctx.stroke();
+
+      const since = now - glowStart[i];
+      let glowing = false;
+      if (since < 3200) {
+        realm.cells.forEach((c) => {
+          const f = (since - c.ring * 150) / 1500;
+          if (f <= 0 || f >= 1) return;
+          const g = Math.sin(Math.PI * f);
+          glowing = true;
+          ctx.save();
+          ctx.shadowColor = `rgba(${TEAL}, ${0.95 * g})`;
+          ctx.shadowBlur = 14 * g * dpr;
+          ctx.beginPath();
+          cellPath(c.polygon);
+          ctx.fillStyle = `rgba(${TEAL}, ${0.6 * g})`;
+          ctx.fill();
+          ctx.lineWidth = 1.3 * k;
+          ctx.strokeStyle = `rgba(${TEAL_DARK}, ${0.9 * g})`;
+          ctx.stroke();
+          ctx.restore();
+        });
+      }
+
+      if (glowing) glowingRealms.add(i);
+      if (facing(realm.center) < 0.05) return;
+      ctx.lineWidth = 0.8 * k;
+      ctx.strokeStyle = 'rgba(38, 38, 38, 0.4)';
+      ctx.beginPath();
+      realm.edges.forEach(([a, b]) => linePath(a, b));
+      ctx.stroke();
+      ctx.fillStyle = glowing ? `rgb(${TEAL_DARK})` : '#262626';
+      for (let q = 0; q < 2 && realm.edges.length; q++) {
+        const phase = now / 650 + i * 1.7 + q * 3.1;
+        const [a, b] = realm.edges[Math.floor(phase) % realm.edges.length];
+        const p = d3.geoInterpolate(a, b)(phase % 1);
+        if (facing(p) < 0.05) continue;
+        const [x, y] = projection(p);
+        ctx.beginPath(); ctx.arc(x, y, 1.6 * k, 0, 2 * Math.PI); ctx.fill();
+      }
+    });
+
+    DATA.realms.forEach((realm, i) => {
+      const c = facing(realm.center);
+      if (c < 0.05) return;
+      const [x, y] = projection(realm.center);
+      ctx.globalAlpha = layerAlpha * Math.min(1, (c - 0.05) * 5);
+      badge(x, y, k, realm.gos, glowingRealms.has(i));
+    });
+    ctx.globalAlpha = layerAlpha;
+
+    for (let j = travelers.length - 1; j >= 0; j--) {
+      const t = travelers[j];
+      const f = (now - t.t0) / t.dur;
+      if (f >= 1) {
+        if (t.kind === 'person') glowStart[t.to] = now;
+        travelers.splice(j, 1);
+        continue;
+      }
+      const eased = f < 0.5 ? 2 * f * f : 1 - Math.pow(-2 * f + 2, 2) / 2;
+      const p = d3.geoInterpolate(REALMS[t.from], REALMS[t.to])(eased);
+      const c = facing(p);
+      if (c < 0.05) continue;
+      const [x, y] = projection(p);
+      ctx.globalAlpha = layerAlpha * Math.min(1, c * 4, f * 8, (1 - f) * 8);
+      if (t.kind === 'person') person(x, y, k); else envelope(x, y, k);
+    }
+    ctx.restore();
+
+    if (now > nextGlow) {
+      const candidates = REALMS.map((p, i) => i).filter((i) => facing(REALMS[i]) > 0.3);
+      if (candidates.length) glowStart[candidates[Math.floor(Math.random() * candidates.length)]] = now;
+      nextGlow = now + 1400 + Math.random() * 2000;
+    }
+  }
+
+  function draw(now) {
+    const seconds = still ? 0 : (now - t0) / 1000;
+    projection.rotate([-15 + seconds * DEG_PER_SECOND, -22]);
+    ctx.clearRect(0, 0, size, size);
+    ctx.beginPath(); path(sphere); ctx.fillStyle = '#e9e9e9'; ctx.fill();
+    ctx.beginPath(); path(window.WORLD_LAND); ctx.fillStyle = '#f9f9f9'; ctx.fill();
+    const dt = Math.min(now - lastFrame, 100);
+    lastFrame = now;
+    const stepAlpha = still ? 1 : dt / LAYER_FADE_MS;
+    layerAlpha = layerTarget > layerAlpha ? Math.min(layerTarget, layerAlpha + stepAlpha) : Math.max(layerTarget, layerAlpha - stepAlpha);
+    if (layerAlpha < 0.01 && layerTarget === 0) { layer = null; travelers.length = 0; return; }
+    if (layer === 'realms') {
+      if (!still) spawn(now);
+      drawRealms(now);
+    }
+  }
+
+  const LAYER_FADE_MS = 700;
+  const t0 = performance.now();
+  let lastFrame = t0;
+  function frame(now) {
+    draw(now);
+    requestAnimationFrame(frame);
+  }
+
+  resize();
+  place(false);
+  requestAnimationFrame(frame);
+  window.addEventListener('deck:scene', () => place(true));
+  window.addEventListener('resize', () => { resize(); place(false); });
+})();
+
+  </script>
+</body>
+</html>

@@ -13,6 +13,8 @@
 
   const dispatch = createEventDispatcher();
 
+  const WHAT_IS_THIS_URL = '/what-is-this/index.html';
+
   $: architectureUrl = architectureHref(casalsUrl);
 
   let showHub = false;
@@ -99,7 +101,14 @@
 
       {#if showHub}
         <nav class="hub-panel" aria-label={$_('hub.open')} on:mousedown|stopPropagation>
-          <button type="button" class="hub-item" on:click={openTour}>
+          <a
+            href={WHAT_IS_THIS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="hub-item"
+            data-what-is-this
+            on:click={() => closePopovers()}
+          >
             <span class="hub-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <circle cx="12" cy="12" r="10"></circle>
@@ -108,22 +117,21 @@
               </svg>
             </span>
             <span class="hub-copy">
-              <span class="hub-label">{$_('hub.tour_title')}</span>
+              <span class="hub-label">{$_('hub.what_is_this')}</span>
             </span>
-          </button>
+          </a>
 
-          <a href="/about" class="hub-item" on:click={() => closePopovers()}>
+          <button type="button" class="hub-item" data-tutorial on:click={openTour}>
             <span class="hub-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="16" x2="12" y2="12"></line>
-                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                <polygon points="10 8 16 12 10 16 10 8"></polygon>
               </svg>
             </span>
             <span class="hub-copy">
-              <span class="hub-label">{$_('hub.about')}</span>
+              <span class="hub-label">{$_('hub.tutorial')}</span>
             </span>
-          </a>
+          </button>
 
           <a href="/deploy-gos" class="hub-item" on:click={() => closePopovers()}>
             <span class="hub-icon" aria-hidden="true">
