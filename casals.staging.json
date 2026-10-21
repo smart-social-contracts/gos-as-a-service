@@ -103,8 +103,8 @@
       {
         "family": "casals-backend",
         "version": "main",
-        "source": "release:smart-social-contracts/Casals@v0.7.0-rc20:casals_backend.wasm.gz",
-        "sha256": "8d947fe6d22208facd072305c80bd57990b92b94835041778bb750d71206ebb0"
+        "source": "release:smart-social-contracts/Casals@v0.7.0-rc21:casals_backend.wasm.gz",
+        "sha256": "244487f7867f92e3e7f7b10e36817fa0bdc3f602bf21a4e1d76240546dc200c8"
       },
       {
         "family": "certified-assets",
@@ -175,14 +175,14 @@
       {
         "family": "realm-installer",
         "version": "main",
-        "source": "release:smart-social-contracts/gos-as-a-service@v0.5.0-rc1:realm_installer.wasm.gz",
-        "sha256": "7e756435338aeab906ab1a9b596c7b8e006377cb4208d8bc13245bf9841b31f8"
+        "source": "release:smart-social-contracts/gos-as-a-service@v0.5.0-rc2:realm_installer.wasm.gz",
+        "sha256": "7e32b0442c789802b69d8f017a7b99f37e6e2236b7f9150bc55aa9b524a046f1"
       },
       {
         "family": "realm-registry-backend",
         "version": "main",
-        "source": "release:smart-social-contracts/gos-as-a-service@v0.5.0-rc1:realm_registry_backend.wasm.gz",
-        "sha256": "b6a7b22473255395b82435b20862ef1a1abd9a615a561b610c196b9e6e0796f3"
+        "source": "release:smart-social-contracts/gos-as-a-service@v0.5.0-rc2:realm_registry_backend.wasm.gz",
+        "sha256": "6fa323fe9bf547985ec20cf854137e55eaadf20d3b6694fe64fc787eefbe89a9"
       },
       {
         "family": "realm-backend",
@@ -200,8 +200,8 @@
     "bundles": [
       {
         "path": "frontend/realm-registry-frontend/main",
-        "source": "release:smart-social-contracts/gos-as-a-service@v0.5.0-rc1:realm_registry_frontend.tar.gz",
-        "sha256": "1c1277a2d63bc6f54a0b7bea9a9b13a1ab4f07e01b19d30630c512bb0ce75710"
+        "source": "release:smart-social-contracts/gos-as-a-service@v0.5.0-rc2:realm_registry_frontend.tar.gz",
+        "sha256": "416745ad9c80e2e2f7e5f2a21aebdaffe9dfb6c8c4221a822b294c9117b9827f"
       },
       {
         "path": "frontend/realm-assets/main",
@@ -217,8 +217,8 @@
       {
         "$comment": "Casals UI from the pinned Casals release. Ships with `casals upgrade --content frontend/casals-ui/main`.",
         "path": "frontend/casals-ui/main",
-        "source": "release:smart-social-contracts/Casals@v0.7.0-rc20:casals_frontend.tar.gz",
-        "sha256": "ab0e7a12e8d028a4ef7c59493fffd529d0e93f908bd3ef02eb525dc3a2e9c7ef"
+        "source": "release:smart-social-contracts/Casals@v0.7.0-rc21:casals_frontend.tar.gz",
+        "sha256": "de5ab6b3e12e4c1bf0e7ec2d4f38b1618372314fe64c7b5777d3946550edee73"
       }
     ]
   },
