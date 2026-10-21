@@ -75,7 +75,7 @@
   },
   "governance": {
     "multisig": {
-      "wasm": "orchestration-multisig@1.7.0",
+      "wasm": "orchestration-multisig@1.8.0",
       "kind": "backend",
       "mode": "managed",
       "signers": [
@@ -103,13 +103,13 @@
       {
         "family": "casals-backend",
         "version": "main",
-        "source": "release:smart-social-contracts/Casals@v0.6.0:casals_backend.wasm.gz",
-        "sha256": "891ea575fe1ea7bb722b85f62166d45e68d1c9c21274faf95451fc2731eacf9b"
+        "source": "release:smart-social-contracts/Casals@v0.7.0:casals_backend.wasm.gz",
+        "sha256": "122722ea253d45502ff13fb79e0b5e02c57bb7c5d1e578ee734c0987171cef3a"
       },
       {
         "family": "certified-assets",
         "version": "0.3.0",
-        "source": "release:smart-social-contracts/Casals@v0.6.0:certified-assets@0.3.0.wasm.gz",
+        "source": "release:smart-social-contracts/Casals@v0.7.0:certified-assets@0.3.0.wasm.gz",
         "sha256": "75df75f39763077fd0333b4ac46ba03b2b23ec313fa85f79a2097bd98bb363d1"
       },
       {
@@ -120,57 +120,62 @@
       },
       {
         "family": "orchestration-multisig",
-        "version": "1.7.0",
-        "source": "release:smart-social-contracts/Casals@v0.6.0:orchestration-multisig@1.7.0.wasm.gz",
-        "sha256": "68732f3a69213475a53971d51ca6a43c19610f8bbc5bbcf6a0c0404b7f6ae204"
-      },
-      {
-        "family": "orchestration-baton",
-        "version": "1.6.0",
-        "source": "release:smart-social-contracts/Casals@v0.6.0:orchestration-baton@1.6.0.wasm.gz",
-        "sha256": "76dc936cca49b6931467397fd5cd760bb47992fef3e702da596db725a277aeb9"
+        "version": "1.8.0",
+        "source": "release:smart-social-contracts/Casals@v0.7.0:orchestration-multisig@1.8.0.wasm.gz",
+        "sha256": "4e7c720ebfa77d6c75c4a54d7f8af91f532ce1ec2035f014e39a3396201af924"
       },
       {
         "family": "file-registry",
         "version": "main",
-        "source": "release:smart-social-contracts/file-registry@v0.1.1:file_registry.wasm.gz",
-        "sha256": "05ec042b1ed6944db2b3b69a781938f5f6ac5d7353490413b8b02b2149bd58e5"
+        "source": "release:smart-social-contracts/file-registry@v0.1.2:file_registry.wasm.gz",
+        "sha256": "9e6d85c8bf4695b38c3ae63b62a2636d54c5849073cc97e98e95415e8d1a7d21"
+      },
+      {
+        "family": "orchestration-baton",
+        "version": "2.2.0",
+        "source": "release:smart-social-contracts/Casals@v0.7.0:orchestration-baton@2.2.0.wasm.gz",
+        "sha256": "e57030ea8be9dadb297eaac246d500afd66d50ef6d5e17f3f5a2620d017d56e7"
+      },
+      {
+        "family": "casals-maintenance",
+        "version": "1.0.0",
+        "source": "release:smart-social-contracts/Casals@v0.7.0:casals-maintenance@1.0.0.wasm.gz",
+        "sha256": "7a3e471c7c6d6ff136946dfd89ae770ce7cc98d37e4b4ad7f2a8107d8349b76f"
       },
       {
         "family": "realm-installer",
         "version": "main",
-        "source": "release:smart-social-contracts/gos-as-a-service@v0.4.0:realm_installer.wasm.gz",
-        "sha256": "acfcfbd455523807f3e7b23b4e0710fed78c6440019c93a3505f4eeee61223f3"
+        "source": "release:smart-social-contracts/gos-as-a-service@v0.5.0:realm_installer.wasm.gz",
+        "sha256": "6d0bf0504fabbe5c5ed9a2e0625678ef3e4e329577e36e701747d673627774c5"
       },
       {
         "family": "realm-registry-backend",
         "version": "main",
-        "source": "release:smart-social-contracts/gos-as-a-service@v0.4.0:realm_registry_backend.wasm.gz",
-        "sha256": "0257eb73d3c399608ca0570ec953ac543b92a4ead04a50d9b823956b4d2717ef"
+        "source": "release:smart-social-contracts/gos-as-a-service@v0.5.0:realm_registry_backend.wasm.gz",
+        "sha256": "6bf065a1a29b428afe60f991c934fd526873f189b4a5c1f3ec5a33815df1ab02"
       },
       {
         "family": "realm-backend",
-        "version": "main",
-        "source": "release:smart-social-contracts/realms-gos@v0.6.4:realm-backend-v0.6.4.wasm.gz",
-        "sha256": "80d829121f3c0a82b1bb6eff257467894445abc8f2f9ad159caa75ebd550d4bf"
+        "version": "0.7.0",
+        "source": "release:smart-social-contracts/realms-gos@v0.7.0:realm-backend-v0.7.0.wasm.gz",
+        "sha256": "db92b17c7359c9a1ca0aacfc9694152d581af708e6d8c3156822a69669953aad"
       }
     ],
     "bundles": [
       {
         "path": "frontend/realm-registry-frontend/main",
-        "source": "release:smart-social-contracts/gos-as-a-service@v0.4.0:realm_registry_frontend.tar.gz",
-        "sha256": "b1e85257a8afbd3782c64c00fd32df195bd696b250b71ad1e2d986f81a7e0a82"
+        "source": "release:smart-social-contracts/gos-as-a-service@v0.5.0:realm_registry_frontend.tar.gz",
+        "sha256": "8411ef7cdd24689de9342ef31afb5a163af3636849fa6d86cf1d9004c60ac34d"
       },
       {
-        "path": "frontend/realm-assets/main",
-        "source": "release:smart-social-contracts/realms-gos@v0.6.4:realm-frontend-v0.6.4.tar.gz",
-        "sha256": "cc2ec08b0cb43c7572ec0cb3719d0d71e3c7b5827657b247b641f9ca1dc0d63e"
+        "path": "release/realm/0.7.0/frontend",
+        "source": "release:smart-social-contracts/realms-gos@v0.7.0:realm-frontend-v0.7.0.tar.gz",
+        "sha256": "e60ee46b07e48adf65eea4d13a290a43069250d55ce7a7d412f036b32f63327d"
       },
       {
-        "$comment": "Casals UI from the pinned Casals release. Ships with `casals upgrade --content frontend/casals-ui/main`.",
         "path": "frontend/casals-ui/main",
-        "source": "release:smart-social-contracts/Casals@v0.6.0:casals_frontend.tar.gz",
-        "sha256": "37d1c6463f342f095b95013657fb4de10eea0340b388a6434f40dffe765bf8d0"
+        "source": "release:smart-social-contracts/Casals@v0.7.0:casals_frontend.tar.gz",
+        "sha256": "394c6325e24139ebace527d0e9347e14700822609a07d29821b3a17d2714a330"
       }
     ]
   },
@@ -194,7 +199,7 @@
               ],
               "config": [
                 {
-                  "$comment": "Packages the installer fetches (ext/…, codex/…) are published here by the operator with `realms files publish`; controllers cannot upload.",
+                  "$comment": "Packages the installer fetches (ext/\u2026, codex/\u2026) are published here by the operator with `realms files publish`; controllers cannot upload.",
                   "method": "grant_publish",
                   "args": {
                     "namespace": "*",
@@ -322,97 +327,100 @@
       "name": "Deployments",
       "description": "Realm stands. The installer mints one with create_stand; the conductor builds it from this template and hands the backend, frontend, and quarters to the stand baton. A realm grows itself: its backend (a stand commander) calls create_stand for the next quarter.",
       "arrangements": {
-       "stand_template": {
-        "name_pattern": "*",
-        "created_by": "$canister:realm-installer",
-        "baton": {
-          "commanders": [
-            {
-              "principal": "$multisig",
-              "weight": 2
-            },
-            "$self",
-            "$stand.backend"
-          ],
-          "threshold": 2,
-          "manages": [
-            "backend",
-            "frontend",
-            "quarter"
-          ],
-          "hand_off": "sole"
-        },
-        "commanders": [
-          {
-            "principal": "$stand.backend",
-            "permissions": "stand.create"
-          }
-        ],
-        "canisters": [
-          {
-            "name": "{stand}-baton",
-            "kind": "backend",
-            "mode": "managed",
-            "wasm": "orchestration-baton@1.6.0",
-            "install_arg": {
-              "top_commander": "$self"
-            },
-            "controllers": [
-              "$multisig"
-            ]
-          },
-          {
-            "name": "{stand}-backend",
-            "kind": "backend",
-            "mode": "managed",
-            "wasm": "realm-backend@main",
-            "install_arg": "(\"$canister:realm-installer\")",
-            "controllers": [
-              "$stand.baton",
-              "$multisig",
-              "$this"
-            ]
-          },
-          {
-            "name": "{stand}-frontend",
-            "kind": "frontend",
-            "mode": "managed",
-            "wasm": "ic-frontend@1.0.1",
-            "controllers": [
-              "$stand.baton",
+        "stand_template": {
+          "name_pattern": "*",
+          "created_by": "$canister:realm-installer",
+          "baton": {
+            "commanders": [
+              {
+                "principal": "$multisig",
+                "weight": 2
+              },
+              "$self",
               "$stand.backend"
             ],
-            "grants": [
-              {
-                "principal": "$stand.backend",
-                "permission": "Commit"
-              }
+            "threshold": 2,
+            "manages": [
+              "backend",
+              "frontend",
+              "quarter"
             ],
-            "content": "frontend/realm-assets/main",
-            "files": {
-              "/canister_ids.js": "globalThis.__CANISTER_IDS={realm_backend:\"$stand.backend\",internet_identity:\"https://identity.ic0.app\"};\n"
-            },
-            "health": [
-              {
-                "http": "/index.html",
-                "status": 200
-              }
-            ]
+            "hand_off": "sole"
           },
-          {
-            "name": "{stand}-quarter-{n}",
-            "kind": "backend",
-            "mode": "managed",
-            "wasm": "realm-backend@main",
-            "install_arg": "(\"\")",
-            "optional": true,
-            "controllers": [
-              "$stand.baton",
-              "$multisig",
-              "$this"
-            ]
-          }
-        ]
+          "commanders": [
+            {
+              "principal": "$stand.backend",
+              "permissions": "stand.create"
+            }
+          ],
+          "canisters": [
+            {
+              "name": "{stand}-baton",
+              "cycles": {
+                "min_balance_tc": 5
+              },
+              "kind": "backend",
+              "mode": "managed",
+              "wasm": "orchestration-baton@2.2.0",
+              "install_arg": {
+                "top_commander": "$self"
+              },
+              "controllers": [
+                "$multisig"
+              ]
+            },
+            {
+              "name": "{stand}-backend",
+              "kind": "backend",
+              "mode": "managed",
+              "wasm": "realm-backend@0.7.0",
+              "install_arg": "(\"$canister:realm-installer\")",
+              "controllers": [
+                "$stand.baton",
+                "$multisig",
+                "$this"
+              ]
+            },
+            {
+              "name": "{stand}-frontend",
+              "kind": "frontend",
+              "mode": "managed",
+              "wasm": "ic-frontend@1.0.1",
+              "controllers": [
+                "$stand.baton",
+                "$stand.backend"
+              ],
+              "grants": [
+                {
+                  "principal": "$stand.backend",
+                  "permission": "Commit"
+                }
+              ],
+              "content": "release/realm/0.7.0/frontend",
+              "files": {
+                "/canister_ids.js": "globalThis.__CANISTER_IDS={realm_backend:\"$stand.backend\",internet_identity:\"https://identity.ic0.app\"};\n"
+              },
+              "health": [
+                {
+                  "http": "/index.html",
+                  "status": 200
+                }
+              ]
+            },
+            {
+              "name": "{stand}-quarter-{n}",
+              "kind": "backend",
+              "mode": "managed",
+              "wasm": "realm-backend@0.7.0",
+              "install_arg": "(\"\")",
+              "optional": true,
+              "controllers": [
+                "$stand.baton",
+                "$multisig",
+                "$this"
+              ]
+            }
+          ]
         }
       },
       "stands": []
