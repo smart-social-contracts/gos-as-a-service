@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,6 +19,12 @@ test('"What is this?" opens the presentation in a new tab', () => {
 	for (const src of readFileSync(join(deck, 'index.html'), 'utf-8').matchAll(/src="(assets\/[^"]+)"/g)) {
 		assert.ok(existsSync(join(deck, src[1])), src[1]);
 	}
+});
+
+test('the presentation is what presentation/steps.md builds', () => {
+	const build = join(here, '../../presentation/build.py');
+	const result = spawnSync('python3', [build, '--check'], { encoding: 'utf-8' });
+	assert.equal(result.status, 0, result.stderr || result.error?.message);
 });
 
 test('"Tutorial" starts the walkthrough', () => {
