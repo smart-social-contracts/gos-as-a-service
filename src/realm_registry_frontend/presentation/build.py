@@ -977,7 +977,21 @@ CSS = (
     }
 
     .gos-point { display: flex; flex-direction: column; gap: 0.3rem; }
-    .gos-label { font-size: 1.35rem; font-weight: 650; line-height: 1.25; }
+    .gos-label { font-size: 1.35rem; font-weight: 400; line-height: 1.25; }
+    .gos-label strong { font-weight: 700; }
+
+    /* Slide titles wait for the globe to finish moving (MOVE_MS in GLOBE_JS). */
+    .wc-title {
+      opacity: 0;
+      transform: translateY(0.6rem);
+      transition: opacity 0.3s ease;
+    }
+
+    .page.active .wc-title {
+      opacity: 1;
+      transform: none;
+      transition: opacity 0.6s ease-out 1.6s, transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) 1.6s;
+    }
     .gos-note { font-size: 1.08rem; color: var(--gray-500); line-height: 1.4; }
 
     .wf-globe-slot {
@@ -1124,7 +1138,7 @@ CSS = (
 
     @media (prefers-reduced-motion: reduce) {
       .page.active .wc *, .page.active .wc { animation: none !important; }
-      .wc-frag, .wf-item { transition: none; transform: none; }
+      .wc-frag, .wf-item, .page.active .wc-title { transition: none; transform: none; }
       .globe-canvas, .wf-art * { animation: none !important; }
       .wc-pulses { display: none; }
     }
@@ -1168,7 +1182,7 @@ class WorldComputerSlide(Slide):
         body = f"""
             <div class="page-step active">
               <section class="arch-box gos-box-slide wide-slide wc-slide">
-                <header class="box-header">
+                <header class="box-header wc-title">
                   <h2>{html.escape(WORLD_TITLE)}</h2>
                 </header>
                 <div class="box-body">
@@ -1213,7 +1227,7 @@ class WorldFailuresSlide(Slide):
               <section class="wf-slide">
                 <div class="wf-globe-slot" data-globe-slot></div>
                 <div class="wf-content">
-                  <header class="box-header">
+                  <header class="box-header wc-title">
                     <h2>{html.escape(WORLD_FAILURES_TITLE)}</h2>
                   </header>
                   <ol class="wf-list">

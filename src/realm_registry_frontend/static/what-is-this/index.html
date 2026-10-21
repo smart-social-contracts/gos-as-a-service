@@ -298,7 +298,21 @@
     }
 
     .gos-point { display: flex; flex-direction: column; gap: 0.3rem; }
-    .gos-label { font-size: 1.35rem; font-weight: 650; line-height: 1.25; }
+    .gos-label { font-size: 1.35rem; font-weight: 400; line-height: 1.25; }
+    .gos-label strong { font-weight: 700; }
+
+    /* Slide titles wait for the globe to finish moving (MOVE_MS in GLOBE_JS). */
+    .wc-title {
+      opacity: 0;
+      transform: translateY(0.6rem);
+      transition: opacity 0.3s ease;
+    }
+
+    .page.active .wc-title {
+      opacity: 1;
+      transform: none;
+      transition: opacity 0.6s ease-out 1.6s, transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) 1.6s;
+    }
     .gos-note { font-size: 1.08rem; color: var(--gray-500); line-height: 1.4; }
 
     .wf-globe-slot {
@@ -452,7 +466,7 @@
 
     @media (prefers-reduced-motion: reduce) {
       .page.active .wc *, .page.active .wc { animation: none !important; }
-      .wc-frag, .wf-item { transition: none; transform: none; }
+      .wc-frag, .wf-item, .page.active .wc-title { transition: none; transform: none; }
       .globe-canvas, .wf-art * { animation: none !important; }
       .wc-pulses { display: none; }
     }
@@ -485,7 +499,7 @@
             
             <div class="page-step active">
               <section class="arch-box gos-box-slide wide-slide wc-slide">
-                <header class="box-header">
+                <header class="box-header wc-title">
                   <h2>Think of our world as a computer</h2>
                 </header>
                 <div class="box-body">
@@ -527,7 +541,7 @@
               <section class="wf-slide">
                 <div class="wf-globe-slot" data-globe-slot></div>
                 <div class="wf-content">
-                  <header class="box-header">
+                  <header class="box-header wc-title">
                     <h2>When the world computer malfunctions</h2>
                   </header>
                   <ol class="wf-list">
@@ -561,7 +575,7 @@
             <div class="page-step active">
               <section class="gos-slide">
                 <div class="gos-globe-slot" data-globe-slot data-globe-layer="realms"></div>
-                <div class="gos-side gos-left"><header class="gos-head wc-frag" data-frag="1"><div class="gos-kicker">GOS</div><h2>Governance Operating System</h2></header><div class="gos-point wc-frag" data-frag="1"><span class="gos-label">Substrate on which our civilization is built</span></div><div class="gos-point wc-frag" data-frag="2"><span class="gos-label">Enables cooperation scalability globally</span></div><div class="gos-point wc-frag" data-frag="3"><span class="gos-label">Respects user autonomy</span></div><div class="gos-point wc-frag" data-frag="4"><span class="gos-label">Transparent, programmable, efficient</span></div><div class="gos-point wc-frag" data-frag="5"><span class="gos-label">Built upon a standard (Generalized Global Governance)</span></div><div class="gos-point wc-frag" data-frag="6"><span class="gos-label">Public good - open and free, like the Internet</span></div></div>
+                <div class="gos-side gos-left"><header class="gos-head wc-frag" data-frag="1"><div class="gos-kicker">GOS</div><h2>Governance Operating System</h2></header><div class="gos-point wc-frag" data-frag="1"><span class="gos-label">Transparent, efficient, secure</span></div><div class="gos-point wc-frag" data-frag="2"><span class="gos-label">Enables cooperation scalability - human alignment</span></div><div class="gos-point wc-frag" data-frag="3"><span class="gos-label">Respects user autonomy</span></div><div class="gos-point wc-frag" data-frag="4"><span class="gos-label">Built upon a standard - Generalized Global Governance v1.0</span></div><div class="gos-point wc-frag" data-frag="5"><span class="gos-label">Public good - open and free, like the Internet</span></div><div class="gos-point wc-frag" data-frag="6"><span class="gos-label"><strong>Civilizational substrate for the age of AI</strong></span></div></div>
                 <div class="gos-side gos-right"><div class="gos-legend wc-frag" data-frag="7"><div class="gos-legend-item"><span class="gos-badge gos-badge-realms"><img src="assets/logo_sphere_only.svg" alt=""></span>Realms GOS</div><div class="gos-legend-item"><span class="gos-badge gos-badge-other">?</span>Other?</div></div><a class="gos-link wc-frag" data-frag="8" href="https://gos.earth" target="_blank" rel="noopener noreferrer">https://gos.earth</a></div>
               </section>
             </div>

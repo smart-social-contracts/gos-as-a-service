@@ -27,12 +27,12 @@
 ## gos-intro
 
 - left: GOS — Governance Operating System
-- Substrate on which our civilization is built
-- Enables cooperation scalability globally
+- Transparent, efficient, secure
+- Enables cooperation scalability - human alignment
 - Respects user autonomy
-- Transparent, programmable, efficient
-- Built upon a standard (Generalized Global Governance)
+- Built upon a standard - Generalized Global Governance v1.0
 - Public good - open and free, like the Internet
+- **Civilizational substrate for the age of AI**
 - legend: realms — Realms GOS
 - legend: other — Other?
 - link: https://gos.earth
