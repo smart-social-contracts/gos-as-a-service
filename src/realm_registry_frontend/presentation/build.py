@@ -490,6 +490,19 @@ DECK_JS = """
     if (String(window.getSelection())) return;
     window.__goToScene(sceneIndex + 2);
   });
+
+  let touch = null;
+  document.addEventListener('touchstart', (e) => {
+    touch = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+  }, { passive: true });
+  document.addEventListener('touchend', (e) => {
+    if (!touch) return;
+    const dx = e.changedTouches[0].clientX - touch.x;
+    const dy = e.changedTouches[0].clientY - touch.y;
+    touch = null;
+    if (Math.abs(dx) < 40 || Math.abs(dx) < 1.5 * Math.abs(dy)) return;
+    window.__goToScene(dx < 0 ? sceneIndex + 2 : sceneIndex);
+  });
 })();
 """
 
@@ -676,7 +689,8 @@ GLOBE_JS = """
   }
 
   function drawRealms(now) {
-    const k = 1 / scale;
+    // Badges keep their on-screen size, shrinking only on globes smaller than 480px (phones).
+    const k = Math.min(1, (size * scale) / 480) / scale;
     const dpr = window.devicePixelRatio || 1;
     const rot = projection.rotate();
     const center = [-rot[0], -rot[1]];
@@ -863,6 +877,9 @@ GLOBE_JS = """
 CSS = (
     BASE_CSS
     + """
+    /* Slides are sized in rem and never scroll, so short screens shrink the root size. */
+    html { font-size: clamp(10px, 2.1vh, 16px); font-size: clamp(10px, 2.1dvh, 16px); }
+
     .arch-box.wc-slide { border: none; }
 
     .globe-canvas {
@@ -1162,6 +1179,62 @@ CSS = (
       .wc-cell { font-size: 1rem; }
       .wc-arrow { width: 2rem; }
     }
+
+    @media (max-height: 500px) {
+      .wf-content, .wf-list { gap: 1rem; }
+      .wf-item { grid-template-columns: 6rem minmax(0, 1fr); }
+      .wf-art svg { width: 6rem; height: 6rem; }
+      .gos-slide { gap: 1.5rem; padding: 0; }
+      .gos-globe-slot { height: 72%; }
+      .gos-side { gap: 0.7rem; }
+      .gos-head h2 { font-size: 1.5rem; }
+      .gos-label { font-size: 1.2rem; }
+    }
+
+    /* Portrait screens: the globe goes on top and the text stacks below it. */
+    @media (max-aspect-ratio: 1/1) {
+      .deck { padding: 0.75rem 1rem 0.6rem; }
+      footer .site { font-size: 0.95rem; }
+
+      .arch-box.gos-box-slide.wc-slide { padding: 0; gap: 0.9rem; }
+      .wc { --wc-gap: 1.25rem; row-gap: 0.75rem; }
+      .wc-col-head { gap: 0.5rem; margin-bottom: 0.4rem; }
+      .wc-art { width: min(7rem, 30vw); height: min(7rem, 30vw); }
+      .wc-arrow { width: 1.6rem; margin-bottom: 0.4rem; }
+      .wc-cell { flex-direction: column; align-items: flex-start; gap: 0.05rem; font-size: 0.95rem; line-height: 1.25; }
+      .wc-cell.wc-mirror { flex-direction: column; align-items: flex-end; }
+      .wc-label { white-space: normal; }
+      .wc-note { font-size: 0.8em; }
+
+      .wf-globe-slot { left: 50%; top: 0; height: auto; width: 78%; transform: translate(-50%, -58%); }
+      .wf-content { left: 0; right: 0; top: 7.5rem; justify-content: flex-start; gap: 1.4rem; }
+      .wf-list { gap: 1.5rem; }
+      .wf-item { grid-template-columns: 4.75rem minmax(0, 1fr); column-gap: 1rem; }
+      .wf-art svg { width: 4.75rem; height: 4.75rem; }
+      .wf-world, .wf-pc { flex-wrap: wrap; gap: 0.1rem 0.5rem; }
+      .wf-world { font-size: 1.3rem; }
+      .wf-world .wc-note { font-size: 0.68em; }
+      .wf-pc { font-size: 0.92rem; margin-top: 0.35rem; }
+      .wf-pc svg { width: 1rem; height: 1rem; }
+
+      .gos-slide { flex-direction: column; align-items: stretch; justify-content: center; gap: 1.1rem; padding: 0; }
+      .gos-globe-slot { order: -2; align-self: center; height: auto; width: min(76%, 36vh); }
+      .gos-slide.globe-only .gos-globe-slot { width: min(92%, 70vh); }
+      .gos-slide.globe-only .gos-side { display: none; }
+      .gos-side { flex: none; gap: 0.75rem; }
+      .gos-right { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem 1.25rem; }
+      .gos-legend { flex-direction: row; gap: 1.1rem; margin-bottom: 0; }
+      .gos-legend-item { font-size: 0.95rem; gap: 0.5rem; }
+      .gos-badge { width: 1.9rem; height: 1.9rem; font-size: 0.9rem; }
+      .gos-badge img { height: 1.3rem; }
+      .gos-link { font-size: 1.2rem; }
+      .gos-head { padding-bottom: 0.5rem; margin-bottom: 0.1rem; }
+      .gos-head h2 { font-size: 1.45rem; }
+      .gos-kicker { font-size: 0.72rem; }
+      .gos-point { gap: 0.15rem; }
+      .gos-label { font-size: 1.02rem; }
+      .gos-note { font-size: 0.85rem; }
+    }
 """
 )
 
@@ -1342,7 +1415,7 @@ class GlobeSlide(Slide):
     def render(self) -> str:
         body = """
             <div class="page-step active">
-              <section class="gos-slide">
+              <section class="gos-slide globe-only">
                 <div class="gos-side"></div>
                 <div class="gos-globe-slot" data-globe-slot></div>
                 <div class="gos-side"></div>
