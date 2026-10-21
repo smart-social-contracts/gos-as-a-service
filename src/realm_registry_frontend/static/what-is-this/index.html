@@ -301,7 +301,9 @@
     .gos-label { font-size: 1.35rem; font-weight: 400; line-height: 1.25; }
     .gos-label strong { font-weight: 700; }
 
-    /* Slide titles wait for the globe to finish moving (MOVE_MS in GLOBE_JS). */
+    /* Titles and the art beside the globe wait for it to finish moving (MOVE_MS in GLOBE_JS). */
+    .viewport { --after-move: 1.6s; }
+
     .wc-title {
       opacity: 0;
       transform: translateY(0.6rem);
@@ -311,9 +313,19 @@
     .page.active .wc-title {
       opacity: 1;
       transform: none;
-      transition: opacity 0.6s ease-out 1.6s, transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) 1.6s;
+      transition: opacity 0.6s ease-out var(--after-move), transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) var(--after-move);
     }
     .gos-note { font-size: 1.08rem; color: var(--gray-500); line-height: 1.4; }
+
+    .gos-note a,
+    .gos-legend-item a {
+      color: inherit;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .gos-note a:hover,
+    .gos-legend-item a:hover { color: rgb(47, 95, 95); }
 
     .wf-globe-slot {
       position: absolute;
@@ -456,7 +468,8 @@
     .wc-arrow svg { display: block; width: 100%; }
 
     .page.active .wc-col-head > svg,
-    .page.active .wc-arrow { animation: wc-rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: calc(var(--c) * 0.25s); }
+    .page.active .wc-arrow { animation: wc-rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: var(--after-move); }
+    .page.active .wc-col-head > svg { animation-delay: calc(var(--after-move) + var(--c) * 0.25s); }
     .wc-arrow { margin-bottom: 1.1rem; }
     .wc-cell.wc-frag.shown:not(.wc-mirror) { transition-delay: 0.12s; }
 
@@ -575,8 +588,8 @@
             <div class="page-step active">
               <section class="gos-slide">
                 <div class="gos-globe-slot" data-globe-slot data-globe-layer="realms"></div>
-                <div class="gos-side gos-left"><header class="gos-head wc-frag" data-frag="1"><div class="gos-kicker">GOS</div><h2>Governance Operating System</h2></header><div class="gos-point"><span class="gos-label wc-frag" data-frag="1">Transparent, efficient, secure</span></div><div class="gos-point"><span class="gos-label wc-frag" data-frag="2">Enables cooperation scalability</span><span class="gos-label wc-frag" data-frag="3">Respects user autonomy</span><span class="gos-note wc-frag" data-frag="3">human alignment</span></div><div class="gos-point"><span class="gos-label wc-frag" data-frag="4">Built upon a standard</span><span class="gos-note wc-frag" data-frag="4">Generalized Global Governance v1.0</span></div><div class="gos-point"><span class="gos-label wc-frag" data-frag="5">Public good</span><span class="gos-note wc-frag" data-frag="5">open and free, like the Internet</span></div><div class="gos-point"><span class="gos-label wc-frag" data-frag="6"><strong>Civilizational substrate for the age of AI</strong></span></div></div>
-                <div class="gos-side gos-right"><div class="gos-legend wc-frag" data-frag="7"><div class="gos-legend-item"><span class="gos-badge gos-badge-realms"><img src="assets/logo_sphere_only.svg" alt=""></span>Realms GOS</div><div class="gos-legend-item"><span class="gos-badge gos-badge-other">?</span>Other?</div></div><a class="gos-link wc-frag" data-frag="8" href="https://gos.earth" target="_blank" rel="noopener noreferrer">https://gos.earth</a></div>
+                <div class="gos-side gos-left"><header class="gos-head wc-frag" data-frag="1"><div class="gos-kicker">GOS</div><h2>Governance Operating System</h2></header><div class="gos-point"><span class="gos-label wc-frag" data-frag="2">Transparent, efficient, secure</span></div><div class="gos-point"><span class="gos-label wc-frag" data-frag="3">Enables cooperation scalability</span><span class="gos-label wc-frag" data-frag="4">Respects user autonomy</span><span class="gos-note wc-frag" data-frag="5">human alignment</span></div><div class="gos-point"><span class="gos-label wc-frag" data-frag="6">Built upon a standard</span><span class="gos-note wc-frag" data-frag="6"><a href="https://github.com/smart-social-contracts/ggg" target="_blank" rel="noopener noreferrer">Generalized Global Governance v1.0</a></span></div><div class="gos-point"><span class="gos-label wc-frag" data-frag="7">Public good</span><span class="gos-note wc-frag" data-frag="7">open and free, like the Internet</span></div><div class="gos-point"><span class="gos-label wc-frag" data-frag="8"><strong>Civilizational substrate for the age of AI</strong></span></div></div>
+                <div class="gos-side gos-right"><div class="gos-legend wc-frag" data-frag="9"><div class="gos-legend-item"><span class="gos-badge gos-badge-realms"><img src="assets/logo_sphere_only.svg" alt=""></span><a href="https://realmsgos.org" target="_blank" rel="noopener noreferrer">Realms GOS</a></div><div class="gos-legend-item"><span class="gos-badge gos-badge-other">?</span>Other?</div></div><a class="gos-link wc-frag" data-frag="10" href="https://gos.earth" target="_blank" rel="noopener noreferrer">https://gos.earth</a></div>
               </section>
             </div>
         </div>

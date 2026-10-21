@@ -980,7 +980,9 @@ CSS = (
     .gos-label { font-size: 1.35rem; font-weight: 400; line-height: 1.25; }
     .gos-label strong { font-weight: 700; }
 
-    /* Slide titles wait for the globe to finish moving (MOVE_MS in GLOBE_JS). */
+    /* Titles and the art beside the globe wait for it to finish moving (MOVE_MS in GLOBE_JS). */
+    .viewport { --after-move: 1.6s; }
+
     .wc-title {
       opacity: 0;
       transform: translateY(0.6rem);
@@ -990,9 +992,19 @@ CSS = (
     .page.active .wc-title {
       opacity: 1;
       transform: none;
-      transition: opacity 0.6s ease-out 1.6s, transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) 1.6s;
+      transition: opacity 0.6s ease-out var(--after-move), transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) var(--after-move);
     }
     .gos-note { font-size: 1.08rem; color: var(--gray-500); line-height: 1.4; }
+
+    .gos-note a,
+    .gos-legend-item a {
+      color: inherit;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .gos-note a:hover,
+    .gos-legend-item a:hover { color: rgb(47, 95, 95); }
 
     .wf-globe-slot {
       position: absolute;
@@ -1128,7 +1140,8 @@ CSS = (
     .wc-arrow svg { display: block; width: 100%; }
 
     .page.active .wc-col-head > svg,
-    .page.active .wc-arrow { animation: wc-rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: calc(var(--c) * 0.25s); }
+    .page.active .wc-arrow { animation: wc-rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: var(--after-move); }
+    .page.active .wc-col-head > svg { animation-delay: calc(var(--after-move) + var(--c) * 0.25s); }
     .wc-arrow { margin-bottom: 1.1rem; }
     .wc-cell.wc-frag.shown:not(.wc-mirror) { transition-delay: 0.12s; }
 
@@ -1285,20 +1298,24 @@ class GosIntroSlide(Slide):
                     if kicker
                     else ""
                 )
+                frag += 1
                 sides[side].append(
-                    f'<header class="gos-head wc-frag" data-frag="{frag + 1}">{kicker_html}'
+                    f'<header class="gos-head wc-frag" data-frag="{frag}">{kicker_html}'
                     f"<h2>{render_inline(title)}</h2></header>"
                 )
                 continue
-            # "A + B — note": points revealed one by one, sharing the note under the last.
+            # "A + B — note": points revealed one by one, then the note they share.
             labels, _, note = text.partition(" — ")
+            labels = labels.split(" + ")
             parts = []
-            for label in labels.split(" + "):
+            for label in labels:
                 frag += 1
                 parts.append(
                     f'<span class="gos-label wc-frag" data-frag="{frag}">{render_inline(label)}</span>'
                 )
             if note:
+                if len(labels) > 1:
+                    frag += 1
                 parts.append(
                     f'<span class="gos-note wc-frag" data-frag="{frag}">{render_inline(note)}</span>'
                 )
