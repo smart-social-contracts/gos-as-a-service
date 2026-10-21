@@ -513,11 +513,18 @@ GLOBE_JS = """
   let scale = 1;
 
   const DATA = window.GOS_REALMS || { realms: [], links: [], grid: [] };
-  const REALMS = DATA.realms.map((r) => r.center);
-  const LINKS = DATA.links;
+  // Nodes: every realm, then the half each splitting realm sheds (present only while split).
+  const BASE = DATA.realms.length;
+  const SPLITS = DATA.realms.map((r, i) => i).filter((i) => DATA.realms[i].split);
+  const LINKS = DATA.links.concat(SPLITS.map((i, s) => [i, BASE + s]));
+  const pos = DATA.realms.map((r) => r.center).concat(SPLITS.map((i) => DATA.realms[i].split.centers[1]));
+  const presence = pos.map(() => 1);
   const TEAL = '107, 163, 163';
   const TEAL_DARK = '47, 95, 95';
-  const glowStart = REALMS.map(() => -1e9);
+  const glowStart = pos.map(() => -1e9);
+  const GROW = { period: 42000, ringEvery: 6000, fadeIn: 1200, flash: 1600, shrinkAt: 35500, shrink: 2500 };
+  const SPLIT = { period: 48000, at: 5000, mergeAt: 38000, take: 2200 };
+  let layerStart = 0;
   let nextGlow = 0;
   const gridByRing = {};
   DATA.grid.forEach((c) => (gridByRing[c.ring] = gridByRing[c.ring] || []).push(c.polygon));
@@ -540,7 +547,11 @@ GLOBE_JS = """
     const wanted = slot && slot.dataset.globeLayer;
     if (wanted !== layer) layerTarget = 0;
     if (wanted) {
-      layerTimer = setTimeout(() => { layer = wanted; layerTarget = 1; }, animate && !still ? MOVE_MS * 0.8 : 0);
+      layerTimer = setTimeout(() => {
+        if (layer !== wanted || layerAlpha < 0.01) layerStart = performance.now();
+        layer = wanted;
+        layerTarget = 1;
+      }, animate && !still ? MOVE_MS * 0.8 : 0);
     }
     if (!slot) { canvas.style.opacity = '0'; return; }
     const r = slot.getBoundingClientRect();
@@ -607,15 +618,57 @@ GLOBE_JS = """
     }
   }
 
+  const clamp01 = (x) => Math.max(0, Math.min(1, x));
+  const ease = (x) => { const t = clamp01(x); return t * t * (3 - 2 * t); };
+
+  // Time into realm i's loop; each realm starts a little later than the one before.
+  function cycle(i, period, now) {
+    const t = still ? 0 : now - layerStart - 2000 - (i * 3700) % 15000;
+    return t <= 0 ? 0 : t % period;
+  }
+
+  // Per cell: opacity and a teal flash (cells appearing as the realm grows, or the seam
+  // emptying when it splits); which tree edges show; how far apart a split realm is.
+  function realmState(realm, i, now) {
+    const alpha = realm.cells.map(() => 1);
+    const flash = realm.cells.map(() => 0);
+    let edges = realm.edges;
+    let split = 0;
+    if (realm.grow !== undefined) {
+      const u = cycle(i, GROW.period, now);
+      const out = clamp01((GROW.shrinkAt + GROW.shrink - u) / GROW.shrink);
+      const since = (ring) => u - (ring - realm.grow - 1) * GROW.ringEvery;
+      realm.cells.forEach((c, j) => {
+        if (c.ring <= realm.grow) return;
+        const t = since(c.ring) - (j % 5) * 250;
+        alpha[j] = Math.min(clamp01(t / GROW.fadeIn), out);
+        if (t > 0 && t < GROW.flash) flash[j] = Math.sin((Math.PI * t) / GROW.flash) * out;
+      });
+      edges = realm.edges.filter((e) => e[2] <= realm.grow || (since(e[2]) > GROW.fadeIn && out > 0.5));
+    }
+    if (realm.split) {
+      const u = cycle(i, SPLIT.period, now);
+      split = ease((u - SPLIT.at) / SPLIT.take) * (1 - ease((u - SPLIT.mergeAt) / SPLIT.take));
+      realm.cells.forEach((c, j) => {
+        if (c.side !== -1) return;
+        alpha[j] = 1 - split;
+        flash[j] = Math.sin(Math.PI * split);
+      });
+    }
+    return { alpha, flash, edges, split };
+  }
+
   function spawn(now) {
+    const open = LINKS.filter(([a, b]) => presence[a] > 0.95 && presence[b] > 0.95);
+    if (!open.length) return;
     if (now > nextMessage) {
-      const [a, b] = LINKS[Math.floor(Math.random() * LINKS.length)];
+      const [a, b] = open[Math.floor(Math.random() * open.length)];
       const flip = Math.random() < 0.5;
       travelers.push({ from: flip ? b : a, to: flip ? a : b, t0: now, dur: 2600 + Math.random() * 1800, kind: 'message' });
       nextMessage = now + 280 + Math.random() * 360;
     }
     if (now > nextPerson) {
-      const [a, b] = LINKS[Math.floor(Math.random() * LINKS.length)];
+      const [a, b] = open[Math.floor(Math.random() * open.length)];
       const flip = Math.random() < 0.5;
       travelers.push({ from: flip ? b : a, to: flip ? a : b, t0: now, dur: 6500 + Math.random() * 2500, kind: 'person' });
       nextPerson = now + 1600 + Math.random() * 1400;
@@ -628,6 +681,12 @@ GLOBE_JS = """
     const rot = projection.rotate();
     const center = [-rot[0], -rot[1]];
     const facing = (p) => Math.cos(d3.geoDistance(p, center));
+    const states = DATA.realms.map((realm, i) => realmState(realm, i, now));
+    SPLITS.forEach((i, s) => {
+      const { split } = states[i];
+      pos[i] = d3.geoInterpolate(DATA.realms[i].center, DATA.realms[i].split.centers[0])(split);
+      presence[BASE + s] = split;
+    });
     ctx.save();
     ctx.globalAlpha = layerAlpha;
 
@@ -642,68 +701,103 @@ GLOBE_JS = """
     ctx.setLineDash([4 * k, 5 * k]);
     ctx.lineWidth = 1.2 * k;
     ctx.strokeStyle = 'rgba(82, 82, 82, 0.4)';
-    ctx.beginPath();
-    LINKS.forEach(([a, b]) => linePath(REALMS[a], REALMS[b]));
-    ctx.stroke();
+    LINKS.forEach(([a, b]) => {
+      const shown = Math.min(presence[a], presence[b]);
+      if (shown < 0.01) return;
+      ctx.globalAlpha = layerAlpha * shown;
+      ctx.beginPath();
+      linePath(pos[a], pos[b]);
+      ctx.stroke();
+    });
     ctx.setLineDash([]);
+    ctx.globalAlpha = layerAlpha;
 
-    const glowingRealms = new Set();
-    DATA.realms.forEach((realm, i) => {
-      if (facing(realm.center) < -0.3) return;
-      ctx.beginPath();
-      realm.cells.forEach((c) => cellPath(c.polygon));
-      ctx.fillStyle = 'rgba(64, 64, 64, 0.16)';
-      ctx.fill();
-      ctx.lineWidth = 0.9 * k;
-      ctx.strokeStyle = 'rgba(38, 38, 38, 0.45)';
-      ctx.stroke();
-
-      const since = now - glowStart[i];
-      let glowing = false;
-      if (since < 3200) {
-        realm.cells.forEach((c) => {
-          const f = (since - c.ring * 150) / 1500;
-          if (f <= 0 || f >= 1) return;
-          const g = Math.sin(Math.PI * f);
-          glowing = true;
-          ctx.save();
-          ctx.shadowColor = `rgba(${TEAL}, ${0.95 * g})`;
-          ctx.shadowBlur = 14 * g * dpr;
-          ctx.beginPath();
-          cellPath(c.polygon);
-          ctx.fillStyle = `rgba(${TEAL}, ${0.6 * g})`;
-          ctx.fill();
-          ctx.lineWidth = 1.3 * k;
-          ctx.strokeStyle = `rgba(${TEAL_DARK}, ${0.9 * g})`;
-          ctx.stroke();
-          ctx.restore();
-        });
-      }
-
-      if (glowing) glowingRealms.add(i);
-      if (facing(realm.center) < 0.05) return;
-      ctx.lineWidth = 0.8 * k;
-      ctx.strokeStyle = 'rgba(38, 38, 38, 0.4)';
-      ctx.beginPath();
-      realm.edges.forEach(([a, b]) => linePath(a, b));
-      ctx.stroke();
-      ctx.fillStyle = glowing ? `rgb(${TEAL_DARK})` : '#262626';
-      for (let q = 0; q < 2 && realm.edges.length; q++) {
-        const phase = now / 650 + i * 1.7 + q * 3.1;
-        const [a, b] = realm.edges[Math.floor(phase) % realm.edges.length];
+    const pulses = (edges, seed) => {
+      for (let q = 0; q < 2 && edges.length; q++) {
+        const phase = now / 650 + seed * 1.7 + q * 3.1;
+        const [a, b] = edges[Math.floor(phase) % edges.length];
         const p = d3.geoInterpolate(a, b)(phase % 1);
         if (facing(p) < 0.05) continue;
         const [x, y] = projection(p);
         ctx.beginPath(); ctx.arc(x, y, 1.6 * k, 0, 2 * Math.PI); ctx.fill();
       }
+    };
+    const treeLines = (edges, alpha) => {
+      if (alpha < 0.01) return;
+      ctx.globalAlpha = layerAlpha * alpha;
+      ctx.beginPath();
+      edges.forEach(([a, b]) => linePath(a, b));
+      ctx.stroke();
+    };
+
+    const glowingNodes = new Set();
+    DATA.realms.forEach((realm, i) => {
+      if (facing(realm.center) < -0.3) return;
+      const { alpha, flash, edges, split } = states[i];
+      const half = realm.split ? BASE + SPLITS.indexOf(i) : -1;
+      const fillCell = (c) => {
+        ctx.beginPath();
+        cellPath(c.polygon);
+        ctx.fill();
+        ctx.stroke();
+      };
+      ctx.fillStyle = 'rgba(64, 64, 64, 0.16)';
+      ctx.lineWidth = 0.9 * k;
+      ctx.strokeStyle = 'rgba(38, 38, 38, 0.45)';
+      ctx.beginPath();
+      realm.cells.forEach((c, j) => { if (alpha[j] >= 0.999) cellPath(c.polygon); });
+      ctx.fill();
+      ctx.stroke();
+      realm.cells.forEach((c, j) => {
+        if (alpha[j] >= 0.999 || alpha[j] < 0.01) return;
+        ctx.globalAlpha = layerAlpha * alpha[j];
+        fillCell(c);
+      });
+      ctx.globalAlpha = layerAlpha;
+
+      realm.cells.forEach((c, j) => {
+        const node = half >= 0 && split > 0.5 && c.side === 1 ? half : i;
+        const f = (now - glowStart[node] - c.ring * 150) / 1500;
+        const wave = f > 0 && f < 1 ? Math.sin(Math.PI * f) * alpha[j] : 0;
+        if (wave > 0.01) glowingNodes.add(node);
+        const g = Math.max(wave, flash[j]);
+        if (g < 0.01) return;
+        ctx.save();
+        ctx.shadowColor = `rgba(${TEAL}, ${0.95 * g})`;
+        ctx.shadowBlur = 14 * g * dpr;
+        ctx.fillStyle = `rgba(${TEAL}, ${0.6 * g})`;
+        ctx.lineWidth = 1.3 * k;
+        ctx.strokeStyle = `rgba(${TEAL_DARK}, ${0.9 * g})`;
+        fillCell(c);
+        ctx.restore();
+      });
+
+      if (facing(realm.center) < 0.05) return;
+      ctx.lineWidth = 0.8 * k;
+      ctx.strokeStyle = 'rgba(38, 38, 38, 0.4)';
+      if (realm.split) {
+        treeLines(realm.edges, 1 - split);
+        realm.split.edges.forEach((e) => treeLines(e, split));
+      } else {
+        treeLines(edges, 1);
+      }
+      ctx.globalAlpha = layerAlpha;
+      ctx.fillStyle = glowingNodes.has(i) ? `rgb(${TEAL_DARK})` : '#262626';
+      if (realm.split && split > 0.5) {
+        pulses(realm.split.edges[0], i);
+        pulses(realm.split.edges[1], i + 0.5);
+      } else {
+        pulses(edges, i);
+      }
     });
 
-    DATA.realms.forEach((realm, i) => {
-      const c = facing(realm.center);
-      if (c < 0.05) return;
-      const [x, y] = projection(realm.center);
-      ctx.globalAlpha = layerAlpha * Math.min(1, (c - 0.05) * 5);
-      badge(x, y, k, realm.gos, glowingRealms.has(i));
+    pos.forEach((p, n) => {
+      const c = facing(p);
+      if (c < 0.05 || presence[n] < 0.01) return;
+      const [x, y] = projection(p);
+      const gos = n < BASE ? DATA.realms[n].gos : DATA.realms[SPLITS[n - BASE]].split.gos;
+      ctx.globalAlpha = layerAlpha * presence[n] * Math.min(1, (c - 0.05) * 5);
+      badge(x, y, k * (0.6 + 0.4 * presence[n]), gos, glowingNodes.has(n));
     });
     ctx.globalAlpha = layerAlpha;
 
@@ -716,17 +810,18 @@ GLOBE_JS = """
         continue;
       }
       const eased = f < 0.5 ? 2 * f * f : 1 - Math.pow(-2 * f + 2, 2) / 2;
-      const p = d3.geoInterpolate(REALMS[t.from], REALMS[t.to])(eased);
+      const p = d3.geoInterpolate(pos[t.from], pos[t.to])(eased);
       const c = facing(p);
       if (c < 0.05) continue;
       const [x, y] = projection(p);
-      ctx.globalAlpha = layerAlpha * Math.min(1, c * 4, f * 8, (1 - f) * 8);
+      const shown = Math.min(presence[t.from], presence[t.to]);
+      ctx.globalAlpha = layerAlpha * shown * Math.min(1, c * 4, f * 8, (1 - f) * 8);
       if (t.kind === 'person') person(x, y, k); else envelope(x, y, k);
     }
     ctx.restore();
 
     if (now > nextGlow) {
-      const candidates = REALMS.map((p, i) => i).filter((i) => facing(REALMS[i]) > 0.3);
+      const candidates = pos.map((p, n) => n).filter((n) => presence[n] > 0.95 && facing(pos[n]) > 0.3);
       if (candidates.length) glowStart[candidates[Math.floor(Math.random() * candidates.length)]] = now;
       nextGlow = now + 1400 + Math.random() * 2000;
     }
