@@ -28,10 +28,9 @@
 
 - left: GOS — Governance Operating System
 - Transparent, efficient, secure
-- Enables cooperation scalability - human alignment
-- Respects user autonomy
-- Built upon a standard - Generalized Global Governance v1.0
-- Public good - open and free, like the Internet
+- Enables cooperation scalability + Respects user autonomy — human alignment
+- Built upon a standard — Generalized Global Governance v1.0
+- Public good — open and free, like the Internet
 - **Civilizational substrate for the age of AI**
 - legend: realms — Realms GOS
 - legend: other — Other?

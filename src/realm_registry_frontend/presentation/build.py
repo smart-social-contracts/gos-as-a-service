@@ -1290,15 +1290,19 @@ class GosIntroSlide(Slide):
                     f"<h2>{render_inline(title)}</h2></header>"
                 )
                 continue
-            frag += 1
-            label, _, note = text.partition(" — ")
-            note_html = (
-                f'<span class="gos-note">{render_inline(note)}</span>' if note else ""
-            )
-            sides[side].append(
-                f'<div class="gos-point wc-frag" data-frag="{frag}">'
-                f'<span class="gos-label">{render_inline(label)}</span>{note_html}</div>'
-            )
+            # "A + B — note": points revealed one by one, sharing the note under the last.
+            labels, _, note = text.partition(" — ")
+            parts = []
+            for label in labels.split(" + "):
+                frag += 1
+                parts.append(
+                    f'<span class="gos-label wc-frag" data-frag="{frag}">{render_inline(label)}</span>'
+                )
+            if note:
+                parts.append(
+                    f'<span class="gos-note wc-frag" data-frag="{frag}">{render_inline(note)}</span>'
+                )
+            sides[side].append(f'<div class="gos-point">{"".join(parts)}</div>')
         if legend:
             sides["right"].insert(
                 0,
