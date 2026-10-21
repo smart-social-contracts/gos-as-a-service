@@ -23,7 +23,6 @@
   let requestId = '';
   let info = null; // { client_name, redirect_uri_host, requested_scopes, valid_scopes }
   let principal = '';
-  let selectedScope = 'read';
   let submitting = false;
 
   onMount(async () => {
@@ -44,9 +43,6 @@
         }));
       }
       info = data;
-      // Default the picker to the broadest scope the client asked for, but never
-      // above read unless they explicitly requested full.
-      selectedScope = (info.requested_scopes || []).includes('full') ? 'full' : 'read';
 
       if (await isAuthenticated()) {
         const p = await getPrincipal();
@@ -86,7 +82,7 @@
       const res = await fetch(`${MCP_HOST}/oauth/consent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ request_id: requestId, proof, scope: selectedScope, approve }),
+        body: JSON.stringify({ request_id: requestId, proof, scope: 'read', approve }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.redirect_to) {
@@ -136,7 +132,7 @@
       <p class="lead">
         <strong>{info?.client_name || 'An MCP client'}</strong>
         {$_('mcpConsent.lead', {
-          default: 'wants to access your Realms account and act through the Geister assistant on your behalf.',
+          default: 'wants read-only access to your Realms account through the Geister assistant.',
         })}
       </p>
       <!-- The client name is whatever the client registered; the host is where approval sends you. -->
@@ -169,31 +165,15 @@
       </div>
 
       {#if principal}
-        <fieldset class="scope">
-          <legend>{$_('mcpConsent.access_level', { default: 'Access level' })}</legend>
-          <label class:active={selectedScope === 'read'}>
-            <input type="radio" bind:group={selectedScope} value="read" />
-            <span>
-              <strong>{$_('mcpConsent.scope_read', { default: 'Read-only' })}</strong>
-              <small>{$_('mcpConsent.scope_read_desc', { default: 'View realms, credits, proposals and balances. Recommended.' })}</small>
-            </span>
-          </label>
-          <label class:active={selectedScope === 'full'}>
-            <input type="radio" bind:group={selectedScope} value="full" />
-            <span>
-              <strong>{$_('mcpConsent.scope_full', { default: 'Full access' })}</strong>
-              <small>{$_('mcpConsent.scope_full_desc', { default: 'Also vote, submit proposals, deploy and transfer on your behalf.' })}</small>
-            </span>
-          </label>
-        </fieldset>
-
-        {#if selectedScope === 'full'}
-          <div class="warn">
-            {$_('mcpConsent.full_warn', {
-              default: 'Full access lets this client take actions that move funds and change governance. Only approve clients you trust.',
-            })}
-          </div>
-        {/if}
+        <div class="scope">
+          <strong>{$_('mcpConsent.scope_read', { default: 'Read-only' })}</strong>
+          <small>{$_('mcpConsent.readonly_desc', {
+            default: 'It can view realms, proposals, credits and balances. It cannot vote, submit proposals, deploy or move funds.',
+          })}</small>
+          <small>{$_('mcpConsent.poa_desc', {
+            default: 'If you later want it to act for you in a realm, grant it power of attorney there (menu → Power of attorney): you choose the permissions and how long it lasts, and you can revoke it any time.',
+          })}</small>
+        </div>
       {/if}
 
       <div class="actions">
@@ -325,35 +305,14 @@
   .ii-btn:hover:not(:disabled) { background: #404040; }
 
   .scope {
-    border: none;
-    padding: 0;
-    margin: 0 0 1rem;
-  }
-  .scope legend {
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: #171717;
-    padding: 0;
-    margin-bottom: 0.5rem;
-  }
-  .scope label {
-    display: flex;
-    gap: 0.6rem;
-    align-items: flex-start;
-    border: 1px solid #e9e9e9;
-    border-radius: 0.6rem;
-    padding: 0.7rem 0.8rem;
-    margin-bottom: 0.5rem;
-    cursor: pointer;
-  }
-  .scope label.active {
-    border-color: #6366f1;
-    background: #f5f4ff;
-  }
-  .scope label span {
     display: flex;
     flex-direction: column;
-    gap: 0.15rem;
+    gap: 0.4rem;
+    border: 1px solid #6366f1;
+    background: #f5f4ff;
+    border-radius: 0.6rem;
+    padding: 0.7rem 0.8rem;
+    margin: 0 0 1rem;
   }
   .scope strong {
     font-size: 0.88rem;
@@ -361,22 +320,8 @@
   }
   .scope small {
     font-size: 0.78rem;
-    color: #737373;
+    color: #525252;
     line-height: 1.4;
-  }
-  .scope input {
-    margin-top: 0.2rem;
-  }
-
-  .warn {
-    font-size: 0.78rem;
-    color: #92400e;
-    background: #fef3c7;
-    border: 1px solid #fde68a;
-    border-radius: 0.5rem;
-    padding: 0.6rem 0.75rem;
-    margin-bottom: 1rem;
-    line-height: 1.45;
   }
 
   .actions {
