@@ -31,7 +31,8 @@
 - Enables cooperation scalability globally
 - Respects user autonomy
 - Transparent, programmable, efficient
-- Public good (like the Internet)
+- Built upon a standard (Generalized Global Governance)
+- Public good - open and free, like the Internet
 - legend: realms — Realms GOS
-- legend: other — Other GOS
+- legend: other — Other?
 - link: https://gos.earth

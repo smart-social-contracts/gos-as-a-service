@@ -1136,11 +1136,15 @@ class GosIntroSlide(Slide):
     def render(self) -> str:
         sides: dict[str, list[str]] = {"left": [], "right": []}
         legend: list[str] = []
+        legend_frag = 0
         side = "left"
         frag = 0
         for _, text in self.bullets:
             entry = re.match(r"^legend:\s*(realms|other)\s+—\s+(.*)$", text)
             if entry:
+                if not legend:
+                    frag += 1
+                    legend_frag = frag
                 gos, label = entry.groups()
                 mark = (
                     '<img src="assets/logo_sphere_only.svg" alt="">'
@@ -1189,7 +1193,7 @@ class GosIntroSlide(Slide):
         if legend:
             sides["right"].insert(
                 0,
-                f'<div class="gos-legend wc-frag" data-frag="1">{"".join(legend)}</div>',
+                f'<div class="gos-legend wc-frag" data-frag="{legend_frag}">{"".join(legend)}</div>',
             )
         body = f"""
             <div class="page-step active">
