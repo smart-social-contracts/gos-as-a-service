@@ -27,6 +27,15 @@ test('the presentation is what presentation/steps.md builds', () => {
 	assert.equal(result.status, 0, result.stderr || result.error?.message);
 });
 
+test('the presentation offers the same languages as the portal', () => {
+	const portal = readFileSync(join(here, 'i18n/index.ts'), 'utf-8');
+	const deck = readFileSync(join(here, '../../presentation/build.py'), 'utf-8');
+	const pairs = (text, re) => [...text.matchAll(re)].map((m) => `${m[1]}=${m[2]}`);
+	const expected = pairs(portal, /\{ id: "([^"]+)", name: "([^"]+)" \}/g);
+	assert.ok(expected.length >= 6);
+	assert.deepEqual(pairs(deck, /^\s+\("([^"]+)", "([^"]+)"\),$/gm), expected);
+});
+
 test('"Tutorial" starts the walkthrough', () => {
 	assert.match(header, /<button[^>]*data-tutorial[^>]*on:click=\{openTour\}/);
 	assert.match(header, /hub\.tutorial/);

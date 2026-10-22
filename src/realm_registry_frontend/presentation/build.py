@@ -8,14 +8,28 @@ python3 build.py --check   # fail when index.html is not what steps.md builds
 from __future__ import annotations
 
 import html
+import json
 import re
 import sys
 from pathlib import Path
 
 DIR = Path(__file__).resolve().parent
 MD_PATH = DIR / "steps.md"
+TRANSLATIONS_PATH = DIR / "translations.json"
 HTML_PATH = DIR.parent / "static" / "what-is-this" / "index.html"
 FOOTER_SITE = "gos.earth"
+
+# Same ids, names and order as supportedLocales in src/lib/i18n/index.ts.
+LOCALES = [
+    ("en", "English"),
+    ("es", "Español"),
+    ("de", "Deutsch"),
+    ("fr", "Français"),
+    ("zh-CN", "中文 (简体)"),
+    ("it", "Italiano"),
+]
+START_HINT = "Click or press → to start"
+START_HINT_TOUCH = "Tap to start"
 
 BASE_CSS = """
     :root {
@@ -231,6 +245,35 @@ def render_inline(text: str) -> str:
     return "".join(parts)
 
 
+# Every text tr() renders, in order; the language selector swaps each for its translation.
+UNITS: list[str] = []
+
+
+def tr(text: str) -> str:
+    if text not in UNITS:
+        UNITS.append(text)
+    return f'<span data-i18n="{UNITS.index(text)}">{render_inline(text)}</span>'
+
+
+def load_translations() -> dict[str, dict[str, str]]:
+    """Translations of every UNITS entry, keyed by language then by the English text.
+
+    Raises ValueError naming what is missing or no longer used, so a change to steps.md
+    cannot ship with a language that silently falls back to English.
+    """
+    data = json.loads(TRANSLATIONS_PATH.read_text(encoding="utf-8"))
+    problems = []
+    for lang, _ in LOCALES[1:]:
+        strings = data.get(lang, {})
+        problems += [f"{lang}: missing {u!r}" for u in UNITS if not strings.get(u)]
+        problems += [f"{lang}: unused {k!r}" for k in strings if k not in UNITS]
+    if problems:
+        raise ValueError(
+            f"{TRANSLATIONS_PATH.name} is out of date:\n  " + "\n  ".join(problems)
+        )
+    return data
+
+
 class Slide:
     def __init__(self, marker: str, bullets: list[tuple[int, str]]):
         self.marker = marker
@@ -405,6 +448,60 @@ GLOBE_SCRIPTS = (
     "assets/realms.js",
 )
 
+LANG_ICON_SVG = (
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">'
+    '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9'
+    'M12 3c-2.5 2.6-3.8 5.6-3.8 9s1.3 6.4 3.8 9"/></svg>'
+)
+
+# Picks the language the way the portal does (src/lib/i18n/index.ts) and shares its stored choice.
+I18N_JS = """
+(function () {
+  const { strings, titles } = window.DECK_I18N;
+  const select = document.getElementById('lang');
+  const KEY = 'registryPreferredLocale';
+  const ids = Object.keys(strings);
+
+  function preferred() {
+    const fromUrl = new URLSearchParams(location.search).get('locale');
+    if (ids.includes(fromUrl)) return fromUrl;
+    try {
+      const stored = localStorage.getItem(KEY);
+      if (ids.includes(stored)) return stored;
+    } catch (e) {}
+    for (const l of navigator.languages || [navigator.language]) {
+      if (ids.includes(l)) return l;
+      const code = l.split('-')[0];
+      if (code === 'zh') return 'zh-CN';
+      if (ids.includes(code)) return code;
+    }
+    return 'en';
+  }
+
+  function apply(lang) {
+    document.querySelectorAll('[data-i18n]').forEach((el) => {
+      el.innerHTML = strings[lang][parseInt(el.dataset.i18n, 10)];
+    });
+    document.documentElement.lang = lang;
+    document.title = titles[lang];
+    select.value = lang;
+  }
+
+  apply(preferred());
+  select.addEventListener('change', () => {
+    const lang = select.value;
+    try { localStorage.setItem(KEY, lang); } catch (e) {}
+    const url = new URL(location.href);
+    if (url.searchParams.has('locale')) {
+      url.searchParams.set('locale', lang);
+      history.replaceState(null, '', url);
+    }
+    apply(lang);
+    window.dispatchEvent(new Event('resize'));
+  });
+})();
+"""
+
 # Pages and fragments: elements with data-frag="N" appear at step N of their page. Click, →, ↓ or space advances; ←, ↑ goes back.
 DECK_JS = """
 (function () {
@@ -470,6 +567,7 @@ DECK_JS = """
   window.addEventListener('hashchange', () => applyScene(sceneFromHash() - 1));
 
   window.addEventListener('keydown', (e) => {
+    if (e.target.closest && e.target.closest('select')) return;
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ' || e.key === 'PageDown') {
       e.preventDefault();
       window.__goToScene(sceneIndex + 2);
@@ -486,7 +584,7 @@ DECK_JS = """
   });
 
   document.addEventListener('click', (e) => {
-    if (e.button !== 0 || e.target.closest('a, button, .dots')) return;
+    if (e.button !== 0 || e.target.closest('a, button, .dots, .lang')) return;
     if (String(window.getSelection())) return;
     window.__goToScene(sceneIndex + 2);
   });
@@ -897,6 +995,53 @@ CSS = (
 
     .deck > footer, .deck > .dots { position: relative; z-index: 3; }
 
+    .lang {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      color: var(--gray-500);
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    .lang:hover, .lang:focus-within { color: var(--gray-900); }
+    .lang svg { width: 1.1rem; height: 1.1rem; flex: none; }
+    .lang select {
+      appearance: none;
+      -webkit-appearance: none;
+      border: none;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      font-size: 1rem;
+      line-height: 1.2;
+      height: 1.2em;
+      cursor: pointer;
+      padding: 0;
+    }
+    .lang select:focus-visible { outline: 2px solid rgb(107, 163, 163); outline-offset: 2px; border-radius: 3px; }
+
+    .start-hint {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0.4rem;
+      z-index: 2;
+      text-align: center;
+      font-size: 1.05rem;
+      letter-spacing: 0.02em;
+      color: var(--gray-500);
+      pointer-events: none;
+      opacity: 0;
+    }
+    .page.active .start-hint { animation: hint-in 0.8s ease-out 1.2s both, hint-pulse 2.6s ease-in-out 2s infinite; }
+    .hint-touch { display: none; }
+    @media (hover: none) and (pointer: coarse) {
+      .hint-pointer { display: none; }
+      .hint-touch { display: inline; }
+    }
+    @keyframes hint-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; } }
+    @keyframes hint-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
     .wf-slide,
     .gos-slide {
       position: absolute;
@@ -1171,6 +1316,7 @@ CSS = (
       .wc-frag, .wf-item, .page.active .wc-title { transition: none; transform: none; }
       .globe-canvas, .wf-art * { animation: none !important; }
       .wc-pulses { display: none; }
+      .page.active .start-hint { animation: none; opacity: 1; }
     }
 
     @media (max-width: 900px) {
@@ -1180,10 +1326,18 @@ CSS = (
       .wc-arrow { width: 2rem; }
     }
 
+    @media (max-height: 760px) and (min-aspect-ratio: 1/1) {
+      .wc-art { width: 13rem; height: 13rem; }
+      .wc { row-gap: 0.7rem; }
+      .gos-slide { gap: 2.5rem; }
+      .gos-globe-slot { height: 76%; }
+    }
+
     @media (max-height: 500px) {
       .wf-content, .wf-list { gap: 1rem; }
       .wf-item { grid-template-columns: 6rem minmax(0, 1fr); }
       .wf-art svg { width: 6rem; height: 6rem; }
+      .wf-world { font-size: 1.7rem; }
       .gos-slide { gap: 1.5rem; padding: 0; }
       .gos-globe-slot { height: 72%; }
       .gos-side { gap: 0.7rem; }
@@ -1241,11 +1395,11 @@ CSS = (
 
 def render_cell(text: str, row: int, col: int, mirrored: bool) -> str:
     label, _, note = text.strip().partition(" — ")
-    note_html = f'<span class="wc-note">{render_inline(note)}</span>' if note else ""
+    note_html = f'<span class="wc-note">{tr(note)}</span>' if note else ""
     cls = "wc-cell wc-frag wc-mirror" if mirrored else "wc-cell wc-frag"
     return (
         f'<div class="{cls}" data-frag="{row + 1}" style="grid-column:{2 * col + 1};grid-row:{row + 2}">'
-        f'<span class="wc-label">{render_inline(label)}</span>{note_html}</div>'
+        f'<span class="wc-label">{tr(label)}</span>{note_html}</div>'
     )
 
 
@@ -1269,7 +1423,7 @@ class WorldComputerSlide(Slide):
             <div class="page-step active">
               <section class="arch-box gos-box-slide wide-slide wc-slide">
                 <header class="box-header wc-title">
-                  <h2>{html.escape(WORLD_TITLE)}</h2>
+                  <h2>{tr(WORLD_TITLE)}</h2>
                 </header>
                 <div class="box-body">
                   <div class="wc" style="grid-template-columns: {grid}">
@@ -1290,8 +1444,8 @@ CHIP_MINI_SVG = (
 
 def label_and_note(text: str) -> str:
     label, _, note = text.strip().partition(" — ")
-    note_html = f'<span class="wc-note">{render_inline(note)}</span>' if note else ""
-    return f'<span class="wc-label">{render_inline(label)}</span>{note_html}'
+    note_html = f'<span class="wc-note">{tr(note)}</span>' if note else ""
+    return f'<span class="wc-label">{tr(label)}</span>{note_html}'
 
 
 class WorldFailuresSlide(Slide):
@@ -1314,7 +1468,7 @@ class WorldFailuresSlide(Slide):
                 <div class="wf-globe-slot" data-globe-slot></div>
                 <div class="wf-content">
                   <header class="box-header wc-title">
-                    <h2>{html.escape(WORLD_FAILURES_TITLE)}</h2>
+                    <h2>{tr(WORLD_FAILURES_TITLE)}</h2>
                   </header>
                   <ol class="wf-list">
                     {"".join(items)}
@@ -1348,7 +1502,7 @@ class GosIntroSlide(Slide):
                 )
                 legend.append(
                     f'<div class="gos-legend-item"><span class="gos-badge gos-badge-{gos}">{mark}</span>'
-                    f"{render_inline(label)}</div>"
+                    f"{tr(label)}</div>"
                 )
                 continue
             link = re.match(r"^link:\s*(\S+)$", text)
@@ -1367,14 +1521,12 @@ class GosIntroSlide(Slide):
                 if not title:
                     kicker, title = "", kicker
                 kicker_html = (
-                    f'<div class="gos-kicker">{render_inline(kicker)}</div>'
-                    if kicker
-                    else ""
+                    f'<div class="gos-kicker">{tr(kicker)}</div>' if kicker else ""
                 )
                 frag += 1
                 sides[side].append(
                     f'<header class="gos-head wc-frag" data-frag="{frag}">{kicker_html}'
-                    f"<h2>{render_inline(title)}</h2></header>"
+                    f"<h2>{tr(title)}</h2></header>"
                 )
                 continue
             # "A + B — note": points revealed one by one, then the note they share.
@@ -1384,13 +1536,13 @@ class GosIntroSlide(Slide):
             for label in labels:
                 frag += 1
                 parts.append(
-                    f'<span class="gos-label wc-frag" data-frag="{frag}">{render_inline(label)}</span>'
+                    f'<span class="gos-label wc-frag" data-frag="{frag}">{tr(label)}</span>'
                 )
             if note:
                 if len(labels) > 1:
                     frag += 1
                 parts.append(
-                    f'<span class="gos-note wc-frag" data-frag="{frag}">{render_inline(note)}</span>'
+                    f'<span class="gos-note wc-frag" data-frag="{frag}">{tr(note)}</span>'
                 )
             sides[side].append(f'<div class="gos-point">{"".join(parts)}</div>')
         if legend:
@@ -1413,12 +1565,16 @@ class GlobeSlide(Slide):
     """Just the rotating globe, centred."""
 
     def render(self) -> str:
-        body = """
+        body = f"""
             <div class="page-step active">
               <section class="gos-slide globe-only">
                 <div class="gos-side"></div>
                 <div class="gos-globe-slot" data-globe-slot></div>
                 <div class="gos-side"></div>
+                <p class="start-hint">
+                  <span class="hint-pointer">{tr(START_HINT)}</span>
+                  <span class="hint-touch">{tr(START_HINT_TOUCH)}</span>
+                </p>
               </section>
             </div>"""
         return body
@@ -1460,7 +1616,20 @@ def slide_title(slide: Slide) -> str:
     raise TypeError(type(slide).__name__)
 
 
+def i18n_data(slides: list[Slide]) -> str:
+    """JSON for I18N_JS: each language's rendered UNITS and page title."""
+    translations = load_translations()
+    strings, titles = {}, {}
+    for lang, _ in LOCALES:
+        t = translations.get(lang, {})
+        strings[lang] = [render_inline(t.get(u, u)) for u in UNITS]
+        titles[lang] = " · ".join(t.get(x, x) for x in map(slide_title, slides))
+    data = json.dumps({"strings": strings, "titles": titles}, ensure_ascii=False)
+    return data.replace("</", "<\\/")
+
+
 def build_html(slides: list[Slide]) -> str:
+    UNITS.clear()
     pages_html = []
     for i, slide in enumerate(slides):
         body = slide.render()
@@ -1472,6 +1641,10 @@ def build_html(slides: list[Slide]) -> str:
     title_str = " · ".join(slide_title(s) for s in slides)
     scripts = "\n".join(f'  <script src="{src}"></script>' for src in GLOBE_SCRIPTS)
     pages_joined = "\n".join(pages_html)
+    i18n = i18n_data(slides)
+    options = "".join(
+        f'<option value="{lang}">{html.escape(name)}</option>' for lang, name in LOCALES
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -1489,9 +1662,14 @@ def build_html(slides: list[Slide]) -> str:
     </div>
     <footer>
       <span class="site">{html.escape(FOOTER_SITE)}</span>
+      <label class="lang">{LANG_ICON_SVG}<select id="lang" aria-label="Language">{options}</select></label>
     </footer>
     <nav class="dots" id="dots" aria-label="Slide navigation"></nav>
   </article>
+  <script>window.DECK_I18N = {i18n};
+  </script>
+  <script>{I18N_JS}
+  </script>
   <script>{DECK_JS}
   </script>
 {scripts}
@@ -1503,7 +1681,11 @@ def build_html(slides: list[Slide]) -> str:
 
 
 def main(argv: list[str]) -> int:
-    page = build_html(parse_steps(MD_PATH.read_text(encoding="utf-8")))
+    try:
+        page = build_html(parse_steps(MD_PATH.read_text(encoding="utf-8")))
+    except ValueError as e:
+        print(e, file=sys.stderr)
+        return 1
     if "--check" in argv:
         if HTML_PATH.read_text(encoding="utf-8") != page:
             print(

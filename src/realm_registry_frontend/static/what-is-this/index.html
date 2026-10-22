@@ -204,6 +204,53 @@
 
     .deck > footer, .deck > .dots { position: relative; z-index: 3; }
 
+    .lang {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      color: var(--gray-500);
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    .lang:hover, .lang:focus-within { color: var(--gray-900); }
+    .lang svg { width: 1.1rem; height: 1.1rem; flex: none; }
+    .lang select {
+      appearance: none;
+      -webkit-appearance: none;
+      border: none;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      font-size: 1rem;
+      line-height: 1.2;
+      height: 1.2em;
+      cursor: pointer;
+      padding: 0;
+    }
+    .lang select:focus-visible { outline: 2px solid rgb(107, 163, 163); outline-offset: 2px; border-radius: 3px; }
+
+    .start-hint {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0.4rem;
+      z-index: 2;
+      text-align: center;
+      font-size: 1.05rem;
+      letter-spacing: 0.02em;
+      color: var(--gray-500);
+      pointer-events: none;
+      opacity: 0;
+    }
+    .page.active .start-hint { animation: hint-in 0.8s ease-out 1.2s both, hint-pulse 2.6s ease-in-out 2s infinite; }
+    .hint-touch { display: none; }
+    @media (hover: none) and (pointer: coarse) {
+      .hint-pointer { display: none; }
+      .hint-touch { display: inline; }
+    }
+    @keyframes hint-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; } }
+    @keyframes hint-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
     .wf-slide,
     .gos-slide {
       position: absolute;
@@ -485,6 +532,7 @@
       .wc-frag, .wf-item, .page.active .wc-title { transition: none; transform: none; }
       .globe-canvas, .wf-art * { animation: none !important; }
       .wc-pulses { display: none; }
+      .page.active .start-hint { animation: none; opacity: 1; }
     }
 
     @media (max-width: 900px) {
@@ -494,10 +542,18 @@
       .wc-arrow { width: 2rem; }
     }
 
+    @media (max-height: 760px) and (min-aspect-ratio: 1/1) {
+      .wc-art { width: 13rem; height: 13rem; }
+      .wc { row-gap: 0.7rem; }
+      .gos-slide { gap: 2.5rem; }
+      .gos-globe-slot { height: 76%; }
+    }
+
     @media (max-height: 500px) {
       .wf-content, .wf-list { gap: 1rem; }
       .wf-item { grid-template-columns: 6rem minmax(0, 1fr); }
       .wf-art svg { width: 6rem; height: 6rem; }
+      .wf-world { font-size: 1.7rem; }
       .gos-slide { gap: 1.5rem; padding: 0; }
       .gos-globe-slot { height: 72%; }
       .gos-side { gap: 0.7rem; }
@@ -563,6 +619,10 @@
                 <div class="gos-side"></div>
                 <div class="gos-globe-slot" data-globe-slot></div>
                 <div class="gos-side"></div>
+                <p class="start-hint">
+                  <span class="hint-pointer"><span data-i18n="0">Click or press → to start</span></span>
+                  <span class="hint-touch"><span data-i18n="1">Tap to start</span></span>
+                </p>
               </section>
             </div>
         </div>
@@ -572,7 +632,7 @@
             <div class="page-step active">
               <section class="arch-box gos-box-slide wide-slide wc-slide">
                 <header class="box-header wc-title">
-                  <h2>Think of our world as a computer</h2>
+                  <h2><span data-i18n="30">Think of our world as a computer</span></h2>
                 </header>
                 <div class="box-body">
                   <div class="wc" style="grid-template-columns: minmax(0, 1fr) var(--wc-gap) minmax(0, 1fr)">
@@ -600,7 +660,7 @@
   <rect x="86" y="86" width="88" height="88" rx="12" fill="#e9e9e9"/>
   <rect x="103" y="103" width="54" height="54" rx="7" fill="#f9f9f9"/>
   <circle class="wc-core" cx="130" cy="130" r="10" fill="#e9e9e9"/>
-</svg></div><div class="wc-arrow" style="grid-column:2;grid-row:1;--c:1" aria-hidden="true"><svg viewBox="0 0 64 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h54M11 3 5 8l6 5M53 3l6 5-6 5"/></svg></div><div class="wc-cell wc-frag wc-mirror" data-frag="1" style="grid-column:1;grid-row:2"><span class="wc-label">The Earth</span><span class="wc-note">land, water, resources</span></div><div class="wc-cell wc-frag" data-frag="1" style="grid-column:3;grid-row:2"><span class="wc-label">Hardware</span><span class="wc-note">memory, CPU, disk</span></div><div class="wc-cell wc-frag wc-mirror" data-frag="2" style="grid-column:1;grid-row:3"><span class="wc-label">People</span><span class="wc-note">citizens, residents, members</span></div><div class="wc-cell wc-frag" data-frag="2" style="grid-column:3;grid-row:3"><span class="wc-label">Users</span><span class="wc-note">everyone who logs in</span></div><div class="wc-cell wc-frag wc-mirror" data-frag="3" style="grid-column:1;grid-row:4"><span class="wc-label">Officials</span><span class="wc-note">civil servants, mayors, presidents</span></div><div class="wc-cell wc-frag" data-frag="3" style="grid-column:3;grid-row:4"><span class="wc-label">Admins</span><span class="wc-note">keep it running, manage access</span></div><div class="wc-cell wc-frag wc-mirror" data-frag="4" style="grid-column:1;grid-row:5"><span class="wc-label">Governments &amp; institutions</span><span class="wc-note">how a society is run</span></div><div class="wc-cell wc-frag" data-frag="4" style="grid-column:3;grid-row:5"><span class="wc-label">Operating system</span><span class="wc-note">Windows, macOS, Linux</span></div><div class="wc-cell wc-frag wc-mirror" data-frag="5" style="grid-column:1;grid-row:6"><span class="wc-label">Laws &amp; policies</span><span class="wc-note">who may do what</span></div><div class="wc-cell wc-frag" data-frag="5" style="grid-column:3;grid-row:6"><span class="wc-label">Permissions &amp; settings</span><span class="wc-note">who can open which file</span></div><div class="wc-cell wc-frag wc-mirror" data-frag="6" style="grid-column:1;grid-row:7"><span class="wc-label">Public services</span><span class="wc-note">tax office, land registry, courts</span></div><div class="wc-cell wc-frag" data-frag="6" style="grid-column:3;grid-row:7"><span class="wc-label">Apps</span><span class="wc-note">email, banking, maps</span></div><div class="wc-cell wc-frag wc-mirror" data-frag="7" style="grid-column:1;grid-row:8"><span class="wc-label">Elections &amp; new laws</span><span class="wc-note">how the rules change</span></div><div class="wc-cell wc-frag" data-frag="7" style="grid-column:3;grid-row:8"><span class="wc-label">Software updates</span><span class="wc-note">new versions, fixes</span></div>
+</svg></div><div class="wc-arrow" style="grid-column:2;grid-row:1;--c:1" aria-hidden="true"><svg viewBox="0 0 64 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h54M11 3 5 8l6 5M53 3l6 5-6 5"/></svg></div><div class="wc-cell wc-frag wc-mirror" data-frag="1" style="grid-column:1;grid-row:2"><span class="wc-label"><span data-i18n="3">The Earth</span></span><span class="wc-note"><span data-i18n="2">land, water, resources</span></span></div><div class="wc-cell wc-frag" data-frag="1" style="grid-column:3;grid-row:2"><span class="wc-label"><span data-i18n="5">Hardware</span></span><span class="wc-note"><span data-i18n="4">memory, CPU, disk</span></span></div><div class="wc-cell wc-frag wc-mirror" data-frag="2" style="grid-column:1;grid-row:3"><span class="wc-label"><span data-i18n="7">People</span></span><span class="wc-note"><span data-i18n="6">citizens, residents, members</span></span></div><div class="wc-cell wc-frag" data-frag="2" style="grid-column:3;grid-row:3"><span class="wc-label"><span data-i18n="9">Users</span></span><span class="wc-note"><span data-i18n="8">everyone who logs in</span></span></div><div class="wc-cell wc-frag wc-mirror" data-frag="3" style="grid-column:1;grid-row:4"><span class="wc-label"><span data-i18n="11">Officials</span></span><span class="wc-note"><span data-i18n="10">civil servants, mayors, presidents</span></span></div><div class="wc-cell wc-frag" data-frag="3" style="grid-column:3;grid-row:4"><span class="wc-label"><span data-i18n="13">Admins</span></span><span class="wc-note"><span data-i18n="12">keep it running, manage access</span></span></div><div class="wc-cell wc-frag wc-mirror" data-frag="4" style="grid-column:1;grid-row:5"><span class="wc-label"><span data-i18n="15">Governments &amp; institutions</span></span><span class="wc-note"><span data-i18n="14">how a society is run</span></span></div><div class="wc-cell wc-frag" data-frag="4" style="grid-column:3;grid-row:5"><span class="wc-label"><span data-i18n="17">Operating system</span></span><span class="wc-note"><span data-i18n="16">Windows, macOS, Linux</span></span></div><div class="wc-cell wc-frag wc-mirror" data-frag="5" style="grid-column:1;grid-row:6"><span class="wc-label"><span data-i18n="19">Laws &amp; policies</span></span><span class="wc-note"><span data-i18n="18">who may do what</span></span></div><div class="wc-cell wc-frag" data-frag="5" style="grid-column:3;grid-row:6"><span class="wc-label"><span data-i18n="21">Permissions &amp; settings</span></span><span class="wc-note"><span data-i18n="20">who can open which file</span></span></div><div class="wc-cell wc-frag wc-mirror" data-frag="6" style="grid-column:1;grid-row:7"><span class="wc-label"><span data-i18n="23">Public services</span></span><span class="wc-note"><span data-i18n="22">tax office, land registry, courts</span></span></div><div class="wc-cell wc-frag" data-frag="6" style="grid-column:3;grid-row:7"><span class="wc-label"><span data-i18n="25">Apps</span></span><span class="wc-note"><span data-i18n="24">email, banking, maps</span></span></div><div class="wc-cell wc-frag wc-mirror" data-frag="7" style="grid-column:1;grid-row:8"><span class="wc-label"><span data-i18n="27">Elections &amp; new laws</span></span><span class="wc-note"><span data-i18n="26">how the rules change</span></span></div><div class="wc-cell wc-frag" data-frag="7" style="grid-column:3;grid-row:8"><span class="wc-label"><span data-i18n="29">Software updates</span></span><span class="wc-note"><span data-i18n="28">new versions, fixes</span></span></div>
                   </div>
                 </div>
               </section>
@@ -614,7 +674,7 @@
                 <div class="wf-globe-slot" data-globe-slot></div>
                 <div class="wf-content">
                   <header class="box-header wc-title">
-                    <h2>When the world computer malfunctions</h2>
+                    <h2><span data-i18n="43">When the world computer malfunctions</span></h2>
                   </header>
                   <ol class="wf-list">
                     <li class="wf-item" data-frag="1"><div class="wf-art"><svg viewBox="0 0 120 120" fill="none" aria-hidden="true">
@@ -627,7 +687,7 @@
   <rect x="54" y="74" width="12" height="18" fill="#e9e9e9"/>
   <path d="M8 92h104" stroke="#a3a3a3" stroke-width="1.75" stroke-linecap="round"/>
   <path d="M17 99v12a4 4 0 0 0 4 4h18a4 4 0 0 0 4-4v-12" stroke="#737373" stroke-width="2" stroke-linecap="round"/>
-</svg></div><div><div class="wf-world"><span class="wc-label">Corruption</span><span class="wc-note">hidden deals, abuse of power</span></div><div class="wf-pc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M10 2.5v3.5M14 2.5v3.5M10 18v3.5M14 18v3.5M2.5 10H6M2.5 14H6M18 10h3.5M18 14h3.5"/></svg><span class="wc-label">An admin who abuses their access</span><span class="wc-note">and deletes the logs</span></div></div></li><li class="wf-item" data-frag="2"><div class="wf-art"><svg viewBox="0 0 120 120" fill="none" aria-hidden="true">
+</svg></div><div><div class="wf-world"><span class="wc-label"><span data-i18n="32">Corruption</span></span><span class="wc-note"><span data-i18n="31">hidden deals, abuse of power</span></span></div><div class="wf-pc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M10 2.5v3.5M14 2.5v3.5M10 18v3.5M14 18v3.5M2.5 10H6M2.5 14H6M18 10h3.5M18 14h3.5"/></svg><span class="wc-label"><span data-i18n="34">An admin who abuses their access</span></span><span class="wc-note"><span data-i18n="33">and deletes the logs</span></span></div></div></li><li class="wf-item" data-frag="2"><div class="wf-art"><svg viewBox="0 0 120 120" fill="none" aria-hidden="true">
   <defs><clipPath id="wf-rest"><path d="M56 68 87.95 56.37A34 34 0 1 1 61.9 34.52z"/></clipPath></defs>
   <path d="M56 68 87.95 56.37A34 34 0 1 1 61.9 34.52z" fill="#e9e9e9"/>
   <g clip-path="url(#wf-rest)" stroke="#f9f9f9" stroke-width="2.5">
@@ -635,7 +695,7 @@
   </g>
   <path class="wf-slice" d="M56 68 61.9 34.52A34 34 0 0 1 87.95 56.37z" fill="#525252"/>
   <g stroke="#a3a3a3" stroke-width="1.75" stroke-linecap="round"><path class="wf-heat" d="M26 30q-3-4 0-8t0-8" style="animation-delay:-0s"/><path class="wf-heat" d="M36 30q-3-4 0-8t0-8" style="animation-delay:-0.8s"/><path class="wf-heat" d="M46 30q-3-4 0-8t0-8" style="animation-delay:-1.6s"/></g>
-</svg></div><div><div class="wf-world"><span class="wc-label">Resource misuse</span><span class="wc-note">wasted taxes, a worn-out planet</span></div><div class="wf-pc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M10 2.5v3.5M14 2.5v3.5M10 18v3.5M14 18v3.5M2.5 10H6M2.5 14H6M18 10h3.5M18 14h3.5"/></svg><span class="wc-label">A few programs hog the memory</span><span class="wc-note">and the machine overheats</span></div></div></li><li class="wf-item" data-frag="3"><div class="wf-art"><svg viewBox="0 0 120 120" aria-hidden="true"><polygon class="wf-hex wf-d0" points="21.9,49.9 30.7,54.9 30.7,65.1 21.9,70.1 13.1,65.1 13.1,54.9"/><polygon class="wf-hex wf-d1" points="31.4,66.4 40.2,71.4 40.2,81.6 31.4,86.6 22.7,81.6 22.7,71.4"/><polygon class="wf-hex wf-d2" points="40.9,82.9 49.7,87.9 49.7,98.1 40.9,103.1 32.2,98.1 32.2,87.9"/><polygon class="wf-hex wf-d1" points="31.4,33.4 40.2,38.4 40.2,48.6 31.4,53.6 22.7,48.6 22.7,38.4"/><polygon class="wf-hex wf-d1" points="40.9,49.9 49.7,54.9 49.7,65.1 40.9,70.1 32.2,65.1 32.2,54.9"/><polygon class="wf-hex wf-d2" points="50.5,66.4 59.2,71.4 59.2,81.6 50.5,86.6 41.7,81.6 41.7,71.4"/><polygon class="wf-hex wf-d3" points="60.0,82.9 68.8,87.9 68.8,98.1 60.0,103.1 51.2,98.1 51.2,87.9"/><polygon class="wf-hex wf-d2" points="40.9,16.9 49.7,21.9 49.7,32.1 40.9,37.1 32.2,32.1 32.2,21.9"/><polygon class="wf-hex wf-d2" points="50.5,33.4 59.2,38.4 59.2,48.6 50.5,53.6 41.7,48.6 41.7,38.4"/><polygon class="wf-hex wf-d2" points="60.0,49.9 68.8,54.9 68.8,65.1 60.0,70.1 51.2,65.1 51.2,54.9"/><polygon class="wf-hex wf-d3" points="69.5,66.4 78.3,71.4 78.3,81.6 69.5,86.6 60.8,81.6 60.8,71.4"/><polygon class="wf-hex wf-d4" points="79.1,82.9 87.8,87.9 87.8,98.1 79.1,103.1 70.3,98.1 70.3,87.9"/><polygon class="wf-hex wf-d3" points="60.0,16.9 68.8,21.9 68.8,32.1 60.0,37.1 51.2,32.1 51.2,21.9"/><polygon class="wf-hex wf-d3" points="69.5,33.4 78.3,38.4 78.3,48.6 69.5,53.6 60.8,48.6 60.8,38.4"/><polygon class="wf-hex wf-d3" points="79.1,49.9 87.8,54.9 87.8,65.1 79.1,70.1 70.3,65.1 70.3,54.9"/><polygon class="wf-hex wf-d4" points="88.6,66.4 97.3,71.4 97.3,81.6 88.6,86.6 79.8,81.6 79.8,71.4"/><polygon class="wf-hex wf-d4" points="79.1,16.9 87.8,21.9 87.8,32.1 79.1,37.1 70.3,32.1 70.3,21.9"/><polygon class="wf-hex wf-d4" points="88.6,33.4 97.3,38.4 97.3,48.6 88.6,53.6 79.8,48.6 79.8,38.4"/><polygon class="wf-hex wf-d4" points="98.1,49.9 106.9,54.9 106.9,65.1 98.1,70.1 89.3,65.1 89.3,54.9"/></svg></div><div><div class="wf-world"><span class="wc-label">Wars</span><span class="wc-note">taking land and resources by force</span></div><div class="wf-pc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M10 2.5v3.5M14 2.5v3.5M10 18v3.5M14 18v3.5M2.5 10H6M2.5 14H6M18 10h3.5M18 14h3.5"/></svg><span class="wc-label">Viruses that take over the machine</span><span class="wc-note">and trick its users</span></div></div></li>
+</svg></div><div><div class="wf-world"><span class="wc-label"><span data-i18n="36">Resource misuse</span></span><span class="wc-note"><span data-i18n="35">wasted taxes, a worn-out planet</span></span></div><div class="wf-pc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M10 2.5v3.5M14 2.5v3.5M10 18v3.5M14 18v3.5M2.5 10H6M2.5 14H6M18 10h3.5M18 14h3.5"/></svg><span class="wc-label"><span data-i18n="38">A few programs hog the memory</span></span><span class="wc-note"><span data-i18n="37">and the machine overheats</span></span></div></div></li><li class="wf-item" data-frag="3"><div class="wf-art"><svg viewBox="0 0 120 120" aria-hidden="true"><polygon class="wf-hex wf-d0" points="21.9,49.9 30.7,54.9 30.7,65.1 21.9,70.1 13.1,65.1 13.1,54.9"/><polygon class="wf-hex wf-d1" points="31.4,66.4 40.2,71.4 40.2,81.6 31.4,86.6 22.7,81.6 22.7,71.4"/><polygon class="wf-hex wf-d2" points="40.9,82.9 49.7,87.9 49.7,98.1 40.9,103.1 32.2,98.1 32.2,87.9"/><polygon class="wf-hex wf-d1" points="31.4,33.4 40.2,38.4 40.2,48.6 31.4,53.6 22.7,48.6 22.7,38.4"/><polygon class="wf-hex wf-d1" points="40.9,49.9 49.7,54.9 49.7,65.1 40.9,70.1 32.2,65.1 32.2,54.9"/><polygon class="wf-hex wf-d2" points="50.5,66.4 59.2,71.4 59.2,81.6 50.5,86.6 41.7,81.6 41.7,71.4"/><polygon class="wf-hex wf-d3" points="60.0,82.9 68.8,87.9 68.8,98.1 60.0,103.1 51.2,98.1 51.2,87.9"/><polygon class="wf-hex wf-d2" points="40.9,16.9 49.7,21.9 49.7,32.1 40.9,37.1 32.2,32.1 32.2,21.9"/><polygon class="wf-hex wf-d2" points="50.5,33.4 59.2,38.4 59.2,48.6 50.5,53.6 41.7,48.6 41.7,38.4"/><polygon class="wf-hex wf-d2" points="60.0,49.9 68.8,54.9 68.8,65.1 60.0,70.1 51.2,65.1 51.2,54.9"/><polygon class="wf-hex wf-d3" points="69.5,66.4 78.3,71.4 78.3,81.6 69.5,86.6 60.8,81.6 60.8,71.4"/><polygon class="wf-hex wf-d4" points="79.1,82.9 87.8,87.9 87.8,98.1 79.1,103.1 70.3,98.1 70.3,87.9"/><polygon class="wf-hex wf-d3" points="60.0,16.9 68.8,21.9 68.8,32.1 60.0,37.1 51.2,32.1 51.2,21.9"/><polygon class="wf-hex wf-d3" points="69.5,33.4 78.3,38.4 78.3,48.6 69.5,53.6 60.8,48.6 60.8,38.4"/><polygon class="wf-hex wf-d3" points="79.1,49.9 87.8,54.9 87.8,65.1 79.1,70.1 70.3,65.1 70.3,54.9"/><polygon class="wf-hex wf-d4" points="88.6,66.4 97.3,71.4 97.3,81.6 88.6,86.6 79.8,81.6 79.8,71.4"/><polygon class="wf-hex wf-d4" points="79.1,16.9 87.8,21.9 87.8,32.1 79.1,37.1 70.3,32.1 70.3,21.9"/><polygon class="wf-hex wf-d4" points="88.6,33.4 97.3,38.4 97.3,48.6 88.6,53.6 79.8,48.6 79.8,38.4"/><polygon class="wf-hex wf-d4" points="98.1,49.9 106.9,54.9 106.9,65.1 98.1,70.1 89.3,65.1 89.3,54.9"/></svg></div><div><div class="wf-world"><span class="wc-label"><span data-i18n="40">Wars</span></span><span class="wc-note"><span data-i18n="39">taking land and resources by force</span></span></div><div class="wf-pc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M10 2.5v3.5M14 2.5v3.5M10 18v3.5M14 18v3.5M2.5 10H6M2.5 14H6M18 10h3.5M18 14h3.5"/></svg><span class="wc-label"><span data-i18n="42">Viruses that take over the machine</span></span><span class="wc-note"><span data-i18n="41">and trick its users</span></span></div></div></li>
                   </ol>
                 </div>
               </section>
@@ -647,17 +707,67 @@
             <div class="page-step active">
               <section class="gos-slide">
                 <div class="gos-globe-slot" data-globe-slot data-globe-layer="realms"></div>
-                <div class="gos-side gos-left"><header class="gos-head wc-frag" data-frag="1"><div class="gos-kicker">GOS</div><h2>Governance Operating System</h2></header><div class="gos-point"><span class="gos-label wc-frag" data-frag="2">Transparent, efficient, secure</span></div><div class="gos-point"><span class="gos-label wc-frag" data-frag="3">Enables cooperation scalability</span><span class="gos-label wc-frag" data-frag="4">Respects user autonomy</span><span class="gos-note wc-frag" data-frag="5">human alignment</span></div><div class="gos-point"><span class="gos-label wc-frag" data-frag="6">Built upon a standard</span><span class="gos-note wc-frag" data-frag="6"><a href="https://github.com/smart-social-contracts/ggg" target="_blank" rel="noopener noreferrer">Generalized Global Governance v1.0</a></span></div><div class="gos-point"><span class="gos-label wc-frag" data-frag="7">Public good</span><span class="gos-note wc-frag" data-frag="7">open and free, like the Internet</span></div><div class="gos-point"><span class="gos-label wc-frag" data-frag="8"><strong>Civilizational substrate for the age of AI</strong></span></div></div>
-                <div class="gos-side gos-right"><div class="gos-legend wc-frag" data-frag="9"><div class="gos-legend-item"><span class="gos-badge gos-badge-realms"><img src="assets/logo_sphere_only.svg" alt=""></span><a href="https://realmsgos.org" target="_blank" rel="noopener noreferrer">Realms GOS</a></div><div class="gos-legend-item"><span class="gos-badge gos-badge-other">?</span>Other?</div></div><a class="gos-link wc-frag" data-frag="10" href="https://gos.earth" target="_blank" rel="noopener noreferrer">https://gos.earth</a></div>
+                <div class="gos-side gos-left"><header class="gos-head wc-frag" data-frag="1"><div class="gos-kicker"><span data-i18n="44">GOS</span></div><h2><span data-i18n="45">Governance Operating System</span></h2></header><div class="gos-point"><span class="gos-label wc-frag" data-frag="2"><span data-i18n="46">Transparent, efficient, secure</span></span></div><div class="gos-point"><span class="gos-label wc-frag" data-frag="3"><span data-i18n="47">Enables cooperation scalability</span></span><span class="gos-label wc-frag" data-frag="4"><span data-i18n="48">Respects user autonomy</span></span><span class="gos-note wc-frag" data-frag="5"><span data-i18n="49">human alignment</span></span></div><div class="gos-point"><span class="gos-label wc-frag" data-frag="6"><span data-i18n="50">Built upon a standard</span></span><span class="gos-note wc-frag" data-frag="6"><span data-i18n="51"><a href="https://github.com/smart-social-contracts/ggg" target="_blank" rel="noopener noreferrer">Generalized Global Governance v1.0</a></span></span></div><div class="gos-point"><span class="gos-label wc-frag" data-frag="7"><span data-i18n="52">Public good</span></span><span class="gos-note wc-frag" data-frag="7"><span data-i18n="53">open and free, like the Internet</span></span></div><div class="gos-point"><span class="gos-label wc-frag" data-frag="8"><span data-i18n="54"><strong>Civilizational substrate for the age of AI</strong></span></span></div></div>
+                <div class="gos-side gos-right"><div class="gos-legend wc-frag" data-frag="9"><div class="gos-legend-item"><span class="gos-badge gos-badge-realms"><img src="assets/logo_sphere_only.svg" alt=""></span><span data-i18n="55"><a href="https://realmsgos.org" target="_blank" rel="noopener noreferrer">Realms GOS</a></span></div><div class="gos-legend-item"><span class="gos-badge gos-badge-other">?</span><span data-i18n="56">Other?</span></div></div><a class="gos-link wc-frag" data-frag="10" href="https://gos.earth" target="_blank" rel="noopener noreferrer">https://gos.earth</a></div>
               </section>
             </div>
         </div>
     </div>
     <footer>
       <span class="site">gos.earth</span>
+      <label class="lang"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9M12 3c-2.5 2.6-3.8 5.6-3.8 9s1.3 6.4 3.8 9"/></svg><select id="lang" aria-label="Language"><option value="en">English</option><option value="es">Español</option><option value="de">Deutsch</option><option value="fr">Français</option><option value="zh-CN">中文 (简体)</option><option value="it">Italiano</option></select></label>
     </footer>
     <nav class="dots" id="dots" aria-label="Slide navigation"></nav>
   </article>
+  <script>window.DECK_I18N = {"strings": {"en": ["Click or press → to start", "Tap to start", "land, water, resources", "The Earth", "memory, CPU, disk", "Hardware", "citizens, residents, members", "People", "everyone who logs in", "Users", "civil servants, mayors, presidents", "Officials", "keep it running, manage access", "Admins", "how a society is run", "Governments &amp; institutions", "Windows, macOS, Linux", "Operating system", "who may do what", "Laws &amp; policies", "who can open which file", "Permissions &amp; settings", "tax office, land registry, courts", "Public services", "email, banking, maps", "Apps", "how the rules change", "Elections &amp; new laws", "new versions, fixes", "Software updates", "Think of our world as a computer", "hidden deals, abuse of power", "Corruption", "and deletes the logs", "An admin who abuses their access", "wasted taxes, a worn-out planet", "Resource misuse", "and the machine overheats", "A few programs hog the memory", "taking land and resources by force", "Wars", "and trick its users", "Viruses that take over the machine", "When the world computer malfunctions", "GOS", "Governance Operating System", "Transparent, efficient, secure", "Enables cooperation scalability", "Respects user autonomy", "human alignment", "Built upon a standard", "<a href=\"https://github.com/smart-social-contracts/ggg\" target=\"_blank\" rel=\"noopener noreferrer\">Generalized Global Governance v1.0<\/a>", "Public good", "open and free, like the Internet", "<strong>Civilizational substrate for the age of AI<\/strong>", "<a href=\"https://realmsgos.org\" target=\"_blank\" rel=\"noopener noreferrer\">Realms GOS<\/a>", "Other?"], "es": ["Haz clic o pulsa → para empezar", "Toca para empezar", "tierra, agua, recursos", "La Tierra", "memoria, CPU, disco", "Hardware", "ciudadanos, residentes, miembros", "Las personas", "todos los que inician sesión", "Usuarios", "funcionarios, alcaldes, presidentes", "Los cargos públicos", "lo mantienen en marcha, gestionan el acceso", "Administradores", "cómo se gobierna una sociedad", "Gobiernos e instituciones", "Windows, macOS, Linux", "Sistema operativo", "quién puede hacer qué", "Leyes y normas", "quién puede abrir cada archivo", "Permisos y ajustes", "hacienda, registro de la propiedad, tribunales", "Servicios públicos", "correo, banca, mapas", "Aplicaciones", "cómo cambian las reglas", "Elecciones y nuevas leyes", "nuevas versiones, correcciones", "Actualizaciones", "Piensa en nuestro mundo como un ordenador", "tratos ocultos, abuso de poder", "Corrupción", "y borra los registros", "Un administrador que abusa de su acceso", "impuestos malgastados, un planeta agotado", "Mal uso de los recursos", "y la máquina se sobrecalienta", "Unos pocos programas acaparan la memoria", "tomar tierras y recursos por la fuerza", "Guerras", "y engañan a sus usuarios", "Virus que se apoderan de la máquina", "Cuando el ordenador del mundo falla", "GOS", "Sistema Operativo de Gobernanza", "Transparente, eficiente, seguro", "Permite que la cooperación escale", "Respeta la autonomía personal", "alineamiento humano", "Construido sobre un estándar", "<a href=\"https://github.com/smart-social-contracts/ggg\" target=\"_blank\" rel=\"noopener noreferrer\">Generalized Global Governance v1.0<\/a>", "Bien público", "abierto y gratuito, como Internet", "<strong>Sustrato civilizatorio para la era de la IA<\/strong>", "<a href=\"https://realmsgos.org\" target=\"_blank\" rel=\"noopener noreferrer\">Realms GOS<\/a>", "¿Otros?"], "de": ["Klicken oder → drücken, um zu beginnen", "Tippen, um zu beginnen", "Land, Wasser, Rohstoffe", "Die Erde", "Arbeitsspeicher, CPU, Festplatte", "Hardware", "Bürger, Einwohner, Mitglieder", "Menschen", "alle, die sich anmelden", "Nutzer", "Beamte, Bürgermeister, Präsidenten", "Amtsträger", "halten alles am Laufen, verwalten den Zugang", "Administratoren", "wie eine Gesellschaft geführt wird", "Regierungen &amp; Institutionen", "Windows, macOS, Linux", "Betriebssystem", "wer was darf", "Gesetze &amp; Regeln", "wer welche Datei öffnen darf", "Rechte &amp; Einstellungen", "Finanzamt, Grundbuchamt, Gerichte", "Öffentliche Dienste", "E-Mail, Banking, Karten", "Apps", "wie sich die Regeln ändern", "Wahlen &amp; neue Gesetze", "neue Versionen, Fehlerbehebungen", "Software-Updates", "Stell dir unsere Welt als Computer vor", "geheime Absprachen, Machtmissbrauch", "Korruption", "und die Protokolle löscht", "Ein Admin, der seinen Zugang missbraucht", "verschwendete Steuern, ein erschöpfter Planet", "Ressourcenmissbrauch", "und die Maschine überhitzt", "Wenige Programme belegen den ganzen Speicher", "Land und Ressourcen mit Gewalt nehmen", "Kriege", "und seine Nutzer täuschen", "Viren, die die Maschine übernehmen", "Wenn der Weltcomputer versagt", "GOS", "Governance-Betriebssystem", "Transparent, effizient, sicher", "Macht Zusammenarbeit skalierbar", "Respektiert die Autonomie der Nutzer", "menschliche Ausrichtung", "Auf einem Standard aufgebaut", "<a href=\"https://github.com/smart-social-contracts/ggg\" target=\"_blank\" rel=\"noopener noreferrer\">Generalized Global Governance v1.0<\/a>", "Gemeingut", "offen und frei, wie das Internet", "<strong>Zivilisatorisches Fundament für das KI-Zeitalter<\/strong>", "<a href=\"https://realmsgos.org\" target=\"_blank\" rel=\"noopener noreferrer\">Realms GOS<\/a>", "Andere?"], "fr": ["Cliquez ou appuyez sur → pour commencer", "Touchez pour commencer", "terres, eau, ressources", "La Terre", "mémoire, processeur, disque", "Matériel", "citoyens, habitants, membres", "Les gens", "tous ceux qui se connectent", "Utilisateurs", "fonctionnaires, maires, présidents", "Les responsables", "assurent le fonctionnement, gèrent les accès", "Administrateurs", "la façon dont une société est dirigée", "Gouvernements et institutions", "Windows, macOS, Linux", "Système d&#x27;exploitation", "qui a le droit de faire quoi", "Lois et règles", "qui peut ouvrir quel fichier", "Droits et paramètres", "impôts, cadastre, tribunaux", "Services publics", "e-mail, banque, cartes", "Applications", "la façon dont les règles changent", "Élections et nouvelles lois", "nouvelles versions, correctifs", "Mises à jour", "Imaginez notre monde comme un ordinateur", "accords secrets, abus de pouvoir", "Corruption", "et efface les journaux", "Un administrateur qui abuse de ses accès", "impôts gaspillés, planète épuisée", "Gaspillage des ressources", "et la machine surchauffe", "Quelques programmes accaparent la mémoire", "prendre des terres et des ressources par la force", "Guerres", "et trompent ses utilisateurs", "Des virus qui prennent le contrôle de la machine", "Quand l&#x27;ordinateur du monde dysfonctionne", "GOS", "Système d&#x27;exploitation de la gouvernance", "Transparent, efficace, sûr", "Permet à la coopération de passer à l&#x27;échelle", "Respecte l&#x27;autonomie de chacun", "alignement humain", "Fondé sur un standard", "<a href=\"https://github.com/smart-social-contracts/ggg\" target=\"_blank\" rel=\"noopener noreferrer\">Generalized Global Governance v1.0<\/a>", "Bien commun", "ouvert et gratuit, comme Internet", "<strong>Socle civilisationnel pour l&#x27;ère de l&#x27;IA<\/strong>", "<a href=\"https://realmsgos.org\" target=\"_blank\" rel=\"noopener noreferrer\">Realms GOS<\/a>", "Autres ?"], "zh-CN": ["点击或按 → 开始", "轻触开始", "土地、水、资源", "地球", "内存、CPU、硬盘", "硬件", "公民、居民、成员", "人们", "每一个登录的人", "用户", "公务员、市长、总统", "官员", "维持运行，管理权限", "管理员", "社会如何运转", "政府与机构", "Windows、macOS、Linux", "操作系统", "谁可以做什么", "法律与政策", "谁能打开哪个文件", "权限与设置", "税务局、土地登记处、法院", "公共服务", "邮件、银行、地图", "应用", "规则如何改变", "选举与新法律", "新版本、修复", "软件更新", "把我们的世界想象成一台计算机", "暗箱交易、滥用权力", "腐败", "然后删除日志", "管理员滥用权限", "浪费的税收、被耗尽的地球", "资源滥用", "机器随之过热", "少数程序霸占内存", "以武力夺取土地和资源", "战争", "并欺骗它的用户", "病毒控制了机器", "当世界这台计算机出故障时", "GOS", "治理操作系统", "透明、高效、安全", "让合作得以规模化", "尊重用户自主", "人类对齐", "建立在标准之上", "<a href=\"https://github.com/smart-social-contracts/ggg\" target=\"_blank\" rel=\"noopener noreferrer\">Generalized Global Governance v1.0<\/a>", "公共物品", "开放且免费，就像互联网", "<strong>AI 时代的文明基石<\/strong>", "<a href=\"https://realmsgos.org\" target=\"_blank\" rel=\"noopener noreferrer\">Realms GOS<\/a>", "其他？"], "it": ["Clicca o premi → per iniziare", "Tocca per iniziare", "terra, acqua, risorse", "La Terra", "memoria, CPU, disco", "Hardware", "cittadini, residenti, membri", "Le persone", "chiunque acceda", "Utenti", "funzionari, sindaci, presidenti", "Le autorità", "lo mantengono attivo, gestiscono gli accessi", "Amministratori", "come viene governata una società", "Governi e istituzioni", "Windows, macOS, Linux", "Sistema operativo", "chi può fare cosa", "Leggi e norme", "chi può aprire quale file", "Permessi e impostazioni", "fisco, catasto, tribunali", "Servizi pubblici", "email, banca, mappe", "App", "come cambiano le regole", "Elezioni e nuove leggi", "nuove versioni, correzioni", "Aggiornamenti software", "Immagina il nostro mondo come un computer", "accordi nascosti, abuso di potere", "Corruzione", "e cancella i log", "Un amministratore che abusa dei suoi accessi", "tasse sprecate, un pianeta esausto", "Spreco di risorse", "e la macchina si surriscalda", "Pochi programmi monopolizzano la memoria", "prendere terre e risorse con la forza", "Guerre", "e ingannano i suoi utenti", "Virus che prendono il controllo della macchina", "Quando il computer del mondo si guasta", "GOS", "Sistema Operativo di Governance", "Trasparente, efficiente, sicuro", "Rende la cooperazione scalabile", "Rispetta l&#x27;autonomia di ognuno", "allineamento umano", "Costruito su uno standard", "<a href=\"https://github.com/smart-social-contracts/ggg\" target=\"_blank\" rel=\"noopener noreferrer\">Generalized Global Governance v1.0<\/a>", "Bene pubblico", "aperto e gratuito, come Internet", "<strong>Fondamento della civiltà nell&#x27;era dell&#x27;IA<\/strong>", "<a href=\"https://realmsgos.org\" target=\"_blank\" rel=\"noopener noreferrer\">Realms GOS<\/a>", "Altri?"]}, "titles": {"en": "gos.earth · Think of our world as a computer · When the world computer malfunctions · Governance Operating System", "es": "gos.earth · Piensa en nuestro mundo como un ordenador · Cuando el ordenador del mundo falla · Sistema Operativo de Gobernanza", "de": "gos.earth · Stell dir unsere Welt als Computer vor · Wenn der Weltcomputer versagt · Governance-Betriebssystem", "fr": "gos.earth · Imaginez notre monde comme un ordinateur · Quand l'ordinateur du monde dysfonctionne · Système d'exploitation de la gouvernance", "zh-CN": "gos.earth · 把我们的世界想象成一台计算机 · 当世界这台计算机出故障时 · 治理操作系统", "it": "gos.earth · Immagina il nostro mondo come un computer · Quando il computer del mondo si guasta · Sistema Operativo di Governance"}};
+  </script>
+  <script>
+(function () {
+  const { strings, titles } = window.DECK_I18N;
+  const select = document.getElementById('lang');
+  const KEY = 'registryPreferredLocale';
+  const ids = Object.keys(strings);
+
+  function preferred() {
+    const fromUrl = new URLSearchParams(location.search).get('locale');
+    if (ids.includes(fromUrl)) return fromUrl;
+    try {
+      const stored = localStorage.getItem(KEY);
+      if (ids.includes(stored)) return stored;
+    } catch (e) {}
+    for (const l of navigator.languages || [navigator.language]) {
+      if (ids.includes(l)) return l;
+      const code = l.split('-')[0];
+      if (code === 'zh') return 'zh-CN';
+      if (ids.includes(code)) return code;
+    }
+    return 'en';
+  }
+
+  function apply(lang) {
+    document.querySelectorAll('[data-i18n]').forEach((el) => {
+      el.innerHTML = strings[lang][parseInt(el.dataset.i18n, 10)];
+    });
+    document.documentElement.lang = lang;
+    document.title = titles[lang];
+    select.value = lang;
+  }
+
+  apply(preferred());
+  select.addEventListener('change', () => {
+    const lang = select.value;
+    try { localStorage.setItem(KEY, lang); } catch (e) {}
+    const url = new URL(location.href);
+    if (url.searchParams.has('locale')) {
+      url.searchParams.set('locale', lang);
+      history.replaceState(null, '', url);
+    }
+    apply(lang);
+    window.dispatchEvent(new Event('resize'));
+  });
+})();
+
+  </script>
   <script>
 (function () {
   const pages = Array.from(document.querySelectorAll('.page'));
@@ -722,6 +832,7 @@
   window.addEventListener('hashchange', () => applyScene(sceneFromHash() - 1));
 
   window.addEventListener('keydown', (e) => {
+    if (e.target.closest && e.target.closest('select')) return;
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ' || e.key === 'PageDown') {
       e.preventDefault();
       window.__goToScene(sceneIndex + 2);
@@ -738,7 +849,7 @@
   });
 
   document.addEventListener('click', (e) => {
-    if (e.button !== 0 || e.target.closest('a, button, .dots')) return;
+    if (e.button !== 0 || e.target.closest('a, button, .dots, .lang')) return;
     if (String(window.getSelection())) return;
     window.__goToScene(sceneIndex + 2);
   });
