@@ -367,10 +367,9 @@
     position: absolute;
     top: 0.375rem;
     right: 0.5rem;
-    max-width: 70%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    max-width: 85%;
+    text-align: right;
+    line-height: 1.25;
     font-size: 0.625rem;
     color: rgba(255, 255, 255, 0.85);
     text-decoration: none;
