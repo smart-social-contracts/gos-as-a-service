@@ -26,6 +26,7 @@
 
 ## gos-intro
 
+- intro: Humanity's operating system needs an upgrade.
 - left: GOS — Governance Operating System
 - Transparent, efficient, secure
 - Enables cooperation scalability + Respects user autonomy — human alignment

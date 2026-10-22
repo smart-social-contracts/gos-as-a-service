@@ -502,7 +502,8 @@ I18N_JS = """
 })();
 """
 
-# Pages and fragments: elements with data-frag="N" appear at step N of their page. Click, →, ↓ or space advances; ←, ↑ goes back.
+# Pages and fragments: elements with data-frag="N" appear at step N of their page, and
+# data-until="N" ones leave at step N. Click, →, ↓ or space advances; ←, ↑ goes back.
 DECK_JS = """
 (function () {
   const pages = Array.from(document.querySelectorAll('.page'));
@@ -544,6 +545,9 @@ DECK_JS = """
       });
       page.querySelectorAll('[data-frag]').forEach((f) => {
         f.classList.toggle('shown', active && parseInt(f.dataset.frag, 10) <= stepIdx);
+      });
+      page.querySelectorAll('[data-until]').forEach((f) => {
+        f.classList.toggle('shown', active && stepIdx < parseInt(f.dataset.until, 10));
       });
     });
     renderDots(pageIdx);
@@ -1039,6 +1043,26 @@ CSS = (
       .hint-pointer { display: none; }
       .hint-touch { display: inline; }
     }
+    .gos-intro-line {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0.2rem;
+      z-index: 2;
+      text-align: center;
+      font-size: 1.75rem;
+      font-weight: 650;
+      letter-spacing: -0.01em;
+      pointer-events: none;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.35s ease, transform 0.35s ease;
+    }
+    .gos-intro-line.shown {
+      opacity: 1;
+      transform: none;
+      transition: opacity 0.7s ease-out var(--after-move), transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) var(--after-move);
+    }
     @keyframes hint-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; } }
     @keyframes hint-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
@@ -1317,6 +1341,7 @@ CSS = (
       .globe-canvas, .wf-art * { animation: none !important; }
       .wc-pulses { display: none; }
       .page.active .start-hint { animation: none; opacity: 1; }
+      .gos-intro-line, .gos-intro-line.shown { transition: none; transform: none; }
     }
 
     @media (max-width: 900px) {
@@ -1371,8 +1396,13 @@ CSS = (
       .wf-pc { font-size: 0.92rem; margin-top: 0.35rem; }
       .wf-pc svg { width: 1rem; height: 1rem; }
 
-      .gos-slide { flex-direction: column; align-items: stretch; justify-content: center; gap: 1.1rem; padding: 0; }
-      .gos-globe-slot { order: -2; align-self: center; height: auto; width: min(76%, 36vh); }
+      /* A grid so the intro line can share the points' row: it sits under the globe and moves nothing when it goes. */
+      .gos-slide { display: grid; grid-template-columns: minmax(0, 1fr); align-content: center; gap: 1.1rem; padding: 0; }
+      .gos-slide > * { grid-column: 1; }
+      .gos-globe-slot { grid-row: 1; justify-self: center; height: auto; width: min(76%, 36vh); }
+      .gos-left { grid-row: 2; }
+      .gos-right { grid-row: 3; }
+      .gos-intro-line { position: static; grid-row: 2; grid-column: 1; align-self: start; padding-top: 0.6rem; font-size: 1.45rem; }
       .gos-slide.globe-only .gos-globe-slot { width: min(92%, 70vh); }
       .gos-slide.globe-only .gos-side { display: none; }
       .gos-side { flex: none; gap: 0.75rem; }
@@ -1488,7 +1518,13 @@ class GosIntroSlide(Slide):
         legend_frag = 0
         side = "left"
         frag = 0
+        intro = ""
         for _, text in self.bullets:
+            # "intro: …" shows only before the first point, under the globe.
+            m = re.match(r"^intro:\s*(.*)$", text)
+            if m:
+                intro = f'<p class="gos-intro-line" data-until="1">{tr(m.group(1))}</p>'
+                continue
             entry = re.match(r"^legend:\s*(realms|other)\s+—\s+(.*)$", text)
             if entry:
                 if not legend:
@@ -1556,6 +1592,7 @@ class GosIntroSlide(Slide):
                 <div class="gos-globe-slot" data-globe-slot data-globe-layer="realms"></div>
                 <div class="gos-side gos-left">{"".join(sides["left"])}</div>
                 <div class="gos-side gos-right">{"".join(sides["right"])}</div>
+                {intro}
               </section>
             </div>"""
         return body

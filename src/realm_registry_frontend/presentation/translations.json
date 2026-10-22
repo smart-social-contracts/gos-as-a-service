@@ -1,5 +1,6 @@
 {
   "es": {
+    "Humanity's operating system needs an upgrade.": "El sistema operativo de la humanidad necesita una actualización.",
     "Click or press → to start": "Haz clic o pulsa → para empezar",
     "Tap to start": "Toca para empezar",
     "land, water, resources": "tierra, agua, recursos",
@@ -59,6 +60,7 @@
     "Other?": "¿Otros?"
   },
   "de": {
+    "Humanity's operating system needs an upgrade.": "Das Betriebssystem der Menschheit braucht ein Update.",
     "Click or press → to start": "Klicken oder → drücken, um zu beginnen",
     "Tap to start": "Tippen, um zu beginnen",
     "land, water, resources": "Land, Wasser, Rohstoffe",
@@ -118,6 +120,7 @@
     "Other?": "Andere?"
   },
   "fr": {
+    "Humanity's operating system needs an upgrade.": "Le système d'exploitation de l'humanité a besoin d'une mise à jour.",
     "Click or press → to start": "Cliquez ou appuyez sur → pour commencer",
     "Tap to start": "Touchez pour commencer",
     "land, water, resources": "terres, eau, ressources",
@@ -177,6 +180,7 @@
     "Other?": "Autres ?"
   },
   "zh-CN": {
+    "Humanity's operating system needs an upgrade.": "人类的操作系统需要升级。",
     "Click or press → to start": "点击或按 → 开始",
     "Tap to start": "轻触开始",
     "land, water, resources": "土地、水、资源",
@@ -236,6 +240,7 @@
     "Other?": "其他？"
   },
   "it": {
+    "Humanity's operating system needs an upgrade.": "Il sistema operativo dell'umanità ha bisogno di un aggiornamento.",
     "Click or press → to start": "Clicca o premi → per iniziare",
     "Tap to start": "Tocca per iniziare",
     "land, water, resources": "terra, acqua, risorse",
