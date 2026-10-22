@@ -15,8 +15,7 @@
   import RegistryMobileChrome from '$lib/components/RegistryMobileChrome.svelte';
   import RegistryTour from '$lib/components/RegistryTour.svelte';
   import GlobeWireframeLoader from '$lib/components/GlobeWireframeLoader.svelte';
-  import { fetchRealmDetails, fetchZoneData } from '$lib/globe/zone-fetcher.js';
-  import { DUMMY_REALMS, DUMMY_ZONE_DATA } from '$lib/globe/dummy-realms.js';
+  import { fetchListingDetails, fetchListings, zoneDataFromDetails } from '$lib/globe/listings.js';
   import { filterAndSortRealms } from '$lib/realm-utils.js';
   import { realmPanelChrome } from '$lib/realm-panel-chrome.js';
   import { assistantChrome } from '$lib/assistant-chrome.js';
@@ -80,14 +79,6 @@
     runtimeCanisterIds()?.casals_url,
   );
 
-  function isLocalDevelopment() {
-    return (
-      typeof window !== 'undefined' &&
-      (window.location.hostname.includes('localhost') ||
-        window.location.hostname.includes('127.0.0.1'))
-    );
-  }
-
   function applyFilters() {
     filteredRealms = filterAndSortRealms(realms, debouncedSearchQuery, filterStage, sortBy);
   }
@@ -106,58 +97,30 @@
     try {
       loading = true;
       error = null;
-      const response = await backend.list_realms();
-      realms = response || [];
-
-      // Local empty registry: inject demo realms so the globe can be previewed
-      const useDummy = isLocalDevelopment() && realms.length === 0;
-      if (useDummy) {
-        realms = DUMMY_REALMS.map((r) => ({ ...r }));
-        filteredRealms = realms;
-        loading = false;
-        realmZoneData = { ...DUMMY_ZONE_DATA };
-        globeLoading = false;
-        return;
-      }
-
+      realms = await fetchListings(backend);
       filteredRealms = realms;
-      // Paint the globe as soon as the registry directory is back. Details and
-      // zone hexes fill in afterwards — do not hold the loading overlay.
+      // Paint the globe as soon as the directory is back; manifestos and zone
+      // hexes fill in afterwards.
       loading = false;
       globeLoading = false;
 
-      void hydrateRealmDetailsAndZones(realms);
+      void loadListingDetails(realms);
     } catch (err) {
       error = err.message || 'Failed to load realms';
       loading = false;
       globeLoading = false;
-
-      // Still show demo data locally if backend fails
-      if (isLocalDevelopment() && realms.length === 0) {
-        realms = DUMMY_REALMS.map((r) => ({ ...r }));
-        filteredRealms = realms;
-        realmZoneData = { ...DUMMY_ZONE_DATA };
-        error = null;
-      }
     }
   }
 
-  async function hydrateRealmDetailsAndZones(currentRealms) {
+  async function loadListingDetails(currentRealms) {
     try {
-      const [details, zones] = await Promise.all([
-        fetchRealmDetails(currentRealms),
-        fetchZoneData(currentRealms),
-      ]);
-      details.forEach(({ id, users_count, manifesto, realm_name, realm_stage, last_activity_at }) => {
-        realms = realms.map((r) =>
-          r.id === id
-            ? { ...r, users_count, manifesto, realm_name, realm_stage, last_activity_at }
-            : r
-        );
-      });
-      realmZoneData = zones;
+      const details = await fetchListingDetails(backend, currentRealms);
+      realms = realms.map((r) =>
+        details[r.id]?.manifesto ? { ...r, manifesto: details[r.id].manifesto } : r
+      );
+      realmZoneData = zoneDataFromDetails(currentRealms, details);
     } catch (err) {
-      console.warn('Background realm hydrate failed:', err?.message || err);
+      console.warn('Listing details failed:', err?.message || err);
     }
   }
 
@@ -193,6 +156,10 @@
   }
 
   function handleKeydown(e) {
+    if (e.key === 'Escape' && activeManifestoRealm) {
+      activeManifestoRealm = null;
+      return;
+    }
     if (e.key === '/' && document.activeElement !== searchInput) {
       e.preventDefault();
       panelOpen = true;
@@ -366,20 +333,25 @@
     class="manifesto-overlay"
     role="dialog"
     aria-modal="true"
-    on:click={() => (activeManifestoRealm = null)}
-    on:keydown={(e) => e.key === 'Escape' && (activeManifestoRealm = null)}
+    aria-labelledby="manifesto-title"
   >
-    <div class="manifesto-modal" on:click|stopPropagation role="document">
+    <button
+      type="button"
+      class="manifesto-backdrop"
+      aria-label="Close"
+      on:click={() => (activeManifestoRealm = null)}
+    ></button>
+    <div class="manifesto-modal" role="document">
       <button class="manifesto-close" on:click={() => (activeManifestoRealm = null)} aria-label="Close">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M18 6L6 18M6 6l12 12"></path>
-                    </svg>
-                  </button>
-      <h3>{activeManifestoRealm.name || activeManifestoRealm.realm_name}</h3>
-      <p>{activeManifestoRealm.manifesto}</p>
-          </div>
-        </div>
-      {/if}
+        </svg>
+      </button>
+      <h3 id="manifesto-title">{activeManifestoRealm.name || activeManifestoRealm.realm_name}</h3>
+      <p>{realms.find((r) => r.id === activeManifestoRealm.id)?.manifesto || activeManifestoRealm.manifesto}</p>
+    </div>
+  </div>
+{/if}
 
 <style>
   :global(body) {
@@ -479,7 +451,16 @@
     background: rgba(0, 0, 0, 0.3);
     padding: 1rem;
   }
-  
+
+  .manifesto-backdrop {
+    position: absolute;
+    inset: 0;
+    border: none;
+    padding: 0;
+    background: transparent;
+    cursor: default;
+  }
+
   .manifesto-modal {
     position: relative;
     max-width: 480px;

@@ -91,9 +91,6 @@ export const idlFactory = ({ IDL }) => {
         [AddCreditsResult],
         [],
       ),
-    'issue_voucher' : IDL.Func([IDL.Text], [IDL.Text], []),
-    'redeem_voucher' : IDL.Func([IDL.Text], [IDL.Text], []),
-    'my_voucher_redemptions' : IDL.Func([], [IDL.Text], ['query']),
     'billing_status' : IDL.Func([], [GetBillingStatusResult], ['query']),
     'claim_slug' : IDL.Func(
         [
@@ -128,6 +125,7 @@ export const idlFactory = ({ IDL }) => {
     'get_env_config' : IDL.Func([], [IDL.Text], ['query']),
     'get_invitation_mode' : IDL.Func([], [GenericResult], ['query']),
     'get_latest_version' : IDL.Func([], [UpgradeResult], ['query']),
+    'get_listings' : IDL.Func([IDL.Text], [IDL.Text], ['query']),
     'get_realm' : IDL.Func([IDL.Text], [GetRealmResult], ['query']),
     'get_runtime_flags' : IDL.Func([], [IDL.Text], ['query']),
     'get_transactions' : IDL.Func(
@@ -138,15 +136,20 @@ export const idlFactory = ({ IDL }) => {
     'http_request' : IDL.Func([HttpRequest], [HttpResponseIncoming], ['query']),
     'http_request_update' : IDL.Func([HttpRequest], [HttpResponseIncoming], []),
     'is_principal_activated' : IDL.Func([IDL.Text], [GenericResult], ['query']),
+    'issue_voucher' : IDL.Func([IDL.Text], [IDL.Text], []),
     'list_activated_principals' : IDL.Func([], [IDL.Text], ['query']),
     'list_invitation_codes' : IDL.Func([], [IDL.Text], ['query']),
+    'list_listings' : IDL.Func([IDL.Nat, IDL.Nat], [IDL.Text], ['query']),
     'list_pending_pretty_hostnames' : IDL.Func([], [IDL.Text], ['query']),
     'list_realms' : IDL.Func([], [IDL.Vec(RealmRecord)], ['query']),
     'list_versions' : IDL.Func([], [IDL.Text], ['query']),
+    'listing_publish' : IDL.Func([IDL.Text], [IDL.Text], []),
+    'my_voucher_redemptions' : IDL.Func([], [IDL.Text], ['query']),
     'publish_version' : IDL.Func([IDL.Text], [UpgradeResult], []),
     'realm_count' : IDL.Func([], [IDL.Nat64], ['query']),
     'realm_setup_completed' : IDL.Func([IDL.Text], [IDL.Text], []),
     'redeem_invitation_code' : IDL.Func([IDL.Text], [GenericResult], []),
+    'redeem_voucher' : IDL.Func([IDL.Text], [IDL.Text], []),
     'register_realm' : IDL.Func(
         [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text],
         [AddRealmResult],

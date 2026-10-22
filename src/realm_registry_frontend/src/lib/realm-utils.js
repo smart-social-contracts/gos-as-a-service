@@ -74,6 +74,8 @@ export function resolveRealmAssetUrl(realm, assetPath) {
 }
 
 export function resolvedRealmLogoUrl(realm) {
+  const own = String(realm.logo || '').trim();
+  if (own.startsWith('https://')) return own;
   return resolveRealmAssetUrl(realm, '/custom/logo.png') || null;
 }
 

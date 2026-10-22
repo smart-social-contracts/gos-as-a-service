@@ -90,6 +90,12 @@ class RealmRecord(Entity, TimestampedMixin):
     created_at = Float()
     frontend_canister_id = String(max_length=64)
     listing_status = String(max_length=16, default="live")
+    # Set only on listings with no canister behind them; their owner.
+    publisher = String(max_length=64, default="")
+    stage = String(max_length=16, default="")
+    last_activity_at = Integer(default=0)
+    manifesto_preview = String(max_length=280, default="")
+    revision = Integer(default=0)
 
     def effective_listing_status(self) -> str:
         status = (self.listing_status or "").strip()

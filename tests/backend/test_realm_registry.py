@@ -218,7 +218,8 @@ def test_count_realms():
         count = count_registered_realms()
         assert count == 2, f"Expected 2 realms, got {count}"
 
-        # Remove a realm
+        # Remove a realm (as the realm itself)
+        mock_ic.caller.return_value = "test-realm-1"
         remove_registered_realm("test-realm-1")
 
         # Test count after removal

@@ -147,7 +147,7 @@ type RealmInstallerService = service { enqueue_deployment : (text) -> (RResultEn
 type RealmTargetService = service { install_extension_from_registry : (text) -> (text); install_codex_from_registry : (text) -> (text); run_codex_init : (text) -> (text); resync_extension_frontends : (text) -> (text) };
 type RealmRegistryService = service { register_realm : (text, text, text, text, text) -> (text); remove_realm : (text) -> (text); deployment_failed : (text, text, text) -> (text); deployment_succeeded : (text, text) -> (text) };
 type FileRegistryService = service { get_extension_manifest : (text) -> (text) query };
-type CasalsService = service { get_tree : () -> (text) query; get_cycles_cached : () -> (text) query; create_stand : (text) -> (text); destroy_stand : (text) -> (text) };
+type CasalsService = service { orchestra_get : (text) -> (text) query; cycles_get : (text) -> (text) query; stand_create : (text) -> (text); stand_destroy : (text) -> (text) };
 
 service : (text) -> {
   "status" : () -> (GetStatusResult) query;
@@ -158,6 +158,9 @@ service : (text) -> {
   "get_realm" : (text) -> (GetRealmResult) query;
   "remove_realm" : (text) -> (AddRealmResult);
   "realm_count" : () -> (nat64) query;
+  "listing_publish" : (text) -> (text);
+  "list_listings" : (nat, nat) -> (text) query;
+  "get_listings" : (text) -> (text) query;
   "realm_setup_completed" : (text) -> (text);
   "claim_slug" : (text, text, text, text, text, opt text, opt text, opt text, opt text) -> (GenericResult);
   "resolve_slug" : (text) -> (GenericResult);

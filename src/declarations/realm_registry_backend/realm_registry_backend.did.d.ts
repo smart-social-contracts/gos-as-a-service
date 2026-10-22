@@ -53,10 +53,10 @@ export interface CasalsConfigView {
   'casals_canister_id' : string,
 }
 export interface CasalsService {
-  'create_stand' : ActorMethod<[string], string>,
-  'destroy_stand' : ActorMethod<[string], string>,
-  'get_cycles_cached' : ActorMethod<[], string>,
-  'get_tree' : ActorMethod<[], string>,
+  'cycles_get' : ActorMethod<[string], string>,
+  'orchestra_get' : ActorMethod<[string], string>,
+  'stand_create' : ActorMethod<[string], string>,
+  'stand_destroy' : ActorMethod<[string], string>,
 }
 export interface CreateCanisterArgs { 'settings' : [] | [CanisterSettings] }
 export interface CreateCanisterResult { 'canister_id' : Principal }
@@ -526,9 +526,6 @@ export interface _SERVICE {
     [string, bigint, string, string],
     AddCreditsResult
   >,
-  'issue_voucher' : ActorMethod<[string], string>,
-  'redeem_voucher' : ActorMethod<[string], string>,
-  'my_voucher_redemptions' : ActorMethod<[], string>,
   'billing_status' : ActorMethod<[], GetBillingStatusResult>,
   'claim_slug' : ActorMethod<
     [
@@ -554,21 +551,27 @@ export interface _SERVICE {
   'get_env_config' : ActorMethod<[], string>,
   'get_invitation_mode' : ActorMethod<[], GenericResult>,
   'get_latest_version' : ActorMethod<[], UpgradeResult>,
+  'get_listings' : ActorMethod<[string], string>,
   'get_realm' : ActorMethod<[string], GetRealmResult>,
   'get_runtime_flags' : ActorMethod<[], string>,
   'get_transactions' : ActorMethod<[string, bigint], TransactionHistoryResult>,
   'http_request' : ActorMethod<[HttpRequest], HttpResponseIncoming>,
   'http_request_update' : ActorMethod<[HttpRequest], HttpResponseIncoming>,
   'is_principal_activated' : ActorMethod<[string], GenericResult>,
+  'issue_voucher' : ActorMethod<[string], string>,
   'list_activated_principals' : ActorMethod<[], string>,
   'list_invitation_codes' : ActorMethod<[], string>,
+  'list_listings' : ActorMethod<[bigint, bigint], string>,
   'list_pending_pretty_hostnames' : ActorMethod<[], string>,
   'list_realms' : ActorMethod<[], Array<RealmRecord>>,
   'list_versions' : ActorMethod<[], string>,
+  'listing_publish' : ActorMethod<[string], string>,
+  'my_voucher_redemptions' : ActorMethod<[], string>,
   'publish_version' : ActorMethod<[string], UpgradeResult>,
   'realm_count' : ActorMethod<[], bigint>,
   'realm_setup_completed' : ActorMethod<[string], string>,
   'redeem_invitation_code' : ActorMethod<[string], GenericResult>,
+  'redeem_voucher' : ActorMethod<[string], string>,
   'register_realm' : ActorMethod<
     [string, string, string, string, string],
     AddRealmResult

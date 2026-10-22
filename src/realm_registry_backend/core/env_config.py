@@ -19,6 +19,7 @@ _CAN_TEST_MODE_KEY = "env:can_test_mode"
 _OPEN_MODE_KEY = "env:open_mode"
 _INSTALLER_ID_KEY = "env:installer_id"
 _CASALS_FRONTEND_KEY = "env:casals_frontend"
+_LISTING_PUBLISHERS_KEY = "env:listing_publishers"
 
 
 def _truthy(val: str) -> bool:
@@ -86,8 +87,22 @@ def get_casals_frontend_canister_id() -> str:
     return (cfg.value if cfg else "").strip()
 
 
+def get_listing_publishers() -> list:
+    """Principals that may publish listings with no canister behind them."""
+    cfg = RegistryConfig[_LISTING_PUBLISHERS_KEY]
+    return [p for p in (cfg.value if cfg else "").split(",") if p]
+
+
 def apply_env_config(params: dict) -> None:
     """Persist env config fields present in *params* (all optional)."""
+    publishers = None
+    if "listing_publishers" in params:
+        val = params.get("listing_publishers") or []
+        if isinstance(val, str):
+            val = val.split(",")
+        publishers = ",".join(str(p).strip() for p in val if str(p).strip())
+        if len(publishers) > 256:
+            raise ValueError("listing_publishers holds at most four principals")
     if "portal_url" in params:
         val = (params.get("portal_url") or "").strip().rstrip("/")
         _set_key(_PORTAL_URL_KEY, val)
@@ -121,6 +136,8 @@ def apply_env_config(params: dict) -> None:
             or ""
         ).strip()
         _set_key(_CASALS_FRONTEND_KEY, val)
+    if publishers is not None:
+        _set_key(_LISTING_PUBLISHERS_KEY, publishers)
 
 
 def apply_env_config_from_json(args: str) -> dict:
@@ -140,6 +157,7 @@ def get_env_config_payload() -> dict:
         "can_test_mode": is_can_test_mode(),
         "installer_id": get_installer_id(),
         "casals_frontend_canister_id": get_casals_frontend_canister_id(),
+        "listing_publishers": get_listing_publishers(),
     }
 
 

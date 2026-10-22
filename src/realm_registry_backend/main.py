@@ -200,6 +200,12 @@ from api.slugs import (
     resolve_slug_json,
 )
 from api.status import get_status
+from api.listings import (
+    get_listing_details,
+    init_details as init_listing_details,
+    list_listings as list_listings_impl,
+    publish_listing,
+)
 from _cdk import (
     Async, CallResult, Duration, Func, Opt, Principal, Query, Record, Service,
     StableBTreeMap, Variant, Vec, blob, float64, ic, init, match, nat,
@@ -356,6 +362,8 @@ class HttpResponseIncoming(Record):
 
 storage = StableBTreeMap[str, str](memory_id=1, max_key_size=200, max_value_size=2000)
 Database.init(db_storage=storage, audit_enabled=True)
+listing_details = StableBTreeMap[str, str](memory_id=2, max_key_size=64, max_value_size=400_000)
+init_listing_details(listing_details)
 logger = get_logger("main")
 
 DEPLOYMENT_COST_CREDITS = 5
@@ -490,6 +498,47 @@ def remove_realm(realm_id: text) -> AddRealmResult:
 @query
 def realm_count() -> nat64:
     return count_registered_realms()
+
+# ── Listings (directory and globe) ─────────────────────────────────────
+
+@update
+def listing_publish(args: text) -> text:
+    """Create or update a listing. A realm publishes its own (no ``id``, or its
+    principal); a ``listing_publishers`` principal publishes listings with no
+    canister under ids of lowercase words joined by dashes.
+
+    args JSON: {id?, name?, logo?, stage?, users_count?, last_activity_at?,
+    manifesto?, zones?: [{h3_index, user_count, name?, location_name?, zone_type?}],
+    zones_append?}. Fields left out keep their value; ``zones`` replaces the
+    zone list unless ``zones_append`` is true.
+    """
+    try:
+        payload = json.loads(args) if args else {}
+        if not isinstance(payload, dict):
+            return json.dumps({"success": False, "error": "Expected a JSON object"})
+        return json.dumps(publish_listing(
+            payload, str(ic.caller()), ic.is_controller(ic.caller()),
+            float(ic.time() / 1_000_000_000),
+        ))
+    except Exception as e:
+        return json.dumps({"success": False, "error": str(e)})
+
+@query
+def list_listings(from_id: nat, count: nat) -> text:
+    """A page of listing summaries (at most 50). Pass ``next`` back as from_id;
+    it is null on the last page. ``revision`` changes when the details do."""
+    try:
+        return json.dumps(list_listings_impl(int(from_id), int(count)))
+    except Exception as e:
+        return json.dumps({"success": False, "error": str(e)})
+
+@query
+def get_listings(ids_json: text) -> text:
+    """Manifesto, zones and revision for up to 10 listing ids (JSON list)."""
+    try:
+        return json.dumps(get_listing_details(json.loads(ids_json or "[]")))
+    except Exception as e:
+        return json.dumps({"success": False, "error": str(e)})
 
 @update
 def realm_setup_completed(args: text) -> text:
