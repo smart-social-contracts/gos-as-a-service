@@ -53,10 +53,14 @@ export function buildRealmHoverPopupHtml(data, translate) {
   }
 
   if (data.isCenter && data.totalUsers != null && data.totalUsers > 0) {
+    const count = formatCount(data.totalUsers);
+    const label = escapeHtml(t(translate, 'globe.popup_total_users', { count }));
     metaRows.push(
-      `<div class="realm-hover-stat">
-        <span class="realm-hover-stat-icon" aria-hidden="true">◉</span>
-        ${escapeHtml(t(translate, 'globe.popup_total_users', { count: formatCount(data.totalUsers) }))}
+      `<div class="realm-hover-stat" title="${label}" aria-label="${label}">
+        <svg class="realm-hover-stat-icon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+        </svg>
+        <span aria-hidden="true">${escapeHtml(count)}</span>
       </div>`
     );
   } else if (data.influenceLabel) {

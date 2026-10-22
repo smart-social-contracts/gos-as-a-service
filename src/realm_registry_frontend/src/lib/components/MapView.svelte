@@ -938,8 +938,11 @@
   }
 
   .map-view :global(.realm-hover-stat-icon) {
-    color: #0891b2;
-    font-size: 0.5rem;
+    flex-shrink: 0;
+  }
+
+  .map-view :global(.realm-hover-stat) {
+    font-variant-numeric: tabular-nums;
   }
 
   .map-view :global(.realm-hover-influence) {

@@ -21,7 +21,8 @@ test('the popup counts the realm\'s users in total, not those in the zone', () =
   const html = buildMarkerHoverPopupHtml({ ...point, users: 12, totalUsers: 4200 }, (key, opts) =>
     `${key}:${opts?.values?.count ?? ''}`
   );
-  assert.match(html, /globe\.popup_total_users:4,?200/);
+  assert.match(html, /aria-label="globe\.popup_total_users:4,?200"/);
+  assert.match(html, /<span aria-hidden="true">4,?200<\/span>/);
   assert.doesNotMatch(html, /users_in_zone/);
 });
 
