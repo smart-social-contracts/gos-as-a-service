@@ -12,7 +12,7 @@ test('the popup shows the realm photo and its credit on top', () => {
     credit: 'Photo: A. <Author>, CC BY 4.0, Wikimedia Commons',
   });
   assert.match(html, /class="realm-hover-card has-photo"/);
-  assert.match(html, /<img src="https:\/\/fr\.icp0\.io\/listings\/harbour-commons\/background\.jpg\?v=abc&amp;x=1" alt="" \/>/);
+  assert.match(html, /<img class="realm-hover-photo" src="https:\/\/fr\.icp0\.io\/listings\/harbour-commons\/background\.jpg\?v=abc&amp;x=1" alt="" \/>/);
   assert.match(html, /Photo: A\. &lt;Author&gt;, CC BY 4\.0/);
   assert.ok(html.indexOf('realm-hover-photo') < html.indexOf('realm-hover-title'));
 });

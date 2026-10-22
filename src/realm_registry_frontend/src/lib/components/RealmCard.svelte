@@ -96,7 +96,14 @@
   }
 </script>
 
-<article class="realm-card" class:selected class:expanded use:nearScreen>
+<article
+  class="realm-card"
+  class:selected
+  class:expanded
+  class:has-photo={bannerSrc}
+  style:background-image={bannerSrc ? `url('${bannerSrc}')` : null}
+  use:nearScreen
+>
   <button
     type="button"
     class="realm-row"
@@ -104,46 +111,46 @@
     aria-controls={expanded ? detailsId : undefined}
     on:click={() => dispatch('toggle', { realm })}
   >
-    <span class="realm-logo-container">
-      {#if logoSrc && !logoFailed}
-        <img src={logoSrc} alt="" class="realm-logo" on:error={() => (logoFailed = true)} />
-      {:else}
-        <span class="realm-logo-fallback">{(name || '?').charAt(0).toUpperCase()}</span>
-      {/if}
+    <span class="realm-lead">
+      <span class="realm-logo-container">
+        {#if logoSrc && !logoFailed}
+          <img src={logoSrc} alt="" class="realm-logo" on:error={() => (logoFailed = true)} />
+        {:else}
+          <span class="realm-logo-fallback">{(name || '?').charAt(0).toUpperCase()}</span>
+        {/if}
+      </span>
+
+      <span class="realm-main">
+        <span class="realm-name">{name}</span>
+        {#if stageText || activity}
+          <span class="realm-meta">
+            {#if stageText}
+              <span class="stage-badge stage-{stageId}" title={stageHelp}>{stageText}</span>
+            {/if}
+            {#if activity}
+              <span class="activity" title={activityTitle}>{activity}</span>
+            {/if}
+          </span>
+        {/if}
+      </span>
     </span>
 
-    <span class="realm-main">
-      <span class="realm-name">{name}</span>
-      {#if stageText || activity}
-        <span class="realm-meta">
-          {#if stageText}
-            <span class="stage-badge stage-{stageId}" title={stageHelp}>{stageText}</span>
-          {/if}
-          {#if activity}
-            <span class="activity" title={activityTitle}>{activity}</span>
-          {/if}
-        </span>
-      {/if}
-    </span>
+    <span class="realm-trail">
+      <span
+        class="user-badge"
+        class:has-users={realm.users_count > 0}
+        title={$_('card.members', { values: { count: members } })}
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+        </svg>
+        <span>{members}</span>
+      </span>
 
-    {#if bannerSrc}
-      <img src={bannerSrc} alt="" class="realm-glimpse" title={photoCredit || null} />
-    {/if}
-
-    <span
-      class="user-badge"
-      class:has-users={realm.users_count > 0}
-      title={$_('card.members', { values: { count: members } })}
-    >
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+      <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <polyline points="6 9 12 15 18 9"></polyline>
       </svg>
-      <span>{members}</span>
     </span>
-
-    <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-      <polyline points="6 9 12 15 18 9"></polyline>
-    </svg>
     <span class="sr-only">{expanded ? $_('card.collapse') : $_('card.expand')}</span>
   </button>
 
@@ -151,8 +158,6 @@
     <div
       id={detailsId}
       class="realm-details"
-      class:has-image={bannerSrc}
-      style:background-image={bannerSrc ? `url('${bannerSrc}')` : null}
       transition:slide={{ duration: 160 }}
     >
       {#if photoCredit}
@@ -191,7 +196,9 @@
     width: 100%;
     border: 1px solid var(--border);
     border-radius: 12px;
-    background: var(--surface);
+    background-color: var(--surface);
+    background-size: cover;
+    background-position: center 40%;
     font-family: var(--font-family);
     transition: border-color 0.15s, box-shadow 0.15s;
     overflow: hidden;
@@ -209,16 +216,77 @@
 
   .realm-row {
     display: flex;
-    align-items: center;
-    gap: 0.75rem;
+    align-items: stretch;
     width: 100%;
-    padding: 0.75rem 0.875rem;
+    padding: 0;
     border: 0;
     background: none;
     color: inherit;
     font: inherit;
     text-align: left;
     cursor: pointer;
+  }
+
+  .realm-lead,
+  .realm-trail {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .realm-lead {
+    flex: 0 1 auto;
+    min-width: 0;
+    padding: 0.75rem 0.75rem 0.75rem 0.875rem;
+  }
+
+  .realm-trail {
+    flex-shrink: 0;
+    margin-left: auto;
+    padding: 0.75rem 0.875rem 0.75rem 0;
+  }
+
+  /* The photo shows between the name and the member count; both sit on white that melts into it. */
+  .has-photo .realm-row {
+    gap: clamp(4.5rem, 24%, 9rem);
+  }
+
+  .has-photo .realm-lead,
+  .has-photo .realm-trail {
+    position: relative;
+    background: var(--surface);
+  }
+
+  .has-photo .realm-lead::after,
+  .has-photo .realm-trail::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 3rem;
+    pointer-events: none;
+  }
+
+  .has-photo .realm-lead::after {
+    left: 100%;
+    background: linear-gradient(
+      to right,
+      rgba(255, 255, 255, 1) 0%,
+      rgba(255, 255, 255, 0.78) 30%,
+      rgba(255, 255, 255, 0.32) 68%,
+      rgba(255, 255, 255, 0) 100%
+    );
+  }
+
+  .has-photo .realm-trail::before {
+    right: 100%;
+    background: linear-gradient(
+      to left,
+      rgba(255, 255, 255, 1) 0%,
+      rgba(255, 255, 255, 0.78) 30%,
+      rgba(255, 255, 255, 0.32) 68%,
+      rgba(255, 255, 255, 0) 100%
+    );
   }
 
   .realm-row:focus-visible {
@@ -321,16 +389,6 @@
     background: var(--stage-archived-bg);
   }
 
-  .realm-glimpse {
-    flex-shrink: 0;
-    width: 72px;
-    height: 36px;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-    object-fit: cover;
-    background: var(--surface-2);
-  }
-
   .user-badge {
     flex-shrink: 0;
     display: flex;
@@ -372,25 +430,19 @@
     gap: 0.75rem;
     padding: 0.875rem;
     border-top: 1px solid var(--border);
-    background-size: cover;
-    background-position: center;
+    background: var(--surface);
   }
 
-  .realm-details.has-image {
-    min-height: 160px;
-    justify-content: flex-end;
-  }
-
-  /* Darken toward the text so it stays readable on any photo. */
-  .realm-details.has-image::before {
-    content: '';
-    position: absolute;
-    inset: 0;
+  /* Opened: the photo continues under the row, then melts to white under the text. */
+  .has-photo .realm-details {
+    padding-top: 4.25rem;
+    border-top: 0;
     background: linear-gradient(
-      to top,
-      rgba(15, 23, 42, 0.9) 0%,
-      rgba(15, 23, 42, 0.6) 55%,
-      rgba(15, 23, 42, 0.15) 100%
+      to bottom,
+      rgba(255, 255, 255, 0) 0,
+      rgba(255, 255, 255, 0.35) 2rem,
+      rgba(255, 255, 255, 0.82) 3.5rem,
+      rgba(255, 255, 255, 1) 5rem
     );
   }
 
@@ -435,15 +487,6 @@
     color: var(--text-primary);
   }
 
-  .has-image .realm-manifesto {
-    color: rgba(255, 255, 255, 0.92);
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
-  }
-
-  .has-image .realm-manifesto:hover {
-    color: #fff;
-  }
-
   .visit-btn {
     align-self: flex-start;
     display: inline-flex;
@@ -460,14 +503,5 @@
 
   .visit-btn:hover {
     background: var(--border);
-  }
-
-  .has-image .visit-btn {
-    color: #0f172a;
-    background: rgba(255, 255, 255, 0.92);
-  }
-
-  .has-image .visit-btn:hover {
-    background: #fff;
   }
 </style>

@@ -93,7 +93,7 @@ export function buildRealmHoverPopupHtml(data, translate) {
     ? `<span class="realm-hover-photo-credit">${escapeHtml(data.photo.credit)}</span>`
     : '';
   const photoHtml = photoUrl.startsWith('https://')
-    ? `<div class="realm-hover-photo"><img src="${escapeHtml(photoUrl)}" alt="" />${photoCredit}</div>`
+    ? `<img class="realm-hover-photo" src="${escapeHtml(photoUrl)}" alt="" />${photoCredit}`
     : '';
 
   return `<div class="realm-hover-card${photoHtml ? ' has-photo' : ''}">

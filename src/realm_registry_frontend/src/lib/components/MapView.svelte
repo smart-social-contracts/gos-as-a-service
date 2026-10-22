@@ -834,6 +834,7 @@
   }
 
   .map-view :global(.realm-hover-card) {
+    position: relative;
     min-width: 220px;
     max-width: 280px;
     overflow: hidden;
@@ -849,27 +850,39 @@
   }
 
   .map-view :global(.realm-hover-body) {
+    position: relative;
     padding: 12px 14px;
   }
 
+  /* The photo sits behind the top of the card and melts to white under the text. */
   .map-view :global(.realm-hover-photo) {
-    position: relative;
-    height: 112px;
-    background: var(--surface-2, #f5f5f5);
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 150px;
+    object-fit: cover;
+    object-position: center 60%;
   }
 
-  .map-view :global(.realm-hover-photo img) {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
+  .map-view :global(.realm-hover-card.has-photo .realm-hover-body) {
+    padding-top: 104px;
+    background: linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0) 0,
+      rgba(255, 255, 255, 0) 40px,
+      rgba(255, 255, 255, 0.45) 72px,
+      rgba(255, 255, 255, 0.88) 100px,
+      rgba(255, 255, 255, 1) 128px
+    );
   }
 
   .map-view :global(.realm-hover-photo-credit) {
     position: absolute;
-    right: 6px;
-    bottom: 4px;
-    left: 6px;
+    z-index: 1;
+    top: 5px;
+    right: 7px;
+    left: 7px;
     text-align: right;
     font-size: 0.5625rem;
     line-height: 1.25;
