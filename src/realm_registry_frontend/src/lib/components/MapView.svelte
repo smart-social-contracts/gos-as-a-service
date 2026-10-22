@@ -860,20 +860,21 @@
     top: 0;
     left: 0;
     width: 100%;
-    height: 150px;
+    height: 280px;
     object-fit: cover;
     object-position: center 60%;
   }
 
+  /* Same band as an opened realm card: 220px of clear photo, then white. */
   .map-view :global(.realm-hover-card.has-photo .realm-hover-body) {
-    padding-top: 104px;
+    padding-top: 268px;
     background: linear-gradient(
       to bottom,
       rgba(255, 255, 255, 0) 0,
-      rgba(255, 255, 255, 0) 40px,
-      rgba(255, 255, 255, 0.45) 72px,
-      rgba(255, 255, 255, 0.88) 100px,
-      rgba(255, 255, 255, 1) 128px
+      rgba(255, 255, 255, 0) 220px,
+      rgba(255, 255, 255, 0.45) 240px,
+      rgba(255, 255, 255, 0.88) 258px,
+      rgba(255, 255, 255, 1) 276px
     );
   }
 
