@@ -52,6 +52,7 @@ export async function fetchRealmDetails(realms) {
       realm_manifesto: Idl.Text,
       realm_welcome_message: Idl.Text,
       realm_stage: Idl.Opt(Idl.Text),
+      last_activity_at: Idl.Opt(Idl.Nat64),
       user_profiles_count: Idl.Nat,
       quarters: Idl.Vec(QuarterInfo),
       is_quarter: Idl.Bool,
@@ -105,6 +106,8 @@ export async function fetchRealmDetails(realms) {
               (Array.isArray(statusData.realm_stage)
                 ? statusData.realm_stage[0]
                 : statusData.realm_stage) || 'alpha',
+            // Seconds; 0 when the realm predates the field or nobody has acted yet.
+            last_activity_at: Number(statusData.last_activity_at?.[0] ?? 0),
           };
         }
       } catch (e) {

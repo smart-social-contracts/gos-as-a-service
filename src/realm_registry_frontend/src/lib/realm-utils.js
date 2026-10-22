@@ -369,8 +369,8 @@ export async function resolveAcceptedSplashLogoUrl(inputs, fetchImpl = globalThi
   return '';
 }
 
-export function formatFullDate(timestamp) {
-  return new Date(timestamp * 1000).toLocaleString('en-US', {
+export function formatFullDate(timestamp, locale = 'en-US') {
+  return new Date(timestamp * 1000).toLocaleString(locale || 'en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -379,8 +379,7 @@ export function formatFullDate(timestamp) {
   });
 }
 
-export function formatTimeAgo(timestamp, t, locale) {
-  const now = Date.now();
+export function formatTimeAgo(timestamp, t, locale, now = Date.now()) {
   const date = new Date(timestamp * 1000);
   const seconds = Math.floor((now - date.getTime()) / 1000);
 
@@ -390,6 +389,19 @@ export function formatTimeAgo(timestamp, t, locale) {
   if (seconds < 604800) return t('time.days_ago', { values: { count: Math.floor(seconds / 86400) } });
   if (seconds < 2592000) return t('time.weeks_ago', { values: { count: Math.floor(seconds / 604800) } });
   return date.toLocaleDateString(locale || 'en', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+const QUIET_AFTER_S = 90 * 86400;
+
+/** Last-activity line for a realm card; '' when the realm has never reported any. */
+export function formatLastActivity(timestamp, t, locale, now = Date.now()) {
+  if (!timestamp) return '';
+  if (now / 1000 - timestamp > QUIET_AFTER_S) return t('card.no_recent_activity');
+  return t('card.active', { values: { when: formatTimeAgo(timestamp, t, locale, now) } });
+}
+
+export function formatCount(n, locale) {
+  return new Intl.NumberFormat(locale || 'en').format(Number(n) || 0);
 }
 
 /**

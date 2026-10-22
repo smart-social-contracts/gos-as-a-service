@@ -34,7 +34,13 @@
     "message": "No realms have been registered yet."
   },
   "card": {
-    "visit": "Visit"
+    "visit": "Visit",
+    "active": "Active {when}",
+    "no_recent_activity": "No recent activity",
+    "members": "{count} members",
+    "expand": "Show details",
+    "collapse": "Hide details",
+    "read_manifesto": "Read the full manifesto"
   },
   "map": {
     "loading": "Loading map data...",
@@ -259,5 +265,27 @@
     "connect_grok_step2": "Paste the Realms MCP URL and continue.",
     "connect_grok_step3": "Sign in with Internet Identity and choose read-only or full access.",
     "experimental_notice": "Experimental. Not official. Not legal advice. Do not enter personal data. Chats may be stored."
+  },
+  "stages": {
+    "alpha": {
+      "label": "Alpha",
+      "help": "Pilot: the realm is still being set up and tested. Features and data may change."
+    },
+    "beta": {
+      "label": "Beta",
+      "help": "Open to early members. Most features work, but expect changes."
+    },
+    "production": {
+      "label": "Live",
+      "help": "In regular use by its members."
+    },
+    "deprecation": {
+      "label": "Winding Down",
+      "help": "Being wound down. It may stop taking new members or proposals."
+    },
+    "terminated": {
+      "label": "Archived",
+      "help": "Closed. Its records are kept for reference."
+    }
   }
 }

@@ -46,7 +46,13 @@
     "message": "Aún no se han registrado reinos."
   },
   "card": {
-    "visit": "Visitar"
+    "visit": "Visitar",
+    "active": "Activo {when}",
+    "no_recent_activity": "Sin actividad reciente",
+    "members": "{count} miembros",
+    "expand": "Ver detalles",
+    "collapse": "Ocultar detalles",
+    "read_manifesto": "Leer el manifiesto completo"
   },
   "map": {
     "loading": "Cargando datos del mapa...",
@@ -215,5 +221,27 @@
     "checking": "Checking…",
     "check_again": "Check again",
     "history_sign_in": "Sign in with Internet Identity to save and browse conversation history."
+  },
+  "stages": {
+    "alpha": {
+      "label": "Alfa",
+      "help": "Piloto: el reino aún se está montando y probando. Las funciones y los datos pueden cambiar."
+    },
+    "beta": {
+      "label": "Beta",
+      "help": "Abierto a los primeros miembros. Casi todo funciona, pero habrá cambios."
+    },
+    "production": {
+      "label": "En marcha",
+      "help": "En uso habitual por sus miembros."
+    },
+    "deprecation": {
+      "label": "En cierre",
+      "help": "Se está cerrando. Puede dejar de admitir miembros o propuestas nuevas."
+    },
+    "terminated": {
+      "label": "Archivado",
+      "help": "Cerrado. Sus registros se conservan para consulta."
+    }
   }
 }

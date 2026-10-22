@@ -46,7 +46,13 @@
     "message": "Es wurden noch keine Realms registriert."
   },
   "card": {
-    "visit": "Besuchen"
+    "visit": "Besuchen",
+    "active": "Aktiv {when}",
+    "no_recent_activity": "Keine aktuelle Aktivität",
+    "members": "{count} Mitglieder",
+    "expand": "Details anzeigen",
+    "collapse": "Details ausblenden",
+    "read_manifesto": "Ganzes Manifest lesen"
   },
   "map": {
     "loading": "Kartendaten werden geladen...",
@@ -215,5 +221,27 @@
     "checking": "Checking…",
     "check_again": "Check again",
     "history_sign_in": "Sign in with Internet Identity to save and browse conversation history."
+  },
+  "stages": {
+    "alpha": {
+      "label": "Alpha",
+      "help": "Pilot: Das Realm wird noch aufgebaut und getestet. Funktionen und Daten können sich ändern."
+    },
+    "beta": {
+      "label": "Beta",
+      "help": "Offen für erste Mitglieder. Das meiste funktioniert, Änderungen sind zu erwarten."
+    },
+    "production": {
+      "label": "Live",
+      "help": "Wird von seinen Mitgliedern regelmäßig genutzt."
+    },
+    "deprecation": {
+      "label": "Auslaufend",
+      "help": "Wird eingestellt. Nimmt eventuell keine neuen Mitglieder oder Vorschläge mehr an."
+    },
+    "terminated": {
+      "label": "Archiviert",
+      "help": "Geschlossen. Die Unterlagen bleiben zur Einsicht erhalten."
+    }
   }
 }

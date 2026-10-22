@@ -148,9 +148,11 @@
         fetchRealmDetails(currentRealms),
         fetchZoneData(currentRealms),
       ]);
-      details.forEach(({ id, users_count, manifesto, realm_name, realm_stage }) => {
+      details.forEach(({ id, users_count, manifesto, realm_name, realm_stage, last_activity_at }) => {
         realms = realms.map((r) =>
-          r.id === id ? { ...r, users_count, manifesto, realm_name, realm_stage } : r
+          r.id === id
+            ? { ...r, users_count, manifesto, realm_name, realm_stage, last_activity_at }
+            : r
         );
       });
       realmZoneData = zones;

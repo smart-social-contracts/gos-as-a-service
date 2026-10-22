@@ -26,6 +26,31 @@
 
   $: selectedStage = stageMeta(filterStage);
 
+  /** One card open at a time; a realm picked on the map opens its card. */
+  let expandedId = null;
+  let lastSelectedId = null;
+  $: if (selectedRealmId !== lastSelectedId) {
+    lastSelectedId = selectedRealmId;
+    if (selectedRealmId) expandedId = selectedRealmId;
+  }
+
+  function toggleRealm(realm) {
+    if (expandedId === realm.id) {
+      expandedId = null;
+      return;
+    }
+    expandedId = realm.id;
+    dispatch('select', { realm });
+  }
+
+  /**
+   * @param {{ id: string, label: string }} stage
+   * @param {typeof $_} t passed in so labels follow locale changes
+   */
+  function stageName(stage, t) {
+    return t(`stages.${stage.id}.label`, { default: stage.label });
+  }
+
   $: if (open && selectedRealmId) {
     scrollToSelected();
   }
@@ -134,7 +159,6 @@
   style="width: {panelWidth}px"
   bind:this={panelEl}
   aria-hidden={!open}
-  role="complementary"
   aria-label={$_('globe.browse_realms')}
 >
   {#if open}
@@ -201,7 +225,7 @@
       >
         {#if selectedStage}
           <span class="stage-swatch" style="background-color: {selectedStage.color}" aria-hidden="true"></span>
-          <span class="stage-filter-label" style="color: {selectedStage.color}">{selectedStage.label}</span>
+          <span class="stage-filter-label" style="color: {selectedStage.color}">{stageName(selectedStage, $_)}</span>
         {:else}
           <span class="stage-filter-label muted">{$_('globe.filter_all_stages')}</span>
         {/if}
@@ -211,7 +235,7 @@
       </button>
 
       {#if showStageMenu}
-        <div class="stage-menu" role="listbox" aria-label={$_('globe.filter_all_stages')} on:mousedown|stopPropagation>
+        <div class="stage-menu" role="listbox" tabindex="-1" aria-label={$_('globe.filter_all_stages')} on:mousedown|stopPropagation>
           <button
             type="button"
             class="stage-option"
@@ -232,7 +256,7 @@
               on:click={() => selectStage(stage.id)}
             >
               <span class="stage-swatch" style="background-color: {stage.color}" aria-hidden="true"></span>
-              <span class="stage-filter-label" style="color: {stage.color}">{stage.label}</span>
+              <span class="stage-filter-label" style="color: {stage.color}">{stageName(stage, $_)}</span>
             </button>
           {/each}
         </div>
@@ -262,7 +286,8 @@
           <RealmCard
             {realm}
             selected={selectedRealmId === realm.id}
-            on:select={(e) => dispatch('select', e.detail)}
+            expanded={expandedId === realm.id}
+            on:toggle={(e) => toggleRealm(e.detail.realm)}
             on:manifesto={(e) => dispatch('manifesto', e.detail)}
           />
         </div>

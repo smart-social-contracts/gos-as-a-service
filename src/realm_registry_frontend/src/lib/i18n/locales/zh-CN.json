@@ -46,7 +46,13 @@
     "message": "尚未注册任何领域。"
   },
   "card": {
-    "visit": "访问"
+    "visit": "访问",
+    "active": "{when}活跃",
+    "no_recent_activity": "近期无活动",
+    "members": "{count} 名成员",
+    "expand": "展开详情",
+    "collapse": "收起详情",
+    "read_manifesto": "阅读完整宣言"
   },
   "map": {
     "loading": "正在加载地图数据...",
@@ -212,5 +218,27 @@
     "checking": "Checking…",
     "check_again": "Check again",
     "history_sign_in": "Sign in with Internet Identity to save and browse conversation history."
+  },
+  "stages": {
+    "alpha": {
+      "label": "内测",
+      "help": "试点阶段：领域仍在搭建和测试中，功能和数据可能会变化。"
+    },
+    "beta": {
+      "label": "公测",
+      "help": "向早期成员开放。大部分功能可用，但仍会有变化。"
+    },
+    "production": {
+      "label": "运行中",
+      "help": "成员正在日常使用。"
+    },
+    "deprecation": {
+      "label": "逐步关闭",
+      "help": "正在关闭，可能不再接受新成员或新提案。"
+    },
+    "terminated": {
+      "label": "已归档",
+      "help": "已关闭，记录保留以供查阅。"
+    }
   }
 }

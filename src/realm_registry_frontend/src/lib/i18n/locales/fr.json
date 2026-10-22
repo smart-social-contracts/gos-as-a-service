@@ -46,7 +46,13 @@
     "message": "Aucun royaume n'a encore été enregistré."
   },
   "card": {
-    "visit": "Visiter"
+    "visit": "Visiter",
+    "active": "Actif {when}",
+    "no_recent_activity": "Aucune activité récente",
+    "members": "{count} membres",
+    "expand": "Afficher les détails",
+    "collapse": "Masquer les détails",
+    "read_manifesto": "Lire le manifeste complet"
   },
   "map": {
     "loading": "Chargement des données cartographiques...",
@@ -212,5 +218,27 @@
     "checking": "Checking…",
     "check_again": "Check again",
     "history_sign_in": "Sign in with Internet Identity to save and browse conversation history."
+  },
+  "stages": {
+    "alpha": {
+      "label": "Alpha",
+      "help": "Pilote : le royaume est encore en cours de mise en place et de test. Les fonctions et les données peuvent changer."
+    },
+    "beta": {
+      "label": "Bêta",
+      "help": "Ouvert aux premiers membres. La plupart des fonctions marchent, mais des changements sont à prévoir."
+    },
+    "production": {
+      "label": "En service",
+      "help": "Utilisé régulièrement par ses membres."
+    },
+    "deprecation": {
+      "label": "En fermeture",
+      "help": "En cours de fermeture. Il peut ne plus accepter de nouveaux membres ni de propositions."
+    },
+    "terminated": {
+      "label": "Archivé",
+      "help": "Fermé. Ses registres sont conservés pour consultation."
+    }
   }
 }

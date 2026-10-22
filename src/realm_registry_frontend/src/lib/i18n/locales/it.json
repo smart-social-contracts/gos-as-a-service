@@ -46,7 +46,13 @@
     "message": "Non sono stati ancora registrati reami."
   },
   "card": {
-    "visit": "Visita"
+    "visit": "Visita",
+    "active": "Attivo {when}",
+    "no_recent_activity": "Nessuna attività recente",
+    "members": "{count} membri",
+    "expand": "Mostra dettagli",
+    "collapse": "Nascondi dettagli",
+    "read_manifesto": "Leggi il manifesto completo"
   },
   "map": {
     "loading": "Caricamento dati mappa...",
@@ -212,5 +218,27 @@
     "checking": "Checking…",
     "check_again": "Check again",
     "history_sign_in": "Sign in with Internet Identity to save and browse conversation history."
+  },
+  "stages": {
+    "alpha": {
+      "label": "Alpha",
+      "help": "Pilota: il regno è ancora in allestimento e in prova. Funzioni e dati possono cambiare."
+    },
+    "beta": {
+      "label": "Beta",
+      "help": "Aperto ai primi membri. Quasi tutto funziona, ma ci saranno cambiamenti."
+    },
+    "production": {
+      "label": "Attivo",
+      "help": "In uso regolare da parte dei suoi membri."
+    },
+    "deprecation": {
+      "label": "In chiusura",
+      "help": "In fase di chiusura. Potrebbe non accettare più nuovi membri o proposte."
+    },
+    "terminated": {
+      "label": "Archiviato",
+      "help": "Chiuso. I suoi registri restano consultabili."
+    }
   }
 }

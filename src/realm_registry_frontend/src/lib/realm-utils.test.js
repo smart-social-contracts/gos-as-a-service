@@ -10,6 +10,8 @@ import {
   BRANDING_LOGO_PATHS,
   clearSplashBrandHint,
   firstSplashLogoUrl,
+  formatCount,
+  formatLastActivity,
   HOST_SPLASH_MARK_PATH,
   isLeftoverBrandingBytes,
   isLeftoverPlatformLogoPath,
@@ -296,4 +298,31 @@ test('acceptSplashLogoUrl rejects leftover paths / failed fetches and accepts a 
     })),
     false
   );
+});
+
+const fakeT = (key, opts) => `${key}${opts?.values ? JSON.stringify(opts.values) : ''}`;
+
+test('formatLastActivity is empty when the realm never reported activity', () => {
+  assert.equal(formatLastActivity(0, fakeT, 'en'), '');
+  assert.equal(formatLastActivity(undefined, fakeT, 'en'), '');
+});
+
+test('formatLastActivity says how long ago the realm was active', () => {
+  const now = 1_800_000_000_000;
+  assert.equal(
+    formatLastActivity(now / 1000 - 7200, fakeT, 'en', now),
+    'card.active{"when":"time.hours_ago{\\"count\\":2}"}'
+  );
+});
+
+test('formatLastActivity calls a realm quiet after 90 days', () => {
+  const now = 1_800_000_000_000;
+  assert.equal(formatLastActivity(now / 1000 - 91 * 86400, fakeT, 'en', now), 'card.no_recent_activity');
+  assert.notEqual(formatLastActivity(now / 1000 - 89 * 86400, fakeT, 'en', now), 'card.no_recent_activity');
+});
+
+test('formatCount groups digits for the locale', () => {
+  assert.equal(formatCount(127499, 'en'), '127,499');
+  assert.equal(formatCount(127499, 'de'), '127.499');
+  assert.equal(formatCount(undefined, 'en'), '0');
 });
