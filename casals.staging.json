@@ -175,14 +175,14 @@
       {
         "family": "realm-installer",
         "version": "main",
-        "source": "release:smart-social-contracts/gos-as-a-service@v0.5.0-rc2:realm_installer.wasm.gz",
-        "sha256": "7e32b0442c789802b69d8f017a7b99f37e6e2236b7f9150bc55aa9b524a046f1"
+        "source": "release:smart-social-contracts/gos-as-a-service@v0.6.0-rc1:realm_installer.wasm.gz",
+        "sha256": "d84fc15adeb7b798e617e1450f0e322a07be150be754f0f2563710017e22376d"
       },
       {
         "family": "realm-registry-backend",
         "version": "main",
-        "source": "release:smart-social-contracts/gos-as-a-service@v0.5.0-rc2:realm_registry_backend.wasm.gz",
-        "sha256": "6fa323fe9bf547985ec20cf854137e55eaadf20d3b6694fe64fc787eefbe89a9"
+        "source": "release:smart-social-contracts/gos-as-a-service@v0.6.0-rc1:realm_registry_backend.wasm.gz",
+        "sha256": "5f790825200b0d57a1db8945dc1331fe687f3d6cca8b5bbca318d74a658ad173"
       },
       {
         "family": "realm-backend",
@@ -192,16 +192,16 @@
       },
       {
         "family": "realm-backend",
-        "version": "0.7.1-rc2",
-        "source": "release:smart-social-contracts/realms-gos@v0.7.1-rc2:realm-backend-v0.7.1-rc2.wasm.gz",
-        "sha256": "02a9e64d12997dc366961447bef68180ad8ec6e8ebf90de717279523bac64133"
+        "version": "0.8.0-rc1",
+        "source": "release:smart-social-contracts/realms-gos@v0.8.0-rc1:realm-backend-v0.8.0-rc1.wasm.gz",
+        "sha256": "9fdaf8bc1570ce570bbe734de8195ecb504207896b962dcd1471c2063590227e"
       }
     ],
     "bundles": [
       {
         "path": "frontend/realm-registry-frontend/main",
-        "source": "release:smart-social-contracts/gos-as-a-service@v0.5.1-rc2:realm_registry_frontend.tar.gz",
-        "sha256": "053013609fc322fa6148f4126fc6a3b6e043c8a581e727c594437de39d147be8"
+        "source": "release:smart-social-contracts/gos-as-a-service@v0.6.0-rc1:realm_registry_frontend.tar.gz",
+        "sha256": "3c1d94233cd320fe08b3d5ba18d4fdea0ade095c9cdcda63aa86a4bd8c4caa0c"
       },
       {
         "path": "frontend/realm-assets/main",
@@ -209,10 +209,10 @@
         "sha256": "cc2ec08b0cb43c7572ec0cb3719d0d71e3c7b5827657b247b641f9ca1dc0d63e"
       },
       {
-        "$comment": "The namespace `casals upgrade --release` gives realm 0.7.1-rc1's frontend, so new realms and released ones share it.",
-        "path": "release/realm/0.7.1-rc1/frontend",
-        "source": "release:smart-social-contracts/realms-gos@v0.7.1-rc1:realm-frontend-v0.7.1-rc1.tar.gz",
-        "sha256": "e64975388895fcd75cdae343ff298090fbe6711db7c820b624521988cbe45b2d"
+        "$comment": "The namespace `casals upgrade --release` gives realm 0.8.0-rc1's frontend, so new realms and released ones share it.",
+        "path": "release/realm/0.8.0-rc1/frontend",
+        "source": "release:smart-social-contracts/realms-gos@v0.8.0-rc1:realm-frontend-v0.8.0-rc1.tar.gz",
+        "sha256": "95a056c0bde330505f2b877041778aca07e32b7c655e990f0ceae15c41bbf62b"
       },
       {
         "$comment": "Casals UI from the pinned Casals release. Ships with `casals upgrade --content frontend/casals-ui/main`.",
@@ -416,7 +416,7 @@
             "name": "{stand}-backend",
             "kind": "backend",
             "mode": "managed",
-            "wasm": "realm-backend@0.7.1-rc2",
+            "wasm": "realm-backend@0.8.0-rc1",
             "install_arg": "(\"$canister:realm-installer\")",
             "controllers": [
               "$stand.baton",
@@ -439,7 +439,7 @@
                 "permission": "Commit"
               }
             ],
-            "content": "release/realm/0.7.1-rc1/frontend",
+            "content": "release/realm/0.8.0-rc1/frontend",
             "files": {
               "/canister_ids.js": "globalThis.__CANISTER_IDS={realm_backend:\"$stand.backend\",internet_identity:\"https://identity.ic0.app\"};\n"
             },
@@ -454,7 +454,7 @@
             "name": "{stand}-quarter-{n}",
             "kind": "backend",
             "mode": "managed",
-            "wasm": "realm-backend@0.7.1-rc2",
+            "wasm": "realm-backend@0.8.0-rc1",
             "install_arg": "(\"\")",
             "optional": true,
             "controllers": [
