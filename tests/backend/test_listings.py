@@ -156,6 +156,23 @@ def test_revision_moves_only_with_details():
     assert _publish({"id": "lisboa", "manifesto": "a", "zones": [ZONE], "users_count": 6})["revision"] == 2
 
 
+def test_background_and_its_credit_are_listed():
+    photo = "https://epywb-ryaaa-aaaas-qg7za-cai.icp0.io/listings/lisboa/background.jpg?v=1"
+    source = "https://commons.wikimedia.org/wiki/File:Lisboa.jpg"
+    assert _publish({
+        "id": "lisboa", "name": "Lisboa", "background": photo,
+        "background_credit": "Photo: Someone, CC BY-SA 4.0", "background_source": source,
+    })["success"]
+    summary = list_listings(1, 10)["listings"][0]
+    assert summary["background"] == photo
+    assert summary["background_credit"] == "Photo: Someone, CC BY-SA 4.0"
+    assert summary["background_source"] == source
+
+    for key in ("background", "background_source"):
+        refused = _publish({"id": "lisboa", key: "http://example.org/x.jpg"})
+        assert not refused["success"] and key in refused["error"]
+
+
 def test_crc32_and_base32_match_the_stdlib():
     import base64
     import zlib

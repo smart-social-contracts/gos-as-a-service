@@ -20,7 +20,14 @@ DETAILS_BATCH_MAX = 10
 PREVIEW_CHARS = 280
 MANIFESTO_MAX = 8000
 ZONES_MAX = 1000
-_TEXT_MAX = {"name": 128, "logo": 512}
+_TEXT_MAX = {
+    "name": 128,
+    "logo": 512,
+    "background": 512,
+    "background_credit": 200,
+    "background_source": 512,
+}
+_HTTPS_FIELDS = ("logo", "background", "background_source")
 _ZONE_TEXT_MAX = {"name": 80, "location_name": 80, "zone_type": 32}
 _ID_CHARS = frozenset("abcdefghijklmnopqrstuvwxyz0123456789")
 _HEX_CHARS = frozenset("0123456789abcdef")
@@ -155,8 +162,9 @@ def publish_listing(payload: dict, caller: str, is_controller: bool, now: float)
                 texts[key] = value
         if record is None and not texts.get("name"):
             raise ValueError("name is required")
-        if texts.get("logo") and not texts["logo"].startswith("https://"):
-            raise ValueError("logo must be an https URL")
+        for key in _HTTPS_FIELDS:
+            if texts.get(key) and not texts[key].startswith("https://"):
+                raise ValueError(f"{key} must be an https URL")
         manifesto = None
         if "manifesto" in payload:
             manifesto = str(payload.get("manifesto") or "").strip()
@@ -219,6 +227,9 @@ def listing_summary(record) -> dict:
         "id": record.id,
         "name": record.name or "",
         "logo": record.logo or "",
+        "background": record.background or "",
+        "background_credit": record.background_credit or "",
+        "background_source": record.background_source or "",
         "url": record.url or "",
         "frontend_canister_id": record.frontend_canister_id or "",
         "canister_id": "" if record.publisher else record.id,

@@ -96,6 +96,10 @@ class RealmRecord(Entity, TimestampedMixin):
     last_activity_at = Integer(default=0)
     manifesto_preview = String(max_length=280, default="")
     revision = Integer(default=0)
+    background = String(max_length=512, default="")
+    # Attribution for a background someone else made (photographer, licence) and where it comes from.
+    background_credit = String(max_length=200, default="")
+    background_source = String(max_length=512, default="")
 
     def effective_listing_status(self) -> str:
         status = (self.listing_status or "").strip()

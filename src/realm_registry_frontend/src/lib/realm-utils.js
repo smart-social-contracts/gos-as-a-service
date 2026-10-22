@@ -79,6 +79,13 @@ export function resolvedRealmLogoUrl(realm) {
   return resolveRealmAssetUrl(realm, '/custom/logo.png') || null;
 }
 
+/** The listing's own https background, else the one its frontend serves. */
+export function resolvedRealmBackgroundUrl(realm) {
+  const own = String(realm.background || '').trim();
+  if (own.startsWith('https://')) return own;
+  return resolveRealmAssetUrl(realm, '/custom/background.png') || '';
+}
+
 /** Paths a realm frontend may serve for its branding logo. */
 export const BRANDING_LOGO_PATHS = ['/custom/logo.png', '/logo.png'];
 

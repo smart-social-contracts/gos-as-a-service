@@ -9,8 +9,8 @@
     formatFullDate,
     formatLastActivity,
     realmFrontendAssetBase,
+    resolvedRealmBackgroundUrl,
     resolvedRealmLogoUrl,
-    resolveRealmAssetUrl,
   } from '$lib/realm-utils.js';
   import { stageLabel } from '$lib/realm-stages.js';
 
@@ -26,7 +26,13 @@
   let bannerSrc = '';
   let bannerKey = '';
 
-  $: assetKey = `${realm?.id || ''}|${realm?.frontend_canister_id || ''}|${realmFrontendAssetBase(realm || {})}`;
+  $: assetKey = [
+    realm?.id,
+    realm?.frontend_canister_id,
+    realmFrontendAssetBase(realm || {}),
+    realm?.logo,
+    realm?.background,
+  ].join('|');
   $: probeLogo(assetKey);
   // The background is the heaviest asset on the card: only fetch it once the card is opened.
   $: if (expanded) probeBanner(assetKey);
@@ -40,6 +46,8 @@
   $: members = formatCount(realm.users_count, $locale);
   $: visitUrl = realm.url ? ensureProtocol(realm.url).replace(/\/+$/, '') + '/' : '';
   $: detailsId = `realm-details-${realm.id}`;
+  $: photoCredit = bannerSrc && bannerSrc === realm.background ? realm.background_credit || '' : '';
+  $: photoSource = String(realm.background_source || '').startsWith('https://') ? realm.background_source : '';
 
   async function accepted(url) {
     try {
@@ -62,7 +70,7 @@
     if (key === bannerKey) return;
     bannerKey = key;
     bannerSrc = '';
-    const url = resolveRealmAssetUrl(realm || {}, '/custom/background.png');
+    const url = resolvedRealmBackgroundUrl(realm || {});
     if ((await accepted(url)) && key === bannerKey) bannerSrc = url;
   }
 </script>
@@ -122,6 +130,13 @@
       style:background-image={bannerSrc ? `url('${bannerSrc}')` : null}
       transition:slide={{ duration: 160 }}
     >
+      {#if photoCredit}
+        {#if photoSource}
+          <a class="photo-credit" href={photoSource} target="_blank" rel="noopener noreferrer">{photoCredit}</a>
+        {:else}
+          <span class="photo-credit">{photoCredit}</span>
+        {/if}
+      {/if}
       {#if realm.manifesto}
         <button
           type="button"
@@ -346,6 +361,24 @@
 
   .realm-details > * {
     position: relative;
+  }
+
+  .realm-details > .photo-credit {
+    position: absolute;
+    top: 0.375rem;
+    right: 0.5rem;
+    max-width: 70%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.625rem;
+    color: rgba(255, 255, 255, 0.85);
+    text-decoration: none;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  }
+
+  .realm-details > a.photo-credit:hover {
+    text-decoration: underline;
   }
 
   .realm-manifesto {

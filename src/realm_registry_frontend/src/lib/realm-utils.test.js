@@ -12,6 +12,7 @@ import {
   firstSplashLogoUrl,
   formatCount,
   formatLastActivity,
+  resolvedRealmBackgroundUrl,
   HOST_SPLASH_MARK_PATH,
   isLeftoverBrandingBytes,
   isLeftoverPlatformLogoPath,
@@ -41,6 +42,16 @@ function memoryStorage(initial = {}) {
 }
 
 const testdata = join(dirname(fileURLToPath(import.meta.url)), 'testdata');
+
+test('a listing background wins over the frontend one', () => {
+  const photo = 'https://epywb-ryaaa-aaaas-qg7za-cai.icp0.io/listings/x/background.jpg?v=1';
+  assert.equal(resolvedRealmBackgroundUrl({ background: photo, frontend_canister_id: 'aaaaa-aa' }), photo);
+  assert.equal(
+    resolvedRealmBackgroundUrl({ frontend_canister_id: 'aaaaa-aa' }),
+    'https://aaaaa-aa.icp0.io/custom/background.png'
+  );
+  assert.equal(resolvedRealmBackgroundUrl({ background: 'http://x/y.jpg' }), '');
+});
 
 test('brandingLogoUrls is empty without a frontend canister', () => {
   assert.deepEqual(brandingLogoUrls(''), []);
