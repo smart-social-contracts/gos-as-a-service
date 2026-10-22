@@ -1000,6 +1000,10 @@ CSS = (
     .deck > footer, .deck > .dots { position: relative; z-index: 3; }
 
     .lang {
+      position: fixed;
+      top: 0.7rem;
+      right: 1.25rem;
+      z-index: 4;
       display: flex;
       align-items: center;
       gap: 0.4rem;
@@ -1026,14 +1030,17 @@ CSS = (
 
     .start-hint {
       position: absolute;
-      left: 0;
-      right: 0;
-      bottom: 0.4rem;
+      inset: 0;
       z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       text-align: center;
-      font-size: 1.05rem;
-      letter-spacing: 0.02em;
-      color: var(--gray-500);
+      font-size: 1.3rem;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      color: var(--gray-800);
+      text-shadow: 0 0 6px #fff, 0 0 14px #fff;
       pointer-events: none;
       opacity: 0;
     }
@@ -1699,8 +1706,8 @@ def build_html(slides: list[Slide]) -> str:
     </div>
     <footer>
       <span class="site">{html.escape(FOOTER_SITE)}</span>
-      <label class="lang">{LANG_ICON_SVG}<select id="lang" aria-label="Language">{options}</select></label>
     </footer>
+    <label class="lang">{LANG_ICON_SVG}<select id="lang" aria-label="Language">{options}</select></label>
     <nav class="dots" id="dots" aria-label="Slide navigation"></nav>
   </article>
   <script>window.DECK_I18N = {i18n};
