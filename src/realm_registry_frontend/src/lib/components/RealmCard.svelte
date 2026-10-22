@@ -4,12 +4,13 @@
   import { _, locale } from 'svelte-i18n';
   import {
     acceptBrandingAssetUrl,
+    acceptedRealmBackgroundUrl,
     ensureProtocol,
     formatCount,
     formatFullDate,
     formatLastActivity,
     realmFrontendAssetBase,
-    resolvedRealmBackgroundUrl,
+    realmPhotoCredit,
     resolvedRealmLogoUrl,
   } from '$lib/realm-utils.js';
   import { stageLabel } from '$lib/realm-stages.js';
@@ -25,6 +26,7 @@
   let logoKey = '';
   let bannerSrc = '';
   let bannerKey = '';
+  let onScreen = false;
 
   $: assetKey = [
     realm?.id,
@@ -34,8 +36,8 @@
     realm?.background,
   ].join('|');
   $: probeLogo(assetKey);
-  // The background is the heaviest asset on the card: only fetch it once the card is opened.
-  $: if (expanded) probeBanner(assetKey);
+  // The background is the heaviest asset on the card: only fetch it once the card nears the screen.
+  $: if (onScreen || expanded) probeBanner(assetKey);
 
   $: name = realm.name || realm.realm_name || '';
   $: stageId = realm.realm_stage;
@@ -46,7 +48,7 @@
   $: members = formatCount(realm.users_count, $locale);
   $: visitUrl = realm.url ? ensureProtocol(realm.url).replace(/\/+$/, '') + '/' : '';
   $: detailsId = `realm-details-${realm.id}`;
-  $: photoCredit = bannerSrc && bannerSrc === realm.background ? realm.background_credit || '' : '';
+  $: photoCredit = realmPhotoCredit(realm, bannerSrc);
   $: photoSource = String(realm.background_source || '').startsWith('https://') ? realm.background_source : '';
 
   async function accepted(url) {
@@ -70,12 +72,31 @@
     if (key === bannerKey) return;
     bannerKey = key;
     bannerSrc = '';
-    const url = resolvedRealmBackgroundUrl(realm || {});
-    if ((await accepted(url)) && key === bannerKey) bannerSrc = url;
+    const url = await acceptedRealmBackgroundUrl(realm || {});
+    if (key === bannerKey) bannerSrc = url;
+  }
+
+  /** @param {HTMLElement} node */
+  function nearScreen(node) {
+    if (typeof IntersectionObserver === 'undefined') {
+      onScreen = true;
+      return {};
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          onScreen = true;
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '200px' }
+    );
+    observer.observe(node);
+    return { destroy: () => observer.disconnect() };
   }
 </script>
 
-<article class="realm-card" class:selected class:expanded>
+<article class="realm-card" class:selected class:expanded use:nearScreen>
   <button
     type="button"
     class="realm-row"
@@ -104,6 +125,10 @@
         </span>
       {/if}
     </span>
+
+    {#if bannerSrc}
+      <img src={bannerSrc} alt="" class="realm-glimpse" title={photoCredit || null} />
+    {/if}
 
     <span
       class="user-badge"
@@ -294,6 +319,16 @@
   .stage-terminated {
     color: var(--stage-archived-color);
     background: var(--stage-archived-bg);
+  }
+
+  .realm-glimpse {
+    flex-shrink: 0;
+    width: 72px;
+    height: 36px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    object-fit: cover;
+    background: var(--surface-2);
   }
 
   .user-badge {

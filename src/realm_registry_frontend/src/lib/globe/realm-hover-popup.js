@@ -1,4 +1,4 @@
-import { stageLabel, stageMeta } from '$lib/realm-stages.js';
+import { stageLabel, stageMeta } from '../realm-stages.js';
 
 /** @param {string} value */
 function escapeHtml(value) {
@@ -34,6 +34,7 @@ function t(translate, key, values = {}) {
  *   influenceLabel?: string,
  *   realmCount?: number,
  *   isCenter?: boolean,
+ *   photo?: { url: string, credit?: string } | null,
  * }} data
  * @param {(key: string, opts?: { values?: Record<string, unknown>, default?: string }) => string} translate
  */
@@ -87,22 +88,34 @@ export function buildRealmHoverPopupHtml(data, translate) {
 
   const hint = escapeHtml(t(translate, 'globe.popup_click'));
 
-  return `<div class="realm-hover-card">
-    <div class="realm-hover-header">
-      <h3 class="realm-hover-title">${name}</h3>
-      <span class="realm-hover-stage" style="color:${stageColor};background:${stageBg}">${stageText}</span>
+  const photoUrl = String(data.photo?.url || '');
+  const photoCredit = data.photo?.credit
+    ? `<span class="realm-hover-photo-credit">${escapeHtml(data.photo.credit)}</span>`
+    : '';
+  const photoHtml = photoUrl.startsWith('https://')
+    ? `<div class="realm-hover-photo"><img src="${escapeHtml(photoUrl)}" alt="" />${photoCredit}</div>`
+    : '';
+
+  return `<div class="realm-hover-card${photoHtml ? ' has-photo' : ''}">
+    ${photoHtml}
+    <div class="realm-hover-body">
+      <div class="realm-hover-header">
+        <h3 class="realm-hover-title">${name}</h3>
+        <span class="realm-hover-stage" style="color:${stageColor};background:${stageBg}">${stageText}</span>
+      </div>
+      ${metaRows.join('')}
+      ${manifestoHtml}
+      <div class="realm-hover-footer">${hint}</div>
     </div>
-    ${metaRows.join('')}
-    ${manifestoHtml}
-    <div class="realm-hover-footer">${hint}</div>
   </div>`;
 }
 
 /**
  * @param {import('./hex-data.js').HexPolygon} polygon
  * @param {(key: string, opts?: { values?: Record<string, unknown>, default?: string }) => string} translate
+ * @param {{ url: string, credit?: string } | null} [photo] the primary realm's photo
  */
-export function buildHexHoverPopupHtml(polygon, translate) {
+export function buildHexHoverPopupHtml(polygon, translate, photo = null) {
   const primary = polygon.realms?.[0];
   if (!primary?.realm) return '';
 
@@ -128,6 +141,7 @@ export function buildHexHoverPopupHtml(polygon, translate) {
       influenceLabel: isCenter ? undefined : t(translate, 'globe.popup_influence_zone'),
       realmCount: polygon.realms.length > 1 ? polygon.realms.length : undefined,
       isCenter,
+      photo,
     },
     translate
   );
@@ -143,8 +157,9 @@ export function buildHexHoverPopupHtml(polygon, translate) {
  *   manifesto?: string,
  * }} point
  * @param {(key: string, opts?: { values?: Record<string, unknown>, default?: string }) => string} translate
+ * @param {{ url: string, credit?: string } | null} [photo]
  */
-export function buildMarkerHoverPopupHtml(point, translate) {
+export function buildMarkerHoverPopupHtml(point, translate, photo = null) {
   return buildRealmHoverPopupHtml(
     {
       primaryName: point.realmName || 'Realm',
@@ -154,6 +169,7 @@ export function buildMarkerHoverPopupHtml(point, translate) {
       locations: point.location ? [point.location] : undefined,
       manifesto: point.manifesto,
       isCenter: true,
+      photo,
     },
     translate
   );

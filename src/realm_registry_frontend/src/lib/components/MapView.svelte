@@ -20,6 +20,11 @@
     buildMarkerHoverPopupHtml,
   } from '$lib/globe/realm-hover-popup.js';
   import {
+    acceptedRealmBackgroundUrl,
+    knownRealmBackgroundUrl,
+    realmPhotoCredit,
+  } from '$lib/realm-utils.js';
+  import {
     FLY_TO_MS,
     hexDisplayZoomKey,
     h3ResolutionForZoom,
@@ -57,6 +62,8 @@
   let hexByIndex = new Map();
   /** @type {import('maplibre-gl').Popup | null} */
   let hoverPopup = null;
+  /** @type {(() => string) | null} */
+  let hoverRender = null;
   let hoveredHexIndex = '';
   let hoveredMarkerId = '';
   let ready = false;
@@ -117,15 +124,30 @@
   function clearHoverPopup() {
     hoveredHexIndex = '';
     hoveredMarkerId = '';
+    hoverRender = null;
     hoverPopup?.remove();
   }
 
-  function showHoverPopup(lngLat, html) {
-    if (!map || !hoverPopup || !html) return;
+  function hoverPhoto(realm) {
+    const url = realm ? knownRealmBackgroundUrl(realm) : '';
+    return url ? { url, credit: realmPhotoCredit(realm, url) } : null;
+  }
+
+  /** `render` builds the popup from what is known now; it runs again once `realm`'s photo checks out. */
+  function showHoverPopup(lngLat, render, realm) {
+    if (!map || !hoverPopup) return;
     const lng = Array.isArray(lngLat) ? lngLat[0] : lngLat?.lng;
     const lat = Array.isArray(lngLat) ? lngLat[1] : lngLat?.lat;
     if (!Number.isFinite(lng) || !Number.isFinite(lat)) return;
+    const html = render();
+    if (!html) return;
+    hoverRender = render;
     hoverPopup.setLngLat([lng, lat]).setHTML(html).addTo(map);
+    if (realm && knownRealmBackgroundUrl(realm) === undefined) {
+      acceptedRealmBackgroundUrl(realm).then((url) => {
+        if (url && hoverRender === render && hoverPopup?.isOpen()) hoverPopup.setHTML(render());
+      });
+    }
   }
 
   function attachMarkerHover(el, point) {
@@ -135,7 +157,8 @@
       hoveredHexIndex = '';
       showHoverPopup(
         [point.lng, point.lat],
-        buildMarkerHoverPopupHtml(point, translate)
+        () => buildMarkerHoverPopupHtml(point, translate, hoverPhoto(point.realm)),
+        point.realm
       );
     };
     const onLeave = () => {
@@ -611,7 +634,12 @@
           hoveredMarkerId = '';
           const polygon = hexByIndex.get(hexIndex);
           if (polygon) {
-            showHoverPopup(e.lngLat, buildHexHoverPopupHtml(polygon, translate));
+            const realm = polygon.realms?.[0]?.realm;
+            showHoverPopup(
+              e.lngLat,
+              () => buildHexHoverPopupHtml(polygon, translate, hoverPhoto(realm)),
+              realm
+            );
           }
         } else {
           hoverPopup.setLngLat(e.lngLat);
@@ -808,18 +836,45 @@
   .map-view :global(.realm-hover-card) {
     min-width: 220px;
     max-width: 280px;
-    padding: 12px 14px;
+    overflow: hidden;
     border-radius: 12px;
-    border: 1px solid rgba(0, 229, 255, 0.28);
-    background: rgba(10, 14, 22, 0.94);
-    backdrop-filter: blur(14px);
+    border: 1px solid var(--border, #e5e5e5);
+    background: var(--surface, #ffffff);
     box-shadow:
-      0 10px 28px rgba(0, 0, 0, 0.42),
-      0 0 0 1px rgba(255, 255, 255, 0.04) inset,
-      0 0 24px rgba(0, 229, 255, 0.12);
-    color: #e8edf5;
+      0 10px 28px rgba(15, 23, 42, 0.14),
+      0 2px 6px rgba(15, 23, 42, 0.06);
+    color: var(--text-primary, #171717);
     font-family: var(--font-family, inherit);
     line-height: 1.45;
+  }
+
+  .map-view :global(.realm-hover-body) {
+    padding: 12px 14px;
+  }
+
+  .map-view :global(.realm-hover-photo) {
+    position: relative;
+    height: 112px;
+    background: var(--surface-2, #f5f5f5);
+  }
+
+  .map-view :global(.realm-hover-photo img) {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .map-view :global(.realm-hover-photo-credit) {
+    position: absolute;
+    right: 6px;
+    bottom: 4px;
+    left: 6px;
+    text-align: right;
+    font-size: 0.5625rem;
+    line-height: 1.25;
+    color: rgba(255, 255, 255, 0.9);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
   }
 
   .map-view :global(.realm-hover-header) {
@@ -834,7 +889,7 @@
     margin: 0;
     font-size: 0.9375rem;
     font-weight: 600;
-    color: #f8fafc;
+    color: var(--text-primary, #171717);
     letter-spacing: -0.01em;
   }
 
@@ -852,7 +907,7 @@
   .map-view :global(.realm-hover-locations) {
     margin-bottom: 6px;
     font-size: 0.75rem;
-    color: #94a3b8;
+    color: var(--text-tertiary, #737373);
   }
 
   .map-view :global(.realm-hover-stat) {
@@ -861,15 +916,15 @@
     gap: 6px;
     margin-bottom: 4px;
     font-size: 0.75rem;
-    color: #cbd5e1;
+    color: var(--text-secondary, #525252);
   }
 
   .map-view :global(.realm-hover-stat.muted) {
-    color: #94a3b8;
+    color: var(--text-tertiary, #737373);
   }
 
   .map-view :global(.realm-hover-stat-icon) {
-    color: #00e5ff;
+    color: #0891b2;
     font-size: 0.5rem;
   }
 
@@ -879,15 +934,15 @@
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: #67e8f9;
+    color: #0e7490;
   }
 
   .map-view :global(.realm-hover-manifesto) {
     margin: 8px 0 0;
     padding-top: 8px;
-    border-top: 1px solid rgba(148, 163, 184, 0.18);
+    border-top: 1px solid var(--border, #e5e5e5);
     font-size: 0.75rem;
-    color: #94a3b8;
+    color: var(--text-secondary, #525252);
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -897,11 +952,11 @@
   .map-view :global(.realm-hover-footer) {
     margin-top: 10px;
     padding-top: 8px;
-    border-top: 1px solid rgba(0, 229, 255, 0.14);
+    border-top: 1px solid var(--border, #e5e5e5);
     font-size: 0.6875rem;
     font-weight: 500;
     letter-spacing: 0.02em;
-    color: #67e8f9;
+    color: var(--text-tertiary, #737373);
   }
 
   .map-loading,

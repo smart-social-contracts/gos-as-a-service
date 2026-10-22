@@ -352,6 +352,53 @@ export async function acceptBrandingAssetUrl(url, fetchImpl = globalThis.fetch) 
   return !(await isLeftoverBrandingBytes(bytes));
 }
 
+/** @type {Map<string, Promise<string>>} */
+const backgroundChecks = new Map();
+/** @type {Map<string, string>} */
+const backgroundResults = new Map();
+
+/**
+ * The realm's background photo URL once it is known to be a real image, else ''.
+ * Each URL is downloaded and checked once per page; a failed fetch is retried next time.
+ * @param {object} realm
+ * @param {typeof fetch} [fetchImpl]
+ * @returns {Promise<string>}
+ */
+export function acceptedRealmBackgroundUrl(realm, fetchImpl = globalThis.fetch) {
+  const url = resolvedRealmBackgroundUrl(realm || {});
+  if (!url) return Promise.resolve('');
+  let check = backgroundChecks.get(url);
+  if (!check) {
+    check = acceptBrandingAssetUrl(url, fetchImpl).then(
+      (ok) => {
+        backgroundResults.set(url, ok ? url : '');
+        return ok ? url : '';
+      },
+      () => {
+        backgroundChecks.delete(url);
+        return '';
+      }
+    );
+    backgroundChecks.set(url, check);
+  }
+  return check;
+}
+
+/**
+ * What `acceptedRealmBackgroundUrl` already found for this realm: the URL, '' when it is not
+ * an image, or undefined when it has not been checked yet.
+ * @param {object} realm
+ */
+export function knownRealmBackgroundUrl(realm) {
+  const url = resolvedRealmBackgroundUrl(realm || {});
+  return url ? backgroundResults.get(url) : '';
+}
+
+/** The photo credit to show beside this URL: only the listing's own photo carries one. */
+export function realmPhotoCredit(realm, url) {
+  return url && url === realm?.background ? String(realm.background_credit || '') : '';
+}
+
 /**
  * Accept a splash logo if it loads as an image and is not leftover branding.
  * Shipped Syntropia DNA at `/custom/logo.png` is rejected; a founder-uploaded

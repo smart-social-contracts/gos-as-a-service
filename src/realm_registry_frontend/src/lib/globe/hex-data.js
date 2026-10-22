@@ -710,6 +710,7 @@ export function buildPointMarkers(
       location: capital.name || capital.location_name,
       stage: realm.realm_stage,
       manifesto: realm.manifesto,
+      realm,
       color: stageMarkerColor(realm.realm_stage, { dimmed: isDimmed }),
       size: isDimmed ? 0.7 : 1,
       pixelOffset: [0, 0],

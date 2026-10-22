@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import {
   acceptBrandingAssetUrl,
+  acceptedRealmBackgroundUrl,
   acceptSplashLogoUrl,
   brandingLogoUrls,
   BRANDING_LOGO_PATHS,
@@ -17,8 +18,10 @@ import {
   isLeftoverBrandingBytes,
   isLeftoverPlatformLogoPath,
   isRealmBrandLogoPath,
+  knownRealmBackgroundUrl,
   LEFTOVER_BRANDING_SHA256,
   pathnameFromAssetUrl,
+  realmPhotoCredit,
   readSplashBrandHint,
   resolveAcceptedSplashLogoUrl,
   sha256Hex,
@@ -235,6 +238,58 @@ function okPngFetch(fileBytes) {
     arrayBuffer: async () => buf,
   });
 }
+
+test('a realm background is downloaded and checked once, and only a real image is kept', async () => {
+  const photo = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]);
+  let fetches = 0;
+  const fetchPhoto = async (...args) => {
+    fetches += 1;
+    return okPngFetch(photo)(...args);
+  };
+  const realm = {
+    background: 'https://epywb-ryaaa-aaaas-qg7za-cai.icp0.io/listings/once/background.jpg?v=1',
+    background_credit: 'Photo: A. Author, CC BY 4.0, Wikimedia Commons',
+  };
+
+  assert.equal(knownRealmBackgroundUrl(realm), undefined);
+  const [first, second] = await Promise.all([
+    acceptedRealmBackgroundUrl(realm, fetchPhoto),
+    acceptedRealmBackgroundUrl(realm, fetchPhoto),
+  ]);
+  assert.equal(first, realm.background);
+  assert.equal(second, realm.background);
+  assert.equal(await acceptedRealmBackgroundUrl(realm, fetchPhoto), realm.background);
+  assert.equal(fetches, 1);
+  assert.equal(knownRealmBackgroundUrl(realm), realm.background);
+
+  const html = { frontend_canister_id: 'bbbbb-bb' };
+  const notAnImage = async () => ({
+    ok: true,
+    headers: { get: () => 'text/html' },
+    arrayBuffer: async () => new TextEncoder().encode('<!doctype html>').buffer,
+  });
+  assert.equal(await acceptedRealmBackgroundUrl(html, notAnImage), '');
+  assert.equal(knownRealmBackgroundUrl(html), '');
+  assert.equal(knownRealmBackgroundUrl({}), '');
+});
+
+test('a realm background whose fetch fails is checked again next time', async () => {
+  const realm = { background: 'https://epywb-ryaaa-aaaas-qg7za-cai.icp0.io/listings/retry/background.jpg?v=1' };
+  const offline = async () => {
+    throw new TypeError('network down');
+  };
+  assert.equal(await acceptedRealmBackgroundUrl(realm, offline), '');
+  assert.equal(knownRealmBackgroundUrl(realm), undefined);
+  const photo = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 5, 6]);
+  assert.equal(await acceptedRealmBackgroundUrl(realm, okPngFetch(photo)), realm.background);
+});
+
+test('only the listing\'s own photo carries its credit', () => {
+  const realm = { background: 'https://fr.icp0.io/listings/x/background.jpg', background_credit: 'Photo: B, CC0' };
+  assert.equal(realmPhotoCredit(realm, realm.background), 'Photo: B, CC0');
+  assert.equal(realmPhotoCredit(realm, 'https://aaaaa-aa.icp0.io/custom/background.png'), '');
+  assert.equal(realmPhotoCredit(realm, ''), '');
+});
 
 test('shipped Syntropia DNA and city bytes are leftover; clover leftover is still rejected', async () => {
   const syntropia = readFileSync(join(testdata, 'syntropia-realm-logo.png'));
