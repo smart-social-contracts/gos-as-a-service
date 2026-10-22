@@ -53,7 +53,7 @@ def init_details(storage) -> None:
 
 def looks_like_principal(value: str) -> bool:
     """True for principal text: base32 groups of five whose first four bytes are
-    the CRC32 of the rest. "tokyo-yui" has the shape of one but not the checksum."""
+    the CRC32 of the rest. "amber-sky" has the shape of one but not the checksum."""
     parts = value.split("-")
     if len(parts) < 2 or any(len(p) != 5 for p in parts[:-1]) or not 1 <= len(parts[-1]) <= 5:
         return False

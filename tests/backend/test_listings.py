@@ -51,7 +51,7 @@ def _fresh():
     mock_ic.is_controller.return_value = False
 
 
-def _register_realm(realm_id=REALM, name="València"):
+def _register_realm(realm_id=REALM, name="Harbour Town"):
     mock_ic.caller.return_value = realm_id
     result = register_realm_by_caller(name, "https://example.org")
     assert result["success"], result
@@ -66,30 +66,30 @@ def test_principal_text_is_recognised_by_its_checksum():
     assert looks_like_principal(PUBLISHER)
     assert looks_like_principal(STRANGER)
     assert looks_like_principal("aaaaa-aa")
-    assert not looks_like_principal("lisboa")
+    assert not looks_like_principal("harbour")
     assert not looks_like_principal("san-francisco")
     assert not looks_like_principal("cape-town-commons")
-    assert not looks_like_principal("tokyo-yui")
-    assert not looks_like_principal("seoul-dure")
+    assert not looks_like_principal("amber-sky")
+    assert not looks_like_principal("river-dusk")
     assert not looks_like_principal("2vxsx-fad")
 
 
 def test_principal_shaped_words_are_valid_ids():
-    assert _publish({"id": "tokyo-yui", "name": "Tokyo"})["success"]
+    assert _publish({"id": "amber-sky", "name": "Amber Sky"})["success"]
     refused = _publish({"id": "2vxsx-fae", "name": "Squatter"})
     assert not refused["success"]
 
 
 def test_publisher_creates_a_listing_without_a_canister():
     result = _publish({
-        "id": "lisboa", "name": "Lisboa", "stage": "beta", "users_count": 900,
+        "id": "harbour", "name": "Harbour", "stage": "beta", "users_count": 900,
         "last_activity_at": 1_791_000_000, "manifesto": "Tejo " * 100, "zones": [ZONE],
     })
-    assert result == {"success": True, "id": "lisboa", "revision": 1}
+    assert result == {"success": True, "id": "harbour", "revision": 1}
 
     page = list_listings(1, 50)
     (summary,) = page["listings"]
-    assert summary["id"] == "lisboa"
+    assert summary["id"] == "harbour"
     assert summary["canister_id"] == ""
     assert summary["url"] == ""
     assert summary["stage"] == "beta"
@@ -98,36 +98,36 @@ def test_publisher_creates_a_listing_without_a_canister():
     assert len(summary["manifesto_preview"]) == listings.PREVIEW_CHARS
     assert page["next"] is None
 
-    details = get_listing_details(["lisboa"])["listings"]["lisboa"]
+    details = get_listing_details(["harbour"])["listings"]["harbour"]
     assert details["manifesto"].startswith("Tejo")
     assert details["zones"] == [ZONE]
 
 
 def test_listing_ids_cannot_look_like_canisters():
-    result = _publish({"id": REALM, "name": "Fake València"})
+    result = _publish({"id": REALM, "name": "Fake Harbour Town"})
     assert not result["success"]
     assert RealmRecord[REALM] is None
-    assert not _publish({"id": "Lisboa!", "name": "x"})["success"]
+    assert not _publish({"id": "Harbour!", "name": "x"})["success"]
 
 
 def test_only_listing_publishers_create_listings_without_a_canister():
-    result = _publish({"id": "lisboa", "name": "Lisboa"}, caller=STRANGER)
+    result = _publish({"id": "harbour", "name": "Harbour"}, caller=STRANGER)
     assert not result["success"]
-    assert RealmRecord["lisboa"] is None
+    assert RealmRecord["harbour"] is None
 
 
 def test_a_listing_belongs_to_its_publisher():
-    _publish({"id": "lisboa", "name": "Lisboa"})
+    _publish({"id": "harbour", "name": "Harbour"})
     apply_env_config({"listing_publishers": [PUBLISHER, STRANGER]})
-    result = _publish({"id": "lisboa", "name": "Taken"}, caller=STRANGER)
+    result = _publish({"id": "harbour", "name": "Taken"}, caller=STRANGER)
     assert not result["success"]
-    assert RealmRecord["lisboa"].name == "Lisboa"
+    assert RealmRecord["harbour"].name == "Harbour"
 
 
 def test_a_realm_publishes_its_own_listing():
     _register_realm()
     result = _publish({
-        "name": "València", "stage": "alpha", "users_count": 127_499,
+        "name": "Harbour Town", "stage": "alpha", "users_count": 1_250,
         "manifesto": "Una ciutat oberta.", "zones": [ZONE],
     }, caller=REALM)
     assert result["success"], result
@@ -135,7 +135,7 @@ def test_a_realm_publishes_its_own_listing():
     (summary,) = list_listings(1, 50)["listings"]
     assert summary["canister_id"] == REALM
     assert summary["url"] == "https://example.org"
-    assert summary["users_count"] == 127_499
+    assert summary["users_count"] == 1_250
 
 
 def test_a_realm_must_register_before_publishing():
@@ -149,18 +149,18 @@ def test_publishers_cannot_edit_a_canister_realm():
 
 
 def test_revision_moves_only_with_details():
-    _publish({"id": "lisboa", "name": "Lisboa", "manifesto": "a"})
-    assert _publish({"id": "lisboa", "users_count": 5})["revision"] == 1
-    assert _publish({"id": "lisboa", "zones": [ZONE]})["revision"] == 2
-    assert get_listing_details(["lisboa"])["listings"]["lisboa"]["manifesto"] == "a"
-    assert _publish({"id": "lisboa", "manifesto": "a", "zones": [ZONE], "users_count": 6})["revision"] == 2
+    _publish({"id": "harbour", "name": "Harbour", "manifesto": "a"})
+    assert _publish({"id": "harbour", "users_count": 5})["revision"] == 1
+    assert _publish({"id": "harbour", "zones": [ZONE]})["revision"] == 2
+    assert get_listing_details(["harbour"])["listings"]["harbour"]["manifesto"] == "a"
+    assert _publish({"id": "harbour", "manifesto": "a", "zones": [ZONE], "users_count": 6})["revision"] == 2
 
 
 def test_background_and_its_credit_are_listed():
-    photo = "https://epywb-ryaaa-aaaas-qg7za-cai.icp0.io/listings/lisboa/background.jpg?v=1"
-    source = "https://commons.wikimedia.org/wiki/File:Lisboa.jpg"
+    photo = "https://epywb-ryaaa-aaaas-qg7za-cai.icp0.io/listings/harbour/background.jpg?v=1"
+    source = "https://commons.wikimedia.org/wiki/File:Harbour.jpg"
     assert _publish({
-        "id": "lisboa", "name": "Lisboa", "background": photo,
+        "id": "harbour", "name": "Harbour", "background": photo,
         "background_credit": "Photo: Someone, CC BY-SA 4.0", "background_source": source,
     })["success"]
     summary = list_listings(1, 10)["listings"][0]
@@ -169,7 +169,7 @@ def test_background_and_its_credit_are_listed():
     assert summary["background_source"] == source
 
     for key in ("background", "background_source"):
-        refused = _publish({"id": "lisboa", key: "http://example.org/x.jpg"})
+        refused = _publish({"id": "harbour", key: "http://example.org/x.jpg"})
         assert not refused["success"] and key in refused["error"]
 
 
@@ -184,16 +184,16 @@ def test_crc32_and_base32_match_the_stdlib():
 
 
 def test_zones_append_and_cap():
-    _publish({"id": "lisboa", "name": "Lisboa", "zones": [ZONE]})
+    _publish({"id": "harbour", "name": "Harbour", "zones": [ZONE]})
     other = dict(ZONE, h3_index="86394601fffffff")
-    _publish({"id": "lisboa", "zones": [other], "zones_append": True})
-    zones = get_listing_details(["lisboa"])["listings"]["lisboa"]["zones"]
+    _publish({"id": "harbour", "zones": [other], "zones_append": True})
+    zones = get_listing_details(["harbour"])["listings"]["harbour"]["zones"]
     assert [z["h3_index"] for z in zones] == [ZONE["h3_index"], other["h3_index"]]
 
     too_many = [ZONE] * (listings.ZONES_MAX + 1)
-    result = _publish({"id": "lisboa", "zones": too_many})
+    result = _publish({"id": "harbour", "zones": too_many})
     assert not result["success"]
-    assert len(get_listing_details(["lisboa"])["listings"]["lisboa"]["zones"]) == 2
+    assert len(get_listing_details(["harbour"])["listings"]["harbour"]["zones"]) == 2
 
 
 def test_rejected_publish_writes_nothing():
@@ -226,13 +226,13 @@ def test_details_batch_is_bounded():
 
 
 def test_remove_requires_the_owner():
-    _publish({"id": "lisboa", "name": "Lisboa", "zones": [ZONE]})
+    _publish({"id": "harbour", "name": "Harbour", "zones": [ZONE]})
     mock_ic.caller.return_value = STRANGER
-    assert not remove_registered_realm("lisboa")["success"]
+    assert not remove_registered_realm("harbour")["success"]
     mock_ic.caller.return_value = PUBLISHER
-    assert remove_registered_realm("lisboa")["success"]
-    assert RealmRecord["lisboa"] is None
-    assert listings._details.get("lisboa") is None
+    assert remove_registered_realm("harbour")["success"]
+    assert RealmRecord["harbour"] is None
+    assert listings._details.get("harbour") is None
 
 
 def test_strangers_cannot_remove_or_hijack_a_realm():
@@ -241,7 +241,7 @@ def test_strangers_cannot_remove_or_hijack_a_realm():
     assert not remove_registered_realm(REALM)["success"]
     result = register_realm_by_caller("Hijacked", "https://evil.example", realm_id_override=REALM)
     assert not result["success"]
-    assert RealmRecord[REALM].name == "València"
+    assert RealmRecord[REALM].name == "Harbour Town"
 
 
 def test_installer_and_controllers_may_register_for_a_realm():
@@ -263,5 +263,5 @@ def test_publishers_config_round_trip():
 
 
 def test_list_json_is_serialisable():
-    _publish({"id": "lisboa", "name": "Lisboa"})
-    assert json.loads(json.dumps(list_listings(1, 10)))["listings"][0]["id"] == "lisboa"
+    _publish({"id": "harbour", "name": "Harbour"})
+    assert json.loads(json.dumps(list_listings(1, 10)))["listings"][0]["id"] == "harbour"

@@ -4,8 +4,8 @@ import assert from 'node:assert/strict';
 import { fetchListingDetails, fetchListings, listingToRealm, zoneDataFromDetails } from './listings.js';
 
 const SUMMARY = {
-  id: 'lisboa-aberta',
-  name: 'Lisboa Aberta',
+  id: 'harbour-commons',
+  name: 'Harbour Commons',
   logo: '',
   url: '',
   frontend_canister_id: '',
@@ -13,7 +13,7 @@ const SUMMARY = {
   stage: 'beta',
   users_count: 8420,
   last_activity_at: 1_792_000_000,
-  manifesto_preview: 'Lisboa Aberta is where…',
+  manifesto_preview: 'Harbour Commons is where…',
   revision: 2,
   created_at: 1_791_000_000,
   listing_status: 'live',
@@ -33,7 +33,7 @@ function memoryStorage(initial = {}) {
 test('a listing becomes a realm the list and globe understand', () => {
   const realm = listingToRealm(SUMMARY);
   assert.equal(realm.realm_stage, 'beta');
-  assert.equal(realm.manifesto, 'Lisboa Aberta is where…');
+  assert.equal(realm.manifesto, 'Harbour Commons is where…');
   assert.equal(realm.users_count, 8420);
   assert.equal(listingToRealm({ ...SUMMARY, stage: '' }).realm_stage, 'alpha');
 });
