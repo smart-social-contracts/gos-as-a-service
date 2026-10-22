@@ -19,6 +19,7 @@
 ## world-failures
 
 - :corruption: Corruption — hidden deals, abuse of power <=> An admin who abuses their access — and deletes the logs
+- :bureaucracy: Bureaucracy — red tape, too many layers, nothing gets done <=> Bloatware piles up, layer on layer — and every click takes forever
 - :resources: Resource misuse — wasted taxes, a worn-out planet <=> A few programs hog the memory — and the machine overheats
 - :wars: Wars — taking land and resources by force <=> Viruses that take over the machine — and trick its users
 

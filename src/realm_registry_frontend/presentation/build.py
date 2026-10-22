@@ -369,6 +369,29 @@ def corruption_svg() -> str:
 </svg>"""
 
 
+def bureaucracy_svg() -> str:
+    """Windows pile up one on another, and the front one never stops loading."""
+    windows = []
+    for i in range(5):
+        x, y = 12 + i * 9, 12 + i * 9
+        anim = f' class="wf-pile wf-p{i}"' if i else ""
+        spinner = (
+            f'<circle cx="{x + 31}" cy="{y + 28}" r="9" stroke="{ART_FILL}" stroke-width="3"/>'
+            f'<path class="wf-spin" style="transform-origin:{x + 31}px {y + 28}px" '
+            f'd="M{x + 31} {y + 19}a9 9 0 0 1 9 9" stroke="{ART_DARK}" stroke-width="3" stroke-linecap="round"/>'
+            if i == 4
+            else ""
+        )
+        windows.append(
+            f"<g{anim}>"
+            f'<rect x="{x}" y="{y}" width="62" height="48" rx="4" fill="{ART_LIGHT}" stroke="#a3a3a3" stroke-width="1.75"/>'
+            f'<path d="M{x + 1} {y + 9}h60" stroke="#a3a3a3" stroke-width="1.75"/>'
+            f'<rect x="{x + 1}" y="{y + 1}" width="60" height="8" rx="3" fill="{ART_FILL}"/>'
+            f"{spinner}</g>"
+        )
+    return f'<svg viewBox="0 0 120 120" fill="none" aria-hidden="true">{"".join(windows)}</svg>'
+
+
 def resources_svg() -> str:
     """The globe as a pie: one big slice is pulled away, and heat rises."""
     rest = "M56 68 87.95 56.37A34 34 0 1 1 61.9 34.52z"
@@ -417,6 +440,7 @@ def wars_svg() -> str:
 
 FAILURE_ART = {
     "corruption": corruption_svg,
+    "bureaucracy": bureaucracy_svg,
     "resources": resources_svg,
     "wars": wars_svg,
 }
@@ -426,6 +450,14 @@ WAR_SPREAD_KEYFRAMES = "\n".join(
     f"{14 + d * 15}%, 86% {{ fill: {ART_DARK}; }} 100% {{ fill: {ART_FILL}; }} }}\n"
     f"    .wf-hex.wf-d{d} {{ animation: wf-spread-{d} 8s ease-in-out infinite; }}"
     for d in range(5)
+)
+
+# Window i of the bureaucracy pile drops in at its own moment; then they all clear at once.
+BUREAUCRACY_KEYFRAMES = "\n".join(
+    f"    @keyframes wf-pile-{i} {{ 0%, {4 + i * 14}% {{ opacity: 0; transform: translate(-4px, -4px); }} "
+    f"{9 + i * 14}%, 86% {{ opacity: 1; transform: none; }} 94%, 100% {{ opacity: 0; transform: none; }} }}\n"
+    f"    .wf-pile.wf-p{i} {{ animation: wf-pile-{i} 7s ease-out infinite; }}"
+    for i in range(1, 5)
 )
 
 # The globe is one canvas shared by all slides; each slide marks where it goes with a slot.
@@ -1266,44 +1298,47 @@ CSS = (
       display: flex;
       flex-direction: column;
       justify-content: center;
-      gap: 2.4rem;
+      gap: 2rem;
     }
 
     .wf-list {
       list-style: none;
       display: flex;
       flex-direction: column;
-      gap: 2.4rem;
+      gap: 1.5rem;
     }
 
     .wf-item {
       display: grid;
-      grid-template-columns: 10.5rem minmax(0, 1fr);
+      grid-template-columns: 8rem minmax(0, 1fr);
       column-gap: 2rem;
       align-items: center;
     }
 
-    .wf-art svg { display: block; width: 10.5rem; height: 10.5rem; }
+    .wf-art svg { display: block; width: 8rem; height: 8rem; }
 
-    .wf-world, .wf-pc { display: flex; align-items: baseline; gap: 0.9rem; min-width: 0; }
-    .wf-world { font-size: 2.1rem; line-height: 1.25; }
+    .wf-world { display: flex; align-items: baseline; gap: 0.9rem; min-width: 0; }
+    .wf-world { font-size: 1.9rem; line-height: 1.25; }
     .wf-world .wc-note { font-size: 0.65em; }
-    .wf-pc { font-size: 1.3rem; margin-top: 0.55rem; color: var(--gray-600); }
+    .wf-pc { font-size: 1.3rem; margin-top: 0.55rem; color: var(--gray-600); padding-left: 1.8rem; text-indent: -1.8rem; }
     .wf-world .wc-label { font-weight: 700; }
-    .wf-pc .wc-label { font-weight: 600; color: var(--gray-700); white-space: normal; }
-    .wf-pc .wc-note { font-size: 1em; }
+    .wf-pc .wc-label { font-weight: 600; color: var(--gray-700); white-space: normal; display: inline; }
+    .wf-pc .wc-note { font-size: 1em; display: inline; margin-left: 0.6rem; }
 
     .wf-pc svg {
+      display: inline-block;
       width: 1.2rem;
       height: 1.2rem;
-      flex-shrink: 0;
-      align-self: center;
+      margin-right: 0.6rem;
+      vertical-align: -0.2em;
       color: var(--gray-400);
     }
 
     .wf-coin { animation: wf-coin 3.2s ease-in infinite; }
     .wf-slice { animation: wf-slice 4s ease-in-out infinite alternate; }
     .wf-heat { animation: wf-heat 2.4s ease-out infinite; }
+    .wf-spin { animation: wf-spin 1.1s linear infinite; }
+    @keyframes wf-spin { to { transform: rotate(360deg); } }
 
     @keyframes wf-coin {
       0%, 15% { transform: translateY(0); opacity: 1; }
@@ -1318,6 +1353,8 @@ CSS = (
     }
 """
     + WAR_SPREAD_KEYFRAMES
+    + "\n"
+    + BUREAUCRACY_KEYFRAMES
     + """
 
     .wc {
@@ -1413,13 +1450,21 @@ CSS = (
       .wc { row-gap: 0.7rem; }
       .gos-slide { gap: 2.5rem; }
       .gos-globe-slot { height: 76%; }
+      .wf-content { gap: 1.4rem; }
+      .wf-list { gap: 1.1rem; }
+      .wf-item { grid-template-columns: 6.5rem minmax(0, 1fr); }
+      .wf-art svg { width: 6.5rem; height: 6.5rem; }
+      .wf-world { font-size: 1.75rem; }
+      .wf-pc { margin-top: 0.35rem; }
     }
 
     @media (max-height: 500px) {
-      .wf-content, .wf-list { gap: 1rem; }
-      .wf-item { grid-template-columns: 6rem minmax(0, 1fr); }
-      .wf-art svg { width: 6rem; height: 6rem; }
-      .wf-world { font-size: 1.7rem; }
+      .wf-content { gap: 0.8rem; }
+      .wf-list { gap: 0.6rem; }
+      .wf-item { grid-template-columns: 4.5rem minmax(0, 1fr); }
+      .wf-art svg { width: 4.5rem; height: 4.5rem; }
+      .wf-world { font-size: 1.45rem; }
+      .wf-pc { font-size: 1.1rem; margin-top: 0.2rem; }
       .gos-slide { gap: 1.5rem; padding: 0; }
       .gos-globe-slot { height: 72%; }
       .gos-side { gap: 0.7rem; }
@@ -1444,14 +1489,15 @@ CSS = (
 
       .wf-globe-slot { left: 50%; top: 0; height: auto; width: 78%; transform: translate(-50%, -58%); }
       .wf-content { left: 0; right: 0; top: 7.5rem; justify-content: flex-start; gap: 1.4rem; }
-      .wf-list { gap: 1.5rem; }
-      .wf-item { grid-template-columns: 4.75rem minmax(0, 1fr); column-gap: 1rem; }
-      .wf-art svg { width: 4.75rem; height: 4.75rem; }
-      .wf-world, .wf-pc { flex-wrap: wrap; gap: 0.1rem 0.5rem; }
+      .wf-list { gap: 1.1rem; }
+      .wf-item { grid-template-columns: 4.25rem minmax(0, 1fr); column-gap: 0.9rem; }
+      .wf-art svg { width: 4.25rem; height: 4.25rem; }
+      .wf-world { flex-wrap: wrap; gap: 0.1rem 0.5rem; }
       .wf-world { font-size: 1.3rem; }
       .wf-world .wc-note { font-size: 0.68em; }
-      .wf-pc { font-size: 0.92rem; margin-top: 0.35rem; }
-      .wf-pc svg { width: 1rem; height: 1rem; }
+      .wf-pc { font-size: 0.92rem; margin-top: 0.35rem; padding-left: 1.35rem; text-indent: -1.35rem; }
+      .wf-pc svg { width: 1rem; height: 1rem; margin-right: 0.35rem; vertical-align: -0.15em; }
+      .wf-pc .wc-note { display: block; margin-left: 0; text-indent: 0; }
 
       /* A grid so the intro line can share the points' row: it sits under the globe and moves nothing when it goes. */
       .gos-slide { display: grid; grid-template-columns: minmax(0, 1fr); align-content: center; gap: 0.8rem; padding: 0; }
@@ -1483,6 +1529,8 @@ CSS = (
 
     @media (max-aspect-ratio: 1/1) and (max-height: 700px) {
       .gos-globe-slot { width: min(76%, 22vh); }
+      .wf-content { top: 6.5rem; gap: 1rem; }
+      .wf-list { gap: 0.8rem; }
     }
 """
 )

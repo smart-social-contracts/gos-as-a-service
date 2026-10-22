@@ -60,7 +60,11 @@
     "Other?": "¿Otros?",
     "GOS available today": "GOS disponibles hoy",
     "Many more to come. Anyone can build one on the open standard.": "Vendrán muchos más. Cualquiera puede crear uno sobre el estándar abierto.",
-    "Find a realm, or start your own": "Encuentra un reino o crea el tuyo"
+    "Find a realm, or start your own": "Encuentra un reino o crea el tuyo",
+    "Bureaucracy": "Burocracia",
+    "red tape, too many layers, nothing gets done": "papeleo, demasiadas capas, nada avanza",
+    "Bloatware piles up, layer on layer": "Los programas inútiles se acumulan, capa sobre capa",
+    "and every click takes forever": "y cada clic tarda una eternidad"
   },
   "de": {
     "Humanity's operating system needs an upgrade.": "Das Betriebssystem der Menschheit braucht ein Update.",
@@ -123,7 +127,11 @@
     "Other?": "Andere?",
     "GOS available today": "Heute verfügbare GOS",
     "Many more to come. Anyone can build one on the open standard.": "Viele weitere werden folgen. Jeder kann eines auf dem offenen Standard bauen.",
-    "Find a realm, or start your own": "Finde ein Realm oder starte dein eigenes"
+    "Find a realm, or start your own": "Finde ein Realm oder starte dein eigenes",
+    "Bureaucracy": "Bürokratie",
+    "red tape, too many layers, nothing gets done": "Papierkram, zu viele Ebenen, nichts geht voran",
+    "Bloatware piles up, layer on layer": "Bloatware stapelt sich, Schicht um Schicht",
+    "and every click takes forever": "und jeder Klick dauert ewig"
   },
   "fr": {
     "Humanity's operating system needs an upgrade.": "Le système d'exploitation de l'humanité a besoin d'une mise à jour.",
@@ -186,7 +194,11 @@
     "Other?": "Autres ?",
     "GOS available today": "GOS disponibles aujourd'hui",
     "Many more to come. Anyone can build one on the open standard.": "Beaucoup d'autres sont à venir. Chacun peut en créer un sur le standard ouvert.",
-    "Find a realm, or start your own": "Trouvez un royaume ou créez le vôtre"
+    "Find a realm, or start your own": "Trouvez un royaume ou créez le vôtre",
+    "Bureaucracy": "Bureaucratie",
+    "red tape, too many layers, nothing gets done": "paperasse, trop d'échelons, rien n'avance",
+    "Bloatware piles up, layer on layer": "Les logiciels superflus s'empilent, couche après couche",
+    "and every click takes forever": "et chaque clic prend une éternité"
   },
   "zh-CN": {
     "Humanity's operating system needs an upgrade.": "人类的操作系统需要升级。",
@@ -249,7 +261,11 @@
     "Other?": "其他？",
     "GOS available today": "目前可用的 GOS",
     "Many more to come. Anyone can build one on the open standard.": "更多 GOS 即将出现。任何人都可以基于开放标准构建自己的 GOS。",
-    "Find a realm, or start your own": "寻找一个领域，或创建你自己的领域"
+    "Find a realm, or start your own": "寻找一个领域，或创建你自己的领域",
+    "Bureaucracy": "官僚主义",
+    "red tape, too many layers, nothing gets done": "繁文缛节、层级过多、一事无成",
+    "Bloatware piles up, layer on layer": "臃肿软件层层堆积",
+    "and every click takes forever": "每次点击都要等上半天"
   },
   "it": {
     "Humanity's operating system needs an upgrade.": "Il sistema operativo dell'umanità ha bisogno di un aggiornamento.",
@@ -312,6 +328,10 @@
     "Other?": "Altri?",
     "GOS available today": "GOS disponibili oggi",
     "Many more to come. Anyone can build one on the open standard.": "Molti altri arriveranno. Chiunque può costruirne uno sullo standard aperto.",
-    "Find a realm, or start your own": "Trova un reame o creane uno tuo"
+    "Find a realm, or start your own": "Trova un reame o creane uno tuo",
+    "Bureaucracy": "Burocrazia",
+    "red tape, too many layers, nothing gets done": "scartoffie, troppi livelli, niente si muove",
+    "Bloatware piles up, layer on layer": "Il bloatware si accumula, strato su strato",
+    "and every click takes forever": "e ogni clic richiede un'eternità"
   }
 }
