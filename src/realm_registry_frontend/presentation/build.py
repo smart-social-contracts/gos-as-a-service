@@ -30,6 +30,7 @@ LOCALES = [
 ]
 START_HINT = "Click or press → to start"
 START_HINT_TOUCH = "Tap to start"
+LINK_CTA = "Find a realm, or start your own"
 
 BASE_CSS = """
     :root {
@@ -593,6 +594,14 @@ DECK_JS = """
     window.__goToScene(sceneIndex + 2);
   });
 
+  // Served by the portal (gos.earth, staging.gos.earth, demo.gos.earth, …): link back to that same portal.
+  if (/^([a-z0-9-]+[.])?gos[.]earth$/.test(location.hostname)) {
+    document.querySelectorAll('[data-home-link]').forEach((a) => {
+      a.href = location.origin + '/';
+      a.querySelector('.gos-link-url').textContent = location.hostname;
+    });
+  }
+
   let touch = null;
   document.addEventListener('touchstart', (e) => {
     touch = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
@@ -1105,15 +1114,36 @@ CSS = (
     .gos-right { align-items: center; }
 
     .gos-link {
-      font-size: 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.65rem;
+      font-size: 1.6rem;
       font-weight: 650;
       letter-spacing: -0.01em;
       color: var(--text);
       text-decoration: none;
-      transition: color 0.2s, opacity 0.45s ease-out, transform 0.45s cubic-bezier(0.2, 0.7, 0.2, 1);
+      white-space: nowrap;
+      transition: opacity 0.45s ease-out, transform 0.45s cubic-bezier(0.2, 0.7, 0.2, 1);
     }
 
-    .gos-link:hover { color: rgb(47, 95, 95); }
+    .gos-link-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.55rem;
+      padding: 0.5rem 1.25rem 0.55rem;
+      border: 2px solid var(--gray-900);
+      border-radius: 999px;
+      transition: background 0.2s, color 0.2s;
+    }
+    .gos-link:hover .gos-link-pill { background: var(--gray-900); color: #fff; }
+    .gos-link:focus-visible { outline: none; }
+    .gos-link:focus-visible .gos-link-pill { outline: 2px solid rgb(107, 163, 163); outline-offset: 3px; }
+    .gos-link-arrow { display: inline-block; }
+    .gos-link.shown .gos-link-arrow { animation: link-nudge 2.4s ease-in-out 1s infinite; }
+    @keyframes link-nudge { 0%, 55%, 100% { transform: none; } 25% { transform: translateX(0.35em); } }
+    .gos-link-cta { font-size: 1rem; font-weight: 500; letter-spacing: 0; color: var(--gray-500); transition: color 0.2s; }
+    .gos-link:hover .gos-link-cta { color: rgb(47, 95, 95); }
 
     .gos-legend {
       display: flex;
@@ -1367,6 +1397,7 @@ CSS = (
       .globe-canvas, .wf-art * { animation: none !important; }
       .wc-pulses { display: none; }
       .page.active .start-hint { animation: none; opacity: 1; }
+      .gos-link.shown .gos-link-arrow { animation: none; }
       .gos-intro-line, .gos-intro-line.shown { transition: none; transform: none; }
     }
 
@@ -1423,9 +1454,9 @@ CSS = (
       .wf-pc svg { width: 1rem; height: 1rem; }
 
       /* A grid so the intro line can share the points' row: it sits under the globe and moves nothing when it goes. */
-      .gos-slide { display: grid; grid-template-columns: minmax(0, 1fr); align-content: center; gap: 1.1rem; padding: 0; }
+      .gos-slide { display: grid; grid-template-columns: minmax(0, 1fr); align-content: center; gap: 0.8rem; padding: 0; }
       .gos-slide > * { grid-column: 1; }
-      .gos-globe-slot { grid-row: 1; justify-self: center; height: auto; width: min(76%, 32vh); }
+      .gos-globe-slot { grid-row: 1; justify-self: center; height: auto; width: min(76%, 26vh); }
       .gos-left { grid-row: 2; }
       .gos-right { grid-row: 3; }
       .gos-intro-line { position: static; grid-row: 2; grid-column: 1; align-self: start; padding-top: 0.6rem; font-size: 1.45rem; }
@@ -1439,7 +1470,9 @@ CSS = (
       .gos-legend-item { font-size: 0.95rem; gap: 0.5rem; }
       .gos-badge { width: 1.9rem; height: 1.9rem; font-size: 0.9rem; }
       .gos-badge img { height: 1.3rem; }
-      .gos-link { font-size: 1.2rem; }
+      .gos-link { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.8rem; font-size: 1.15rem; white-space: normal; }
+      .gos-link-pill { padding: 0.35rem 0.95rem 0.4rem; }
+      .gos-link-cta { font-size: 0.85rem; }
       .gos-head { padding-bottom: 0.5rem; margin-bottom: 0.1rem; }
       .gos-head h2 { font-size: 1.45rem; }
       .gos-kicker { font-size: 0.72rem; }
@@ -1449,7 +1482,7 @@ CSS = (
     }
 
     @media (max-aspect-ratio: 1/1) and (max-height: 700px) {
-      .gos-globe-slot { width: min(76%, 27vh); }
+      .gos-globe-slot { width: min(76%, 22vh); }
     }
 """
 )
@@ -1588,9 +1621,13 @@ class GosIntroSlide(Slide):
             if link:
                 frag += 1
                 url = html.escape(link.group(1))
+                shown = re.sub(r"^https?://", "", url).rstrip("/")
                 sides["right"].append(
-                    f'<a class="gos-link wc-frag" data-frag="{frag}" href="{url}" '
-                    f'target="_blank" rel="noopener noreferrer">{url}</a>'
+                    f'<a class="gos-link wc-frag" data-frag="{frag}" data-home-link href="{url}" '
+                    f'target="_blank" rel="noopener noreferrer">'
+                    f'<span class="gos-link-pill"><span class="gos-link-url">{shown}</span>'
+                    f'<span class="gos-link-arrow" aria-hidden="true">→</span></span>'
+                    f'<span class="gos-link-cta">{tr(LINK_CTA)}</span></a>'
                 )
                 continue
             m = re.match(r"^(left|right):\s*(.*)$", text)

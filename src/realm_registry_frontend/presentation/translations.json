@@ -59,7 +59,8 @@
     "[Realms GOS](https://realmsgos.org)": "[Realms GOS](https://realmsgos.org)",
     "Other?": "¿Otros?",
     "GOS available today": "GOS disponibles hoy",
-    "Many more to come. Anyone can build one on the open standard.": "Vendrán muchos más. Cualquiera puede crear uno sobre el estándar abierto."
+    "Many more to come. Anyone can build one on the open standard.": "Vendrán muchos más. Cualquiera puede crear uno sobre el estándar abierto.",
+    "Find a realm, or start your own": "Encuentra un reino o crea el tuyo"
   },
   "de": {
     "Humanity's operating system needs an upgrade.": "Das Betriebssystem der Menschheit braucht ein Update.",
@@ -121,7 +122,8 @@
     "[Realms GOS](https://realmsgos.org)": "[Realms GOS](https://realmsgos.org)",
     "Other?": "Andere?",
     "GOS available today": "Heute verfügbare GOS",
-    "Many more to come. Anyone can build one on the open standard.": "Viele weitere werden folgen. Jeder kann eines auf dem offenen Standard bauen."
+    "Many more to come. Anyone can build one on the open standard.": "Viele weitere werden folgen. Jeder kann eines auf dem offenen Standard bauen.",
+    "Find a realm, or start your own": "Finde ein Realm oder starte dein eigenes"
   },
   "fr": {
     "Humanity's operating system needs an upgrade.": "Le système d'exploitation de l'humanité a besoin d'une mise à jour.",
@@ -183,7 +185,8 @@
     "[Realms GOS](https://realmsgos.org)": "[Realms GOS](https://realmsgos.org)",
     "Other?": "Autres ?",
     "GOS available today": "GOS disponibles aujourd'hui",
-    "Many more to come. Anyone can build one on the open standard.": "Beaucoup d'autres sont à venir. Chacun peut en créer un sur le standard ouvert."
+    "Many more to come. Anyone can build one on the open standard.": "Beaucoup d'autres sont à venir. Chacun peut en créer un sur le standard ouvert.",
+    "Find a realm, or start your own": "Trouvez un royaume ou créez le vôtre"
   },
   "zh-CN": {
     "Humanity's operating system needs an upgrade.": "人类的操作系统需要升级。",
@@ -245,7 +248,8 @@
     "[Realms GOS](https://realmsgos.org)": "[Realms GOS](https://realmsgos.org)",
     "Other?": "其他？",
     "GOS available today": "目前可用的 GOS",
-    "Many more to come. Anyone can build one on the open standard.": "更多 GOS 即将出现。任何人都可以基于开放标准构建自己的 GOS。"
+    "Many more to come. Anyone can build one on the open standard.": "更多 GOS 即将出现。任何人都可以基于开放标准构建自己的 GOS。",
+    "Find a realm, or start your own": "寻找一个领域，或创建你自己的领域"
   },
   "it": {
     "Humanity's operating system needs an upgrade.": "Il sistema operativo dell'umanità ha bisogno di un aggiornamento.",
@@ -307,6 +311,7 @@
     "[Realms GOS](https://realmsgos.org)": "[Realms GOS](https://realmsgos.org)",
     "Other?": "Altri?",
     "GOS available today": "GOS disponibili oggi",
-    "Many more to come. Anyone can build one on the open standard.": "Molti altri arriveranno. Chiunque può costruirne uno sullo standard aperto."
+    "Many more to come. Anyone can build one on the open standard.": "Molti altri arriveranno. Chiunque può costruirne uno sullo standard aperto.",
+    "Find a realm, or start your own": "Trova un reame o creane uno tuo"
   }
 }
