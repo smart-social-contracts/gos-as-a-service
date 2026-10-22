@@ -278,6 +278,15 @@
     );
   }
 
+  .has-photo.expanded .realm-row {
+    background: var(--surface);
+  }
+
+  .has-photo.expanded .realm-lead::after,
+  .has-photo.expanded .realm-trail::before {
+    display: none;
+  }
+
   .has-photo .realm-trail::before {
     right: 100%;
     background: linear-gradient(
@@ -433,16 +442,16 @@
     background: var(--surface);
   }
 
-  /* Opened: the photo continues under the row, then melts to white under the text. */
+  /* Opened: a tall band of photo under the white header, melting to white under the text. */
   .has-photo .realm-details {
-    padding-top: 4.25rem;
-    border-top: 0;
+    padding-top: 268px;
     background: linear-gradient(
       to bottom,
       rgba(255, 255, 255, 0) 0,
-      rgba(255, 255, 255, 0.35) 2rem,
-      rgba(255, 255, 255, 0.82) 3.5rem,
-      rgba(255, 255, 255, 1) 5rem
+      rgba(255, 255, 255, 0) 220px,
+      rgba(255, 255, 255, 0.45) 240px,
+      rgba(255, 255, 255, 0.88) 258px,
+      rgba(255, 255, 255, 1) 276px
     );
   }
 
