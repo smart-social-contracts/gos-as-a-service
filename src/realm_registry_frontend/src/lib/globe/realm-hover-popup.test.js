@@ -17,6 +17,14 @@ test('the popup shows the realm photo and its credit on top', () => {
   assert.ok(html.indexOf('realm-hover-photo') < html.indexOf('realm-hover-title'));
 });
 
+test('the popup counts the realm\'s users in total, not those in the zone', () => {
+  const html = buildMarkerHoverPopupHtml({ ...point, users: 12, totalUsers: 4200 }, (key, opts) =>
+    `${key}:${opts?.values?.count ?? ''}`
+  );
+  assert.match(html, /globe\.popup_total_users:4,?200/);
+  assert.doesNotMatch(html, /users_in_zone/);
+});
+
 test('the popup has no photo without an https one', () => {
   for (const photo of [null, { url: '' }, { url: 'http://fr.icp0.io/a.jpg' }, { url: 'javascript:alert(1)' }]) {
     const html = buildMarkerHoverPopupHtml(point, translate, photo);

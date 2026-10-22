@@ -27,7 +27,6 @@ function t(translate, key, values = {}) {
  * @param {{
  *   primaryName: string,
  *   stageId?: string | null,
- *   zoneUsers?: number,
  *   totalUsers?: number,
  *   locations?: string[],
  *   manifesto?: string,
@@ -53,11 +52,11 @@ export function buildRealmHoverPopupHtml(data, translate) {
     );
   }
 
-  if (data.isCenter && data.zoneUsers != null && data.zoneUsers > 0) {
+  if (data.isCenter && data.totalUsers != null && data.totalUsers > 0) {
     metaRows.push(
       `<div class="realm-hover-stat">
         <span class="realm-hover-stat-icon" aria-hidden="true">◉</span>
-        ${escapeHtml(t(translate, 'map.users_in_zone', { count: formatCount(data.zoneUsers) }))}
+        ${escapeHtml(t(translate, 'globe.popup_total_users', { count: formatCount(data.totalUsers) }))}
       </div>`
     );
   } else if (data.influenceLabel) {
@@ -69,14 +68,6 @@ export function buildRealmHoverPopupHtml(data, translate) {
     metaRows.push(
       `<div class="realm-hover-stat muted">
         ${escapeHtml(t(translate, influenceKey, { count: formatCount(data.realmCount) }))}
-      </div>`
-    );
-  }
-
-  if (data.isCenter && data.totalUsers != null && data.totalUsers > 0 && data.totalUsers !== data.zoneUsers) {
-    metaRows.push(
-      `<div class="realm-hover-stat muted">
-        ${escapeHtml(t(translate, 'globe.popup_total_users', { count: formatCount(data.totalUsers) }))}
       </div>`
     );
   }
@@ -134,7 +125,6 @@ export function buildHexHoverPopupHtml(polygon, translate, photo = null) {
     {
       primaryName: realm.name || realm.realm_name || realm.id,
       stageId: realm.realm_stage,
-      zoneUsers: isCenter ? polygon.totalUsers : undefined,
       totalUsers: realm.users_count,
       locations: isCenter ? locations : undefined,
       manifesto: isCenter ? realm.manifesto : undefined,
@@ -164,7 +154,6 @@ export function buildMarkerHoverPopupHtml(point, translate, photo = null) {
     {
       primaryName: point.realmName || 'Realm',
       stageId: point.stage,
-      zoneUsers: point.users,
       totalUsers: point.totalUsers ?? point.users,
       locations: point.location ? [point.location] : undefined,
       manifesto: point.manifesto,
