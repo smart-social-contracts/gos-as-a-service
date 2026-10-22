@@ -33,6 +33,7 @@
 - Built upon a standard — [Generalized Global Governance v1.0](https://github.com/smart-social-contracts/ggg)
 - Public good — open and free, like the Internet
 - **Civilizational substrate for the age of AI**
+- legend: title — GOS available today
 - legend: realms — [Realms GOS](https://realmsgos.org)
-- legend: other — Other?
+- legend: other — Other? — Many more to come. Anyone can build one on the open standard.
 - link: https://gos.earth

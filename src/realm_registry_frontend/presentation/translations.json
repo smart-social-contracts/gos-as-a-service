@@ -57,7 +57,9 @@
     "open and free, like the Internet": "abierto y gratuito, como Internet",
     "**Civilizational substrate for the age of AI**": "**Sustrato civilizatorio para la era de la IA**",
     "[Realms GOS](https://realmsgos.org)": "[Realms GOS](https://realmsgos.org)",
-    "Other?": "¿Otros?"
+    "Other?": "¿Otros?",
+    "GOS available today": "GOS disponibles hoy",
+    "Many more to come. Anyone can build one on the open standard.": "Vendrán muchos más. Cualquiera puede crear uno sobre el estándar abierto."
   },
   "de": {
     "Humanity's operating system needs an upgrade.": "Das Betriebssystem der Menschheit braucht ein Update.",
@@ -117,7 +119,9 @@
     "open and free, like the Internet": "offen und frei, wie das Internet",
     "**Civilizational substrate for the age of AI**": "**Zivilisatorisches Fundament für das KI-Zeitalter**",
     "[Realms GOS](https://realmsgos.org)": "[Realms GOS](https://realmsgos.org)",
-    "Other?": "Andere?"
+    "Other?": "Andere?",
+    "GOS available today": "Heute verfügbare GOS",
+    "Many more to come. Anyone can build one on the open standard.": "Viele weitere werden folgen. Jeder kann eines auf dem offenen Standard bauen."
   },
   "fr": {
     "Humanity's operating system needs an upgrade.": "Le système d'exploitation de l'humanité a besoin d'une mise à jour.",
@@ -177,7 +181,9 @@
     "open and free, like the Internet": "ouvert et gratuit, comme Internet",
     "**Civilizational substrate for the age of AI**": "**Socle civilisationnel pour l'ère de l'IA**",
     "[Realms GOS](https://realmsgos.org)": "[Realms GOS](https://realmsgos.org)",
-    "Other?": "Autres ?"
+    "Other?": "Autres ?",
+    "GOS available today": "GOS disponibles aujourd'hui",
+    "Many more to come. Anyone can build one on the open standard.": "Beaucoup d'autres sont à venir. Chacun peut en créer un sur le standard ouvert."
   },
   "zh-CN": {
     "Humanity's operating system needs an upgrade.": "人类的操作系统需要升级。",
@@ -237,7 +243,9 @@
     "open and free, like the Internet": "开放且免费，就像互联网",
     "**Civilizational substrate for the age of AI**": "**AI 时代的文明基石**",
     "[Realms GOS](https://realmsgos.org)": "[Realms GOS](https://realmsgos.org)",
-    "Other?": "其他？"
+    "Other?": "其他？",
+    "GOS available today": "目前可用的 GOS",
+    "Many more to come. Anyone can build one on the open standard.": "更多 GOS 即将出现。任何人都可以基于开放标准构建自己的 GOS。"
   },
   "it": {
     "Humanity's operating system needs an upgrade.": "Il sistema operativo dell'umanità ha bisogno di un aggiornamento.",
@@ -297,6 +305,8 @@
     "open and free, like the Internet": "aperto e gratuito, come Internet",
     "**Civilizational substrate for the age of AI**": "**Fondamento della civiltà nell'era dell'IA**",
     "[Realms GOS](https://realmsgos.org)": "[Realms GOS](https://realmsgos.org)",
-    "Other?": "Altri?"
+    "Other?": "Altri?",
+    "GOS available today": "GOS disponibili oggi",
+    "Many more to come. Anyone can build one on the open standard.": "Molti altri arriveranno. Chiunque può costruirne uno sullo standard aperto."
   }
 }

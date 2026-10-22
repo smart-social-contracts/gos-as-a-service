@@ -1130,6 +1130,25 @@ CSS = (
       font-weight: 650;
     }
 
+    .gos-legend-title {
+      font-size: 0.8rem;
+      font-weight: 650;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--gray-500);
+    }
+
+    .gos-legend-label { display: block; }
+    .gos-legend-note {
+      display: block;
+      max-width: 17rem;
+      margin-top: 0.2rem;
+      font-size: 0.95rem;
+      font-weight: 400;
+      line-height: 1.35;
+      color: var(--gray-500);
+    }
+
     .gos-badge {
       flex: none;
       display: grid;
@@ -1406,15 +1425,17 @@ CSS = (
       /* A grid so the intro line can share the points' row: it sits under the globe and moves nothing when it goes. */
       .gos-slide { display: grid; grid-template-columns: minmax(0, 1fr); align-content: center; gap: 1.1rem; padding: 0; }
       .gos-slide > * { grid-column: 1; }
-      .gos-globe-slot { grid-row: 1; justify-self: center; height: auto; width: min(76%, 36vh); }
+      .gos-globe-slot { grid-row: 1; justify-self: center; height: auto; width: min(76%, 32vh); }
       .gos-left { grid-row: 2; }
       .gos-right { grid-row: 3; }
       .gos-intro-line { position: static; grid-row: 2; grid-column: 1; align-self: start; padding-top: 0.6rem; font-size: 1.45rem; }
       .gos-slide.globe-only .gos-globe-slot { width: min(92%, 70vh); }
       .gos-slide.globe-only .gos-side { display: none; }
-      .gos-side { flex: none; gap: 0.75rem; }
+      .gos-side { flex: none; gap: 0.6rem; }
       .gos-right { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem 1.25rem; }
-      .gos-legend { flex-direction: row; gap: 1.1rem; margin-bottom: 0; }
+      .gos-legend { flex-direction: row; flex-wrap: wrap; gap: 0.6rem 1.1rem; margin-bottom: 0; }
+      .gos-legend-title { flex-basis: 100%; font-size: 0.7rem; }
+      .gos-legend-note { font-size: 0.8rem; }
       .gos-legend-item { font-size: 0.95rem; gap: 0.5rem; }
       .gos-badge { width: 1.9rem; height: 1.9rem; font-size: 0.9rem; }
       .gos-badge img { height: 1.3rem; }
@@ -1425,6 +1446,10 @@ CSS = (
       .gos-point { gap: 0.15rem; }
       .gos-label { font-size: 1.02rem; }
       .gos-note { font-size: 0.85rem; }
+    }
+
+    @media (max-aspect-ratio: 1/1) and (max-height: 700px) {
+      .gos-globe-slot { width: min(76%, 27vh); }
     }
 """
 )
@@ -1532,20 +1557,31 @@ class GosIntroSlide(Slide):
             if m:
                 intro = f'<p class="gos-intro-line" data-until="1">{tr(m.group(1))}</p>'
                 continue
-            entry = re.match(r"^legend:\s*(realms|other)\s+—\s+(.*)$", text)
+            # "legend: title — …", or "legend: realms|other — label[ — note]".
+            entry = re.match(r"^legend:\s*(title|realms|other)\s+—\s+(.*)$", text)
             if entry:
                 if not legend:
                     frag += 1
                     legend_frag = frag
-                gos, label = entry.groups()
+                kind, rest = entry.groups()
+                if kind == "title":
+                    legend.append(f'<div class="gos-legend-title">{tr(rest)}</div>')
+                    continue
+                label, _, note = rest.partition(" — ")
                 mark = (
                     '<img src="assets/logo_sphere_only.svg" alt="">'
-                    if gos == "realms"
+                    if kind == "realms"
                     else "?"
                 )
+                text_html = (
+                    f'<span><span class="gos-legend-label">{tr(label)}</span>'
+                    f'<span class="gos-legend-note">{tr(note)}</span></span>'
+                    if note
+                    else tr(label)
+                )
                 legend.append(
-                    f'<div class="gos-legend-item"><span class="gos-badge gos-badge-{gos}">{mark}</span>'
-                    f"{tr(label)}</div>"
+                    f'<div class="gos-legend-item"><span class="gos-badge gos-badge-{kind}">{mark}</span>'
+                    f"{text_html}</div>"
                 )
                 continue
             link = re.match(r"^link:\s*(\S+)$", text)
