@@ -58,8 +58,10 @@
     "Built on top of decentralized cloud tech": "Construido sobre tecnología de nube descentralizada",
     "*Actually* secure, transparent and efficient": "*Realmente* seguro, transparente y eficiente",
     "Enables emergence of governance apps open ecosystem": "Hace posible un ecosistema abierto de aplicaciones de gobernanza",
-    "Enables cooperation scalability & user autonomy": "Permite que la cooperación escale y respeta la autonomía personal",
-    "Incentivizes user alignment (both humans and machines)": "Incentiva el alineamiento de los usuarios (humanos y máquinas)"
+    "Enables user autonomy & cooperation scalability": "Permite autonomía y cooperación a gran escala",
+    "Incentivizes user alignment (both humans and machines)": "Incentiva el alineamiento de los usuarios (humanos y máquinas)",
+    "New Governance Stack": "Nueva pila de gobernanza",
+    "Natural resources": "Recursos naturales"
   },
   "de": {
     "Humanity's operating system needs an upgrade.": "Das Betriebssystem der Menschheit braucht ein Update.",
@@ -120,8 +122,10 @@
     "Built on top of decentralized cloud tech": "Aufgebaut auf dezentraler Cloud-Technologie",
     "*Actually* secure, transparent and efficient": "*Wirklich* sicher, transparent und effizient",
     "Enables emergence of governance apps open ecosystem": "Ermöglicht ein offenes Ökosystem von Governance-Apps",
-    "Enables cooperation scalability & user autonomy": "Macht Zusammenarbeit skalierbar und wahrt die Autonomie der Nutzer",
-    "Incentivizes user alignment (both humans and machines)": "Belohnt die Ausrichtung der Nutzer (Menschen wie Maschinen)"
+    "Enables user autonomy & cooperation scalability": "Ermöglicht Autonomie & Kooperation im Großen",
+    "Incentivizes user alignment (both humans and machines)": "Belohnt die Ausrichtung der Nutzer (Menschen wie Maschinen)",
+    "New Governance Stack": "Neuer Governance-Stack",
+    "Natural resources": "Natürliche Ressourcen"
   },
   "fr": {
     "Humanity's operating system needs an upgrade.": "Le système d'exploitation de l'humanité a besoin d'une mise à jour.",
@@ -182,8 +186,10 @@
     "Built on top of decentralized cloud tech": "Construit sur une technologie de cloud décentralisé",
     "*Actually* secure, transparent and efficient": "*Vraiment* sûr, transparent et efficace",
     "Enables emergence of governance apps open ecosystem": "Fait émerger un écosystème ouvert d'applications de gouvernance",
-    "Enables cooperation scalability & user autonomy": "Permet à la coopération de passer à l'échelle, dans le respect de l'autonomie de chacun",
-    "Incentivizes user alignment (both humans and machines)": "Encourage l'alignement des utilisateurs (humains comme machines)"
+    "Enables user autonomy & cooperation scalability": "Permet autonomie et coopération à l'échelle",
+    "Incentivizes user alignment (both humans and machines)": "Encourage l'alignement des utilisateurs (humains comme machines)",
+    "New Governance Stack": "Nouvelle pile de gouvernance",
+    "Natural resources": "Ressources naturelles"
   },
   "zh-CN": {
     "Humanity's operating system needs an upgrade.": "人类的操作系统需要升级。",
@@ -244,8 +250,10 @@
     "Built on top of decentralized cloud tech": "构建于去中心化云技术之上",
     "*Actually* secure, transparent and efficient": "*真正*安全、透明、高效",
     "Enables emergence of governance apps open ecosystem": "催生开放的治理应用生态",
-    "Enables cooperation scalability & user autonomy": "让合作得以规模化，并保障用户自主",
-    "Incentivizes user alignment (both humans and machines)": "激励用户对齐（无论人类还是机器）"
+    "Enables user autonomy & cooperation scalability": "实现用户自主与规模化合作",
+    "Incentivizes user alignment (both humans and machines)": "激励用户对齐（无论人类还是机器）",
+    "New Governance Stack": "新治理技术栈",
+    "Natural resources": "自然资源"
   },
   "it": {
     "Humanity's operating system needs an upgrade.": "Il sistema operativo dell'umanità ha bisogno di un aggiornamento.",
@@ -306,7 +314,9 @@
     "Built on top of decentralized cloud tech": "Costruito su tecnologia cloud decentralizzata",
     "*Actually* secure, transparent and efficient": "*Davvero* sicuro, trasparente ed efficiente",
     "Enables emergence of governance apps open ecosystem": "Fa emergere un ecosistema aperto di app di governance",
-    "Enables cooperation scalability & user autonomy": "Rende la cooperazione scalabile e rispetta l'autonomia di ognuno",
-    "Incentivizes user alignment (both humans and machines)": "Incentiva l'allineamento degli utenti (umani e macchine)"
+    "Enables user autonomy & cooperation scalability": "Abilita autonomia e cooperazione su larga scala",
+    "Incentivizes user alignment (both humans and machines)": "Incentiva l'allineamento degli utenti (umani e macchine)",
+    "New Governance Stack": "Nuovo stack di governance",
+    "Natural resources": "Risorse naturali"
   }
 }
