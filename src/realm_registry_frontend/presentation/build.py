@@ -384,11 +384,11 @@ def _pop(inner: str, delay: float) -> str:
     return f'<g class="wcx-pop" style="--d:{delay:.2f}s">{inner}</g>'
 
 
-def _billboard(key: str, x: float, y: float, inner: str, lift: float = 0.0) -> str:
+def _billboard(key: str, x: float, y: float, inner: str, lift: float = 0.0, shadow: bool = True) -> str:
     """An upright icon standing on plane point (x, y); inner is drawn with its base at 0, 0."""
     bx, by = iso(x, y, 0, WCX_LAYERS[key][0])
     shadow = (
-        '<ellipse rx="13" ry="3.2" fill="#000" opacity="0.07"/>' if not lift else ""
+        '<ellipse rx="13" ry="3.2" fill="#000" opacity="0.07"/>' if shadow and not lift else ""
     )
     return f'<g transform="translate({bx:.1f} {by - lift:.1f})">{shadow}{inner}</g>'
 
@@ -597,65 +597,89 @@ def _connectors(upper: str, lower: str) -> str:
     return f'<g fill="none" stroke-width="1.3">{"".join(out)}</g>'
 
 
-OS_TRACES = [
-    "M131 131H70V60H22",
-    "M131 131V64H186V22",
-    "M131 131H232V96",
-    "M131 131H196V196H240",
-    "M131 131V214H176V244",
-    "M131 131V178H64V236",
-    "M131 131H44V150H16",
+# The operating system's layout, in plane units. Anything standing on it has to be near the front
+# edges (0.64 * max(x, y) > its height + 67), or the applications' slab above hides its top.
+OS_HUB = (196, 196)  # the capitol, where power sits
+OS_SCALES = (78, 236)
+OS_LAW = (236, 78)
+# The people running the institutions: (where they stand, delay before they are bribed in a hack).
+OS_OFFICIALS = [((40, 250), 0.1), ((110, 170), 0.3), ((150, 248), 0.2), ((248, 150), 0.25), ((170, 110), 0.35), ((250, 40), 0.15)]
+# Wiring as (path, delay before a hack's red runs along it). The officials' wires run in to the
+# capitol, then the capitol's run out to the courts and the law.
+OS_WIRES = [
+    ("M40 250V170H196V196", 0.45),
+    ("M250 40H170V196H196", 0.5),
+    ("M150 248V196H196", 0.55),
+    ("M248 150H196V196", 0.6),
+    ("M110 170V60H40", 0.8),
+    ("M170 110H60V40", 0.9),
+    ("M196 196V236H78", 1.9),
+    ("M196 196H236V78", 2.0),
 ]
-OS_TRACE_ENDS = [(22, 60), (186, 22), (232, 96), (240, 196), (176, 244), (64, 236), (16, 150)]
+OS_NODES = [(40, 60), (60, 40)] + [xy for xy, _ in OS_OFFICIALS]
+HACK_CAPITOL_AT = 1.7  # the officials' red reaches the capitol
+HACK_ICONS_AT = 3.0  # and from there the courts and the law
+HACK_PALE = "#f6dfde"
+HACK_PALER = "#fdf3f3"
 
 
-def capitol_svg() -> str:
-    cols = "".join(f'<rect x="{c - 2.4}" y="-27" width="4.8" height="19"/>' for c in (-16, -8, 0, 8, 16))
+def capitol_svg(hacked: bool = False) -> str:
+    line, fill, cols = (HACK_RED, HACK_PALER, HACK_PALE) if hacked else ("#9a9a9a", "#f6f6f6", ART_FILL)
+    pillars = "".join(f'<rect x="{c - 2.4}" y="-27" width="4.8" height="19"/>' for c in (-16, -8, 0, 8, 16))
     return (
-        '<g fill="#f6f6f6" stroke="#9a9a9a" stroke-width="1.2" stroke-linejoin="round">'
+        f'<g fill="{fill}" stroke="{line}" stroke-width="1.2" stroke-linejoin="round">'
         '<path d="M-27 0h54v-4h-54z"/><path d="M-23 -4h46v-4h-46z"/>'
-        f'<g fill="{ART_FILL}">{cols}</g>'
+        f'<g fill="{cols}">{pillars}</g>'
         '<path d="M-25 -27h50v-4h-50z"/><path d="M-25 -31 0-44 25-31z"/></g>'
     )
 
 
-def scales_svg() -> str:
+def scales_svg(hacked: bool = False) -> str:
+    line, pan = (HACK_RED, HACK_PALE) if hacked else ("#8a8a8a", ART_FILL)
     return (
-        '<g fill="none" stroke="#8a8a8a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">'
+        f'<g fill="none" stroke="{line}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">'
         '<path d="M0-2V-33M-9 0H9M-16-29h32"/>'
         '<path d="M-16-29-21-16M-16-29-11-16M16-29 11-16M16-29 21-16"/>'
-        f'<path d="M-23-16a7 5 0 0 0 14 0z" fill="{ART_FILL}"/><path d="M9-16a7 5 0 0 0 14 0z" fill="{ART_FILL}"/>'
-        '<circle cy="-34" r="2" fill="#8a8a8a"/></g>'
+        f'<path d="M-23-16a7 5 0 0 0 14 0z" fill="{pan}"/><path d="M9-16a7 5 0 0 0 14 0z" fill="{pan}"/>'
+        f'<circle cy="-34" r="2" fill="{line}"/></g>'
     )
 
 
-def law_doc_svg() -> str:
+def law_doc_svg(hacked: bool = False) -> str:
+    line, paper, fold, text = (
+        (HACK_RED, HACK_PALER, HACK_PALE, "#e0a09f") if hacked else ("#9a9a9a", "#fff", ART_FILL, "#c4c4c4")
+    )
     return (
         '<g stroke-linejoin="round">'
-        '<path d="M-12-2V-34H5l7 7V-2z" fill="#fff" stroke="#9a9a9a" stroke-width="1.2"/>'
-        f'<path d="M5-34v7h7" fill="{ART_FILL}" stroke="#9a9a9a" stroke-width="1.2"/>'
-        '<path d="M-7-24H4M-7-19H7M-7-14H7M-7-9H2" stroke="#c4c4c4" stroke-width="1.5" stroke-linecap="round"/></g>'
+        f'<path d="M-12-2V-34H5l7 7V-2z" fill="{paper}" stroke="{line}" stroke-width="1.2"/>'
+        f'<path d="M5-34v7h7" fill="{fold}" stroke="{line}" stroke-width="1.2"/>'
+        f'<path d="M-7-24H4M-7-19H7M-7-14H7M-7-9H2" stroke="{text}" stroke-width="1.5" stroke-linecap="round"/></g>'
     )
+
+
+def official_svg(hacked: bool = False) -> str:
+    return person_svg(HACK_RED if hacked else "#7a7a7a", scale=0.85)
 
 
 def os_svg() -> str:
-    """The operating system: institutions wired into everything, with power held in the middle."""
+    """The operating system: institutions and the people running them, wired into everything."""
     top, _ = WCX_LAYERS["os"]
-    traces = "".join(f'<path d="{d}"/>' for d in OS_TRACES)
+    wires = [d for d, _ in OS_WIRES]
+    traces = "".join(f'<path d="{d}"/>' for d in wires)
     pulses = "".join(
-        f'<path d="{d}" pathLength="100" style="animation-delay:-{i * 0.8:.1f}s"/>' for i, d in enumerate(OS_TRACES)
+        f'<path d="{d}" pathLength="100" style="animation-delay:-{i * 0.8:.1f}s"/>' for i, d in enumerate(wires)
     )
-    nodes = "".join(f'<circle cx="{x}" cy="{y}" r="3.2"/>' for x, y in OS_TRACE_ENDS)
+    nodes = "".join(f'<circle cx="{x}" cy="{y}" r="3.2"/>' for x, y in OS_NODES)
     flat = (
         f'<g fill="none" stroke="#d4d4d4" stroke-width="1.6" stroke-linejoin="round">{traces}</g>'
         f'<g fill="#fff" stroke="#c4c4c4" stroke-width="1.3">{nodes}</g>'
         f'<g class="wcx-pulses" fill="none" stroke="#7a7a7a" stroke-width="2" stroke-linecap="round">{pulses}</g>'
     )
     icons = [
-        _pop(_billboard("os", 215, 60, law_doc_svg()), 0.55),
-        _pop(_billboard("os", SIDE / 2, SIDE / 2, capitol_svg()), 0.4),
-        _pop(_billboard("os", 60, 215, scales_svg()), 0.7),
-    ]
+        _pop(_billboard("os", *OS_LAW, law_doc_svg()), 0.55),
+        _pop(_billboard("os", *OS_HUB, capitol_svg()), 0.4),
+        _pop(_billboard("os", *OS_SCALES, scales_svg()), 0.7),
+    ] + [_pop(_billboard("os", x, y, official_svg()), 0.5 + i * 0.07) for i, ((x, y), _) in enumerate(OS_OFFICIALS)]
     return (
         _connectors("os", "hardware")
         + _slab("os", "#fff", 0.92)
@@ -686,7 +710,8 @@ def apps_svg() -> str:
     top, _ = WCX_LAYERS["apps"]
     grid = "".join(f'<path d="M{v:.1f} 0V{SIDE}M0 {v:.1f}H{SIDE}"/>' for v in [SIDE * i / 8 for i in range(1, 8)])
     flat = f'<g stroke="#ededed" stroke-width="1">{grid}</g>'
-    spots = [(45, 217), (105, 157), (165, 97), (225, 37)]
+    # Along the front half of the layer, so the users' slab above never hides the tiles' tops.
+    spots = [(75, 255), (135, 195), (195, 135), (255, 75)]
     tiles = "".join(
         _pop(_billboard("apps", x, y, f'<g class="wcx-bob" style="animation-delay:-{i * 0.7:.1f}s">'
                         f"{app_tile_svg(icon)}</g>"), 0.35 + i * 0.12)
@@ -695,8 +720,9 @@ def apps_svg() -> str:
     return _connectors("apps", "os") + _slab("apps", "#fff", 0.9) + _plane(top, flat) + tiles
 
 
-def person_svg(shade: str) -> str:
-    return f'<g fill="{shade}"><circle cy="-15" r="4.6"/><path d="M-8.5-1a8.5 8.5 0 0 1 17 0z"/></g>'
+def person_svg(shade: str, scale: float = 1.0) -> str:
+    size = f' transform="scale({scale})"' if scale != 1 else ""
+    return f'<g fill="{shade}"{size}><circle cy="-15" r="4.6"/><path d="M-8.5-1a8.5 8.5 0 0 1 17 0z"/></g>'
 
 
 def users_svg() -> str:
@@ -710,8 +736,17 @@ def users_svg() -> str:
     return _connectors("users", "apps") + _slab("users", "#fff", 0.9) + people
 
 
-def crown_svg() -> str:
-    return f'<path d="M-12 0-14.5-14l7 6L0-18l7.5 10 7-6L12 0z" fill="{HACK_RED}" stroke="#7d2f2e" stroke-width="1" stroke-linejoin="round"/>'
+def evil_svg() -> str:
+    """A horned, grinning face: whoever captured power."""
+    dark = "#4a1716"
+    return (
+        f'<g stroke="#7d2f2e" stroke-width="1" stroke-linejoin="round" fill="{HACK_RED}">'
+        '<path d="M-7.6-17.4-10.5-25-2.8-20.2z"/><path d="M7.6-17.4 10.5-25 2.8-20.2z"/>'
+        '<circle cy="-10.5" r="10.5"/></g>'
+        f'<g fill="none" stroke="{dark}" stroke-width="1.8" stroke-linecap="round">'
+        '<path d="M-7-15.2-2.2-12.6M7-15.2 2.2-12.6"/><path d="M-6.4-6.6Q0-0.6 6.4-6.6"/></g>'
+        f'<g fill="{dark}"><circle cx="-3.6" cy="-10.6" r="1.5"/><circle cx="3.6" cy="-10.6" r="1.5"/></g>'
+    )
 
 
 def shield_svg() -> str:
@@ -732,19 +767,30 @@ def upgrade_svg() -> str:
 
 
 def hack_svg() -> str:
-    """Someone captures power: red spreads along the operating system's wiring and takes the crown."""
+    """Power gets captured: the officials are bribed and turn red, the red runs along their wires
+    to the capitol, and from there to the courts and the law."""
     top, _ = WCX_LAYERS["os"]
     paths = "".join(
-        f'<path class="wcx-capture" d="{d}" pathLength="100" style="--d:{0.15 * i:.2f}s"/>'
-        for i, d in enumerate(OS_TRACES)
+        f'<path class="wcx-capture" d="{d}" pathLength="100" style="--d:{delay:.2f}s"/>' for d, delay in OS_WIRES
     )
     flat = (
         f'<rect class="wcx-glitch" width="{SIDE}" height="{SIDE}" fill="{HACK_RED}"/>'
         f'<g fill="none" stroke="{HACK_RED}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">{paths}</g>'
     )
+
+    def taint(xy: tuple[float, float], art: str, delay: float) -> str:
+        """A red copy laid over the grey one, fading in once the red reaches it."""
+        return f'<g class="wcx-taint" style="--d:{delay:.2f}s">{_billboard("os", *xy, art, shadow=False)}</g>'
+
+    red = (
+        [taint(xy, official_svg(True), delay) for xy, delay in OS_OFFICIALS]
+        + [taint(OS_HUB, capitol_svg(True), HACK_CAPITOL_AT)]
+        + [taint(xy, art, HACK_ICONS_AT) for xy, art in ((OS_SCALES, scales_svg(True)), (OS_LAW, law_doc_svg(True)))]
+    )
     return (
         _plane(top, flat, clip=True)
         + _poly(_face(top), fill="none", stroke=HACK_RED, stroke_width="1.8", class_="wcx-glitch-edge")
+        + "".join(red)
     )
 
 
@@ -757,8 +803,8 @@ def checks_svg() -> str:
 
 # Badges sit on the capitol's roof but are drawn over the whole stack so the upper slabs never hide them.
 WCX_BADGES = {
-    "hack": lambda: _pop(_billboard("os", SIDE / 2, SIDE / 2, crown_svg(), lift=47), 1.0),
-    "checks": lambda: _pop(_billboard("os", SIDE / 2, SIDE / 2, shield_svg(), lift=46), 0.25),
+    "hack": lambda: _pop(_billboard("os", *OS_HUB, evil_svg(), lift=47), HACK_CAPITOL_AT),
+    "checks": lambda: _pop(_billboard("os", *OS_HUB, shield_svg(), lift=46), 0.25),
 }
 
 
@@ -776,7 +822,7 @@ WCX_STACK = ["hardware", "os", "upgrade", "hack", "checks", "apps", "users"]
 CALLOUT_ICONS = {
     "upgrade": f'<svg viewBox="0 0 24 24" fill="none" stroke="{TEAL_DARK}" stroke-width="2" stroke-linecap="round" '
     'stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v4h-4"/></svg>',
-    "hack": '<svg viewBox="-16 -20 32 24" aria-hidden="true">' + crown_svg() + "</svg>",
+    "hack": '<svg viewBox="-14 -26 28 27" aria-hidden="true">' + evil_svg() + "</svg>",
     "checks": '<svg viewBox="-16 -28 32 37" aria-hidden="true">' + shield_svg() + "</svg>",
 }
 
@@ -1501,6 +1547,7 @@ GLOBE_JS = """
   const ppath = d3.geoPath(pproj, pctx);
   const portrait = matchMedia('(max-aspect-ratio: 1/1)');
   const GLIDE_MS = 2600;
+  const SURFACE = 246; // gray level of the planet's plain digital surface
   const PLANET_FADE = 'opacity 0.45s ease';
   const RAD = Math.PI / 180;
   let marker = null; // the .wcx-planet the planet is drawn for, null when off
@@ -1510,8 +1557,6 @@ GLOBE_JS = """
   let planetDrawn = 0;
   let planetW = 0;
   let planetH = 0;
-  const landCache = document.createElement('canvas');
-  let landKey = '';
 
   const globeLam = (now) => -15 + (still ? 0 : (now - t0) / 1000) * DEG_PER_SECOND;
   // Where the globe canvas is right now, even halfway through a CSS move.
@@ -1606,27 +1651,9 @@ GLOBE_JS = """
 
   // Ones and zeros sit on a lat/lon grid of 4096 steps around. Grid points have levels (how
   // often their index halves); only levels coarse enough to stay readable are drawn, and the
-  // finest one fades in or out as the planet zooms. Land is told from sea by a small map.
+  // finest one fades in or out as the planet zooms.
   const STEPS = 4096;
   const STEP = 360 / STEPS;
-  let landMask = null;
-  function isLand(lon, lat) {
-    if (!landMask) {
-      const W = 2048, H = 1024;
-      const off = document.createElement('canvas');
-      off.width = W;
-      off.height = H;
-      const octx = off.getContext('2d');
-      const flat = d3.geoEquirectangular().scale(W / (2 * Math.PI)).translate([W / 2, H / 2]);
-      octx.beginPath(); d3.geoPath(flat, octx)(window.WORLD_LAND); octx.fill();
-      const px = octx.getImageData(0, 0, W, H).data;
-      landMask = new Uint8Array(W * H);
-      for (let i = 0; i < W * H; i++) landMask[i] = px[i * 4 + 3] > 127 ? 1 : 0;
-    }
-    const x = Math.min(2047, Math.max(0, Math.floor(((lon + 180) / 360) * 2048)));
-    const y = Math.min(1023, Math.max(0, Math.floor(((90 - lat) / 180) * 1024)));
-    return landMask[y * 2048 + x] === 1;
-  }
   const level = (i, max) => (i === 0 ? max : Math.min(max, 31 - Math.clz32(i & -i)));
   const hash = (i, j) => {
     let h = Math.imul(i, 374761393) ^ Math.imul(j, 668265263);
@@ -1634,8 +1661,7 @@ GLOBE_JS = """
     return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
   };
   const sprites = {};
-  function sprite(bit, land) {
-    const key = bit + (land ? 'L' : 'S');
+  function sprite(key) {
     if (!sprites[key]) {
       const c = document.createElement('canvas');
       c.width = c.height = 64;
@@ -1643,8 +1669,8 @@ GLOBE_JS = """
       g.font = '700 46px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
       g.textAlign = 'center';
       g.textBaseline = 'middle';
-      g.fillStyle = land ? '#7a7a7a' : '#a6a6a6';
-      g.fillText(bit, 32, 34);
+      g.fillStyle = '#8f8f8f';
+      g.fillText(key, 32, 34);
       sprites[key] = c;
     }
     return sprites[key];
@@ -1731,7 +1757,6 @@ GLOBE_JS = """
         if (sx < clip.x - size0 || sx > clip.x + clip.w + size0 || sy < clip.y - size0 || sy > clip.y + clip.h + size0) continue;
         const seed = hash(i, j);
         const bit = Math.floor(tick * (0.4 + seed) + 10 * seed) & 1;
-        const land = isLand(lon, lat);
         // Lying on the surface: squashed towards the planet's middle as it curves away (but
         // never so flat that it stops reading as a digit).
         let ux = sx - cx, uy = sy - cy;
@@ -1744,8 +1769,8 @@ GLOBE_JS = """
           sx * dpr, sy * dpr
         );
         const edge = Math.min(1, (c - 0.02) / 0.08);
-        pctx.globalAlpha = alpha * aLat * aLon * edge * (land ? 1 : 0.8);
-        pctx.drawImage(sprite(bit ? '1' : '0', land), -32, -32);
+        pctx.globalAlpha = alpha * aLat * aLon * edge;
+        pctx.drawImage(sprite(bit ? '1' : '0'), -32, -32);
       }
     }
     pctx.globalAlpha = 1;
@@ -1774,22 +1799,20 @@ GLOBE_JS = """
     pctx.beginPath(); pctx.rect(clip.x, clip.y, clip.w, clip.h); pctx.clip();
     pproj.translate([g.x, g.h + g.r]).scale(g.r).rotate([g.lam, g.phi]).precision(moving ? 2 : 0.6)
       .clipExtent([[clip.x - 2, clip.y - 2], [clip.x + clip.w + 2, clip.y + clip.h + 2]]);
-    // Once still, the land is drawn once and only the flickering digits are redrawn.
-    const key = moving ? '' : [g.x, g.h, g.r, g.lam, g.phi, clip.x, clip.y, clip.w, clip.h, planet.width].map((v) => v.toFixed(1)).join();
-    if (key && key === landKey) {
-      pctx.setTransform(1, 0, 0, 1, 0, 0);
-      pctx.drawImage(landCache, 0, 0);
-      pctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    } else {
-      pctx.beginPath(); ppath({ type: 'Sphere' }); pctx.fillStyle = '#e9e9e9'; pctx.fill();
+    // The map (the globe's own look) melts away into a plain surface while gliding down,
+    // and comes back while gliding up, so the globe canvas can take over seamlessly.
+    const t = glide ? Math.min(1, (now - glide.t0) / GLIDE_MS) : 1;
+    const map = glide && glide.back ? Math.min(1, Math.max(0, (t - 0.35) / 0.55)) : glide ? 1 - Math.min(1, t / 0.6) : 0;
+    const sea = Math.round(SURFACE + (233 - SURFACE) * map);
+    pctx.beginPath(); ppath({ type: 'Sphere' }); pctx.fillStyle = `rgb(${sea}, ${sea}, ${sea})`; pctx.fill();
+    if (map > 0) {
+      pctx.globalAlpha = map;
       pctx.beginPath(); ppath(window.WORLD_LAND); pctx.fillStyle = '#f9f9f9'; pctx.fill();
-      if (key) {
-        landCache.width = planet.width;
-        landCache.height = planet.height;
-        landCache.getContext('2d').drawImage(planet, 0, 0);
-        landKey = key;
-      }
     }
+    pctx.globalAlpha = 1 - map;
+    pctx.beginPath(); pctx.arc(g.x, g.h + g.r, g.r, 0, 2 * Math.PI);
+    pctx.strokeStyle = '#dcdcdc'; pctx.lineWidth = 1; pctx.stroke();
+    pctx.globalAlpha = 1;
     const fade = glide && glide.back ? 1 - Math.min(1, (now - glide.t0) / (GLIDE_MS * 0.5)) : Math.min(1, (now - glyphStart) / 700);
     if (fade > 0) drawGlyphs(g, clip, fade, now);
     pctx.restore();
@@ -1821,8 +1844,6 @@ GLOBE_JS = """
 
   resize();
   resizePlanet();
-  // The land map takes a moment to build; do it before anyone needs it.
-  setTimeout(() => isLand(0, 0), 400);
   place(false);
   requestAnimationFrame(frame);
   window.addEventListener('deck:scene', () => place(true));
@@ -2244,6 +2265,18 @@ CSS = (
     .wcx-ground, .wcx-hardware-label, .wcx-hardware-lead { --in: 0.3s; }
     .wcx-landing :is(.wcx-ground, .wcx-hardware-label, .wcx-hardware-lead) { --in: 1.9s; }
     .wcx-label :is(.wc-label, .wc-note) { text-shadow: 0 0 3px #fff, 0 0 6px #fff, 0 0 10px #fff; }
+    .wcx-label .wc-frag:has(.wcx-swap) { display: grid; }
+    .wcx-swap { grid-area: 1 / 1; opacity: 0; transition: opacity 0.35s ease; }
+    .wcx-swap.shown { opacity: 1; transition: opacity 0.6s ease 0.3s; }
+    /* The hardware label sits on the planet's surface: a soft white patch keeps it readable. */
+    .wcx-hardware-label { position: relative; isolation: isolate; width: fit-content; }
+    .wcx-hardware-label::before {
+      content: "";
+      position: absolute;
+      inset: -0.9em -1.6em -0.9em -1.1em;
+      z-index: -1;
+      background: radial-gradient(closest-side, #fff 62%, rgba(255, 255, 255, 0.85) 80%, rgba(255, 255, 255, 0));
+    }
 
     .wcx-pop {
       opacity: 0;
@@ -2257,6 +2290,12 @@ CSS = (
       transform: none;
       transition: opacity 0.4s ease-out calc(var(--in, 0s) + var(--d, 0s)),
         transform 0.55s cubic-bezier(0.3, 1.45, 0.5, 1) calc(var(--in, 0s) + var(--d, 0s));
+    }
+    /* A pop inside a shown data-until wrapper still waits for its own step. */
+    .wcx g[data-frag]:not(.shown) .wcx-pop {
+      opacity: 0;
+      transform: translateY(4px) scale(0.25);
+      transition: opacity 0.3s ease, transform 0.3s ease;
     }
 
     .wcx-car-x { animation: wcx-drive-x 9s linear infinite; }
@@ -2272,7 +2311,9 @@ CSS = (
     .wcx-capture { stroke-dasharray: 100; stroke-dashoffset: 100; }
     .wcx-hack.shown .wcx-capture { animation: wcx-capture 1.3s ease-in var(--d) forwards; }
     .wcx-glitch { opacity: 0; }
-    .wcx-hack.shown .wcx-glitch { animation: wcx-glitch 1.7s steps(1) 0.6s infinite; }
+    .wcx-hack.shown .wcx-glitch { animation: wcx-glitch 1.7s steps(1) 1.7s infinite; }
+    .wcx-taint { opacity: 0; }
+    .wcx-hack.shown .wcx-taint { animation: wcx-taint 0.5s ease-out var(--d) forwards; }
     .wcx-glitch-edge { animation: wcx-glitch-edge 1.7s steps(1) infinite; }
     .wcx-ring { transform-box: fill-box; transform-origin: center; animation: wcx-ring 2.8s ease-out infinite; }
 
@@ -2291,6 +2332,7 @@ CSS = (
     @keyframes wcx-sweep { to { transform: translateX(340px); } }
     @keyframes wcx-glow { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
     @keyframes wcx-capture { to { stroke-dashoffset: 0; } }
+    @keyframes wcx-taint { to { opacity: 1; } }
     @keyframes wcx-glitch { 0%, 100% { opacity: 0.06; } 20% { opacity: 0.16; } 24% { opacity: 0.04; } 58% { opacity: 0.13; } 62% { opacity: 0.07; } }
     @keyframes wcx-glitch-edge { 0%, 100% { opacity: 1; } 20% { opacity: 0.3; } 24% { opacity: 1; } 58% { opacity: 0.5; } }
     @keyframes wcx-ring { from { opacity: 0.9; transform: scale(0.12); } to { opacity: 0; transform: scale(1); } }
@@ -2298,6 +2340,7 @@ CSS = (
     @media (prefers-reduced-motion: reduce) {
       .wcx * { animation: none !important; transition: none !important; }
       .wcx-capture { stroke-dashoffset: 0; }
+      .wcx-taint { opacity: 1; }
       .wcx-hack .wcx-glitch { opacity: 0.08; }
       .wcx-pulses, .wcx-flow, .wcx-sweep, .wcx-ring, .wcx-smoke { display: none; }
       .wf-item, .page.active .wc-title { transition: none; transform: none; }
@@ -2403,30 +2446,50 @@ CSS = (
 class WorldComputerSlide(Slide):
     """The world as a computer: the globe becomes a digital planet surface, and layers stack on it.
 
-    Bullets are ":key: Label — note", one per click; keys are those of WCX_ART.
+    Bullets are ":key: Label — note", one per click; keys are those of WCX_ART. A layer can be
+    named for the world first and for the computer later: ":key: World — note <=> Computer — note".
+    The bare ":gos:" bullet is the click where the Governance Operating System comes in and those
+    layers switch to their computer names.
     """
 
     def render(self) -> str:
         frags: dict[str, int] = {}
         labels = []
+        gos = next((i + 1 for i, (_, t) in enumerate(self.bullets) if t.strip() == ":gos:"), None)
+
+        def text_html(text: str) -> str:
+            label, _, note = text.strip().partition(" — ")
+            note_html = f'<span class="wc-note">{tr(note)}</span>' if note else ""
+            return f'<span class="wc-label">{CALLOUT_ICONS.get(key, "")}{tr(label)}</span>{note_html}'
+
         for i, (_, text) in enumerate(self.bullets):
+            if i + 1 == gos:
+                continue
             m = re.match(r"^:([\w-]+):\s*(.*)$", text)
             if not m or m.group(1) not in WCX_ART:
-                raise ValueError(f"world-computer: expected one of {sorted(WCX_ART)} in {text!r}")
+                raise ValueError(f"world-computer: expected :gos: or one of {sorted(WCX_ART)} in {text!r}")
             key, rest = m.groups()
             frags[key] = i + 1
-            label, _, note = rest.partition(" — ")
+            world, swap, computer = rest.partition("<=>")
+            if swap and gos is None:
+                raise ValueError(f"world-computer: {text!r} has a computer name but no :gos: click")
+            if swap:
+                # Both names share one grid cell, so swapping them does not move anything.
+                body = (
+                    f'<span class="wcx-name wcx-swap" data-until="{gos}">{text_html(world)}</span>'
+                    f'<span class="wcx-name wcx-swap" data-frag="{gos}">{text_html(computer)}</span>'
+                )
+            else:
+                body = text_html(world)
             if key in WCX_CALLOUTS:
                 y = WCX_CALLOUTS[key][0]
                 side, pos = "left", f"right:{1 - WCX_CALLOUT_X / WCX_W:.3%}"
             else:
                 y = iso(SIDE, 0, 0, WCX_LAYERS[key][0])[1]
                 side, pos = "right", f"left:{WCX_LABEL_X / WCX_W:.3%}"
-            note_html = f'<span class="wc-note">{tr(note)}</span>' if note else ""
             labels.append(
                 f'<div class="wcx-label wcx-{side}" style="top:{y / WCX_H:.3%};{pos}">'
-                f'<div class="wc-frag wcx-{key}-label" data-frag="{i + 1}">'
-                f'<span class="wc-label">{CALLOUT_ICONS.get(key, "")}{tr(label)}</span>{note_html}</div></div>'
+                f'<div class="wc-frag wcx-{key}-label" data-frag="{i + 1}">{body}</div></div>'
             )
         first = frags.get("hardware", 1)
         planet = " ".join(str(v) for v in (*WCX_PLANET, *WCX_PLANET_ROTATE))

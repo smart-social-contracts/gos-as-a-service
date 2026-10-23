@@ -50,7 +50,11 @@
     "power gets captured": "alguien se apodera del poder",
     "Hacks": "Hackeos",
     "detect the hack, undo it, stop it happening again": "detectar el hackeo, deshacerlo, evitar que se repita",
-    "Checks & balances": "Contrapesos"
+    "Checks & balances": "Contrapesos",
+    "Institutions": "Instituciones",
+    "governments, laws, regulations": "gobiernos, leyes, normativas",
+    "Services": "Servicios",
+    "Citizens": "Ciudadanos"
   },
   "de": {
     "Humanity's operating system needs an upgrade.": "Das Betriebssystem der Menschheit braucht ein Update.",
@@ -103,7 +107,11 @@
     "power gets captured": "jemand reißt die Macht an sich",
     "Hacks": "Hacks",
     "detect the hack, undo it, stop it happening again": "den Hack erkennen, rückgängig machen, Wiederholung verhindern",
-    "Checks & balances": "Gewaltenteilung"
+    "Checks & balances": "Gewaltenteilung",
+    "Institutions": "Institutionen",
+    "governments, laws, regulations": "Regierungen, Gesetze, Vorschriften",
+    "Services": "Dienste",
+    "Citizens": "Bürger"
   },
   "fr": {
     "Humanity's operating system needs an upgrade.": "Le système d'exploitation de l'humanité a besoin d'une mise à jour.",
@@ -156,7 +164,11 @@
     "power gets captured": "le pouvoir est confisqué",
     "Hacks": "Piratages",
     "detect the hack, undo it, stop it happening again": "détecter le piratage, l'annuler, empêcher qu'il se reproduise",
-    "Checks & balances": "Contre-pouvoirs"
+    "Checks & balances": "Contre-pouvoirs",
+    "Institutions": "Institutions",
+    "governments, laws, regulations": "gouvernements, lois, réglementations",
+    "Services": "Services",
+    "Citizens": "Citoyens"
   },
   "zh-CN": {
     "Humanity's operating system needs an upgrade.": "人类的操作系统需要升级。",
@@ -209,7 +221,11 @@
     "power gets captured": "权力被夺取",
     "Hacks": "入侵",
     "detect the hack, undo it, stop it happening again": "发现入侵、撤销它、防止再次发生",
-    "Checks & balances": "制衡"
+    "Checks & balances": "制衡",
+    "Institutions": "制度",
+    "governments, laws, regulations": "政府、法律、法规",
+    "Services": "服务",
+    "Citizens": "公民"
   },
   "it": {
     "Humanity's operating system needs an upgrade.": "Il sistema operativo dell'umanità ha bisogno di un aggiornamento.",
@@ -262,6 +278,10 @@
     "power gets captured": "qualcuno si impadronisce del potere",
     "Hacks": "Attacchi informatici",
     "detect the hack, undo it, stop it happening again": "scoprire l'attacco, annullarlo, impedire che si ripeta",
-    "Checks & balances": "Pesi e contrappesi"
+    "Checks & balances": "Pesi e contrappesi",
+    "Institutions": "Istituzioni",
+    "governments, laws, regulations": "governi, leggi, regolamenti",
+    "Services": "Servizi",
+    "Citizens": "Cittadini"
   }
 }

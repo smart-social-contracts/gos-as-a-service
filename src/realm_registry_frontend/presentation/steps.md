@@ -7,12 +7,13 @@
 ## world-computer
 
 - :hardware: Hardware — land, energy, water, materials
-- :os: Operating system — institutions: governments, laws, regulations
-- :apps: Applications — public services and companies
-- :users: Users — people like you and me
+- :os: Institutions — governments, laws, regulations <=> Operating system — institutions: governments, laws, regulations
+- :apps: Services — public services and companies <=> Applications — public services and companies
+- :users: Citizens — people like you and me <=> Users — people like you and me
 - :upgrade: Upgrades — democracy: elections, referendums, new laws
 - :hack: Hacks — power gets captured
 - :checks: Checks & balances — detect the hack, undo it, stop it happening again
+- :gos:
 
 # GOS — single slide
 
