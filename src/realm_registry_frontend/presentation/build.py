@@ -17,6 +17,7 @@ import math
 import random
 import re
 import sys
+import urllib.parse
 from pathlib import Path
 
 DIR = Path(__file__).resolve().parent
@@ -1448,6 +1449,28 @@ GLOBE_JS = """
     ctx.beginPath(); ctx.arc(x, y + 4.5 * k, 5 * k, Math.PI, 2 * Math.PI); ctx.fill();
   }
 
+  // Devils: where no GOS runs yet, power stays captured.
+  const DEVILS = __DEVILS__;
+  const devil = new Image();
+  devil.src = DEVILS.sprite;
+  function drawDevils(now, k, facing) {
+    if (!devil.complete || !devil.naturalWidth) return;
+    const h = 28 * k, w = h * devil.naturalWidth / devil.naturalHeight;
+    // They turn away with the globe: kept inside its outline, and fading towards the edge.
+    ctx.save();
+    ctx.beginPath(); path(sphere); ctx.clip();
+    DEVILS.spots.forEach((p, i) => {
+      const c = facing(p);
+      if (c < 0.15) return;
+      const [x, y] = projection(p);
+      const bob = still ? 0 : Math.sin(now / 700 + i * 1.9) * 1.5 * k;
+      ctx.globalAlpha = layerAlpha * Math.min(1, (c - 0.15) * 4);
+      ctx.drawImage(devil, x - w / 2, y - h * 0.62 + bob, w, h);
+    });
+    ctx.restore();
+    ctx.globalAlpha = layerAlpha;
+  }
+
   function badge(x, y, k, gos, glowing) {
     const r = 14 * k;
     ctx.save();
@@ -1650,6 +1673,8 @@ GLOBE_JS = """
         pulses(edges, i);
       }
     });
+
+    drawDevils(now, k, facing);
 
     pos.forEach((p, n) => {
       const c = facing(p);
@@ -2084,7 +2109,21 @@ GLOBE_JS = """
 })();
 """
 
+# [lon, lat] on land, far from every realm (make-realms.cjs): a devil where no GOS runs yet.
+GLOBE_DEVILS = [
+    (-110, 45), (-100, 60), (-63, -10), (-67, -40), (10, 22), (24, -14),
+    (45, 50), (90, 62), (130, 60), (100, 35), (125, -24),
+]
+
+
+def devil_sprite() -> str:
+    svg = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="-12 -26 24 27" width="96" height="108">{evil_svg()}</svg>'
+    return "data:image/svg+xml," + urllib.parse.quote(svg)
+
+
 GLOBE_JS = GLOBE_JS.replace(
+    "__DEVILS__", json.dumps({"sprite": devil_sprite(), "spots": GLOBE_DEVILS})
+).replace(
     "__DECAY__",
     json.dumps(
         {

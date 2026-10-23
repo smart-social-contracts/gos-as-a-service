@@ -28,6 +28,7 @@
 ## gos-intro
 
 - left: GOS — Governance Operating System
+- An open standard promotes interoperability and cooperation — among sovereign regions running different GOS implementations
 - legend: title — GOS available today
 - legend: realms — [Realms GOS](https://realmsgos.org)
 - legend: other — Other? — Many more to come. Anyone can build one on the open standard.
