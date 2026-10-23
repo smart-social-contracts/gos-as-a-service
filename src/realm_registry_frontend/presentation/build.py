@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import html
 import json
+import math
+import random
 import re
 import sys
 from pathlib import Path
@@ -296,58 +298,544 @@ ART_FILL = "#e9e9e9"
 ART_LIGHT = "#f9f9f9"
 
 
-def computer_svg() -> str:
-    """Abstract chip: a soft halo, circuit traces fading outward, pulses running along them."""
-    c = 130
-    lengths = [104, 88, 118, 92, 110]
-    traces, nodes, pulses = [], [], []
-    for side in range(4):
-        cos, sin = [(1, 0), (0, 1), (-1, 0), (0, -1)][side]
+TEAL = "rgb(107, 163, 163)"
+TEAL_DARK = "rgb(47, 95, 95)"
+HACK_RED = "#b94a48"
 
-        def pt(u: float, v: float) -> str:
-            return f"{c + u * cos - v * sin:.1f} {c + u * sin + v * cos:.1f}"
+# The world computer is an exploded isometric stack drawn in a WCX_W × WCX_H box. A point
+# (x, y) of a layer's plane, z above it, lands at iso(x, y, z, top), where top is the
+# screen y of that layer's back corner. Every layer is a SIDE × SIDE square.
+WCX_W, WCX_H = 1120, 600
+WCX_CX = 560
+ISO_A, ISO_B = 0.9, 0.32
+SIDE = 262
+# Back-corner y and thickness of each layer, bottom to top. The hardware is no slab: it is the
+# planet's own surface, and its "layer" is just the patch of ground the stack stands on.
+WCX_LAYERS = {"hardware": (432, 0), "os": (250, 9), "apps": (140, 9), "users": (30, 9)}
+WCX_LABEL_X = 828  # layer names start here, right of the stack
+WCX_CALLOUT_X = 300  # what happens to the whole stack is told left of here
+# Callouts point at the operating system: (callout y, plane point it points to).
+WCX_CALLOUTS = {
+    "upgrade": (205, (0, 0.45 * SIDE)),
+    "hack": (300, (0, 0.85 * SIDE)),
+    "checks": (395, (0.3 * SIDE, SIDE)),
+}
+# The globe first sits in the middle. Then it zooms in, tilts and sinks until only its top is
+# left: a curved horizon (x, horizon y, radius) running across the bottom of the slide, drawn
+# by the planet canvas in GLOBE_JS. WCX_PLANET_ROTATE is the d3 rotation it ends at.
+WCX_GLOBE = (WCX_CX, 300, 180)
+WCX_PLANET = (WCX_CX, 418, 2400)
+WCX_PLANET_ROTATE = (-15, 26)
 
-        for k, o in enumerate((-30, -15, 0, 15, 30)):
-            length = lengths[(k + side * 2) % 5]
-            bend = (o > 0) - (o < 0)
-            if bend:
-                d = f"M{pt(46, o)}L{pt(62, o)}L{pt(74, o + bend * 12)}L{pt(length, o + bend * 12)}"
-                end = pt(length, o + bend * 12)
-            else:
-                d = f"M{pt(46, o)}L{pt(length, o)}"
-                end = pt(length, o)
-            traces.append(f'<path d="{d}"/>')
-            ex, ey = end.split()
-            nodes.append(f'<circle cx="{ex}" cy="{ey}" r="2.6"/>')
-            delay = ((side * 5 + k * 3) % 10) * 0.55
-            pulses.append(
-                f'<path d="{d}" pathLength="100" style="animation-delay:-{delay:.2f}s"/>'
-            )
-    return f"""<svg class="wc-art" viewBox="0 0 260 260" fill="none" aria-hidden="true">
+
+def horizon_y(x: float) -> float:
+    cx, h, r = WCX_PLANET
+    return h + r - math.sqrt(r * r - (x - cx) ** 2)
+
+
+def iso(x: float, y: float, z: float = 0.0, top: float = 0.0) -> tuple[float, float]:
+    return WCX_CX + (x - y) * ISO_A, top + (x + y) * ISO_B - z
+
+
+def _attrs(attrs: dict) -> str:
+    return "".join(f' {k.rstrip("_").replace("_", "-")}="{v}"' for k, v in attrs.items())
+
+
+def _poly(points: list[tuple[float, float]], **attrs) -> str:
+    pts = " ".join(f"{x:.1f},{y:.1f}" for x, y in points)
+    return f'<polygon points="{pts}"{_attrs(attrs)}/>'
+
+
+def _line(a: tuple[float, float], b: tuple[float, float], **attrs) -> str:
+    return f'<path d="M{a[0]:.1f} {a[1]:.1f}L{b[0]:.1f} {b[1]:.1f}"{_attrs(attrs)}/>'
+
+
+def _plane(top: float, inner: str, clip: bool = False) -> str:
+    """Flat content drawn in plane units, laid onto the layer whose back corner is at top."""
+    clip_attr = ' clip-path="url(#wcx-plane)"' if clip else ""
+    return (
+        f'<g transform="matrix({ISO_A} {ISO_B} {-ISO_A} {ISO_B} {WCX_CX} {top})">'
+        f"<g{clip_attr}>{inner}</g></g>"
+    )
+
+
+def _face(top: float) -> list[tuple[float, float]]:
+    s = SIDE
+    return [iso(0, 0, 0, top), iso(s, 0, 0, top), iso(s, s, 0, top), iso(0, s, 0, top)]
+
+
+def _slab(key: str, face: str, opacity: float = 1.0) -> str:
+    top, t = WCX_LAYERS[key]
+    s = SIDE
+
+    def p(x: float, y: float, z: float = 0.0) -> tuple[float, float]:
+        return iso(x, y, z, top)
+
+    return (
+        f'<g opacity="{opacity}" stroke="#c4c4c4" stroke-width="1" stroke-linejoin="round">'
+        + _poly([p(0, s), p(s, s), p(s, s, -t), p(0, s, -t)], fill="#efefef")
+        + _poly([p(s, s), p(s, 0), p(s, 0, -t), p(s, s, -t)], fill="#e2e2e2")
+        + _poly(_face(top), fill=face)
+        + "</g>"
+    )
+
+
+def _pop(inner: str, delay: float) -> str:
+    return f'<g class="wcx-pop" style="--d:{delay:.2f}s">{inner}</g>'
+
+
+def _billboard(key: str, x: float, y: float, inner: str, lift: float = 0.0) -> str:
+    """An upright icon standing on plane point (x, y); inner is drawn with its base at 0, 0."""
+    bx, by = iso(x, y, 0, WCX_LAYERS[key][0])
+    shadow = (
+        '<ellipse rx="13" ry="3.2" fill="#000" opacity="0.07"/>' if not lift else ""
+    )
+    return f'<g transform="translate({bx:.1f} {by - lift:.1f})">{shadow}{inner}</g>'
+
+
+def _box(x, y, w, d, h, top, z0=0.0, floors=0.0) -> str:
+    def p(px: float, py: float, pz: float) -> tuple[float, float]:
+        return iso(px, py, pz, top)
+
+    z1 = z0 + h
+    out = [
+        _poly([p(x, y + d, z0), p(x + w, y + d, z0), p(x + w, y + d, z1), p(x, y + d, z1)], fill="#ededed"),
+        _poly([p(x + w, y + d, z0), p(x + w, y, z0), p(x + w, y, z1), p(x + w, y + d, z1)], fill="#dcdcdc"),
+        _poly([p(x, y, z1), p(x + w, y, z1), p(x + w, y + d, z1), p(x, y + d, z1)], fill="#fafafa"),
+    ]
+    if floors:
+        d_ = []
+        z = z0 + floors
+        while z < z1 - 4:
+            for a, b in (
+                (p(x + 3, y + d, z), p(x + w - 3, y + d, z)),
+                (p(x + w, y + d - 3, z), p(x + w, y + 3, z)),
+            ):
+                d_.append(f"M{a[0]:.1f} {a[1]:.1f}L{b[0]:.1f} {b[1]:.1f}")
+            z += floors
+        out.append(
+            f'<path d="{"".join(d_)}" fill="none" stroke="#b5b5b5" stroke-width="1.3" stroke-dasharray="2.4 2.2"/>'
+        )
+    return "".join(out)
+
+
+def _tree(x: float, y: float, top: float, s: float = 1.0) -> str:
+    bx, by = iso(x, y, 0, top)
+    cx, cy = iso(x, y, 12 * s, top)
+    return (
+        f'<ellipse cx="{bx:.1f}" cy="{by:.1f}" rx="{5 * s:.1f}" ry="{1.8 * s:.1f}" fill="#000" opacity="0.07"/>'
+        f'<path d="M{bx:.1f} {by:.1f}V{cy:.1f}" stroke="#a3a3a3" stroke-width="1.6"/>'
+        f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{6.2 * s:.1f}" fill="#e0e0e0" stroke="#a3a3a3"/>'
+    )
+
+
+def _turbine(x: float, y: float, top: float, phase: float) -> str:
+    bx, by = iso(x, y, 0, top)
+    hx, hy = iso(x, y, 54, top)
+    blades = "".join(
+        f'<path d="M0 0-2.2-4 0-21 2.2-4z" transform="rotate({a})"/>' for a in (0, 120, 240)
+    )
+    return (
+        f'<path d="M{bx:.1f} {by:.1f}L{hx:.1f} {hy:.1f}" stroke="#a3a3a3" stroke-width="2.2"/>'
+        f'<g transform="translate({hx:.1f} {hy:.1f})"><g class="wcx-rotor" style="animation-delay:-{phase:.1f}s" '
+        f'fill="#dcdcdc" stroke="#a3a3a3" stroke-width="0.8">{blades}<circle r="2.6" fill="#a3a3a3"/></g></g>'
+    )
+
+
+def _smoke(x: float, y: float, z: float, top: float) -> str:
+    sx, sy = iso(x, y, z, top)
+    return "".join(
+        f'<circle class="wcx-smoke" cx="{sx:.1f}" cy="{sy - 3:.1f}" r="3.6" fill="#d4d4d4" '
+        f'style="animation-delay:-{d:.1f}s"/>'
+        for d in (0, 1.2, 2.4)
+    )
+
+
+def _ground_at(x: float, y: float) -> tuple[float, float]:
+    """The ground plane point drawn at box point (x, y)."""
+    u, v = (x - WCX_CX) / ISO_A, (y - WCX_LAYERS["hardware"][0]) / ISO_B
+    return (v + u) / 2, (v - u) / 2
+
+
+def _house(x: float, y: float, top: float, w: float = 11, d: float = 10, h: float = 8) -> str:
+    def p(px: float, py: float, pz: float) -> tuple[float, float]:
+        return iso(px, py, pz, top)
+
+    ridge = h + 6
+    return (
+        _box(x, y, w, d, h, top)
+        + _poly([p(x, y, h), p(x + w, y, h), p(x + w, y + d / 2, ridge), p(x, y + d / 2, ridge)], fill="#f2f2f2")
+        + _poly([p(x, y + d / 2, ridge), p(x + w, y + d / 2, ridge), p(x + w, y + d, h), p(x, y + d, h)], fill="#e4e4e4")
+        + _poly([p(x + w, y, h), p(x + w, y + d, h), p(x + w, y + d / 2, ridge)], fill="#d4d4d4")
+    )
+
+
+def _solar(x: float, y: float, top: float, rows: int = 4, w: float = 46) -> str:
+    out = []
+    for r in range(rows):
+        y0 = y + r * 11
+        pts = [iso(x, y0, 2, top), iso(x + w, y0, 2, top), iso(x + w, y0 + 7, 7, top), iso(x, y0 + 7, 7, top)]
+        out.append(_poly(pts, fill="#dadada"))
+        a, b = iso(x, y0 + 3.5, 4.5, top), iso(x + w, y0 + 3.5, 4.5, top)
+        out.append(_line(a, b, stroke="#b8b8b8", stroke_width="0.6"))
+    return "".join(out)
+
+
+def ground_svg() -> str:
+    """The hardware: roads, nature, energy and industry on the planet's digital surface."""
+    top, _ = WCX_LAYERS["hardware"]
+    s = SIDE
+    far = 1400
+    rnd = random.Random(11)
+
+    def field(cx: float, cy: float, w: float, d: float) -> str:
+        x, y = _ground_at(cx, cy)
+        x, y = x - w / 2, y - d / 2
+        furrows = "".join(f"M{x + 3:.1f} {y + f:.1f}H{x + w - 3:.1f}" for f in range(5, int(d) - 2, 5))
+        return (
+            f'<rect x="{x:.1f}" y="{y:.1f}" width="{w}" height="{d}" rx="3" fill="#f0f0f0" stroke="#d4d4d4"/>'
+            f'<path d="{furrows}" stroke="#d6d6d6" stroke-width="1.6"/>'
+        )
+
+    flat = (
+        # Two roads cross under the stack and run on over the horizon.
+        f'<g fill="#fff" stroke="#d4d4d4"><rect x="{-far}" y="150" width="{s + 2 * far}" height="16"/>'
+        f'<rect x="96" y="{-far}" width="16" height="{s + 2 * far}"/></g>'
+        '<rect x="96.5" y="150.5" width="15" height="15" fill="#fff"/>'
+        f'<path d="M{-far} 158H96M112 158H{s + far}M104 {-far}V150M104 166V{s + far}" stroke="#d4d4d4" stroke-dasharray="5 5"/>'
+        '<g fill="#737373"><rect class="wcx-car-x" x="-14" y="152.5" width="10" height="5" rx="1.5"/>'
+        f'<rect class="wcx-car-xr" x="{s + 4}" y="159" width="10" height="5" rx="1.5" style="animation-delay:-4s"/>'
+        '<rect class="wcx-car-y" x="98" y="-14" width="5" height="10" rx="1.5" style="animation-delay:-2s"/></g>'
+        # A lake, a park and farmland.
+        '<ellipse cx="200" cy="64" rx="40" ry="28" fill="#e6e6e6" stroke="#d0d0d0"/>'
+        '<path d="M182 58q5-4 10 0t10 0M194 72q5-4 10 0t10 0" fill="none" stroke="#c4c4c4" stroke-width="1.3"/>'
+        '<rect x="12" y="178" width="74" height="72" rx="10" fill="#f3f3f3" stroke="#d4d4d4" stroke-dasharray="3 3"/>'
+        + field(215, 560, 70, 44)
+        + field(150, 585, 60, 40)
+        + field(90, 560, 60, 40)
+    )
+
+    # (sort key, svg, box point it stands on): the stack's own patch of ground first.
+    objects: list[tuple[float, str, tuple[float, float]]] = []
+
+    def add(x: float, y: float, svg: str, key: float | None = None) -> None:
+        objects.append((x + y if key is None else key, svg, iso(x, y, 0, top)))
+
+    trees = [
+        (14, 16), (38, 10), (76, 14), (24, 44), (84, 48), (12, 92), (80, 96), (40, 136), (76, 130), (14, 132),
+        (128, 18), (152, 12), (250, 18), (134, 72), (128, 126), (162, 134), (246, 104), (232, 136), (252, 128),
+        (26, 194), (52, 188), (74, 200), (30, 224), (62, 230), (46, 244), (76, 242), (30, 72), (58, 30),
+    ]
+    for x, y in trees:
+        add(x, y, _tree(x, y, top, 0.85 + 0.3 * rnd.random()))
+    buildings = [
+        (122, 176, 22, 22, 52), (150, 178, 20, 22, 36), (176, 176, 24, 22, 64), (208, 178, 20, 20, 30),
+        (236, 180, 18, 18, 42), (122, 206, 22, 22, 30), (150, 206, 22, 20, 44),
+        (124, 236, 20, 20, 22), (152, 236, 20, 20, 16),
+    ]
+    for x, y, w, d, h in buildings:
+        add(x + w / 2, y + d / 2, _box(x, y, w, d, h, top, floors=8))
+    factory = (
+        _box(182, 212, 56, 32, 18, top)
+        + _box(212, 216, 6, 6, 22, top, z0=18)
+        + _box(226, 216, 7, 7, 32, top, z0=18)
+        + _smoke(229.5, 219.5, 52, top)
+    )
+    add(210, 228, factory)
+
+    # Around it, the rest of the world, placed by where it shows up in the box.
+    side_trees = [
+        (70, 505), (96, 497), (122, 510), (142, 500), (112, 538), (150, 526), (205, 488), (240, 476), (178, 498),
+        (-20, 562), (-62, 578), (172, 545), (10, 585), (-40, 600), (-90, 612),
+        (1140, 532), (1165, 548), (1215, 540), (1150, 618), (1205, 632), (1255, 612), (958, 642), (1045, 650),
+        (812, 590),
+    ]
+    sides = [(X, Y, lambda x, y: _tree(x, y, top, 0.85 + 0.3 * rnd.random())) for X, Y in side_trees]
+    sides += [
+        (40, 548, lambda x, y: _turbine(x, y, top, 0.0)),
+        (88, 530, lambda x, y: _turbine(x, y, top, 2.1)),
+        (1188, 582, lambda x, y: _turbine(x, y, top, 1.2)),
+        (1240, 572, lambda x, y: _turbine(x, y, top, 3.0)),
+        (1010, 604, lambda x, y: _solar(x - 23, y - 20, top)),
+        (1100, 628, lambda x, y: _box(x - 25, y - 15, 50, 30, 18, top)
+            + _box(x + 2, y - 11, 6, 6, 24, top, z0=18) + _box(x + 14, y - 11, 7, 7, 36, top, z0=18)
+            + _smoke(x + 17.5, y - 7.5, 54, top)),
+        (850, 576, lambda x, y: _house(x - 5, y - 5, top)),
+        (880, 588, lambda x, y: _house(x - 5, y - 5, top, 12, 11, 9)),
+        (912, 598, lambda x, y: _house(x - 5, y - 5, top)),
+        (905, 572, lambda x, y: _house(x - 5, y - 5, top, 13, 10, 8)),
+        (940, 584, lambda x, y: _house(x - 5, y - 5, top)),
+    ]
+    for X, Y, make in sides:
+        assert Y > horizon_y(X) + 20, f"ground object at {X}, {Y} sits on the horizon"
+        x, y = _ground_at(X, Y)
+        add(x, y, make(x, y))
+
+    objects.sort(key=lambda o: o[0])
+    # Things pop up from the middle outwards.
+    mx, my = iso(s / 2, s / 2, 0, top)
+    things = "".join(
+        _pop(svg, 0.2 + math.hypot(bx - mx, (by - my) * 2) / 900) for _, svg, (bx, by) in objects
+    )
+    return (
+        f'<g clip-path="url(#wcx-planet)">{_plane(top, flat)}</g>'
+        + f'<g stroke="#a3a3a3" stroke-width="0.8" stroke-linejoin="round">{things}</g>'
+    )
+
+
+def _connectors(upper: str, lower: str) -> str:
+    """Dashed posts from a layer's corners down to the layer below, with data running down them."""
+    ut, t = WCX_LAYERS[upper]
+    lt, _ = WCX_LAYERS[lower]
+    out = []
+    for i, (x, y) in enumerate(((0, SIDE), (SIDE, SIDE), (SIDE, 0))):
+        a, b = iso(x, y, -t, ut), iso(x, y, 0, lt)
+        out.append(_line(a, b, stroke="#d4d4d4", stroke_dasharray="3 4"))
+        out.append(
+            _line(a, b, class_="wcx-flow", pathLength="100", style=f"animation-delay:-{i * 0.9:.1f}s")
+        )
+    return f'<g fill="none" stroke-width="1.3">{"".join(out)}</g>'
+
+
+OS_TRACES = [
+    "M131 131H70V60H22",
+    "M131 131V64H186V22",
+    "M131 131H232V96",
+    "M131 131H196V196H240",
+    "M131 131V214H176V244",
+    "M131 131V178H64V236",
+    "M131 131H44V150H16",
+]
+OS_TRACE_ENDS = [(22, 60), (186, 22), (232, 96), (240, 196), (176, 244), (64, 236), (16, 150)]
+
+
+def capitol_svg() -> str:
+    cols = "".join(f'<rect x="{c - 2.4}" y="-27" width="4.8" height="19"/>' for c in (-16, -8, 0, 8, 16))
+    return (
+        '<g fill="#f6f6f6" stroke="#9a9a9a" stroke-width="1.2" stroke-linejoin="round">'
+        '<path d="M-27 0h54v-4h-54z"/><path d="M-23 -4h46v-4h-46z"/>'
+        f'<g fill="{ART_FILL}">{cols}</g>'
+        '<path d="M-25 -27h50v-4h-50z"/><path d="M-25 -31 0-44 25-31z"/></g>'
+    )
+
+
+def scales_svg() -> str:
+    return (
+        '<g fill="none" stroke="#8a8a8a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">'
+        '<path d="M0-2V-33M-9 0H9M-16-29h32"/>'
+        '<path d="M-16-29-21-16M-16-29-11-16M16-29 11-16M16-29 21-16"/>'
+        f'<path d="M-23-16a7 5 0 0 0 14 0z" fill="{ART_FILL}"/><path d="M9-16a7 5 0 0 0 14 0z" fill="{ART_FILL}"/>'
+        '<circle cy="-34" r="2" fill="#8a8a8a"/></g>'
+    )
+
+
+def law_doc_svg() -> str:
+    return (
+        '<g stroke-linejoin="round">'
+        '<path d="M-12-2V-34H5l7 7V-2z" fill="#fff" stroke="#9a9a9a" stroke-width="1.2"/>'
+        f'<path d="M5-34v7h7" fill="{ART_FILL}" stroke="#9a9a9a" stroke-width="1.2"/>'
+        '<path d="M-7-24H4M-7-19H7M-7-14H7M-7-9H2" stroke="#c4c4c4" stroke-width="1.5" stroke-linecap="round"/></g>'
+    )
+
+
+def os_svg() -> str:
+    """The operating system: institutions wired into everything, with power held in the middle."""
+    top, _ = WCX_LAYERS["os"]
+    traces = "".join(f'<path d="{d}"/>' for d in OS_TRACES)
+    pulses = "".join(
+        f'<path d="{d}" pathLength="100" style="animation-delay:-{i * 0.8:.1f}s"/>' for i, d in enumerate(OS_TRACES)
+    )
+    nodes = "".join(f'<circle cx="{x}" cy="{y}" r="3.2"/>' for x, y in OS_TRACE_ENDS)
+    flat = (
+        f'<g fill="none" stroke="#d4d4d4" stroke-width="1.6" stroke-linejoin="round">{traces}</g>'
+        f'<g fill="#fff" stroke="#c4c4c4" stroke-width="1.3">{nodes}</g>'
+        f'<g class="wcx-pulses" fill="none" stroke="#7a7a7a" stroke-width="2" stroke-linecap="round">{pulses}</g>'
+    )
+    icons = [
+        _pop(_billboard("os", 215, 60, law_doc_svg()), 0.55),
+        _pop(_billboard("os", SIDE / 2, SIDE / 2, capitol_svg()), 0.4),
+        _pop(_billboard("os", 60, 215, scales_svg()), 0.7),
+    ]
+    return (
+        _connectors("os", "hardware")
+        + _slab("os", "#fff", 0.92)
+        + _plane(top, flat)
+        + "".join(icons)
+    )
+
+
+APP_ICONS = {
+    "justice": '<rect x="-8" y="-4" width="12" height="7" rx="1.5" transform="rotate(-45 -2 -0.5)"/>'
+    '<path d="M1.5 2.5 8 9M-10 9H0"/>',
+    "education": '<path d="M-10-3 0-8l10 5L0 2z"/><path d="M-6-1v5c3 2.6 9 2.6 12 0v-5M10-3v6"/>',
+    "health": '<path d="M-3-9h6v6h6v6H3v6h-6V3h-6v-6h6z"/>',
+    "company": '<rect x="-10" y="-4" width="20" height="14" rx="2"/><path d="M-4-4v-4h8v4M-10 2h20"/>',
+}
+
+
+def app_tile_svg(icon: str) -> str:
+    return (
+        '<rect x="-19" y="-40" width="38" height="38" rx="9" fill="#fff" stroke="#a3a3a3" stroke-width="1.3"/>'
+        '<g transform="translate(0 -21)" fill="none" stroke="#737373" stroke-width="1.7" '
+        f'stroke-linecap="round" stroke-linejoin="round">{APP_ICONS[icon]}</g>'
+    )
+
+
+def apps_svg() -> str:
+    """Applications: public services and companies, running on top of the operating system."""
+    top, _ = WCX_LAYERS["apps"]
+    grid = "".join(f'<path d="M{v:.1f} 0V{SIDE}M0 {v:.1f}H{SIDE}"/>' for v in [SIDE * i / 8 for i in range(1, 8)])
+    flat = f'<g stroke="#ededed" stroke-width="1">{grid}</g>'
+    spots = [(45, 217), (105, 157), (165, 97), (225, 37)]
+    tiles = "".join(
+        _pop(_billboard("apps", x, y, f'<g class="wcx-bob" style="animation-delay:-{i * 0.7:.1f}s">'
+                        f"{app_tile_svg(icon)}</g>"), 0.35 + i * 0.12)
+        for i, ((x, y), icon) in enumerate(zip(spots, APP_ICONS))
+    )
+    return _connectors("apps", "os") + _slab("apps", "#fff", 0.9) + _plane(top, flat) + tiles
+
+
+def person_svg(shade: str) -> str:
+    return f'<g fill="{shade}"><circle cy="-15" r="4.6"/><path d="M-8.5-1a8.5 8.5 0 0 1 17 0z"/></g>'
+
+
+def users_svg() -> str:
+    """Users: people like you and me, on top of everything."""
+    spots = [(40, 44), (120, 30), (206, 54), (66, 120), (152, 110), (234, 132), (30, 206), (122, 190), (204, 214), (100, 244)]
+    people = "".join(
+        _pop(_billboard("users", x, y, f'<g class="wcx-bob" style="animation-delay:-{i * 0.45:.2f}s">'
+                        f'{person_svg("#525252" if i % 3 else "#8a8a8a")}</g>'), 0.3 + i * 0.06)
+        for i, (x, y) in enumerate(spots)
+    )
+    return _connectors("users", "apps") + _slab("users", "#fff", 0.9) + people
+
+
+def crown_svg() -> str:
+    return f'<path d="M-12 0-14.5-14l7 6L0-18l7.5 10 7-6L12 0z" fill="{HACK_RED}" stroke="#7d2f2e" stroke-width="1" stroke-linejoin="round"/>'
+
+
+def shield_svg() -> str:
+    return (
+        f'<path d="M0-26 14-20.5V-10C14-1 7 4 0 7-7 4-14-1-14-10V-20.5z" fill="{TEAL}" '
+        f'stroke="{TEAL_DARK}" stroke-width="1.2" stroke-linejoin="round"/>'
+        '<path d="M-6-9.5-1.5-5 6.5-13" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>'
+    )
+
+
+def upgrade_svg() -> str:
+    """A new version rolls across the operating system."""
+    top, _ = WCX_LAYERS["os"]
+    band = f'<rect class="wcx-sweep" x="-70" y="0" width="70" height="{SIDE}" fill="url(#wcx-sweep-g)"/>'
+    return _plane(top, band, clip=True) + _poly(
+        _face(top), fill="none", stroke=TEAL, stroke_width="1.8", class_="wcx-glow"
+    )
+
+
+def hack_svg() -> str:
+    """Someone captures power: red spreads along the operating system's wiring and takes the crown."""
+    top, _ = WCX_LAYERS["os"]
+    paths = "".join(
+        f'<path class="wcx-capture" d="{d}" pathLength="100" style="--d:{0.15 * i:.2f}s"/>'
+        for i, d in enumerate(OS_TRACES)
+    )
+    flat = (
+        f'<rect class="wcx-glitch" width="{SIDE}" height="{SIDE}" fill="{HACK_RED}"/>'
+        f'<g fill="none" stroke="{HACK_RED}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">{paths}</g>'
+    )
+    return (
+        _plane(top, flat, clip=True)
+        + _poly(_face(top), fill="none", stroke=HACK_RED, stroke_width="1.8", class_="wcx-glitch-edge")
+    )
+
+
+def checks_svg() -> str:
+    """Checks and balances catch the hack, undo it and guard against the next one."""
+    top, _ = WCX_LAYERS["os"]
+    ring = f'<circle class="wcx-ring" cx="{SIDE / 2}" cy="{SIDE / 2}" r="125" fill="none" stroke="{TEAL}" stroke-width="2.5"/>'
+    return _plane(top, ring, clip=True) + _poly(_face(top), fill="none", stroke=TEAL, stroke_width="1.8")
+
+
+# Badges sit on the capitol's roof but are drawn over the whole stack so the upper slabs never hide them.
+WCX_BADGES = {
+    "hack": lambda: _pop(_billboard("os", SIDE / 2, SIDE / 2, crown_svg(), lift=47), 1.0),
+    "checks": lambda: _pop(_billboard("os", SIDE / 2, SIDE / 2, shield_svg(), lift=46), 0.25),
+}
+
+
+WCX_ART = {
+    "hardware": ground_svg,
+    "os": os_svg,
+    "apps": apps_svg,
+    "users": users_svg,
+    "upgrade": upgrade_svg,
+    "hack": hack_svg,
+    "checks": checks_svg,
+}
+WCX_STACK = ["hardware", "os", "upgrade", "hack", "checks", "apps", "users"]
+
+CALLOUT_ICONS = {
+    "upgrade": f'<svg viewBox="0 0 24 24" fill="none" stroke="{TEAL_DARK}" stroke-width="2" stroke-linecap="round" '
+    'stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v4h-4"/></svg>',
+    "hack": '<svg viewBox="-16 -20 32 24" aria-hidden="true">' + crown_svg() + "</svg>",
+    "checks": '<svg viewBox="-16 -28 32 37" aria-hidden="true">' + shield_svg() + "</svg>",
+}
+
+
+def _lead(key: str, frag: int) -> str:
+    """The hairline from a label to what it names."""
+    if key in WCX_CALLOUTS:
+        y, (px, py) = WCX_CALLOUTS[key]
+        a, b = (WCX_CALLOUT_X + 10, y), iso(px, py, 0, WCX_LAYERS["os"][0])
+    else:
+        top, _ = WCX_LAYERS[key]
+        b = iso(SIDE, 0, 0, top)
+        a, b = (WCX_LABEL_X - 12, b[1]), (b[0] + 10, b[1])
+    color = {"upgrade": TEAL, "checks": TEAL, "hack": HACK_RED}.get(key, "#bdbdbd")
+    return (
+        f'<g class="wcx-fade wcx-lead wcx-{key}-lead" data-frag="{frag}">'
+        + _line(a, b, stroke=color, stroke_width="1.2", fill="none")
+        + f'<circle cx="{b[0]:.1f}" cy="{b[1]:.1f}" r="2.6" fill="{color}"/></g>'
+    )
+
+
+def world_computer_svg(frags: dict[str, int]) -> str:
+    groups, badges = [], []
+    for key in WCX_STACK:
+        if key not in frags:
+            continue
+        frag = frags[key]
+        cls = "wcx-fade wcx-ground" if key == "hardware" else "wcx-step"
+        parts = [(groups, WCX_ART[key]())] + ([(badges, WCX_BADGES[key]())] if key in WCX_BADGES else [])
+        for out, inner in parts:
+            if key == "upgrade" and "hack" in frags:
+                inner = f'<g class="wcx-fade" data-until="{frags["hack"]}">{inner}</g>'
+            if key == "hack" and "checks" in frags:
+                inner = f'<g class="wcx-fade" data-until="{frags["checks"]}">{inner}</g>'
+            out.append(f'<g class="{cls} wcx-{key}" data-frag="{frag}">{inner}</g>')
+    groups += badges
+    px, ph, pr = WCX_PLANET
+    leads = "".join(_lead(k, f) for k, f in frags.items())
+    return f"""<svg viewBox="0 0 {WCX_W} {WCX_H}" fill="none" aria-hidden="true">
   <defs>
-    <radialGradient id="wc-halo">
-      <stop offset="0" stop-color="#d4d4d4" stop-opacity="0.6"/>
-      <stop offset="0.55" stop-color="#e5e5e5" stop-opacity="0.25"/>
-      <stop offset="1" stop-color="#e5e5e5" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="wc-fade-g">
-      <stop offset="0.35" stop-color="#fff"/>
-      <stop offset="1" stop-color="#000"/>
-    </radialGradient>
-    <mask id="wc-fade" maskUnits="userSpaceOnUse" x="0" y="0" width="260" height="260">
-      <rect width="260" height="260" fill="url(#wc-fade-g)"/>
-    </mask>
+    <clipPath id="wcx-plane"><rect width="{SIDE}" height="{SIDE}"/></clipPath>
+    <clipPath id="wcx-planet"><circle cx="{px}" cy="{ph + pr}" r="{pr}"/></clipPath>
+    <linearGradient id="wcx-sweep-g">
+      <stop offset="0" stop-color="{TEAL}" stop-opacity="0"/>
+      <stop offset="0.7" stop-color="{TEAL}" stop-opacity="0.4"/>
+      <stop offset="1" stop-color="{TEAL}" stop-opacity="0"/>
+    </linearGradient>
   </defs>
-  <circle class="wc-halo" cx="{c}" cy="{c}" r="128" fill="url(#wc-halo)"/>
-  <g mask="url(#wc-fade)">
-    <g stroke="#d4d4d4" stroke-width="1.4" stroke-linejoin="round">{"".join(traces)}</g>
-    <g stroke="#c4c4c4" stroke-width="1.3" fill="#fff">{"".join(nodes)}</g>
-    <g class="wc-pulses" stroke="#737373" stroke-width="1.8" stroke-linecap="round">{"".join(pulses)}</g>
-  </g>
-  <rect x="{c - 44}" y="{c - 44}" width="88" height="88" rx="12" fill="{ART_FILL}"/>
-  <rect x="{c - 27}" y="{c - 27}" width="54" height="54" rx="7" fill="{ART_LIGHT}"/>
-  <circle class="wc-core" cx="{c}" cy="{c}" r="10" fill="{ART_FILL}"/>
+  {"".join(groups)}
+  {leads}
 </svg>"""
+
+
+def _globe_slot(spot: tuple[float, float, float], attrs: str) -> str:
+    x, y, r = spot
+    return (
+        f'<div class="wcx-globe" data-globe-slot {attrs} style="left:{(x - r) / WCX_W:.3%};'
+        f'top:{(y - r) / WCX_H:.3%};width:{2 * r / WCX_W:.3%}"></div>'
+    )
 
 
 WORLD_FAILURES_TITLE = "When the world computer malfunctions"
@@ -463,20 +951,6 @@ BUREAUCRACY_KEYFRAMES = "\n".join(
     f"{9 + i * 14}%, 86% {{ opacity: 1; transform: none; }} 94%, 100% {{ opacity: 0; transform: none; }} }}\n"
     f"    .wf-pile.wf-p{i} {{ animation: wf-pile-{i} 7s ease-out infinite; }}"
     for i in range(1, 5)
-)
-
-# The globe is one canvas shared by all slides; each slide marks where it goes with a slot.
-GLOBE_HTML = '<div class="wc-art" data-globe-slot></div>'
-
-# (illustration, mirrored: note on the outer side so the bold terms meet at the arrow)
-COLUMNS: list[tuple[str, bool]] = [
-    (GLOBE_HTML, True),
-    (computer_svg(), False),
-]
-
-ARROW_SVG = (
-    '<svg viewBox="0 0 64 16" fill="none" stroke="currentColor" stroke-width="1.5" '
-    'stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h54M11 3 5 8l6 5M53 3l6 5-6 5"/></svg>'
 )
 
 GLOBE_SCRIPTS = (
@@ -699,10 +1173,16 @@ GLOBE_JS = """
   const logo = new Image();
   logo.src = 'assets/logo_sphere_only.svg';
 
-  const activeSlot = () => document.querySelector('.page.active [data-globe-slot]');
+  // A slot with data-frag / data-until holds the globe only at the steps it is shown.
+  const activeSlot = () => Array.from(document.querySelectorAll('.page.active [data-globe-slot]')).find(
+    (s) => !('frag' in s.dataset || 'until' in s.dataset) || s.classList.contains('shown')
+  );
 
+  let lastSlot = null;
   function place(animate) {
     const slot = activeSlot();
+    const from = lastSlot;
+    lastSlot = slot;
     canvas.style.transition = animate && !still ? MOVE : 'opacity 0.6s ease';
     clearTimeout(layerTimer);
     const wanted = slot && slot.dataset.globeLayer;
@@ -714,17 +1194,20 @@ GLOBE_JS = """
         layerTarget = 1;
       }, animate && !still ? MOVE_MS * 0.8 : 0);
     }
+    const handoff = placePlanet(animate && !still, from, slot);
     if (!slot) { canvas.style.opacity = '0'; return; }
     const r = slot.getBoundingClientRect();
     const v = viewport.getBoundingClientRect();
     scale = r.width / size;
     canvas.style.transform = `translate(${r.left - v.left}px, ${r.top - v.top}px) scale(${scale})`;
-    canvas.style.opacity = '1';
+    // Gliding back out of the planet: the globe shows up only once the planet has shrunk into it.
+    canvas.style.opacity = handoff ? '0' : '1';
   }
 
   function resize() {
     const dpr = window.devicePixelRatio || 1;
-    size = Math.max(...Array.from(document.querySelectorAll('[data-globe-slot]'), (s) => s.getBoundingClientRect().width));
+    const slots = document.querySelectorAll('[data-globe-slot]');
+    size = Math.max(...Array.from(slots, (s) => s.getBoundingClientRect().width));
     canvas.width = Math.round(size * dpr);
     canvas.height = Math.round(size * dpr);
     canvas.style.width = canvas.style.height = size + 'px';
@@ -1006,19 +1489,344 @@ GLOBE_JS = """
     }
   }
 
+  // The planet: when the world-computer slide's first layer shows, the globe glides down and
+  // swells until only its top is left, a curved horizon across the bottom of the window.
+  // Its surface turns into ones and zeros, anchored to the ground (see .wcx-planet).
+  const planet = document.createElement('canvas');
+  planet.className = 'planet-canvas';
+  planet.setAttribute('aria-hidden', 'true');
+  viewport.prepend(planet);
+  const pctx = planet.getContext('2d');
+  const pproj = d3.geoOrthographic().clipAngle(90).precision(0.6);
+  const ppath = d3.geoPath(pproj, pctx);
+  const portrait = matchMedia('(max-aspect-ratio: 1/1)');
+  const GLIDE_MS = 2600;
+  const PLANET_FADE = 'opacity 0.45s ease';
+  const RAD = Math.PI / 180;
+  let marker = null; // the .wcx-planet the planet is drawn for, null when off
+  let glide = null; // { from, back, t0 }
+  let glyphFrom = 0;
+  let glyphStart = 0;
+  let planetDrawn = 0;
+  let planetW = 0;
+  let planetH = 0;
+  const landCache = document.createElement('canvas');
+  let landKey = '';
+
+  const globeLam = (now) => -15 + (still ? 0 : (now - t0) / 1000) * DEG_PER_SECOND;
+  // Where the globe canvas is right now, even halfway through a CSS move.
+  function globeGeom(now) {
+    const m = new DOMMatrix(getComputedStyle(canvas).transform);
+    const v = viewport.getBoundingClientRect();
+    const r = m.a * (size / 2 - 1);
+    return { x: v.left + m.e + (m.a * size) / 2, h: v.top + m.f + (m.a * size) / 2 - r, r, lam: globeLam(now), phi: -22 };
+  }
+  function groundGeom(el) {
+    const b = el.parentElement.querySelector('svg').getBoundingClientRect();
+    const k = b.width / 1120;
+    const [x, h, r, lam, phi] = el.dataset.planet.split(' ').map(Number);
+    return { x: b.left + x * k, h: b.top + h * k, r: r * k, lam, phi, k };
+  }
+  const glideEase = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+  function mix(a, b, t) {
+    const dl = ((((b.lam - a.lam) % 360) + 540) % 360) - 180;
+    return {
+      x: a.x + (b.x - a.x) * t,
+      h: a.h + (b.h - a.h) * t,
+      r: Math.exp(Math.log(a.r) + (Math.log(b.r) - Math.log(a.r)) * t),
+      lam: a.lam + dl * t,
+      phi: a.phi + (b.phi - a.phi) * t,
+      k: b.k || a.k,
+    };
+  }
+
+  function setLanding(on) {
+    const slide = marker && marker.closest('.wcx-slide');
+    if (slide) slide.classList.toggle('wcx-landing', on);
+  }
+
+  // Called by place(); returns true when the globe must stay hidden while the planet shrinks into it.
+  function placePlanet(animate, fromSlot, slot) {
+    const el = document.querySelector('.page.active .wcx-planet.shown');
+    const samePage = (a, b) => a && b && a.closest('.page') === b.closest('.page');
+    if (el) {
+      if (marker === el && !(glide && glide.back)) return false;
+      const wasOn = marker === el;
+      const glideIn = animate && (wasOn || samePage(fromSlot, el));
+      // Before anything reads styles: the ground's transitions must start with the landing delay.
+      el.closest('.wcx-slide').classList.toggle('wcx-landing', glideIn);
+      const live = glide ? currentGeom(performance.now()) : null;
+      marker = el;
+      if (glideIn) {
+        // Glide down from wherever the globe (or a half-way planet) is right now.
+        glide = { from: live || globeGeom(performance.now()), back: false, t0: performance.now() };
+        planet.style.transition = 'none';
+        planet.style.opacity = '1';
+        drawPlanet(performance.now(), true);
+        canvas.style.transition = 'none';
+        if (!wasOn) glyphStart = performance.now() + 200;
+      } else {
+        glide = null;
+        planet.style.transition = PLANET_FADE;
+        planet.style.opacity = '1';
+        glyphStart = performance.now() - 1e4;
+        drawPlanet(performance.now(), true);
+      }
+      return false;
+    }
+    if (!marker) return false;
+    if (animate && slot && samePage(slot, marker)) {
+      const from = currentGeom(performance.now());
+      glide = { from, back: true, t0: performance.now() };
+      setLanding(false);
+      return true;
+    }
+    setLanding(false);
+    planet.style.transition = PLANET_FADE;
+    planet.style.opacity = '0';
+    marker = null;
+    glide = null;
+    return false;
+  }
+
+  function currentGeom(now) {
+    const to = glide && glide.back ? globeGeom(now) : groundGeom(marker);
+    if (!glide) return to;
+    return mix(glide.from, to, glideEase(Math.min(1, (now - glide.t0) / GLIDE_MS)));
+  }
+
+  function resizePlanet() {
+    const dpr = window.devicePixelRatio || 1;
+    planetW = innerWidth;
+    planetH = innerHeight;
+    planet.width = Math.round(planetW * dpr);
+    planet.height = Math.round(planetH * dpr);
+    planetDrawn = 0;
+  }
+
+  // Ones and zeros sit on a lat/lon grid of 4096 steps around. Grid points have levels (how
+  // often their index halves); only levels coarse enough to stay readable are drawn, and the
+  // finest one fades in or out as the planet zooms. Land is told from sea by a small map.
+  const STEPS = 4096;
+  const STEP = 360 / STEPS;
+  let landMask = null;
+  function isLand(lon, lat) {
+    if (!landMask) {
+      const W = 2048, H = 1024;
+      const off = document.createElement('canvas');
+      off.width = W;
+      off.height = H;
+      const octx = off.getContext('2d');
+      const flat = d3.geoEquirectangular().scale(W / (2 * Math.PI)).translate([W / 2, H / 2]);
+      octx.beginPath(); d3.geoPath(flat, octx)(window.WORLD_LAND); octx.fill();
+      const px = octx.getImageData(0, 0, W, H).data;
+      landMask = new Uint8Array(W * H);
+      for (let i = 0; i < W * H; i++) landMask[i] = px[i * 4 + 3] > 127 ? 1 : 0;
+    }
+    const x = Math.min(2047, Math.max(0, Math.floor(((lon + 180) / 360) * 2048)));
+    const y = Math.min(1023, Math.max(0, Math.floor(((90 - lat) / 180) * 1024)));
+    return landMask[y * 2048 + x] === 1;
+  }
+  const level = (i, max) => (i === 0 ? max : Math.min(max, 31 - Math.clz32(i & -i)));
+  const hash = (i, j) => {
+    let h = Math.imul(i, 374761393) ^ Math.imul(j, 668265263);
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  };
+  const sprites = {};
+  function sprite(bit, land) {
+    const key = bit + (land ? 'L' : 'S');
+    if (!sprites[key]) {
+      const c = document.createElement('canvas');
+      c.width = c.height = 64;
+      const g = c.getContext('2d');
+      g.font = '700 46px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillStyle = land ? '#7a7a7a' : '#a6a6a6';
+      g.fillText(bit, 32, 34);
+      sprites[key] = c;
+    }
+    return sprites[key];
+  }
+
+  function drawGlyphs(g, clip, alpha, now) {
+    const { x: cx, r } = g;
+    const cy = g.h + r;
+    const lam0 = -g.lam, phi0 = -g.phi;
+    const sp0 = Math.sin(phi0 * RAD), cp0 = Math.cos(phi0 * RAD);
+    const k = g.k || 1;
+    const minPx = Math.min(0.05 * r, 18 * Math.max(0.6, k));
+    // The spacing is judged where the eye is: the middle of a globe, the ground under the stack.
+    const ry = Math.min(cy, g.h + 100 * k);
+    const ref = pproj.invert([cx, ry]);
+    if (!ref) return;
+    const pxPerDeg = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+    const p0 = pproj(ref);
+    const dLat = pxPerDeg(p0, pproj([ref[0], ref[1] + 0.5])) * 2;
+    const dLon = pxPerDeg(p0, pproj([ref[0] + 0.5, ref[1]])) * 2 / Math.max(0.05, Math.cos(ref[1] * RAD));
+    if (!(dLat > 0 && dLon > 0)) return;
+    const Llat = Math.max(0, Math.log2(minPx / (STEP * dLat)));
+    const Llon0 = Math.log2(minPx / (STEP * dLon));
+
+    // Which lat/lon range can show up inside the clip at all.
+    let latMin = 90, latMax = -90, lonMin = 180, lonMax = -180;
+    const take = (sx, sy) => {
+      if (Math.hypot(sx - cx, sy - cy) > r) return;
+      const q = pproj.invert([sx, sy]);
+      if (!q) return;
+      const dl = ((((q[0] - lam0) % 360) + 540) % 360) - 180;
+      latMin = Math.min(latMin, q[1]); latMax = Math.max(latMax, q[1]);
+      lonMin = Math.min(lonMin, dl); lonMax = Math.max(lonMax, dl);
+    };
+    for (let a = 0; a <= 16; a++) for (let b = 0; b <= 10; b++) {
+      take(clip.x + (clip.w * a) / 16, clip.y + (clip.h * b) / 10);
+    }
+    for (let a = 0; a < 128; a++) {
+      const t = (a / 128) * 2 * Math.PI;
+      const sx = cx + (r - 0.5) * Math.cos(t), sy = cy + (r - 0.5) * Math.sin(t);
+      if (sx >= clip.x && sx <= clip.x + clip.w && sy >= clip.y && sy <= clip.y + clip.h) take(sx, sy);
+    }
+    if (latMin > latMax) return;
+    const inClip = (p) => {
+      const q = pproj(p);
+      return q[0] >= clip.x && q[0] <= clip.x + clip.w && q[1] >= clip.y && q[1] <= clip.y + clip.h;
+    };
+    const north = Math.sin(90 * RAD) * sp0 > 0 && inClip([0, 90]);
+    const south = -sp0 > 0 && inClip([0, -90]);
+    const pad = 4 * STEP * Math.pow(2, Llat);
+    latMin = south ? -90 : Math.max(-90, latMin - pad);
+    latMax = north ? 90 : Math.min(90, latMax + pad);
+    if (north || south) { lonMin = -180; lonMax = 180; }
+
+    const tick = still ? 0 : now / 900;
+    const dpr = window.devicePixelRatio || 1;
+    const size0 = 0.72 * minPx;
+    const latStep = 1 << Math.min(11, Math.floor(Llat));
+    const iMin = Math.ceil((latMin + 90) / STEP / latStep) * latStep;
+    const iMax = Math.floor((latMax + 90) / STEP);
+    for (let i = iMin; i <= iMax; i += latStep) {
+      const lat = -90 + i * STEP;
+      const aLat = Math.min(1, Math.max(0, 3 * (level(i, 11) - Llat) + 1));
+      if (aLat <= 0) continue;
+      const cl = Math.cos(lat * RAD), sl = Math.sin(lat * RAD);
+      if (cl < 1e-6) continue;
+      const Llon = Math.max(0, Llon0 + Math.log2(1 / cl));
+      if (Llon > 12) continue;
+      const lonStep = 1 << Math.min(12, Math.floor(Llon));
+      const lonPad = 2 * STEP * lonStep;
+      const j0 = Math.floor((lam0 + lonMin - lonPad + 180) / STEP / lonStep) * lonStep;
+      const j1 = Math.ceil((lam0 + lonMax + lonPad + 180) / STEP / lonStep) * lonStep;
+      for (let jj = j0; jj <= j1 && jj - j0 < STEPS; jj += lonStep) {
+        const j = ((jj % STEPS) + STEPS) % STEPS;
+        const aLon = Math.min(1, Math.max(0, 3 * (level(j, 12) - Llon) + 1));
+        if (aLon <= 0) continue;
+        const lon = -180 + j * STEP;
+        const dl = (lon - lam0) * RAD;
+        const cdl = Math.cos(dl);
+        const c = sp0 * sl + cp0 * cl * cdl;
+        if (c < 0.02) continue;
+        const sx = cx + r * cl * Math.sin(dl);
+        const sy = cy - r * (cp0 * sl - sp0 * cl * cdl);
+        if (sx < clip.x - size0 || sx > clip.x + clip.w + size0 || sy < clip.y - size0 || sy > clip.y + clip.h + size0) continue;
+        const seed = hash(i, j);
+        const bit = Math.floor(tick * (0.4 + seed) + 10 * seed) & 1;
+        const land = isLand(lon, lat);
+        // Lying on the surface: squashed towards the planet's middle as it curves away (but
+        // never so flat that it stops reading as a digit).
+        let ux = sx - cx, uy = sy - cy;
+        const len = Math.hypot(ux, uy) || 1;
+        ux /= len; uy /= len;
+        const f = 0.5 * (c - 1);
+        const s = (size0 / 64) * dpr;
+        pctx.setTransform(
+          (1 + f * ux * ux) * s, f * ux * uy * s, f * ux * uy * s, (1 + f * uy * uy) * s,
+          sx * dpr, sy * dpr
+        );
+        const edge = Math.min(1, (c - 0.02) / 0.08);
+        pctx.globalAlpha = alpha * aLat * aLon * edge * (land ? 1 : 0.8);
+        pctx.drawImage(sprite(bit ? '1' : '0', land), -32, -32);
+      }
+    }
+    pctx.globalAlpha = 1;
+  }
+
+  function drawPlanet(now, force) {
+    if (!marker) return;
+    if (!marker.closest('.page.active')) {
+      marker = null;
+      glide = null;
+      planet.style.opacity = '0';
+      return;
+    }
+    const moving = !!glide;
+    if (!force && !moving && now - planetDrawn < 100) return;
+    planetDrawn = now;
+    if (planetW !== innerWidth || planetH !== innerHeight) resizePlanet();
+    const g = currentGeom(now);
+    const dpr = window.devicePixelRatio || 1;
+    pctx.setTransform(1, 0, 0, 1, 0, 0);
+    pctx.clearRect(0, 0, planet.width, planet.height);
+    let clip = { x: 0, y: 0, w: planetW, h: planetH };
+    if (portrait.matches) clip.h = marker.closest('.wcx-crop').getBoundingClientRect().bottom;
+    pctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    pctx.save();
+    pctx.beginPath(); pctx.rect(clip.x, clip.y, clip.w, clip.h); pctx.clip();
+    pproj.translate([g.x, g.h + g.r]).scale(g.r).rotate([g.lam, g.phi]).precision(moving ? 2 : 0.6)
+      .clipExtent([[clip.x - 2, clip.y - 2], [clip.x + clip.w + 2, clip.y + clip.h + 2]]);
+    // Once still, the land is drawn once and only the flickering digits are redrawn.
+    const key = moving ? '' : [g.x, g.h, g.r, g.lam, g.phi, clip.x, clip.y, clip.w, clip.h, planet.width].map((v) => v.toFixed(1)).join();
+    if (key && key === landKey) {
+      pctx.setTransform(1, 0, 0, 1, 0, 0);
+      pctx.drawImage(landCache, 0, 0);
+      pctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    } else {
+      pctx.beginPath(); ppath({ type: 'Sphere' }); pctx.fillStyle = '#e9e9e9'; pctx.fill();
+      pctx.beginPath(); ppath(window.WORLD_LAND); pctx.fillStyle = '#f9f9f9'; pctx.fill();
+      if (key) {
+        landCache.width = planet.width;
+        landCache.height = planet.height;
+        landCache.getContext('2d').drawImage(planet, 0, 0);
+        landKey = key;
+      }
+    }
+    const fade = glide && glide.back ? 1 - Math.min(1, (now - glide.t0) / (GLIDE_MS * 0.5)) : Math.min(1, (now - glyphStart) / 700);
+    if (fade > 0) drawGlyphs(g, clip, fade, now);
+    pctx.restore();
+
+    if (glide && now - glide.t0 >= GLIDE_MS) {
+      const back = glide.back;
+      glide = null;
+      if (back) {
+        // Hand the planet, shrunk back into a globe, over to the globe canvas.
+        canvas.style.transition = 'none';
+        canvas.style.opacity = '1';
+        planet.style.transition = 'none';
+        planet.style.opacity = '0';
+        marker = null;
+      } else {
+        setLanding(false);
+      }
+    }
+  }
+
   const LAYER_FADE_MS = 700;
   const t0 = performance.now();
   let lastFrame = t0;
   function frame(now) {
     draw(now);
+    drawPlanet(now, false);
     requestAnimationFrame(frame);
   }
 
   resize();
+  resizePlanet();
+  // The land map takes a moment to build; do it before anyone needs it.
+  setTimeout(() => isLand(0, 0), 400);
   place(false);
   requestAnimationFrame(frame);
   window.addEventListener('deck:scene', () => place(true));
-  window.addEventListener('resize', () => { resize(); place(false); });
+  window.addEventListener('resize', () => { resize(); resizePlanet(); place(false); drawPlanet(performance.now(), true); });
 })();
 """
 
@@ -1028,8 +1836,6 @@ CSS = (
     /* Slides are sized in rem and never scroll, so short screens shrink the root size. */
     html { font-size: clamp(10px, 2.1vh, 16px); font-size: clamp(10px, 2.1dvh, 16px); }
 
-    .arch-box.wc-slide { border: none; }
-
     .globe-canvas {
       position: absolute;
       top: 0;
@@ -1038,10 +1844,13 @@ CSS = (
       transform-origin: 0 0;
       pointer-events: none;
       opacity: 0;
-      animation: wc-fade-in 0.9s ease-out both;
+      /* backwards, not both: a filling animation would override the opacity transitions. */
+      animation: wc-fade-in 0.9s ease-out backwards;
     }
 
     @keyframes wc-fade-in { from { opacity: 0; } }
+
+    .planet-canvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; opacity: 0; }
 
     .deck > footer, .deck > .dots { position: relative; z-index: 3; }
 
@@ -1370,43 +2179,6 @@ CSS = (
     + BUREAUCRACY_KEYFRAMES
     + """
 
-    .wc {
-      --wc-gap: 6rem;
-      width: 100%;
-      display: grid;
-      align-items: center;
-      row-gap: 0.95rem;
-    }
-
-    .wc-col-head {
-      grid-row: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 1rem;
-      margin-bottom: 1.1rem;
-    }
-
-    .wc-art {
-      width: 17rem;
-      height: 17rem;
-      display: block;
-    }
-
-    .wc-halo { transform-origin: 130px 130px; animation: wc-breathe 6s ease-in-out infinite; }
-    .wc-core { transform-origin: 130px 130px; animation: wc-breathe 6s ease-in-out infinite; animation-delay: -3s; }
-    .wc-pulses path { stroke-dasharray: 7 93; animation: wc-pulse 5.5s linear infinite; }
-
-    .wc-cell {
-      display: flex;
-      align-items: baseline;
-      gap: 0.75rem;
-      font-size: 1.3rem;
-      line-height: 1.3;
-    }
-
-    .wc-cell.wc-mirror { flex-direction: row-reverse; text-align: right; }
-
     .wc-label { font-weight: 650; color: var(--text); white-space: nowrap; }
     .wc-note { font-size: 0.8em; color: var(--gray-500); }
 
@@ -1422,45 +2194,120 @@ CSS = (
 
     .wc-frag:not(.shown), .wf-item:not(.shown) { pointer-events: none; }
 
-    .wc-arrow {
-      align-self: center;
-      justify-self: center;
-      width: 5.5rem;
-      color: var(--gray-400);
+    /* The world computer: an isometric stack drawn in a 1120 × 600 box (WCX_W × WCX_H). */
+    .wcx-slide {
+      position: absolute;
+      inset: 0;
+      margin: 0 auto;
+      width: min(84rem, 100%);
+      padding: 1.6rem 1rem 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
     }
 
-    .wc-arrow svg { display: block; width: 100%; }
+    .wcx {
+      flex: 1;
+      min-height: 0;
+      container-type: size;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
 
-    .page.active .wc-col-head > svg,
-    .page.active .wc-arrow { animation: wc-rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: var(--after-move); }
-    .page.active .wc-col-head > svg { animation-delay: calc(var(--after-move) + var(--c) * 0.25s); }
-    .wc-arrow { margin-bottom: 1.1rem; }
-    .wc-cell.wc-frag.shown:not(.wc-mirror) { transition-delay: 0.12s; }
+    .wcx-inner {
+      position: relative;
+      width: min(100cqw, 100cqh * 1120 / 600);
+      aspect-ratio: 1120 / 600;
+      container-type: inline-size;
+    }
 
-    @keyframes wc-rise { from { opacity: 0; transform: translateY(10px); } }
-    @keyframes wc-breathe { 0%, 100% { opacity: 0.65; transform: scale(0.94); } 50% { opacity: 1; transform: scale(1.04); } }
-    @keyframes wc-pulse { from { stroke-dashoffset: 7; } to { stroke-dashoffset: -100; } }
+    .wcx-crop, .wcx-art { position: absolute; inset: 0; }
+    .wcx-art svg { display: block; width: 100%; height: 100%; overflow: visible; }
+    .wcx-globe { position: absolute; aspect-ratio: 1; }
+
+    .wcx-label { position: absolute; width: 25.9%; transform: translateY(-50%); }
+    .wcx-left { text-align: right; }
+    .wcx-label .wc-frag.shown { transition-delay: var(--in, 0.2s); }
+    .wcx-label .wc-label { display: block; font-size: 1.85cqw; white-space: normal; line-height: 1.2; }
+    .wcx-label .wc-note { display: block; font-size: 1.35cqw; line-height: 1.35; margin-top: 0.2em; }
+    .wcx-label .wc-label svg { display: inline-block; height: 1.05em; width: auto; margin-right: 0.4em; vertical-align: -0.15em; }
+
+    .wcx-step, .wcx-fade { opacity: 0; transition: opacity 0.4s ease, transform 0.4s ease; }
+    .wcx-step { transform: translateY(-22px); }
+    .wcx-step.shown, .wcx-fade.shown {
+      opacity: 1;
+      transform: none;
+      transition: opacity 0.7s ease-out var(--in, 0s), transform 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) var(--in, 0s);
+    }
+    /* While the globe glides down into the planet (GLOBE_JS sets .wcx-landing), the ground waits for it. */
+    .wcx-ground, .wcx-hardware-label, .wcx-hardware-lead { --in: 0.3s; }
+    .wcx-landing :is(.wcx-ground, .wcx-hardware-label, .wcx-hardware-lead) { --in: 1.9s; }
+    .wcx-label :is(.wc-label, .wc-note) { text-shadow: 0 0 3px #fff, 0 0 6px #fff, 0 0 10px #fff; }
+
+    .wcx-pop {
+      opacity: 0;
+      transform: translateY(4px) scale(0.25);
+      transform-box: fill-box;
+      transform-origin: 50% 100%;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+    .shown .wcx-pop {
+      opacity: 1;
+      transform: none;
+      transition: opacity 0.4s ease-out calc(var(--in, 0s) + var(--d, 0s)),
+        transform 0.55s cubic-bezier(0.3, 1.45, 0.5, 1) calc(var(--in, 0s) + var(--d, 0s));
+    }
+
+    .wcx-car-x { animation: wcx-drive-x 9s linear infinite; }
+    .wcx-car-xr { animation: wcx-drive-xr 11s linear infinite; }
+    .wcx-car-y { animation: wcx-drive-y 10s linear infinite; }
+    .wcx-rotor { animation: wcx-spin 4.5s linear infinite; }
+    .wcx-smoke { transform-box: fill-box; transform-origin: center; animation: wcx-smoke 3.6s ease-out infinite; opacity: 0; }
+    .wcx-pulses path { stroke-dasharray: 6 94; animation: wcx-pulse 4.8s linear infinite; }
+    .wcx-flow { stroke: #8a8a8a; stroke-dasharray: 5 95; animation: wcx-flow 2.7s linear infinite; }
+    .wcx-bob { animation: wcx-bob 2.8s ease-in-out infinite alternate; }
+    .wcx-sweep { animation: wcx-sweep 2.6s cubic-bezier(0.45, 0, 0.55, 1) infinite; }
+    .wcx-glow { animation: wcx-glow 2.6s ease-in-out infinite; }
+    .wcx-capture { stroke-dasharray: 100; stroke-dashoffset: 100; }
+    .wcx-hack.shown .wcx-capture { animation: wcx-capture 1.3s ease-in var(--d) forwards; }
+    .wcx-glitch { opacity: 0; }
+    .wcx-hack.shown .wcx-glitch { animation: wcx-glitch 1.7s steps(1) 0.6s infinite; }
+    .wcx-glitch-edge { animation: wcx-glitch-edge 1.7s steps(1) infinite; }
+    .wcx-ring { transform-box: fill-box; transform-origin: center; animation: wcx-ring 2.8s ease-out infinite; }
+
+    @keyframes wcx-drive-x { to { transform: translateX(285px); } }
+    @keyframes wcx-drive-xr { to { transform: translateX(-285px); } }
+    @keyframes wcx-drive-y { to { transform: translateY(285px); } }
+    @keyframes wcx-spin { to { transform: rotate(360deg); } }
+    @keyframes wcx-smoke {
+      0% { opacity: 0; transform: scale(0.5); }
+      20% { opacity: 0.85; }
+      100% { opacity: 0; transform: translate(-9px, -24px) scale(1.7); }
+    }
+    @keyframes wcx-pulse { from { stroke-dashoffset: 6; } to { stroke-dashoffset: -100; } }
+    @keyframes wcx-flow { from { stroke-dashoffset: 5; } to { stroke-dashoffset: -100; } }
+    @keyframes wcx-bob { to { transform: translateY(-2.5px); } }
+    @keyframes wcx-sweep { to { transform: translateX(340px); } }
+    @keyframes wcx-glow { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+    @keyframes wcx-capture { to { stroke-dashoffset: 0; } }
+    @keyframes wcx-glitch { 0%, 100% { opacity: 0.06; } 20% { opacity: 0.16; } 24% { opacity: 0.04; } 58% { opacity: 0.13; } 62% { opacity: 0.07; } }
+    @keyframes wcx-glitch-edge { 0%, 100% { opacity: 1; } 20% { opacity: 0.3; } 24% { opacity: 1; } 58% { opacity: 0.5; } }
+    @keyframes wcx-ring { from { opacity: 0.9; transform: scale(0.12); } to { opacity: 0; transform: scale(1); } }
 
     @media (prefers-reduced-motion: reduce) {
-      .page.active .wc *, .page.active .wc { animation: none !important; }
-      .wc-frag, .wf-item, .page.active .wc-title { transition: none; transform: none; }
+      .wcx * { animation: none !important; transition: none !important; }
+      .wcx-capture { stroke-dashoffset: 0; }
+      .wcx-hack .wcx-glitch { opacity: 0.08; }
+      .wcx-pulses, .wcx-flow, .wcx-sweep, .wcx-ring, .wcx-smoke { display: none; }
+      .wf-item, .page.active .wc-title { transition: none; transform: none; }
       .globe-canvas, .wf-art * { animation: none !important; }
-      .wc-pulses { display: none; }
       .page.active .start-hint { animation: none; opacity: 1; }
       .gos-link.shown .gos-link-arrow { animation: none; }
       .gos-intro-line, .gos-intro-line.shown { transition: none; transform: none; }
     }
 
-    @media (max-width: 900px) {
-      .wc { --wc-gap: 2.5rem; }
-      .wc-art { width: 8rem; height: 8rem; }
-      .wc-cell { font-size: 1rem; }
-      .wc-arrow { width: 2rem; }
-    }
-
     @media (max-height: 760px) and (min-aspect-ratio: 1/1) {
-      .wc-art { width: 13rem; height: 13rem; }
-      .wc { row-gap: 0.7rem; }
       .gos-slide { gap: 2.5rem; }
       .gos-globe-slot { height: 76%; }
       .wf-content { gap: 1.4rem; }
@@ -1490,15 +2337,19 @@ CSS = (
       .deck { padding: 0.75rem 1rem 0.6rem; }
       footer .site { font-size: 0.95rem; }
 
-      .arch-box.gos-box-slide.wc-slide { padding: 0; gap: 0.9rem; }
-      .wc { --wc-gap: 1.25rem; row-gap: 0.75rem; }
-      .wc-col-head { gap: 0.5rem; margin-bottom: 0.4rem; }
-      .wc-art { width: min(7rem, 30vw); height: min(7rem, 30vw); }
-      .wc-arrow { width: 1.6rem; margin-bottom: 0.4rem; }
-      .wc-cell { flex-direction: column; align-items: flex-start; gap: 0.05rem; font-size: 0.95rem; line-height: 1.25; }
-      .wc-cell.wc-mirror { flex-direction: column; align-items: flex-end; }
-      .wc-label { white-space: normal; }
-      .wc-note { font-size: 0.8em; }
+      /* The stack, cropped to its middle, on top; the labels in a list below it. */
+      .wcx-slide { padding: 0; gap: 0.6rem; }
+      .wcx { container-type: normal; flex-direction: column; justify-content: center; gap: 0.8rem; }
+      .wcx-inner { width: 100%; aspect-ratio: auto; container-type: normal; display: flex; flex-direction: column; gap: 0.8rem; }
+      .wcx-crop { position: relative; inset: auto; width: min(100%, 38dvh * 520 / 600); aspect-ratio: 520 / 600; margin: 0 auto; }
+      /* The planet's ground runs the full width but stops above the labels (so does GLOBE_JS's planet). */
+      .wcx-crop { clip-path: inset(-100vh -100vw 0 -100vw); }
+      .wcx-art { inset: auto; top: 0; left: -57.7%; width: 215.4%; aspect-ratio: 1120 / 600; }
+      .wcx-lead { display: none; }
+      .wcx-labels { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem 1rem; }
+      .wcx-label { position: static; width: auto; transform: none; text-align: left; }
+      .wcx-label .wc-label { font-size: 0.95rem; }
+      .wcx-label .wc-note { font-size: 0.78rem; margin-top: 0.05em; }
 
       .wf-globe-slot { left: 50%; top: 0; height: auto; width: 78%; transform: translate(-50%, -58%); }
       .wf-content { left: 0; right: 0; top: 7.5rem; justify-content: flex-start; gap: 1.4rem; }
@@ -1549,46 +2400,60 @@ CSS = (
 )
 
 
-def render_cell(text: str, row: int, col: int, mirrored: bool) -> str:
-    label, _, note = text.strip().partition(" — ")
-    note_html = f'<span class="wc-note">{tr(note)}</span>' if note else ""
-    cls = "wc-cell wc-frag wc-mirror" if mirrored else "wc-cell wc-frag"
-    return (
-        f'<div class="{cls}" data-frag="{row + 1}" style="grid-column:{2 * col + 1};grid-row:{row + 2}">'
-        f'<span class="wc-label">{tr(label)}</span>{note_html}</div>'
-    )
-
-
 class WorldComputerSlide(Slide):
+    """The world as a computer: the globe becomes a digital planet surface, and layers stack on it.
+
+    Bullets are ":key: Label — note", one per click; keys are those of WCX_ART.
+    """
+
     def render(self) -> str:
-        cells = []
-        for c, (art, _) in enumerate(COLUMNS):
-            cells.append(
-                f'<div class="wc-col-head" style="grid-column:{2 * c + 1};--c:{c}">{art}</div>'
+        frags: dict[str, int] = {}
+        labels = []
+        for i, (_, text) in enumerate(self.bullets):
+            m = re.match(r"^:([\w-]+):\s*(.*)$", text)
+            if not m or m.group(1) not in WCX_ART:
+                raise ValueError(f"world-computer: expected one of {sorted(WCX_ART)} in {text!r}")
+            key, rest = m.groups()
+            frags[key] = i + 1
+            label, _, note = rest.partition(" — ")
+            if key in WCX_CALLOUTS:
+                y = WCX_CALLOUTS[key][0]
+                side, pos = "left", f"right:{1 - WCX_CALLOUT_X / WCX_W:.3%}"
+            else:
+                y = iso(SIDE, 0, 0, WCX_LAYERS[key][0])[1]
+                side, pos = "right", f"left:{WCX_LABEL_X / WCX_W:.3%}"
+            note_html = f'<span class="wc-note">{tr(note)}</span>' if note else ""
+            labels.append(
+                f'<div class="wcx-label wcx-{side}" style="top:{y / WCX_H:.3%};{pos}">'
+                f'<div class="wc-frag wcx-{key}-label" data-frag="{i + 1}">'
+                f'<span class="wc-label">{CALLOUT_ICONS.get(key, "")}{tr(label)}</span>{note_html}</div></div>'
             )
-            if c:
-                cells.append(
-                    f'<div class="wc-arrow" style="grid-column:{2 * c};grid-row:1;--c:{c}" '
-                    f'aria-hidden="true">{ARROW_SVG}</div>'
-                )
-        for r, (_, text) in enumerate(self.bullets):
-            for c, part in enumerate(text.split("<=>")):
-                cells.append(render_cell(part, r, c, COLUMNS[c][1]))
-        grid = " var(--wc-gap) ".join(["minmax(0, 1fr)"] * len(COLUMNS))
-        body = f"""
+        first = frags.get("hardware", 1)
+        planet = " ".join(str(v) for v in (*WCX_PLANET, *WCX_PLANET_ROTATE))
+        # The globe sits in its slot until the first click; then GLOBE_JS glides it into the
+        # planet whose top the marker describes (in viewBox units) and draws that full-window.
+        globes = _globe_slot(WCX_GLOBE, f'data-until="{first}"') + (
+            f'<div class="wcx-planet" data-planet="{planet}" data-frag="{first}"></div>'
+        )
+        return f"""
             <div class="page-step active">
-              <section class="arch-box gos-box-slide wide-slide wc-slide">
+              <section class="wcx-slide">
                 <header class="box-header wc-title">
                   <h2>{tr(WORLD_TITLE)}</h2>
                 </header>
-                <div class="box-body">
-                  <div class="wc" style="grid-template-columns: {grid}">
-                    {"".join(cells)}
+                <div class="wcx">
+                  <div class="wcx-inner">
+                    <div class="wcx-crop">
+                      <div class="wcx-art">
+                        {world_computer_svg(frags)}
+                        {globes}
+                      </div>
+                    </div>
+                    <div class="wcx-labels">{"".join(labels)}</div>
                   </div>
                 </div>
               </section>
             </div>"""
-        return body
 
 
 CHIP_MINI_SVG = (

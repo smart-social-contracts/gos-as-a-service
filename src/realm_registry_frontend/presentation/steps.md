@@ -6,13 +6,13 @@
 
 ## world-computer
 
-- The Earth — land, water, resources <=> Hardware — memory, CPU, disk
-- People — citizens, residents, members <=> Users — everyone who logs in
-- Officials — civil servants, mayors, presidents <=> Admins — keep it running, manage access
-- Governments & institutions — how a society is run <=> Operating system — Windows, macOS, Linux
-- Laws & policies — who may do what <=> Permissions & settings — who can open which file
-- Public services — tax office, land registry, courts <=> Apps — email, banking, maps
-- Elections & new laws — how the rules change <=> Software updates — new versions, fixes
+- :hardware: Hardware — land, energy, water, materials
+- :os: Operating system — institutions: governments, laws, regulations
+- :apps: Applications — public services and companies
+- :users: Users — people like you and me
+- :upgrade: Upgrades — democracy: elections, referendums, new laws
+- :hack: Hacks — power gets captured
+- :checks: Checks & balances — detect the hack, undo it, stop it happening again
 
 # GOS — single slide
 
