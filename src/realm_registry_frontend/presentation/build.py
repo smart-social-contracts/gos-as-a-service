@@ -31,6 +31,11 @@ LOCALES = [
 START_HINT = "Click or press → to start"
 START_HINT_TOUCH = "Tap to start"
 LINK_CTA = "Find a realm, or start your own"
+IC_LOGO_HTML = (
+    '<a class="gos-ic" href="https://internetcomputer.org" target="_blank" '
+    'rel="noopener noreferrer" title="Internet Computer">'
+    '<img src="assets/internet-computer-icp-logo.svg" alt="Internet Computer"></a>'
+)
 
 BASE_CSS = """
     :root {
@@ -1253,6 +1258,14 @@ CSS = (
     .gos-point { display: flex; flex-direction: column; gap: 0.3rem; }
     .gos-label { font-size: 1.35rem; font-weight: 400; line-height: 1.25; }
     .gos-label strong { font-weight: 700; }
+    .gos-ic {
+      display: inline-block;
+      margin-left: 0.4em;
+      vertical-align: -0.12em;
+      line-height: 0;
+    }
+    .gos-ic img { display: block; height: 1.1em; width: auto; }
+    .gos-ic:hover img { opacity: 0.75; }
 
     /* Titles and the art beside the globe wait for it to finish moving (MOVE_MS in GLOBE_JS). */
     .viewport { --after-move: 1.6s; }
@@ -1699,8 +1712,12 @@ class GosIntroSlide(Slide):
             parts = []
             for label in labels:
                 frag += 1
+                ic = label.endswith("{ic}")
+                if ic:
+                    label = label[: -len("{ic}")].rstrip()
+                mark = IC_LOGO_HTML if ic else ""
                 parts.append(
-                    f'<span class="gos-label wc-frag" data-frag="{frag}">{tr(label)}</span>'
+                    f'<span class="gos-label wc-frag" data-frag="{frag}">{tr(label)}{mark}</span>'
                 )
             if note:
                 if len(labels) > 1:

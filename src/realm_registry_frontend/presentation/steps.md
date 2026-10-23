@@ -29,7 +29,7 @@
 
 - intro: Humanity's operating system needs an upgrade.
 - left: GOS — Governance Operating System
-- Transparent, efficient, secure
+- Transparent, efficient, secure {ic}
 - Enables cooperation scalability + Respects user autonomy — human alignment
 - Built upon a standard — [Generalized Global Governance v1.0](https://github.com/smart-social-contracts/ggg)
 - Public good — open and free, like the Internet
