@@ -49,12 +49,17 @@
     "Upgrades": "Actualizaciones",
     "power gets captured": "alguien se apodera del poder",
     "Hacks": "Hackeos",
-    "detect the hack, undo it, stop it happening again": "detectar el hackeo, deshacerlo, evitar que se repita",
+    "try to undo the hack, but power stays captured": "intentan deshacer el hackeo, pero el poder sigue en otras manos",
     "Checks & balances": "Contrapesos",
     "Institutions": "Instituciones",
     "governments, laws, regulations": "gobiernos, leyes, normativas",
     "Services": "Servicios",
-    "Citizens": "Ciudadanos"
+    "Citizens": "Ciudadanos",
+    "Built on top of decentralized cloud tech": "Construido sobre tecnología de nube descentralizada",
+    "*Actually* secure, transparent and efficient": "*Realmente* seguro, transparente y eficiente",
+    "Enables emergence of governance apps open ecosystem": "Hace posible un ecosistema abierto de aplicaciones de gobernanza",
+    "Enables cooperation scalability & user autonomy": "Permite que la cooperación escale y respeta la autonomía personal",
+    "Incentivizes user alignment (both humans and machines)": "Incentiva el alineamiento de los usuarios (humanos y máquinas)"
   },
   "de": {
     "Humanity's operating system needs an upgrade.": "Das Betriebssystem der Menschheit braucht ein Update.",
@@ -106,12 +111,17 @@
     "Upgrades": "Updates",
     "power gets captured": "jemand reißt die Macht an sich",
     "Hacks": "Hacks",
-    "detect the hack, undo it, stop it happening again": "den Hack erkennen, rückgängig machen, Wiederholung verhindern",
+    "try to undo the hack, but power stays captured": "versuchen, den Hack rückgängig zu machen, doch die Macht bleibt in fremden Händen",
     "Checks & balances": "Gewaltenteilung",
     "Institutions": "Institutionen",
     "governments, laws, regulations": "Regierungen, Gesetze, Vorschriften",
     "Services": "Dienste",
-    "Citizens": "Bürger"
+    "Citizens": "Bürger",
+    "Built on top of decentralized cloud tech": "Aufgebaut auf dezentraler Cloud-Technologie",
+    "*Actually* secure, transparent and efficient": "*Wirklich* sicher, transparent und effizient",
+    "Enables emergence of governance apps open ecosystem": "Ermöglicht ein offenes Ökosystem von Governance-Apps",
+    "Enables cooperation scalability & user autonomy": "Macht Zusammenarbeit skalierbar und wahrt die Autonomie der Nutzer",
+    "Incentivizes user alignment (both humans and machines)": "Belohnt die Ausrichtung der Nutzer (Menschen wie Maschinen)"
   },
   "fr": {
     "Humanity's operating system needs an upgrade.": "Le système d'exploitation de l'humanité a besoin d'une mise à jour.",
@@ -163,12 +173,17 @@
     "Upgrades": "Mises à jour",
     "power gets captured": "le pouvoir est confisqué",
     "Hacks": "Piratages",
-    "detect the hack, undo it, stop it happening again": "détecter le piratage, l'annuler, empêcher qu'il se reproduise",
+    "try to undo the hack, but power stays captured": "tentent d'annuler le piratage, mais le pouvoir reste confisqué",
     "Checks & balances": "Contre-pouvoirs",
     "Institutions": "Institutions",
     "governments, laws, regulations": "gouvernements, lois, réglementations",
     "Services": "Services",
-    "Citizens": "Citoyens"
+    "Citizens": "Citoyens",
+    "Built on top of decentralized cloud tech": "Construit sur une technologie de cloud décentralisé",
+    "*Actually* secure, transparent and efficient": "*Vraiment* sûr, transparent et efficace",
+    "Enables emergence of governance apps open ecosystem": "Fait émerger un écosystème ouvert d'applications de gouvernance",
+    "Enables cooperation scalability & user autonomy": "Permet à la coopération de passer à l'échelle, dans le respect de l'autonomie de chacun",
+    "Incentivizes user alignment (both humans and machines)": "Encourage l'alignement des utilisateurs (humains comme machines)"
   },
   "zh-CN": {
     "Humanity's operating system needs an upgrade.": "人类的操作系统需要升级。",
@@ -220,12 +235,17 @@
     "Upgrades": "升级",
     "power gets captured": "权力被夺取",
     "Hacks": "入侵",
-    "detect the hack, undo it, stop it happening again": "发现入侵、撤销它、防止再次发生",
+    "try to undo the hack, but power stays captured": "试图撤销入侵，但权力仍被夺取",
     "Checks & balances": "制衡",
     "Institutions": "制度",
     "governments, laws, regulations": "政府、法律、法规",
     "Services": "服务",
-    "Citizens": "公民"
+    "Citizens": "公民",
+    "Built on top of decentralized cloud tech": "构建于去中心化云技术之上",
+    "*Actually* secure, transparent and efficient": "*真正*安全、透明、高效",
+    "Enables emergence of governance apps open ecosystem": "催生开放的治理应用生态",
+    "Enables cooperation scalability & user autonomy": "让合作得以规模化，并保障用户自主",
+    "Incentivizes user alignment (both humans and machines)": "激励用户对齐（无论人类还是机器）"
   },
   "it": {
     "Humanity's operating system needs an upgrade.": "Il sistema operativo dell'umanità ha bisogno di un aggiornamento.",
@@ -277,11 +297,16 @@
     "Upgrades": "Aggiornamenti",
     "power gets captured": "qualcuno si impadronisce del potere",
     "Hacks": "Attacchi informatici",
-    "detect the hack, undo it, stop it happening again": "scoprire l'attacco, annullarlo, impedire che si ripeta",
+    "try to undo the hack, but power stays captured": "cercano di annullare l'attacco, ma il potere resta in mano altrui",
     "Checks & balances": "Pesi e contrappesi",
     "Institutions": "Istituzioni",
     "governments, laws, regulations": "governi, leggi, regolamenti",
     "Services": "Servizi",
-    "Citizens": "Cittadini"
+    "Citizens": "Cittadini",
+    "Built on top of decentralized cloud tech": "Costruito su tecnologia cloud decentralizzata",
+    "*Actually* secure, transparent and efficient": "*Davvero* sicuro, trasparente ed efficiente",
+    "Enables emergence of governance apps open ecosystem": "Fa emergere un ecosistema aperto di app di governance",
+    "Enables cooperation scalability & user autonomy": "Rende la cooperazione scalabile e rispetta l'autonomia di ognuno",
+    "Incentivizes user alignment (both humans and machines)": "Incentiva l'allineamento degli utenti (umani e macchine)"
   }
 }

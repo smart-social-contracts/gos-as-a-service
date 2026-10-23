@@ -314,6 +314,11 @@ SIDE = 262
 WCX_LAYERS = {"hardware": (432, 0), "os": (250, 9), "apps": (140, 9), "users": (30, 9)}
 WCX_LABEL_X = 828  # layer names start here, right of the stack
 WCX_CALLOUT_X = 300  # what happens to the whole stack is told left of here
+# When the Governance Operating System comes in, the whole picture moves right by WCX_SHIFT and
+# its points are told left of WCX_GOS_X (both after the move), one beside each layer.
+WCX_SHIFT = 100
+WCX_GOS_X = WCX_CX - SIDE * ISO_A + WCX_SHIFT - 50
+WCX_GOS_HEAD_Y = 72  # where its heading ends
 # Callouts point at the operating system: (callout y, plane point it points to).
 WCX_CALLOUTS = {
     "upgrade": (205, (0, 0.45 * SIDE)),
@@ -795,16 +800,27 @@ def hack_svg() -> str:
 
 
 def checks_svg() -> str:
-    """Checks and balances catch the hack, undo it and guard against the next one."""
+    """Checks and balances try to undo the hack: the red gives way for a moment, then comes back."""
     top, _ = WCX_LAYERS["os"]
     ring = f'<circle class="wcx-ring" cx="{SIDE / 2}" cy="{SIDE / 2}" r="125" fill="none" stroke="{TEAL}" stroke-width="2.5"/>'
-    return _plane(top, ring, clip=True) + _poly(_face(top), fill="none", stroke=TEAL, stroke_width="1.8")
+    return _plane(top, ring, clip=True) + _poly(
+        _face(top), fill="none", stroke=TEAL, stroke_width="1.8", class_="wcx-checks-edge"
+    )
+
+
+def broken_shield_svg() -> str:
+    """The shield, with the crack it gets when the hack holds."""
+    return (
+        f'<g class="wcx-fail">{shield_svg()}'
+        '<path class="wcx-crack" d="M-1-26 2-18.5-2.5-12 2.5-5-1 2" fill="none" stroke="#1d3b3b" '
+        'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></g>'
+    )
 
 
 # Badges sit on the capitol's roof but are drawn over the whole stack so the upper slabs never hide them.
 WCX_BADGES = {
-    "hack": lambda: _pop(_billboard("os", *OS_HUB, evil_svg(), lift=47), HACK_CAPITOL_AT),
-    "checks": lambda: _pop(_billboard("os", *OS_HUB, shield_svg(), lift=46), 0.25),
+    "hack": lambda: _pop(_billboard("os", *OS_HUB, f'<g class="wcx-evil">{evil_svg()}</g>', lift=47), HACK_CAPITOL_AT),
+    "checks": lambda: _pop(_billboard("os", *OS_HUB, broken_shield_svg(), lift=46), 0.25),
 }
 
 
@@ -844,7 +860,18 @@ def _lead(key: str, frag: int) -> str:
     )
 
 
-def world_computer_svg(frags: dict[str, int]) -> str:
+def _gos_lead(layer: str, frag: int) -> str:
+    """The hairline from a Governance Operating System point to its layer, drawn before the move."""
+    b = iso(0, SIDE, 0, WCX_LAYERS[layer][0])
+    a, b = (WCX_GOS_X + 8 - WCX_SHIFT, b[1]), (b[0] - 10, b[1])
+    return (
+        f'<g class="wcx-fade wcx-lead wcx-gos-lead wcx-gos-{layer}-lead" data-frag="{frag}">'
+        + _line(a, b, stroke=TEAL, stroke_width="1.2", fill="none")
+        + f'<circle cx="{b[0]:.1f}" cy="{b[1]:.1f}" r="2.6" fill="{TEAL}"/></g>'
+    )
+
+
+def world_computer_svg(frags: dict[str, int], gos: int | None = None, gos_points: list[tuple[str, int]] = ()) -> str:
     groups, badges = [], []
     for key in WCX_STACK:
         if key not in frags:
@@ -855,12 +882,13 @@ def world_computer_svg(frags: dict[str, int]) -> str:
         for out, inner in parts:
             if key == "upgrade" and "hack" in frags:
                 inner = f'<g class="wcx-fade" data-until="{frags["hack"]}">{inner}</g>'
-            if key == "hack" and "checks" in frags:
-                inner = f'<g class="wcx-fade" data-until="{frags["checks"]}">{inner}</g>'
             out.append(f'<g class="{cls} wcx-{key}" data-frag="{frag}">{inner}</g>')
     groups += badges
     px, ph, pr = WCX_PLANET
-    leads = "".join(_lead(k, f) for k, f in frags.items())
+    leads = "".join(
+        f'<g class="wcx-fade" data-until="{gos}">{_lead(k, f)}</g>' if gos and k in WCX_CALLOUTS else _lead(k, f)
+        for k, f in frags.items()
+    ) + "".join(_gos_lead(layer, f) for layer, f in gos_points)
     return f"""<svg viewBox="0 0 {WCX_W} {WCX_H}" fill="none" aria-hidden="true">
   <defs>
     <clipPath id="wcx-plane"><rect width="{SIDE}" height="{SIDE}"/></clipPath>
@@ -1555,6 +1583,7 @@ GLOBE_JS = """
   let glyphFrom = 0;
   let glyphStart = 0;
   let planetDrawn = 0;
+  let planetG = null;
   let planetW = 0;
   let planetH = 0;
 
@@ -1785,10 +1814,13 @@ GLOBE_JS = """
       return;
     }
     const moving = !!glide;
-    if (!force && !moving && now - planetDrawn < 100) return;
-    planetDrawn = now;
-    if (planetW !== innerWidth || planetH !== innerHeight) resizePlanet();
     const g = currentGeom(now);
+    // The ground can also move under it (the picture moving right for the Governance Operating System).
+    const shifted = !planetG || g.x !== planetG.x || g.h !== planetG.h || g.r !== planetG.r;
+    if (!force && !moving && !shifted && now - planetDrawn < 100) return;
+    planetDrawn = now;
+    planetG = g;
+    if (planetW !== innerWidth || planetH !== innerHeight) resizePlanet();
     const dpr = window.devicePixelRatio || 1;
     pctx.setTransform(1, 0, 0, 1, 0, 0);
     pctx.clearRect(0, 0, planet.width, planet.height);
@@ -2268,6 +2300,45 @@ CSS = (
     .wcx-label .wc-frag:has(.wcx-swap) { display: grid; }
     .wcx-swap { grid-area: 1 / 1; opacity: 0; transition: opacity 0.35s ease; }
     .wcx-swap.shown { opacity: 1; transition: opacity 0.6s ease 0.3s; }
+
+    /* The Governance Operating System comes in: the picture moves right by WCX_SHIFT, the
+       callouts leave and its points take the left (WCX_GOS_X), one beside each layer. */
+    .wcx-art, .wcx-right {
+      transition: transform 1.3s cubic-bezier(0.45, 0, 0.2, 1), width 1.3s cubic-bezier(0.45, 0, 0.2, 1);
+    }
+    .wcx-inner[data-shift].shown .wcx-art { transform: translateX(8.929cqw); }
+    .wcx-inner[data-shift].shown .wcx-right { transform: translate(8.929cqw, -50%); width: 17.143%; }
+    .wcx-until { transition: opacity 0.4s ease; }
+    .wcx-until:not(.shown) { opacity: 0; pointer-events: none; }
+    .wcx-gos-head, .wcx-gos-os, .wcx-gos-os-lead { --in: 1.1s; }
+    .wcx-gos-head { width: 50%; text-align: left; }
+    .wcx-gos-kicker {
+      display: block;
+      font-size: 1.4cqw;
+      font-weight: 750;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: rgb(47, 95, 95);
+    }
+    .wcx-gos-title { display: block; font-size: 3cqw; font-weight: 800; letter-spacing: -0.025em; line-height: 1.1; }
+    .wcx-gos .wc-label + .wc-label, .wcx-gos .wc-note + .wc-label { margin-top: 0.55em; }
+    /* A point's first line meets its lead, and the rest hangs below; the heading sits above them. */
+    .wcx-gos { transform: translateY(-1cqw); }
+    .wcx-gos-head { transform: translateY(-100%); }
+    .wcx-gos .gos-ic img { height: 0.95em; }
+    .wcx-gos a:not(.gos-ic) {
+      color: inherit;
+      text-decoration: underline;
+      text-decoration-color: rgba(107, 163, 163, 0.6);
+      text-underline-offset: 0.15em;
+      transition: color 0.2s;
+    }
+    .wcx-gos a:not(.gos-ic):hover { color: rgb(47, 95, 95); }
+    /* Both sides share the narrower room once the picture has moved. */
+    .wcx-label :is(.wc-label, .wc-note) { transition: font-size 1.3s cubic-bezier(0.45, 0, 0.2, 1); }
+    .wcx-inner[data-shift].shown :is(.wcx-right, .wcx-gos) .wc-label { font-size: 1.6cqw; }
+    .wcx-inner[data-shift].shown :is(.wcx-right, .wcx-gos) .wc-note { font-size: 1.2cqw; }
+    .wcx-inner[data-shift].shown .wcx-gos .wc-label { font-size: 1.5cqw; }
     /* The hardware label sits on the planet's surface: a soft white patch keeps it readable. */
     .wcx-hardware-label { position: relative; isolation: isolate; width: fit-content; }
     .wcx-hardware-label::before {
@@ -2315,7 +2386,21 @@ CSS = (
     .wcx-taint { opacity: 0; }
     .wcx-hack.shown .wcx-taint { animation: wcx-taint 0.5s ease-out var(--d) forwards; }
     .wcx-glitch-edge { animation: wcx-glitch-edge 1.7s steps(1) infinite; }
-    .wcx-ring { transform-box: fill-box; transform-origin: center; animation: wcx-ring 2.8s ease-out infinite; }
+    .wcx-ring { transform-box: fill-box; transform-origin: center; opacity: 0; }
+    /* Checks and balances try: the red gives way, then comes back, and the shield breaks. */
+    .wcx-checks.shown .wcx-ring { animation: wcx-ring 1.4s ease-out 0.2s 2 both; }
+    .wcx-checks-edge { opacity: 0; }
+    .wcx-checks.shown .wcx-checks-edge { animation: wcx-checks-edge 3.4s ease forwards; }
+    .wcx-fail, .wcx-evil { transform-box: fill-box; transform-origin: 50% 100%; }
+    .wcx-crack { opacity: 0; }
+    .wcx-checks.shown .wcx-fail { animation: wcx-fail 3.4s ease-in forwards; }
+    .wcx-checks.shown .wcx-crack { animation: wcx-crack 3.4s steps(1) forwards; }
+    .wcx svg:has(.wcx-checks.shown) .wcx-hack.shown :is(.wcx-taint, .wcx-capture) {
+      opacity: 1;
+      stroke-dashoffset: 0;
+      animation: wcx-resist 3.4s ease-in-out forwards;
+    }
+    .wcx svg:has(.wcx-checks.shown) .wcx-evil { animation: wcx-evil 3.4s ease-out forwards; }
 
     @keyframes wcx-drive-x { to { transform: translateX(285px); } }
     @keyframes wcx-drive-xr { to { transform: translateX(-285px); } }
@@ -2336,11 +2421,28 @@ CSS = (
     @keyframes wcx-glitch { 0%, 100% { opacity: 0.06; } 20% { opacity: 0.16; } 24% { opacity: 0.04; } 58% { opacity: 0.13; } 62% { opacity: 0.07; } }
     @keyframes wcx-glitch-edge { 0%, 100% { opacity: 1; } 20% { opacity: 0.3; } 24% { opacity: 1; } 58% { opacity: 0.5; } }
     @keyframes wcx-ring { from { opacity: 0.9; transform: scale(0.12); } to { opacity: 0; transform: scale(1); } }
+    @keyframes wcx-checks-edge { 0% { opacity: 0; } 10%, 55% { opacity: 1; } 80%, 100% { opacity: 0; } }
+    @keyframes wcx-resist { 0% { opacity: 1; } 22%, 50% { opacity: 0.12; } 82%, 100% { opacity: 1; } }
+    @keyframes wcx-crack { 0% { opacity: 0; } 53%, 100% { opacity: 1; } }
+    @keyframes wcx-fail {
+      0%, 52% { opacity: 1; transform: none; }
+      56% { transform: rotate(-7deg); }
+      60% { transform: rotate(6deg); }
+      64% { opacity: 1; transform: rotate(-3deg); }
+      100% { opacity: 0; transform: translateY(18px) rotate(18deg); }
+    }
+    @keyframes wcx-evil {
+      0% { opacity: 1; transform: none; }
+      8%, 72% { opacity: 0; transform: scale(0.5); }
+      86% { opacity: 1; transform: scale(1.2); }
+      100% { opacity: 1; transform: none; }
+    }
 
     @media (prefers-reduced-motion: reduce) {
       .wcx * { animation: none !important; transition: none !important; }
       .wcx-capture { stroke-dashoffset: 0; }
       .wcx-taint { opacity: 1; }
+      .wcx-checks .wcx-fail { opacity: 0; }
       .wcx-hack .wcx-glitch { opacity: 0.08; }
       .wcx-pulses, .wcx-flow, .wcx-sweep, .wcx-ring, .wcx-smoke { display: none; }
       .wf-item, .page.active .wc-title { transition: none; transform: none; }
@@ -2393,6 +2495,17 @@ CSS = (
       .wcx-label { position: static; width: auto; transform: none; text-align: left; }
       .wcx-label .wc-label { font-size: 0.95rem; }
       .wcx-label .wc-note { font-size: 0.78rem; margin-top: 0.05em; }
+      .wcx-inner[data-shift].shown :is(.wcx-art, .wcx-right) { transform: none; }
+      .wcx-inner[data-shift].shown .wcx-right { width: auto; }
+      .wcx-until:not(.shown), .wcx-gos:has(> .wc-frag:not(.shown)) { display: none; }
+      .wcx-gos { width: auto !important; transform: none; grid-column: 1 / -1; }
+      /* Room for the Governance Operating System's points: the layers keep just their names. */
+      .wcx-inner[data-shift].shown .wcx-right .wc-note { display: none; }
+      .wcx-gos-head { grid-column: 1 / -1; }
+      .wcx-gos-kicker { font-size: 0.68rem; }
+      .wcx-gos-title { font-size: 1.15rem; }
+      .wcx-inner[data-shift].shown :is(.wcx-right, .wcx-gos) .wc-label { font-size: 0.95rem; }
+      .wcx-inner[data-shift].shown :is(.wcx-right, .wcx-gos) .wc-note { font-size: 0.78rem; }
 
       .wf-globe-slot { left: 50%; top: 0; height: auto; width: 78%; transform: translate(-50%, -58%); }
       .wf-content { left: 0; right: 0; top: 7.5rem; justify-content: flex-start; gap: 1.4rem; }
@@ -2443,33 +2556,83 @@ CSS = (
 )
 
 
+GOS_POINTS = {"gos-os": "os", "gos-apps": "apps", "gos-users": "users"}
+
+
 class WorldComputerSlide(Slide):
     """The world as a computer: the globe becomes a digital planet surface, and layers stack on it.
 
     Bullets are ":key: Label — note", one per click; keys are those of WCX_ART. A layer can be
     named for the world first and for the computer later: ":key: World — note <=> Computer — note".
-    The bare ":gos:" bullet is the click where the Governance Operating System comes in and those
-    layers switch to their computer names.
+    ":gos: Kicker — Title" is the click where the Governance Operating System comes in: the picture
+    moves right, the callouts on the left leave for its points, and the layers switch to their
+    computer names. Its points are ":gos-os:", ":gos-apps:" and ":gos-users:" bullets: lines
+    "A — note + B", where a note is optional, and "{ic}" ends a line with the Internet Computer logo. A nested bullet comes with the
+    click of the bullet above it.
     """
 
     def render(self) -> str:
         frags: dict[str, int] = {}
+        gos_points: list[tuple[str, int]] = []
         labels = []
-        gos = next((i + 1 for i, (_, t) in enumerate(self.bullets) if t.strip() == ":gos:"), None)
+        clicks, n = [], 0
+        for depth, _ in self.bullets:
+            n += depth == 0
+            clicks.append(max(n, 1))
+        gos = next((c for c, (_, t) in zip(clicks, self.bullets) if re.match(r"^:gos:(\s|$)", t.strip())), None)
 
         def text_html(text: str) -> str:
             label, _, note = text.strip().partition(" — ")
             note_html = f'<span class="wc-note">{tr(note)}</span>' if note else ""
             return f'<span class="wc-label">{CALLOUT_ICONS.get(key, "")}{tr(label)}</span>{note_html}'
 
-        for i, (_, text) in enumerate(self.bullets):
-            if i + 1 == gos:
-                continue
+        def point_html(text: str) -> str:
+            lines = []
+            for line in text.strip().split(" + "):
+                name, _, note = line.partition(" — ")
+                ic = name.endswith("{ic}")
+                name = name.removesuffix("{ic}").rstrip()
+                lines.append(f'<span class="wc-label">{tr(name)}{IC_LOGO_HTML if ic else ""}</span>')
+                if note:
+                    lines.append(f'<span class="wc-note">{tr(note)}</span>')
+            return "".join(lines)
+
+        def gos_label(y: float, body: str, frag: int, cls: str) -> str:
+            # The heading starts at the slide's left edge; the points end at WCX_GOS_X.
+            place = (
+                "left:0"
+                if cls == "wcx-gos-head"
+                else f"right:{1 - WCX_GOS_X / WCX_W:.3%};width:{WCX_GOS_X / WCX_W:.3%}"
+            )
+            return (
+                f'<div class="wcx-label wcx-left wcx-gos {cls}" style="top:{y / WCX_H:.3%};{place}">'
+                f'<div class="wc-frag" data-frag="{frag}">{body}</div></div>'
+            )
+
+        for click, (_, text) in zip(clicks, self.bullets):
             m = re.match(r"^:([\w-]+):\s*(.*)$", text)
-            if not m or m.group(1) not in WCX_ART:
-                raise ValueError(f"world-computer: expected :gos: or one of {sorted(WCX_ART)} in {text!r}")
+            if not m or m.group(1) not in {*WCX_ART, *GOS_POINTS, "gos"}:
+                raise ValueError(
+                    f"world-computer: expected :gos:, one of {sorted(GOS_POINTS)} or one of {sorted(WCX_ART)} in {text!r}"
+                )
             key, rest = m.groups()
-            frags[key] = i + 1
+            if key == "gos":
+                if rest:
+                    kicker, _, title = rest.partition(" — ")
+                    head = (
+                        f'<span class="wcx-gos-kicker">{tr(kicker)}</span><span class="wcx-gos-title">{tr(title)}</span>'
+                        if title
+                        else f'<span class="wcx-gos-title">{tr(kicker)}</span>'
+                    )
+                    labels.append(gos_label(WCX_GOS_HEAD_Y, head, click, "wcx-gos-head"))
+                continue
+            if key in GOS_POINTS:
+                layer = GOS_POINTS[key]
+                gos_points.append((layer, click))
+                y = iso(0, SIDE, 0, WCX_LAYERS[layer][0])[1]
+                labels.append(gos_label(y, point_html(rest), click, f"wcx-gos-{layer}"))
+                continue
+            frags[key] = click
             world, swap, computer = rest.partition("<=>")
             if swap and gos is None:
                 raise ValueError(f"world-computer: {text!r} has a computer name but no :gos: click")
@@ -2481,15 +2644,18 @@ class WorldComputerSlide(Slide):
                 )
             else:
                 body = text_html(world)
+            until = ""
             if key in WCX_CALLOUTS:
                 y = WCX_CALLOUTS[key][0]
                 side, pos = "left", f"right:{1 - WCX_CALLOUT_X / WCX_W:.3%}"
+                # The callouts make room for the Governance Operating System.
+                until = f' wcx-until" data-until="{gos}' if gos else ""
             else:
                 y = iso(SIDE, 0, 0, WCX_LAYERS[key][0])[1]
                 side, pos = "right", f"left:{WCX_LABEL_X / WCX_W:.3%}"
             labels.append(
-                f'<div class="wcx-label wcx-{side}" style="top:{y / WCX_H:.3%};{pos}">'
-                f'<div class="wc-frag wcx-{key}-label" data-frag="{i + 1}">{body}</div></div>'
+                f'<div class="wcx-label wcx-{side}{until}" style="top:{y / WCX_H:.3%};{pos}">'
+                f'<div class="wc-frag wcx-{key}-label" data-frag="{click}">{body}</div></div>'
             )
         first = frags.get("hardware", 1)
         planet = " ".join(str(v) for v in (*WCX_PLANET, *WCX_PLANET_ROTATE))
@@ -2498,6 +2664,7 @@ class WorldComputerSlide(Slide):
         globes = _globe_slot(WCX_GLOBE, f'data-until="{first}"') + (
             f'<div class="wcx-planet" data-planet="{planet}" data-frag="{first}"></div>'
         )
+        shift = f' data-frag="{gos}" data-shift' if gos else ""
         return f"""
             <div class="page-step active">
               <section class="wcx-slide">
@@ -2505,10 +2672,10 @@ class WorldComputerSlide(Slide):
                   <h2>{tr(WORLD_TITLE)}</h2>
                 </header>
                 <div class="wcx">
-                  <div class="wcx-inner">
+                  <div class="wcx-inner"{shift}>
                     <div class="wcx-crop">
                       <div class="wcx-art">
-                        {world_computer_svg(frags)}
+                        {world_computer_svg(frags, gos, gos_points)}
                         {globes}
                       </div>
                     </div>

@@ -12,8 +12,11 @@
 - :users: Citizens — people like you and me <=> Users — people like you and me
 - :upgrade: Upgrades — democracy: elections, referendums, new laws
 - :hack: Hacks — power gets captured
-- :checks: Checks & balances — detect the hack, undo it, stop it happening again
-- :gos:
+- :checks: Checks & balances — try to undo the hack, but power stays captured
+- :gos: GOS — Governance Operating System
+    - :gos-os: Built on top of decentralized cloud tech {ic} + *Actually* secure, transparent and efficient
+- :gos-apps: Built upon a standard — [Generalized Global Governance v1.0](https://github.com/smart-social-contracts/ggg) + Enables emergence of governance apps open ecosystem
+- :gos-users: Enables cooperation scalability & user autonomy + Incentivizes user alignment (both humans and machines)
 
 # GOS — single slide
 
