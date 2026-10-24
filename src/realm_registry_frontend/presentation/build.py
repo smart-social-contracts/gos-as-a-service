@@ -692,8 +692,9 @@ def official_svg(hacked: bool = False) -> str:
     return person_svg(HACK_RED if hacked else "#7a7a7a", scale=0.85)
 
 
-def os_svg() -> str:
-    """The operating system: institutions and the people running them, wired into everything."""
+def os_svg(officials=lambda inner: inner) -> str:
+    """The operating system: institutions and the people running them, wired into everything.
+    officials(svg) wraps the people, who leave once the Governance Operating System runs it."""
     top, _ = WCX_LAYERS["os"]
     wires = [d for d, _ in OS_WIRES]
     traces = "".join(f'<path d="{d}"/>' for d in wires)
@@ -710,7 +711,7 @@ def os_svg() -> str:
         _pop(_billboard("os", *OS_LAW, law_doc_svg()), 0.55),
         _pop(_billboard("os", *OS_HUB, capitol_svg()), 0.4),
         _pop(_billboard("os", *OS_SCALES, scales_svg()), 0.7),
-    ] + [_pop(_billboard("os", x, y, official_svg()), 0.5 + i * 0.07) for i, ((x, y), _) in enumerate(OS_OFFICIALS)]
+    ] + [officials(_pop(_billboard("os", x, y, official_svg()), 0.5 + i * 0.07)) for i, ((x, y), _) in enumerate(OS_OFFICIALS)]
     return (
         _connectors("os", "hardware")
         + _slab("os", "#fff", 0.92)
@@ -720,11 +721,12 @@ def os_svg() -> str:
 
 
 APP_ICONS = {
-    "justice": '<rect x="-8" y="-4" width="12" height="7" rx="1.5" transform="rotate(-45 -2 -0.5)"/>'
-    '<path d="M1.5 2.5 8 9M-10 9H0"/>',
     "education": '<path d="M-10-3 0-8l10 5L0 2z"/><path d="M-6-1v5c3 2.6 9 2.6 12 0v-5M10-3v6"/>',
     "health": '<path d="M-3-9h6v6h6v6H3v6h-6V3h-6v-6h6z"/>',
-    "company": '<rect x="-10" y="-4" width="20" height="14" rx="2"/><path d="M-4-4v-4h8v4M-10 2h20"/>',
+    "shopping": '<path d="M-8-3h16L6.5 9h-13z"/><path d="M-4-3v-2.5a4 4 0 0 1 8 0V-3"/>',
+    "food": '<path d="M-7-9v5a2.5 2.5 0 0 0 5 0v-5M-4.5-9V9"/><path d="M6 9V-9C3-7.5 2-3 2 1h4"/>',
+    "labor": '<path d="M-8 8 2-2"/><rect x="-7" y="-3" width="14" height="6" rx="1" transform="translate(4 -4) rotate(45)"/>',
+    "tech": '<rect x="-8" y="-8" width="16" height="11" rx="1.5"/><path d="M-11 6.5h22"/>',
 }
 
 
@@ -753,15 +755,22 @@ def apps_svg(sick=_no_mood, happy=_no_mood) -> str:
     grid = "".join(f'<path d="M{v:.1f} 0V{SIDE}M0 {v:.1f}H{SIDE}"/>' for v in [SIDE * i / 8 for i in range(1, 8)])
     flat = f'<g stroke="#ededed" stroke-width="1">{grid}</g>'
     # Along the front half of the layer, so the users' slab above never hides the tiles' tops.
-    spots = [(75, 255), (135, 195), (195, 135), (255, 75)]
+    spots = [(48, 262), (89, 221), (130, 180), (171, 139), (212, 98), (253, 57)]
     tiles = "".join(
         _pop(_billboard("apps", x, y, f'<g class="wcx-bob" style="animation-delay:-{i * 0.7:.1f}s">'
                         f"{app_tile_svg(icon)}{sick(app_tile_svg(icon, True), 0.3 + i * 0.3)}</g>"), 0.35 + i * 0.12)
         for i, ((x, y), icon) in enumerate(zip(spots, APP_ICONS))
     )
+    # The people working in them, in front of the tiles.
+    workers = [(100, 256), (160, 250), (200, 224), (236, 196), (256, 140)]
+    people = "".join(
+        _pop(_billboard("apps", x, y, person_svg("#7a7a7a", 0.8)
+                        + sick(person_svg(HACK_RED, 0.8), 0.4 + i * 0.25)), 0.5 + i * 0.08)
+        for i, (x, y) in enumerate(workers)
+    )
     return (
         _connectors("apps", "os") + _slab("apps", "#fff", 0.9) + sick(_sick_face("apps"), 0.2)
-        + _plane(top, flat) + tiles
+        + _plane(top, flat) + tiles + people
     )
 
 
@@ -788,7 +797,10 @@ def face_svg(shade: str, mood: str) -> str:
 def users_svg(sick=_no_mood, happy=_no_mood) -> str:
     """Users: people like you and me, on top of everything. sick(svg, delay) wraps how they look
     once the damage reaches them, happy(svg, delay) how they look once it is mended."""
-    spots = [(40, 44), (120, 30), (206, 54), (66, 120), (152, 110), (234, 132), (30, 206), (122, 190), (204, 214), (100, 244)]
+    spots = [
+        (40, 44), (120, 30), (206, 54), (66, 120), (152, 110), (234, 132), (30, 206), (122, 190), (204, 214), (100, 244),
+        (80, 78), (160, 62), (250, 90), (14, 128), (190, 166), (250, 214), (162, 246),
+    ]
     rnd = random.Random(5)
 
     def person(i: int) -> str:
@@ -1002,7 +1014,12 @@ def world_computer_svg(
             continue
         frag = frags[key]
         cls = "wcx-fade wcx-ground" if key == "hardware" else "wcx-step"
-        art = WCX_ART[key](sick(key), happy(key)) if key in ("apps", "users") else WCX_ART[key]()
+        if key in ("apps", "users"):
+            art = WCX_ART[key](sick(key), happy(key))
+        elif key == "os":
+            art = os_svg(lambda inner: healed("os", inner))
+        else:
+            art = WCX_ART[key]()
         parts = [(groups, art)] + ([(badges, WCX_BADGES[key]())] if key in WCX_BADGES else [])
         for out, inner in parts:
             if key == "upgrade" and "hack" in frags:
@@ -1394,6 +1411,10 @@ GLOBE_JS = """
   const ctx = canvas.getContext('2d');
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const DEG_PER_SECOND = 2;
+  // The spin starts over from Europe each time the realms come in; spinFrom (how far it was from
+  // there) eases away, so a restart in sight never jumps.
+  let spinAt = performance.now();
+  let spinFrom = 0;
   const MOVE_MS = 1800;
   const MOVE = `transform ${MOVE_MS}ms cubic-bezier(0.65, 0, 0.35, 1), opacity 0.6s ease`;
   const projection = d3.geoOrthographic().clipAngle(90).precision(0.6);
@@ -1445,6 +1466,11 @@ GLOBE_JS = """
     if (handoff) canvas.style.transition = 'none';
     const wanted = slot && slot.dataset.globeLayer;
     if (wanted !== layer) layerTarget = 0;
+    if (wanted && (wanted !== layer || layerAlpha < 0.01) && !still) {
+      const now = performance.now();
+      spinFrom = ((((globeLam(now) + 15) % 360) + 540) % 360) - 180;
+      spinAt = now;
+    }
     if (wanted) {
       layerTimer = setTimeout(() => {
         if (layer !== wanted || layerAlpha < 0.01) layerStart = performance.now();
@@ -1490,23 +1516,57 @@ GLOBE_JS = """
     ctx.beginPath(); ctx.arc(x, y + 4.5 * k, 5 * k, Math.PI, 2 * Math.PI); ctx.fill();
   }
 
-  // Devils: where no GOS runs yet, power stays captured.
+  // Devils: where no GOS runs yet, power stays captured. At first only one realm runs a GOS and a
+  // devil sits where each other realm will be; one by one they turn into realms (those facing us
+  // first), until only the strays are left.
   const DEVILS = __DEVILS__;
   const devil = new Image();
   devil.src = DEVILS.sprite;
+  const CONVERT = { first: 1800, last: 15000, take: 1600, firstRealm: 0 };
+  const born = DATA.realms.map(() => -1e9);
+  let bornFor = null;
+  function scheduleBirths() {
+    bornFor = layerStart;
+    const left = DATA.realms.map((r, i) => i).filter((i) => i !== CONVERT.firstRealm);
+    left.slice().forEach((_, j, all) => {
+      const t = CONVERT.first + ((CONVERT.last - CONVERT.first) * j) / Math.max(1, all.length - 1);
+      const center = [-globeLam(layerStart + t), 22];
+      const best = left.reduce((a, b) => (d3.geoDistance(DATA.realms[b].center, center) < d3.geoDistance(DATA.realms[a].center, center) ? b : a));
+      left.splice(left.indexOf(best), 1);
+      born[best] = t;
+    });
+  }
+  // How far realm i is into its birth: below 0 it is still a devil, from 1 on it is a realm.
+  const age = (i, now) => (still ? 1e9 : now - layerStart - born[i]);
+  const birth = (i, now) => clamp01(age(i, now) / CONVERT.take);
+
   function drawDevils(now, k, facing) {
     if (!devil.complete || !devil.naturalWidth) return;
     const h = 28 * k, w = h * devil.naturalWidth / devil.naturalHeight;
+    const spots = DEVILS.spots.map((p) => [p, 0]).concat(
+      DATA.realms.map((r, i) => [r.center, age(i, now) / CONVERT.take]).filter(([, b]) => b < 1)
+    );
     // They turn away with the globe: kept inside its outline, and fading towards the edge.
     ctx.save();
     ctx.beginPath(); path(sphere); ctx.clip();
-    DEVILS.spots.forEach((p, i) => {
+    spots.forEach(([p, b], i) => {
       const c = facing(p);
       if (c < 0.15) return;
       const [x, y] = projection(p);
+      const edge = Math.min(1, (c - 0.15) * 4);
+      // Converting: a teal ring bursts out while the devil swells and fades.
+      const gone = clamp01(b * 1.8);
+      if (b > 0) {
+        ctx.globalAlpha = layerAlpha * edge * (1 - b);
+        ctx.strokeStyle = `rgb(${TEAL})`;
+        ctx.lineWidth = 2.5 * k * (1 - b);
+        ctx.beginPath(); ctx.arc(x, y, (8 + 34 * ease(b)) * k, 0, 2 * Math.PI); ctx.stroke();
+      }
+      if (gone >= 1) return;
       const bob = still ? 0 : Math.sin(now / 700 + i * 1.9) * 1.5 * k;
-      ctx.globalAlpha = layerAlpha * Math.min(1, (c - 0.15) * 4);
-      ctx.drawImage(devil, x - w / 2, y - h * 0.62 + bob, w, h);
+      const s = 1 + 0.35 * gone;
+      ctx.globalAlpha = layerAlpha * edge * (1 - gone);
+      ctx.drawImage(devil, x - (w * s) / 2, y - h * s * 0.62 + bob, w * s, h * s);
     });
     ctx.restore();
     ctx.globalAlpha = layerAlpha;
@@ -1544,9 +1604,9 @@ GLOBE_JS = """
   const clamp01 = (x) => Math.max(0, Math.min(1, x));
   const ease = (x) => { const t = clamp01(x); return t * t * (3 - 2 * t); };
 
-  // Time into realm i's loop; each realm starts a little later than the one before.
+  // Time into realm i's loop, which starts a little after the realm is born.
   function cycle(i, period, now) {
-    const t = still ? 0 : now - layerStart - 2000 - (i * 3700) % 15000;
+    const t = still ? 0 : age(i, now) - 2500 - (born[i] < 0 ? (i * 3700) % 15000 : 0);
     return t <= 0 ? 0 : t % period;
   }
 
@@ -1578,6 +1638,15 @@ GLOBE_JS = """
         flash[j] = Math.sin(Math.PI * split);
       });
     }
+    // Being born: the cells come in ring by ring from the centre, each with a teal flash.
+    const a = age(i, now);
+    if (a < CONVERT.take + 2000) {
+      realm.cells.forEach((c, j) => {
+        const t = a - 250 - c.ring * 320 - (j % 4) * 60;
+        alpha[j] *= clamp01(t / 450);
+        if (t > 0 && t < 1100) flash[j] = Math.max(flash[j], Math.sin((Math.PI * t) / 1100) * alpha[j]);
+      });
+    }
     return { alpha, flash, edges, split };
   }
 
@@ -1605,11 +1674,13 @@ GLOBE_JS = """
     const rot = projection.rotate();
     const center = [-rot[0], -rot[1]];
     const facing = (p) => Math.cos(d3.geoDistance(p, center));
+    if (bornFor !== layerStart) scheduleBirths();
+    DATA.realms.forEach((r, i) => (presence[i] = ease(birth(i, now))));
     const states = DATA.realms.map((realm, i) => realmState(realm, i, now));
     SPLITS.forEach((i, s) => {
       const { split } = states[i];
       pos[i] = d3.geoInterpolate(DATA.realms[i].center, DATA.realms[i].split.centers[0])(split);
-      presence[BASE + s] = split;
+      presence[BASE + s] = split * presence[i];
     });
     ctx.save();
     ctx.globalAlpha = layerAlpha;
@@ -1696,16 +1767,17 @@ GLOBE_JS = """
         ctx.restore();
       });
 
-      if (facing(realm.center) < 0.05) return;
+      if (facing(realm.center) < 0.05 || presence[i] < 0.01) return;
       ctx.lineWidth = 0.8 * k;
       ctx.strokeStyle = 'rgba(38, 38, 38, 0.4)';
       if (realm.split) {
-        treeLines(realm.edges, 1 - split);
-        realm.split.edges.forEach((e) => treeLines(e, split));
+        treeLines(realm.edges, (1 - split) * presence[i]);
+        realm.split.edges.forEach((e) => treeLines(e, split * presence[i]));
       } else {
-        treeLines(edges, 1);
+        treeLines(edges, presence[i]);
       }
       ctx.globalAlpha = layerAlpha;
+      if (presence[i] < 0.95) return;
       ctx.fillStyle = glowingNodes.has(i) ? `rgb(${TEAL_DARK})` : '#262626';
       if (realm.split && split > 0.5) {
         pulses(realm.split.edges[0], i);
@@ -1754,8 +1826,7 @@ GLOBE_JS = """
   }
 
   function draw(now) {
-    const seconds = still ? 0 : (now - t0) / 1000;
-    projection.rotate([-15 + seconds * DEG_PER_SECOND, -22]);
+    projection.rotate([globeLam(now), -22]);
     ctx.clearRect(0, 0, size, size);
     ctx.beginPath(); path(sphere); ctx.fillStyle = '#e9e9e9'; ctx.fill();
     ctx.beginPath(); path(window.WORLD_LAND); ctx.fillStyle = '#f9f9f9'; ctx.fill();
@@ -1794,7 +1865,11 @@ GLOBE_JS = """
   let planetW = 0;
   let planetH = 0;
 
-  const globeLam = (now) => -15 + (still ? 0 : (now - t0) / 1000) * DEG_PER_SECOND;
+  const globeLam = (now) => {
+    if (still) return -15;
+    const s = Math.max(0, now - spinAt);
+    return -15 + (s / 1000) * DEG_PER_SECOND + spinFrom * (1 - ease(s / 1500));
+  };
   // Where the globe canvas is right now, even halfway through a CSS move.
   function globeGeom(now) {
     const m = new DOMMatrix(getComputedStyle(canvas).transform);
@@ -2150,11 +2225,9 @@ GLOBE_JS = """
 })();
 """
 
-# [lon, lat] on land, far from every realm (make-realms.cjs): a devil where no GOS runs yet.
-GLOBE_DEVILS = [
-    (-110, 45), (-100, 60), (-63, -10), (-67, -40), (10, 22), (24, -14),
-    (45, 50), (90, 62), (130, 60), (100, 35), (125, -24),
-]
+# [lon, lat] on land, far from every realm (make-realms.cjs): devils that stay, where no GOS runs
+# yet. GLOBE_JS also puts a devil on every realm but the first, until that realm is born.
+GLOBE_DEVILS = [(10, 22), (45, 50), (-63, -10), (90, 62), (125, -24)]
 
 
 def devil_sprite() -> str:
