@@ -331,10 +331,18 @@ WCX_GOS_HEAD_Y = 64  # where its heading ends
 WCX_GOS_HEAD_OUT = 28  # how far its heading starts left of the slide's text
 # Callouts point at the operating system: (callout y, plane point it points to).
 WCX_CALLOUTS = {
-    "upgrade": (205, (0, 0.45 * SIDE)),
-    "hack": (300, (0, 0.85 * SIDE)),
-    "checks": (395, (0.3 * SIDE, SIDE)),
+    "upgrade": (290, (0, 0.8 * SIDE)),
+    "hack": (290, (0, 0.8 * SIDE)),
+    "checks": (372, (0.25 * SIDE, SIDE)),
+    "bureaucracy": (372, (0.6 * SIDE, SIDE)),
 }
+# Bureaucracy wedges extra layers into the stack: the applications and the users rise by
+# WCX_BLOAT_LIFT to make room for a slab of paperwork under each (its back-corner y and thickness).
+WCX_BLOAT_LIFT = {"apps": 12, "users": 24}
+WCX_BLOAT = {"lo": (190, 12), "hi": (68, 12)}
+# A callout that leaves as another comes in, rather than when the Governance Operating System does.
+CALLOUT_MAKES_WAY = {"upgrade": "hack", "checks": "bureaucracy"}
+REQUEST_S = 7.5  # how long a citizen's request takes to stall in it
 # The globe first sits in the middle. Then it zooms in, tilts and sinks until only its top is
 # left: a curved horizon (x, horizon y, radius) running across the bottom of the slide, drawn
 # by the planet canvas in GLOBE_JS. WCX_PLANET_ROTATE is the d3 rotation it ends at.
@@ -909,10 +917,82 @@ def broken_shield_svg() -> str:
     )
 
 
+STAMP_SVG = (
+    '<g fill="#ececec" stroke="#8a8a8a" stroke-width="1.2" stroke-linejoin="round">'
+    '<circle cy="-23" r="4.2"/><path d="M-2.6-19h5.2v7h-5.2z"/><path d="M-9-12h18v5h-18z"/>'
+    '<path d="M-12-7h24v4h-24z" fill="#d4d4d4"/></g>'
+)
+HOURGLASS_SVG = (
+    '<circle r="10.5" fill="#fff" stroke="#bdbdbd" stroke-width="1.2"/>'
+    '<path d="M-2.6 5.6h5.2L0 2.4z" fill="#9a9a9a"/>'
+    '<path d="M-5-6.5h10M-5 6.5h10M-3.8-6.5c0 3.6 3.2 4.6 3.2 6.5S-3.8 2.9-3.8 6.5M3.8-6.5c0 3.6-3.2 4.6-3.2 6.5S3.8 2.9 3.8 6.5" '
+    'fill="none" stroke="#6f6f6f" stroke-width="1.4" stroke-linecap="round"/>'
+)
+# Piles of files on each paperwork slab, as (x, y, height) in plane units, near its front edges so
+# the layer above never hides them.
+BLOAT_PILES = [(50, 222, 14), (140, 222, 22), (222, 140, 18), (222, 50, 12)]
+
+
+def bloat_svg(which: str) -> str:
+    """Bureaucracy: a slab of paperwork wedged between two layers. Its sides are a ream of sheets,
+    with piles of files and a rubber stamp on it."""
+    top, t = WCX_BLOAT[which]
+    s = SIDE
+
+    def p(x: float, y: float, z: float = 0.0) -> tuple[float, float]:
+        return iso(x, y, z, top)
+
+    sheets = "".join(_line(p(0, s, -z), p(s, s, -z)) + _line(p(s, s, -z), p(s, 0, -z)) for z in range(3, t, 3))
+    sx, sy = p(40, 250)
+    return (
+        '<g stroke="#bdbdbd" stroke-width="1" stroke-linejoin="round">'
+        + _poly([p(0, s), p(s, s), p(s, s, -t), p(0, s, -t)], fill="#f1f1f1", fill_opacity="0.9")
+        + _poly([p(s, s), p(s, 0), p(s, 0, -t), p(s, s, -t)], fill="#e4e4e4", fill_opacity="0.9")
+        + f'<g stroke="#cfcfcf" stroke-width="0.8">{sheets}</g>'
+        + _poly(_face(top), fill="#f4f4f4", fill_opacity="0.55")
+        + "</g>"
+        + "".join(_pop(_box(x, y, 24, 18, h, top, floors=2.6), 0.3 + i * 0.1) for i, (x, y, h) in enumerate(BLOAT_PILES))
+        + _pop(f'<g transform="translate({sx:.1f} {sy:.1f})">{STAMP_SVG}</g>', 0.7)
+    )
+
+
+def request_svg() -> str:
+    """A citizen's request makes its way down through the paperwork, slower and slower, and stalls
+    on the way to the institutions: an hourglass that never runs out."""
+    users = WCX_LAYERS["users"][0] - WCX_BLOAT_LIFT["users"]
+    apps = WCX_LAYERS["apps"][0] - WCX_BLOAT_LIFT["apps"]
+    hi, lo = WCX_BLOAT["hi"][0], WCX_BLOAT["lo"][0]
+    # (plane point, back-corner y of what it is on, when it gets there, when it moves on), in seconds.
+    stops = [
+        ((170, 250), users, 0.0, 0.2),
+        ((170, 250), hi, 0.7, 1.4),
+        ((250, 250), hi, 2.1, 2.6),
+        ((250, 170), hi, 3.1, 3.1),
+        ((250, 170), apps, 3.5, 3.5),
+        ((250, 235), apps, 4.0, 4.0),
+        ((250, 235), lo, 4.5, 5.6),
+        ((250, 125), lo, REQUEST_S, REQUEST_S),
+    ]
+    frames = []
+    for xy, top, t_in, t_out in stops:
+        x, y = iso(*xy, 9, top)
+        for t in sorted({t_in, t_out}):
+            frames.append(f"{t / REQUEST_S:.2%} {{ transform: translate({x:.1f}px, {y:.1f}px); }}")
+    ex, ey = iso(*stops[-1][0], 9, lo)
+    return (
+        f'<style>@keyframes wcx-request {{ {" ".join(frames)} }}</style>'
+        f'<g class="wcx-req" transform="translate({ex:.1f} {ey:.1f})"><g transform="scale(1.5)">'
+        '<path d="M-6-8h8.5L6-4.5V8H-6z" fill="#fff" stroke="#525252" stroke-width="1.3" stroke-linejoin="round"/>'
+        '<path d="M-3-3.5h6M-3 0h6M-3 3.5h4" stroke="#8a8a8a" stroke-width="1.1" stroke-linecap="round"/></g></g>'
+        f'<g transform="translate({ex + 26:.1f} {ey - 8:.1f})"><g class="wcx-hourglass"><g transform="scale(1.35)">{HOURGLASS_SVG}</g></g></g>'
+    )
+
+
 # Badges sit on the capitol's roof but are drawn over the whole stack so the upper slabs never hide them.
 WCX_BADGES = {
     "hack": lambda: _pop(_billboard("os", *OS_HUB, f'<g class="wcx-evil">{evil_svg()}</g>', lift=47), HACK_CAPITOL_AT),
     "checks": lambda: _pop(_billboard("os", *OS_HUB, broken_shield_svg(), lift=46), 0.25),
+    "bureaucracy": lambda: request_svg(),
 }
 
 
@@ -924,14 +1004,17 @@ WCX_ART = {
     "upgrade": upgrade_svg,
     "hack": hack_svg,
     "checks": checks_svg,
+    "bureaucracy": lambda: bloat_svg("lo"),
 }
-WCX_STACK = ["hardware", "os", "upgrade", "hack", "checks", "apps", "users"]
+# "bureaucracy-hi" is the bureaucracy's second slab, between the applications and the users.
+WCX_STACK = ["hardware", "os", "upgrade", "hack", "checks", "bureaucracy", "apps", "bureaucracy-hi", "users"]
 
 CALLOUT_ICONS = {
     "upgrade": f'<svg viewBox="0 0 24 24" fill="none" stroke="{TEAL_DARK}" stroke-width="2" stroke-linecap="round" '
     'stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v4h-4"/></svg>',
     "hack": '<svg viewBox="-14 -26 28 27" aria-hidden="true">' + evil_svg() + "</svg>",
     "checks": '<svg viewBox="-16 -28 32 37" aria-hidden="true">' + shield_svg() + "</svg>",
+    "bureaucracy": '<svg viewBox="-11 -11 22 22" aria-hidden="true">' + HOURGLASS_SVG + "</svg>",
 }
 
 
@@ -944,7 +1027,7 @@ def _lead(key: str, frag: int) -> str:
         top, _ = WCX_LAYERS[key]
         b = iso(SIDE, 0, 0, top)
         a, b = (WCX_LABEL_X - 12, b[1]), (b[0] + 10, b[1])
-    color = {"upgrade": TEAL, "checks": TEAL, "hack": HACK_RED}.get(key, "#bdbdbd")
+    color = {"upgrade": TEAL, "checks": TEAL, "hack": HACK_RED, "bureaucracy": "#9a9a9a"}.get(key, "#bdbdbd")
     return (
         f'<g class="wcx-fade wcx-lead wcx-{key}-lead" data-frag="{frag}">'
         + _line(a, b, stroke=color, stroke_width="1.2", fill="none")
@@ -1010,23 +1093,32 @@ def world_computer_svg(
     os_last = [k for k in ("os", "upgrade", "hack", "checks") if k in frags][-1:]
     groups, badges = [], []
     for key in WCX_STACK:
-        if key not in frags:
+        src = "bureaucracy" if key == "bureaucracy-hi" else key
+        if src not in frags:
             continue
-        frag = frags[key]
+        frag = frags[src]
         cls = "wcx-fade wcx-ground" if key == "hardware" else "wcx-step"
         if key in ("apps", "users"):
             art = WCX_ART[key](sick(key), happy(key))
         elif key == "os":
             art = os_svg(lambda inner: healed("os", inner))
+        elif key == "bureaucracy-hi":
+            art = bloat_svg("hi")
         else:
             art = WCX_ART[key]()
         parts = [(groups, art)] + ([(badges, WCX_BADGES[key]())] if key in WCX_BADGES else [])
         for out, inner in parts:
             if key == "upgrade" and "hack" in frags:
                 inner = f'<g class="wcx-fade" data-until="{frags["hack"]}">{inner}</g>'
+            if src == "bureaucracy":
+                # Bureaucracy only shows on its own click.
+                inner = f'<g class="wcx-fade" data-until="{frag + 1}">{inner}</g>'
             if key in ("hack", "checks"):
                 inner = healed("os", inner)
-            out.append(f'<g class="{cls} wcx-{key}" data-frag="{frag}">{inner}</g>')
+            group = f'<g class="{cls} wcx-{key}" data-frag="{frag}">{inner}</g>'
+            if key in WCX_BLOAT_LIFT and "bureaucracy" in frags:
+                group = f'<g class="wcx-lift wcx-lift-{key}">{group}</g>'
+            out.append(group)
         if key in os_last:
             groups.append(mend("os"))
             if "os" in heal:
@@ -1040,10 +1132,19 @@ def world_computer_svg(
     groups.append(sick("hardware")(""))
     groups += badges
     px, ph, pr = WCX_PLANET
-    leads = "".join(
-        f'<g class="wcx-fade" data-until="{gos}">{_lead(k, f)}</g>' if gos and k in WCX_CALLOUTS else _lead(k, f)
-        for k, f in frags.items()
-    ) + "".join(
+
+    def lead(k: str, f: int) -> str:
+        out = _lead(k, f)
+        if k in CALLOUT_MAKES_WAY.values():
+            out = f'<g style="--in:0.5s">{out}</g>'
+        out_at = frags.get(CALLOUT_MAKES_WAY.get(k), gos)
+        if out_at and k in WCX_CALLOUTS:
+            out = f'<g class="wcx-fade" data-until="{out_at}">{out}</g>'
+        if k in WCX_BLOAT_LIFT and "bureaucracy" in frags:
+            out = f'<g class="wcx-lift wcx-lift-{k}">{out}</g>'
+        return out
+
+    leads = "".join(lead(k, f) for k, f in frags.items()) + "".join(
         _gos_lead(layer, f, GOS_WAIT if f == gos else GOS_AFTER_HEAD if f == head else 0.0) for layer, f in gos_points
     )
     return f"""<svg viewBox="0 0 {WCX_W} {WCX_H}" fill="none" aria-hidden="true">
@@ -2279,6 +2380,34 @@ def ground_decay_css() -> str:
     return "\n    ".join(rules)
 
 
+def bloat_css() -> str:
+    """Bureaucracy, on its own click: the applications and the users rise by WCX_BLOAT_LIFT (their
+    names with them, beside the stack), and a citizen's request crawls down until it stalls."""
+    on = ".wcx-inner:has(.wcx-bureaucracy.shown > .wcx-fade.shown)"
+    start = 1.2  # once the paperwork is in
+    stall = start + REQUEST_S
+    unit = 100 / WCX_W  # one box unit, in cqw
+    rules = [".wcx-lift { transition: transform 1.3s cubic-bezier(0.45, 0, 0.2, 1); }"]
+    for key, lift in WCX_BLOAT_LIFT.items():
+        rules += [
+            f"{on} .wcx-lift-{key} {{ transform: translateY(-{lift}px); }}",
+            f"@media (min-aspect-ratio: 1/1) {{ {on} .wcx-label:has(> .wcx-{key}-label) "
+            f"{{ transform: translateY(calc(-50% - {lift * unit:.3f}cqw)); }} }}",
+        ]
+    rules += [
+        ".wcx-req, .wcx-hourglass { opacity: 0; }",
+        ".wcx-hourglass { transform-box: fill-box; transform-origin: center; }",
+        f"{on} .wcx-req {{ animation: wcx-request {REQUEST_S}s ease-in-out {start}s both, "
+        f"wcx-appear 0.4s ease-out {start}s both, wcx-wait 1.1s ease-in-out {stall}s infinite alternate; }}",
+        f"{on} .wcx-hourglass {{ animation: wcx-appear 0.4s ease-out {stall}s both, wcx-flip 1.8s ease-in-out {stall + 0.4}s infinite; }}",
+        "@keyframes wcx-appear { from { opacity: 0; } to { opacity: 1; } }",
+        "@keyframes wcx-wait { to { opacity: 0.35; } }",
+        "@keyframes wcx-flip { 0%, 55% { transform: none; } 100% { transform: rotate(180deg); } }",
+        "@media (prefers-reduced-motion: reduce) { .wcx-req, .wcx-hourglass { opacity: 1; } }",
+    ]
+    return "\n    ".join(rules)
+
+
 CSS = (
     BASE_CSS
     + """
@@ -2719,7 +2848,9 @@ CSS = (
     .wcx-gos .wc-label:has(.wcx-gos-abbr) { font-weight: 800; }
     .wcx-gos .wc-note .gos-ic { margin-left: 0.3em; }
     .wcx-nowrap { white-space: nowrap; }
-    /* The last click boxes the Governance Operating System point, to stress it. */
+    /* Before the switch, each layer's computer name waits beside its world name, small and gray. */
+    .wcx-label .wcx-hint { font-size: 0.68em; font-weight: 500; color: #8a8a8a; margin-left: 0.25em; white-space: nowrap; }
+    /* The Governance Operating System point comes in boxed, to stress it. */
     .wcx-gos-os .wc-frag { position: relative; isolation: isolate; width: fit-content; margin-left: auto; }
     .wcx-gos-box {
       position: absolute;
@@ -2729,11 +2860,7 @@ CSS = (
       background: rgba(255, 255, 255, 0.55);
       box-shadow: 0 0.3cqw 1.4cqw rgba(47, 95, 95, 0.18);
       z-index: -1;
-      opacity: 0;
-      transform: scale(1.08);
-      transition: opacity 0.3s ease, transform 0.3s ease;
     }
-    .wcx-gos-box.shown { opacity: 1; transform: none; transition: opacity 0.6s ease, transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1); }
     /* The users point's title stays on one line, reaching left as far as it needs. */
     .wcx-gos-users .wc-frag { display: flex; flex-direction: column; align-items: flex-end; }
     .wcx-gos-users .wc-label:first-child { white-space: nowrap; }
@@ -2995,6 +3122,8 @@ CSS = (
 """
     + "\n    "
     + ground_decay_css()
+    + "\n    "
+    + bloat_css()
     + "\n"
 )
 
@@ -3013,8 +3142,9 @@ class WorldComputerSlide(Slide):
     ":gos-head: Title" is its heading. Its points are ":gos-os:", ":gos-apps:" and ":gos-users:"
     bullets: lines "A — note — note + B", where notes are optional, "{ic}" ends a line or note
     with the Internet Computer logo, and a line "Title (Abbr)" sets the abbreviation apart. Each point
-    mends its layer. A nested bullet comes with the click of the bullet above it. ":gos-box:" is the
-    click that draws a rounded box round the ":gos-os:" point, to stress it.
+    mends its layer. A nested bullet comes with the click of the bullet above it. The ":gos-os:"
+    point comes in boxed, to stress it. Until the switch, a layer's world name carries its computer
+    name as a small gray hint.
     """
 
     def render(self) -> str:
@@ -3028,12 +3158,15 @@ class WorldComputerSlide(Slide):
             clicks.append(max(n, 1))
         gos = next((c for c, (_, t) in zip(clicks, self.bullets) if re.match(r"^:gos:(\s|$)", t.strip())), None)
         head_click = next((c for c, (_, t) in zip(clicks, self.bullets) if t.strip().startswith(":gos-head:")), None)
-        box_click = next((c for c, (_, t) in zip(clicks, self.bullets) if re.match(r"^:gos-box:(\s|$)", t.strip())), None)
+        callout_clicks = {
+            k: c for c, (_, t) in zip(clicks, self.bullets) for k in WCX_CALLOUTS if t.strip().startswith(f":{k}:")
+        }
 
-        def text_html(text: str) -> str:
+        def text_html(text: str, hint: str = "") -> str:
             label, _, note = text.strip().partition(" — ")
             note_html = f'<span class="wc-note">{tr(note)}</span>' if note else ""
-            return f'<span class="wc-label">{CALLOUT_ICONS.get(key, "")}{tr(label)}</span>{note_html}'
+            hint_html = f' <span class="wcx-hint">{tr(hint)}</span>' if hint else ""
+            return f'<span class="wc-label">{CALLOUT_ICONS.get(key, "")}{tr(label)}{hint_html}</span>{note_html}'
 
         def titled(text: str) -> str:
             title, abbr = re.match(r"^(.*?)(?:\s*\(([^()]+)\))?$", text).groups()
@@ -3077,9 +3210,9 @@ class WorldComputerSlide(Slide):
 
         for click, (_, text) in zip(clicks, self.bullets):
             m = re.match(r"^:([\w-]+):\s*(.*)$", text)
-            if not m or m.group(1) not in {*WCX_ART, *GOS_POINTS, "gos", "gos-head", "gos-box", "decay"}:
+            if not m or m.group(1) not in {*WCX_ART, *GOS_POINTS, "gos", "gos-head", "decay"}:
                 raise ValueError(
-                    f"world-computer: expected :gos:, :gos-head:, :gos-box:, :decay:, one of {sorted(GOS_POINTS)} or one of {sorted(WCX_ART)} in {text!r}"
+                    f"world-computer: expected :gos:, :gos-head:, :decay:, one of {sorted(GOS_POINTS)} or one of {sorted(WCX_ART)} in {text!r}"
                 )
             key, rest = m.groups()
             if key == "decay":
@@ -3091,12 +3224,6 @@ class WorldComputerSlide(Slide):
                 if rest:
                     raise ValueError(f"world-computer: :gos: takes no text (the heading is :gos-head:), not {rest!r}")
                 continue
-            if key == "gos-box":
-                if rest:
-                    raise ValueError(f"world-computer: :gos-box: takes no text, not {rest!r}")
-                if not any(t.strip().startswith(":gos-os:") for _, t in self.bullets):
-                    raise ValueError("world-computer: :gos-box: needs a :gos-os: point to box")
-                continue
             if key == "gos-head":
                 head = f'<span class="wcx-gos-title">{titled(rest)}</span>'
                 labels.append(gos_label(WCX_GOS_HEAD_Y, head, click, "wcx-gos-head"))
@@ -3105,7 +3232,7 @@ class WorldComputerSlide(Slide):
                 layer = GOS_POINTS[key]
                 gos_points.append((layer, click))
                 y = iso(0, SIDE, 0, WCX_LAYERS[layer][0])[1]
-                box = f'<span class="wcx-gos-box" data-frag="{box_click}" aria-hidden="true"></span>' if box_click and layer == "os" else ""
+                box = '<span class="wcx-gos-box" aria-hidden="true"></span>' if layer == "os" else ""
                 labels.append(gos_label(y, point_html(rest), click, f"wcx-gos-{layer}", box))
                 continue
             frags[key] = click
@@ -3115,7 +3242,7 @@ class WorldComputerSlide(Slide):
             if swap:
                 # Both names share one grid cell, so swapping them does not move anything.
                 body = (
-                    f'<span class="wcx-name wcx-swap" data-until="{gos}">{text_html(world)}</span>'
+                    f'<span class="wcx-name wcx-swap" data-until="{gos}">{text_html(world, computer.partition(" — ")[0].strip())}</span>'
                     f'<span class="wcx-name wcx-swap" data-frag="{gos}">{text_html(computer)}</span>'
                 )
             else:
@@ -3124,8 +3251,12 @@ class WorldComputerSlide(Slide):
             if key in WCX_CALLOUTS:
                 y = WCX_CALLOUTS[key][0]
                 side, pos = "left", f"right:{1 - WCX_CALLOUT_X / WCX_W:.3%}"
-                # The callouts make room for the Governance Operating System.
-                until = f' wcx-until" data-until="{gos}' if gos else ""
+                # The callouts make room for the Governance Operating System; upgrades and checks
+                # and balances leave earlier, as hacks and bureaucracy come in.
+                out_at = callout_clicks.get(CALLOUT_MAKES_WAY.get(key), gos)
+                until = f' wcx-until" data-until="{out_at}' if out_at else ""
+                if key in CALLOUT_MAKES_WAY.values() and callout_clicks.get(key):
+                    pos += ";--in:0.5s"
             else:
                 y = iso(SIDE, 0, 0, WCX_LAYERS[key][0])[1]
                 side, pos = "right", f"left:{WCX_LABEL_X / WCX_W:.3%}"

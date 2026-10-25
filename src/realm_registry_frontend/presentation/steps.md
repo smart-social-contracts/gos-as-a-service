@@ -13,6 +13,7 @@
 - :upgrade: Upgrades — democracy: elections, referendums, new laws
 - :hack: Hacks — power gets captured
 - :checks: Checks & balances — try to undo the hack, but power stays captured
+- :bureaucracy: Bureaucracy — red tape, too many layers, nothing gets done
 - :decay: hardware
 - :decay: apps
 - :decay: users
@@ -21,7 +22,6 @@
     - :gos-os: Governance Operating System (GOS) — Built on top of decentralized cloud tech {ic} — *Actually* secure, transparent and efficient
 - :gos-apps: Built upon a standard — [Generalized Global Governance v1.0](https://github.com/smart-social-contracts/ggg) — Enables emergence of governance apps open ecosystem
 - :gos-users: Enables user autonomy & cooperation scalability — Incentivizes user alignment (both humans and machines)
-- :gos-box:
 
 # GOS — single slide
 
