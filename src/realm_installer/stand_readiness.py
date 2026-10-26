@@ -56,6 +56,13 @@ def stand_declared(view: dict, stand: str) -> bool:
     return _stand_node(view, stand) is not None
 
 
+def stand_of_canister(view: dict, canister_id: str) -> str:
+    """The stand a canister belongs to, or "". Canister ids survive a stand
+    rename in Casals; the stand name a job recorded at deploy time does not."""
+    return next((c.get("stand") or "" for c in (view or {}).get("canisters") or []
+                 if canister_id and c.get("canister_id") == canister_id), "")
+
+
 def stand_build_gate(view: dict, stand: str) -> tuple[str, str]:
     """``("ready", "")``, ``("waiting", reason)`` or ``("failed", reason)``: the
     conductor sets ``built_at`` once every member is installed, its files are

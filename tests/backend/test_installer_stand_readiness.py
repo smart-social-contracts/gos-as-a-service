@@ -11,9 +11,18 @@ from stand_readiness import (
     realm_casals_block,
     stand_build_gate,
     stand_declared,
+    stand_of_canister,
     stand_readiness,
     stand_required_members,
 )
+
+
+def test_stand_of_canister_follows_a_rename():
+    tree = {"canisters": [{"name": "valencia-backend", "canister_id": "b-id", "stand": "valencia"}]}
+    assert stand_of_canister(tree, "b-id") == "valencia"
+    assert stand_of_canister(tree, "other") == ""
+    assert stand_of_canister(tree, "") == ""
+    assert stand_of_canister({}, "b-id") == ""
 
 
 def test_stand_declared():

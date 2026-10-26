@@ -59,6 +59,7 @@ from stand_readiness import (
     realm_casals_block,
     stand_build_gate,
     stand_declared,
+    stand_of_canister,
     stand_readiness,
     stand_required_members,
 )
@@ -2301,6 +2302,8 @@ def _destroy_realm_canisters_gen(job, job_id: text, backend_id: text, frontend_i
     stand = (cas.get("stand") or _slugify(realm_name)).strip()
 
     casals = CasalsService(Principal.from_str(casals_id))
+    tree = _casals_ok((yield casals.orchestra_get(json.dumps({}))))
+    stand = stand_of_canister(tree, backend_id) or stand
     payload = {
         "stand": stand,
         "backend_canister_id": backend_id,
@@ -2400,10 +2403,21 @@ def report_deployment_failure(args: text) -> ResultReportFailure:
 
 # ── On-chain provisioning via Casals (opt-in) ──────────────────────────
 
+# unicodedata is not compiled into the Basilisk canister build, so accents are folded by hand.
+_ASCII_FOLD = str.maketrans({
+    **{c: "a" for c in "àáâãäåāăą"}, **{c: "c" for c in "çćĉċč"}, **{c: "e" for c in "èéêëēĕėęě"},
+    **{c: "i" for c in "ìíîïĩīĭįı"}, **{c: "n" for c in "ñńņňŉ"}, **{c: "o" for c in "òóôõöøōŏő"},
+    **{c: "u" for c in "ùúûüũūŭůűų"}, **{c: "y" for c in "ýÿŷ"}, **{c: "s" for c in "śŝşšß"},
+    **{c: "z" for c in "źżž"}, **{c: "g" for c in "ĝğġģ"}, **{c: "l" for c in "ĺļľŀł"},
+    **{c: "r" for c in "ŕŗř"}, **{c: "d" for c in "ďđ"}, **{c: "t" for c in "ţťŧ"},
+    "æ": "ae", "œ": "oe", "·": "",
+})
+
+
 def _slugify(name: str) -> str:
     out = []
-    for ch in (name or "").lower():
-        if ch.isalnum():
+    for ch in (name or "").lower().translate(_ASCII_FOLD):
+        if ch.isascii() and ch.isalnum():
             out.append(ch)
         elif ch in (" ", "_", "-") and out and out[-1] != "-":
             out.append("-")
