@@ -1,6 +1,7 @@
 import {
   DIM_OPACITY,
   hexStyle,
+  realmZoneColor,
   hexCapForResolution,
   HEX_AREA_INFLATION_MAX,
   HEX_INFLUENCE_MAX_TRUTH_CELLS,
@@ -55,6 +56,7 @@ function isUsableH3Index(h3, h3Index) {
  * @property {number} weight
  * @property {string[]} realmIds
  * @property {number} minDistance
+ * @property {boolean} [isDimmed]
  * @property {object} geometry
  */
 
@@ -393,6 +395,17 @@ export function buildHexPolygons(
     }
   });
 
+  /** Busiest territory cell per realm — density is relative to it. */
+  /** @type {Map<string, number>} */
+  const realmMaxUsers = new Map();
+  for (const data of Object.values(hexData)) {
+    for (const entry of data.realms) {
+      if (entry.distance !== 0) continue;
+      const id = entry.realm.id;
+      realmMaxUsers.set(id, Math.max(realmMaxUsers.get(id) || 0, entry.users || 0));
+    }
+  }
+
   const polygons = [];
 
   for (const [hexIndex, data] of Object.entries(hexData)) {
@@ -411,14 +424,21 @@ export function buildHexPolygons(
 
     const sortedRealms = [...data.realms].sort((a, b) => b.users - a.users);
     const minDistance = Math.min(...data.realms.map((r) => r.distance));
-    const hasMultipleRealms = data.realms.length > 1;
+    // Dominant realm owns the cell's color: closest territory first, then most users.
+    const dominant = [...data.realms].sort(
+      (a, b) => a.distance - b.distance || b.users - a.users
+    )[0];
+    const maxUsers = realmMaxUsers.get(dominant.realm.id) || 0;
     const style = hexStyle(minDistance, {
-      totalUsers: data.totalUsers,
-      hasMultipleRealms,
+      color: realmZoneColor(dominant.realm.id),
+      density: maxUsers > 0 ? dominant.users / maxUsers : 0.5,
       h3Resolution: finestResolution,
     });
 
-    const realmIds = data.realms.map((r) => r.realm.id);
+    const realmIds = [
+      dominant.realm.id,
+      ...data.realms.map((r) => r.realm.id).filter((id) => id !== dominant.realm.id),
+    ];
     const isDimmed =
       dimNonMatching &&
       matchingRealmIds &&
@@ -437,6 +457,7 @@ export function buildHexPolygons(
       weight: style.weight,
       minDistance,
       realmIds,
+      isDimmed: Boolean(isDimmed),
     });
   }
 
@@ -450,6 +471,112 @@ export function buildHexPolygons(
     .sort((a, b) => (a.minDistance ?? 99) - (b.minDistance ?? 99));
   const influenceBudget = Math.max(0, cap - hq.length);
   return hq.concat(influence.slice(0, influenceBudget));
+}
+
+/**
+ * Merge each realm's displayed territory cells (distance 0) into one outline,
+ * plus a label anchor on the territory cell nearest its centroid (always inside
+ * the territory, unlike a raw centroid).
+ * @param {HexPolygon[]} polygons output of buildHexPolygons
+ * @param {object} h3
+ * @returns {{ outlines: object[], labels: object[] }} GeoJSON features
+ */
+export function buildRealmTerritories(polygons, h3) {
+  /** @type {Map<string, { realm: object, cells: Set<string>, users: number, dimmed: boolean }>} */
+  const byRealm = new Map();
+
+  for (const polygon of polygons) {
+    for (const entry of polygon.realms || []) {
+      if (entry.distance !== 0) continue;
+      const id = entry.realm.id;
+      if (!byRealm.has(id)) {
+        byRealm.set(id, { realm: entry.realm, cells: new Set(), users: 0, dimmed: true });
+      }
+      const group = byRealm.get(id);
+      group.cells.add(polygon.hexIndex);
+      group.users += entry.users || 0;
+      if (!polygon.isDimmed) group.dimmed = false;
+    }
+  }
+
+  const outlines = [];
+  const labels = [];
+
+  for (const [realmId, { realm, cells, users, dimmed }] of byRealm) {
+    /** @type {Map<number, string[]>} */
+    const byRes = new Map();
+    for (const cell of cells) {
+      let res = -1;
+      try {
+        res = h3.getResolution(cell);
+      } catch {
+        continue;
+      }
+      if (!byRes.has(res)) byRes.set(res, []);
+      byRes.get(res).push(cell);
+    }
+
+    // cellsToMultiPolygon only dissolves cells of one resolution.
+    const coordinates = [];
+    for (const group of byRes.values()) {
+      try {
+        coordinates.push(...h3.cellsToMultiPolygon(group, true));
+      } catch {
+        /* skip unmergeable group */
+      }
+    }
+    if (!coordinates.length) continue;
+
+    const color = realmZoneColor(realmId);
+    const stage = realm.realm_stage || 'alpha';
+    const name = realm.name || realm.realm_name || realmId;
+
+    outlines.push({
+      type: 'Feature',
+      id: `outline:${realmId}`,
+      properties: {
+        realmId,
+        color,
+        stage,
+        opacity: dimmed ? DIM_OPACITY : 1,
+      },
+      geometry: { type: 'MultiPolygon', coordinates },
+    });
+
+    const centers = [];
+    for (const cell of cells) {
+      try {
+        const [lat, lng] = h3.cellToLatLng(cell);
+        if (isFiniteLatLng(lat, lng)) centers.push({ lat, lng });
+      } catch {
+        /* skip */
+      }
+    }
+    if (!centers.length) continue;
+    const meanLat = centers.reduce((s, c) => s + c.lat, 0) / centers.length;
+    const meanLng = centers.reduce((s, c) => s + c.lng, 0) / centers.length;
+    const anchor = centers.reduce((best, c) =>
+      (c.lat - meanLat) ** 2 + (c.lng - meanLng) ** 2 <
+      (best.lat - meanLat) ** 2 + (best.lng - meanLng) ** 2
+        ? c
+        : best
+    );
+
+    labels.push({
+      type: 'Feature',
+      id: `label:${realmId}`,
+      properties: {
+        realmId,
+        color,
+        name,
+        users: Number(realm.users_count) || users || 0,
+        opacity: dimmed ? DIM_OPACITY : 1,
+      },
+      geometry: { type: 'Point', coordinates: [anchor.lng, anchor.lat] },
+    });
+  }
+
+  return { outlines, labels };
 }
 
 /**

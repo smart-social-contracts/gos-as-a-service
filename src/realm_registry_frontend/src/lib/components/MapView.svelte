@@ -10,6 +10,7 @@
   import {
     buildHexPolygons,
     buildPointMarkers,
+    buildRealmTerritories,
     capitalHexCenter,
     realmDisplayBounds,
     resolveCapitalZone,
@@ -31,6 +32,7 @@
     MAP_BG,
     MERCATOR_PROJECTION_MIN_ZOOM,
     softenGlobeBasemap,
+    STAGE_OUTLINE_DASH,
     stripPoliticalLayers,
     ZONE_DATA_RESOLUTION,
   } from '$lib/globe/globe-config.js';
@@ -45,7 +47,14 @@
   const STYLE_URL = 'https://tiles.openfreemap.org/styles/positron';
   const HEX_SOURCE = 'realm-hexes';
   const HEX_FILL = 'realm-hex-fill';
+  /** Faint per-cell grid inside a territory, only when zoomed in. */
   const HEX_LINE = 'realm-hex-line';
+  const TERRITORY_SOURCE = 'realm-territories';
+  const TERRITORY_CASING = 'realm-territory-casing';
+  const TERRITORY_LINE = 'realm-territory-line';
+  const LABEL_SOURCE = 'realm-labels';
+  const LABEL_LAYER = 'realm-label';
+  const OVERLAY_LAYERS = [HEX_FILL, HEX_LINE, TERRITORY_CASING, TERRITORY_LINE, LABEL_LAYER];
   /** Far-side pins use DOM Markers — MapLibre depth-occludes circle layers. */
   const MARKER_COVERED_OPACITY = 0.48;
 
@@ -109,12 +118,89 @@
           stroke: p.strokeColor,
           opacity: p.opacity,
           weight: p.weight,
+          distance: p.minDistance ?? 0,
           realmId: p.realmIds?.[0] || '',
           hexIndex: p.hexIndex,
         },
         geometry: p.geometry,
       })),
     };
+  }
+
+  const compactCount = new Intl.NumberFormat(undefined, {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  });
+
+  function territoriesToGeoJSON(polygons) {
+    const { outlines, labels } = buildRealmTerritories(polygons, h3);
+    for (const label of labels) {
+      const users = label.properties.users;
+      label.properties.text =
+        users > 0
+          ? `${label.properties.name}\n${translate('globe.popup_total_users', {
+              values: { count: compactCount.format(users) },
+              default: compactCount.format(users),
+            })}`
+          : label.properties.name;
+    }
+    return {
+      outlines: { type: 'FeatureCollection', features: outlines },
+      labels: { type: 'FeatureCollection', features: labels },
+    };
+  }
+
+  function pushOverlayData(polygons) {
+    if (!map) return;
+    map.getSource(HEX_SOURCE)?.setData(polygonsToGeoJSON(polygons));
+    const { outlines, labels } = territoriesToGeoJSON(polygons);
+    map.getSource(TERRITORY_SOURCE)?.setData(outlines);
+    map.getSource(LABEL_SOURCE)?.setData(labels);
+  }
+
+  /** Raise the hovered realm, recede the rest; '' restores data-driven paint. */
+  let highlightedRealmId = '';
+  function setHighlightedRealm(realmId) {
+    if (!map || realmId === highlightedRealmId) return;
+    highlightedRealmId = realmId;
+    const isHovered = ['==', ['get', 'realmId'], realmId];
+    const pick = (hovered, other, base) =>
+      realmId ? ['case', isHovered, hovered, other] : base;
+    const baseOpacity = ['to-number', ['get', 'opacity']];
+    try {
+      if (map.getLayer(HEX_FILL)) {
+        map.setPaintProperty(
+          HEX_FILL,
+          'fill-opacity',
+          pick(
+            ['min', 0.7, ['*', baseOpacity, 1.45]],
+            ['*', baseOpacity, 0.55],
+            baseOpacity
+          )
+        );
+      }
+      if (map.getLayer(TERRITORY_LINE)) {
+        map.setPaintProperty(
+          TERRITORY_LINE,
+          'line-opacity',
+          pick(baseOpacity, ['*', baseOpacity, 0.45], baseOpacity)
+        );
+        map.setPaintProperty(
+          TERRITORY_LINE,
+          'line-width',
+          realmId
+            ? ['case', isHovered, territoryLineWidth(1.6), territoryLineWidth(1)]
+            : territoryLineWidth(1)
+        );
+      }
+    } catch {
+      // layer churn during projection switch
+    }
+  }
+
+  /** @param {number} scale */
+  function territoryLineWidth(scale) {
+    return ['interpolate', ['linear'], ['zoom'], 2, 0.8 * scale, 8, 1.8 * scale, 12, 2.6 * scale];
   }
 
   function translate(key, opts = {}) {
@@ -262,25 +348,18 @@
     }
 
     if (!map.getLayer(HEX_FILL)) {
-      const fillPaint = {
-        'fill-color': ['get', 'fill'],
-        'fill-opacity': ['to-number', ['get', 'opacity']],
-      };
-      try {
-        map.addLayer({
-          id: HEX_FILL,
-          type: 'fill',
-          source: HEX_SOURCE,
-          paint: { ...fillPaint, 'fill-emissive-strength': 0.35 },
-        });
-      } catch {
-        map.addLayer({
-          id: HEX_FILL,
-          type: 'fill',
-          source: HEX_SOURCE,
-          paint: fillPaint,
-        });
-      }
+      // No `fill-emissive-strength`: MapLibre 5 rejects it in validation and
+      // silently skips the whole layer (it does not throw).
+      map.addLayer({
+        id: HEX_FILL,
+        type: 'fill',
+        source: HEX_SOURCE,
+        paint: {
+          'fill-color': ['get', 'fill'],
+          'fill-opacity': ['to-number', ['get', 'opacity']],
+          'fill-antialias': false,
+        },
+      });
     }
 
     if (!map.getLayer(HEX_LINE)) {
@@ -288,20 +367,103 @@
         id: HEX_LINE,
         type: 'line',
         source: HEX_SOURCE,
+        minzoom: 8,
+        filter: ['==', ['get', 'distance'], 0],
+        layout: { 'line-join': 'round' },
         paint: {
           'line-color': ['get', 'stroke'],
-          'line-width': ['get', 'weight'],
-          'line-opacity': 0.85,
+          'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.2, 10, 0.5, 13, 0.9],
+          'line-opacity': ['*', 0.6, ['to-number', ['get', 'opacity']]],
         },
       });
     }
 
-    // Keep hex overlays above basemap tiles after projection/style churn.
+    if (!map.getSource(TERRITORY_SOURCE)) {
+      map.addSource(TERRITORY_SOURCE, {
+        type: 'geojson',
+        data: emptyFeatureCollection(),
+        tolerance: 0,
+        maxzoom: 22,
+      });
+    }
+
+    if (!map.getLayer(TERRITORY_CASING)) {
+      map.addLayer({
+        id: TERRITORY_CASING,
+        type: 'line',
+        source: TERRITORY_SOURCE,
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: {
+          'line-color': '#ffffff',
+          'line-width': ['interpolate', ['linear'], ['zoom'], 2, 2, 8, 4, 12, 5.5],
+          'line-opacity': ['*', 0.85, ['to-number', ['get', 'opacity']]],
+        },
+      });
+    }
+
+    if (!map.getLayer(TERRITORY_LINE)) {
+      const dashByStage = ['match', ['get', 'stage']];
+      for (const [stage, dash] of Object.entries(STAGE_OUTLINE_DASH)) {
+        dashByStage.push(stage, ['literal', dash]);
+      }
+      dashByStage.push(['literal', STAGE_OUTLINE_DASH.alpha]);
+      map.addLayer({
+        id: TERRITORY_LINE,
+        type: 'line',
+        source: TERRITORY_SOURCE,
+        layout: { 'line-join': 'round' },
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': territoryLineWidth(1),
+          'line-opacity': ['to-number', ['get', 'opacity']],
+          'line-dasharray': dashByStage,
+        },
+      });
+    }
+
+    if (!map.getSource(LABEL_SOURCE)) {
+      map.addSource(LABEL_SOURCE, { type: 'geojson', data: emptyFeatureCollection() });
+    }
+
+    if (!map.getLayer(LABEL_LAYER)) {
+      map.addLayer({
+        id: LABEL_LAYER,
+        type: 'symbol',
+        source: LABEL_SOURCE,
+        minzoom: 4,
+        layout: {
+          'text-field': ['get', 'text'],
+          'text-font': ['Noto Sans Bold'],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 4, 11, 10, 13],
+          'text-line-height': 1.25,
+          'text-anchor': 'top',
+          // Sit below the capital pin when it shares the anchor cell.
+          'text-offset': [0, 0.9],
+          'text-max-width': 12,
+          'text-padding': 4,
+        },
+        paint: {
+          'text-color': ['get', 'color'],
+          'text-halo-color': '#ffffff',
+          'text-halo-width': 1.6,
+          'text-halo-blur': 0.4,
+          'text-opacity': ['to-number', ['get', 'opacity']],
+        },
+      });
+    }
+
+    // Keep overlays above basemap tiles after projection/style churn.
     try {
-      if (map.getLayer(HEX_FILL)) map.moveLayer(HEX_FILL);
-      if (map.getLayer(HEX_LINE)) map.moveLayer(HEX_LINE);
+      for (const id of OVERLAY_LAYERS) {
+        if (map.getLayer(id)) map.moveLayer(id);
+      }
     } catch {
       // ignore
+    }
+    if (highlightedRealmId) {
+      const realmId = highlightedRealmId;
+      highlightedRealmId = '';
+      setHighlightedRealm(realmId);
     }
   }
 
@@ -358,16 +520,14 @@
 
     hexByIndex = new Map(polygons.map((polygon) => [polygon.hexIndex, polygon]));
 
-    const hexSource = map.getSource(HEX_SOURCE);
-    if (hexSource) hexSource.setData(polygonsToGeoJSON(polygons));
+    pushOverlayData(polygons);
     syncHtmlMarkers(points);
 
     // If setProjection deferred a style rebuild, push data again after it settles.
     if (projectionChanged) {
       map.once('idle', () => {
         ensureLayers();
-        const src = map.getSource(HEX_SOURCE);
-        if (src) src.setData(polygonsToGeoJSON(polygons));
+        pushOverlayData(polygons);
       });
     }
   }
@@ -628,6 +788,7 @@
 
         const hexIndex = String(hit.properties.hexIndex);
         map.getCanvas().style.cursor = 'pointer';
+        setHighlightedRealm(String(hit.properties.realmId || ''));
 
         if (hexIndex !== hoveredHexIndex) {
           hoveredHexIndex = hexIndex;
@@ -651,6 +812,7 @@
       });
       map.on('mouseleave', HEX_FILL, () => {
         if (map) map.getCanvas().style.cursor = 'grab';
+        setHighlightedRealm('');
         clearHoverPopup();
       });
 

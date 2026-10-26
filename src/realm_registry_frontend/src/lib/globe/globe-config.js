@@ -67,35 +67,76 @@ export function hexCapForResolution(resolution) {
 }
 
 /**
- * Soft teal/gray hex styling — close to staging IC map, light Realms aesthetic.
- * @param {number} distance
+ * Categorical realm colors — mid-dark hues that read on the light basemap and
+ * stay distinct from each other when territories touch.
  */
-export function hexStyle(distance, { totalUsers = 0, hasMultipleRealms = false, h3Resolution = 6 } = {}) {
-  const userBoost = Math.min((totalUsers / 50) * 0.1, 0.12);
+export const REALM_ZONE_PALETTE = [
+  '#0f766e',
+  '#4f46e5',
+  '#be185d',
+  '#b45309',
+  '#0369a1',
+  '#7c3aed',
+  '#15803d',
+  '#c2410c',
+  '#a21caf',
+  '#0e7490',
+];
+
+/**
+ * Stable per-realm color (FNV-1a over the realm id).
+ * @param {string | null | undefined} realmId
+ */
+export function realmZoneColor(realmId) {
+  const id = String(realmId || '');
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) {
+    hash ^= id.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return REALM_ZONE_PALETTE[hash % REALM_ZONE_PALETTE.length];
+}
+
+/** Territory outline dash pattern per lifecycle stage (in line-width units). */
+export const STAGE_OUTLINE_DASH = {
+  production: [1, 0],
+  beta: [3, 2],
+  alpha: [1, 1.6],
+  deprecation: [4, 2, 1, 2],
+  terminated: [1, 3],
+};
+
+/** @param {string | null | undefined} stage */
+export function stageOutlineDash(stage) {
+  return STAGE_OUTLINE_DASH[stage || 'alpha'] || STAGE_OUTLINE_DASH.alpha;
+}
+
+/**
+ * Hex fill styling. Territory cells are shaded by user density relative to the
+ * realm's busiest cell; influence-ring cells are a faint halo. Cell borders are
+ * drawn separately (merged territory outline + faint zoomed-in grid).
+ * @param {number} distance 0 = territory, ≥1 = influence ring
+ * @param {{ color?: string, density?: number, h3Resolution?: number }} [opts]
+ */
+export function hexStyle(distance, { color = REALM_ZONE_PALETTE[0], density = 0.5, h3Resolution = 6 } = {}) {
   const fine = h3Resolution >= 6;
+  const t = Math.max(0, Math.min(1, Number.isFinite(density) ? density : 0.5));
 
   if (distance === 0) {
+    // Coarse painted regions (res < 6) need a higher floor or they vanish on the globe.
+    const floor = fine ? 0.14 : 0.22;
     return {
-      fill: hasMultipleRealms ? '#5B8A8A' : '#6BA3A3',
-      stroke: '#2F5F5F',
-      // Coarse painted regions (res < 6) need stronger fill or they vanish on the globe.
-      opacity: Math.min((fine ? 0.52 : 0.5) + userBoost, 0.78),
-      weight: fine ? 2 : 1.6,
-    };
-  }
-  if (distance === 1) {
-    return {
-      fill: '#8BB8B8',
-      stroke: '#3A3A3A',
-      opacity: (fine ? 0.22 : 0.16) + userBoost * 0.35,
-      weight: fine ? 1.1 : 0.9,
+      fill: color,
+      stroke: color,
+      opacity: floor + (0.5 - floor) * Math.sqrt(t),
+      weight: fine ? 0.8 : 0.6,
     };
   }
   return {
-    fill: '#A8C9C9',
-    stroke: '#5A5A5A',
-    opacity: fine ? 0.12 : 0.08,
-    weight: 0.7,
+    fill: color,
+    stroke: color,
+    opacity: distance === 1 ? (fine ? 0.07 : 0.05) : 0.03,
+    weight: 0,
   };
 }
 

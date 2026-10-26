@@ -3,6 +3,8 @@ import { buildGosManifestBlock } from './gos-implementations.js';
 export function slugify(name) {
   return (
     (name || 'realm')
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')

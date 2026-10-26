@@ -3,12 +3,14 @@ import test from 'node:test';
 import h3 from 'h3-js';
 import {
   buildHexPolygons,
+  buildRealmTerritories,
   chooseRealmHexResolution,
   computeKpis,
   isTerritoryZone,
   normalizeZoneToTruthCell,
   realmTruthCells,
 } from './hex-data.js';
+import { hexStyle, realmZoneColor, REALM_ZONE_PALETTE } from './globe-config.js';
 
 const RES3 = '83541cfffffffff'; // live RealmTest6 territory cell (West Africa)
 const RES6 = '861f1d48fffffff';
@@ -156,4 +158,53 @@ test('buildHexPolygons never draws land-registry cells', () => {
   assert.equal(chooseRealmHexResolution(zones, h3, 9), null);
   assert.deepEqual(buildHexPolygons([realm], { [realm.id]: { zones } }, h3, { zoom: 9 }), []);
   assert.equal(computeKpis([realm], { [realm.id]: { zones } }).locationClusters, 0);
+});
+
+test('buildRealmTerritories dissolves a contiguous territory into one outline', () => {
+  const zones = h3.gridDisk(RES6, 1).map((h3_index, i) => ({
+    h3_index,
+    name: `v${i}`,
+    user_count: i === 0 ? 100 : 5,
+  }));
+  const polygons = buildHexPolygons([realm], { [realm.id]: { zones } }, h3, { zoom: 10 });
+  const territory = polygons.filter((p) => p.minDistance === 0);
+  assert.equal(territory.length, 7);
+
+  const { outlines, labels } = buildRealmTerritories(polygons, h3);
+  assert.equal(outlines.length, 1);
+  assert.equal(outlines[0].geometry.type, 'MultiPolygon');
+  assert.equal(outlines[0].geometry.coordinates.length, 1, 'one merged polygon');
+  assert.equal(outlines[0].geometry.coordinates[0].length, 1, 'outer ring only, no holes');
+  // 7-cell flower has 18 outer edges vs 42 for separately outlined cells.
+  assert.equal(outlines[0].geometry.coordinates[0][0].length, 19);
+  assert.equal(outlines[0].properties.stage, 'alpha');
+  assert.equal(outlines[0].properties.color, realmZoneColor(realm.id));
+
+  assert.equal(labels.length, 1);
+  assert.equal(labels[0].properties.name, 'RealmTest6');
+  const [lng, lat] = labels[0].geometry.coordinates;
+  assert.equal(h3.latLngToCell(lat, lng, 6), RES6, 'label anchors on the central cell');
+});
+
+test('territory cells are shaded by user density in the realm color', () => {
+  const zones = h3.gridDisk(RES6, 1).map((h3_index) => ({
+    h3_index,
+    name: h3_index,
+    user_count: h3_index === RES6 ? 100 : 1,
+  }));
+  const polygons = buildHexPolygons([realm], { [realm.id]: { zones } }, h3, { zoom: 10 });
+  const busiest = polygons.find((p) => p.hexIndex === RES6);
+  const quiet = polygons.find((p) => p.minDistance === 0 && p.hexIndex !== RES6);
+  assert.ok(busiest.opacity > quiet.opacity);
+  assert.ok(quiet.opacity > hexStyle(1, { density: 1 }).opacity, 'influence ring stays a faint halo');
+  assert.equal(busiest.fillColor, realmZoneColor(realm.id));
+});
+
+test('realmZoneColor is stable and drawn from the palette', () => {
+  assert.equal(realmZoneColor(realm.id), realmZoneColor(realm.id));
+  assert.ok(REALM_ZONE_PALETTE.includes(realmZoneColor(realm.id)));
+  const spread = new Set(
+    Array.from({ length: 40 }, (_, i) => realmZoneColor(`realm-${i}`))
+  );
+  assert.ok(spread.size >= 6, 'ids should spread across the palette');
 });

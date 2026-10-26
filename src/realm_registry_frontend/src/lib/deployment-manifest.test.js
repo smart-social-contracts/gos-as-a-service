@@ -64,6 +64,11 @@ test('buildRealmDeploymentManifest slugifies custom slug for federation', () => 
   assert.equal(manifest.federation.slug, slugify('Custom_Slug Name!'));
 });
 
+test('slugify transliterates accents instead of dropping them', () => {
+  assert.equal(slugify('València'), 'valencia');
+  assert.equal(slugify('Çà i Ñoño'), 'ca-i-nono');
+});
+
 test('casals block names the stand only (WASMs come from the stand_template)', () => {
   const manifest = buildRealmDeploymentManifest(
     { name: 'Main Realm', gos_implementation: 'realms-gos' },
