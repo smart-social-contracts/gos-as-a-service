@@ -42,13 +42,12 @@ from deploy_resume import (
     completed_step_signatures,
     deploy_task_id,
     describe_resume,
-    enter_setup_already_satisfied,
     coerce_realm_json,
     realm_json_response_failed,
     extensions_stall_reason,
     failed_bootstrap_step_kinds,
-    install_step_in_progress,
     plan_resume,
+    step_already_satisfied,
     steps_satisfied_by_prior_task,
     task_belongs_to_job,
     task_owner_job,
@@ -56,7 +55,7 @@ from deploy_resume import (
 from claim_args import build_claim_slug_args
 from stand_create_args import build_stand_create_args, casals_placement_from_cfg
 from stand_readiness import (
-    realm_casals_block,
+    stand_baton_id,
     stand_build_gate,
     stand_declared,
     stand_of_canister,
@@ -65,18 +64,25 @@ from stand_readiness import (
 )
 from manifest_access import can_view_deployment_manifest
 from bootstrap import (
-    configure_canister_ids_args,
-    configure_canister_ids_payload,
+    RELAX_TRUST_POLICY_STEP,
+    branding_payload,
     build_enter_setup_candid,
     enter_setup_args,
-    resolve_founder,
+    founder_error,
     manifest_has_codex_block,
     needs_enter_setup_step,
-    _install_step_failed,
-    resync_extension_batches,
-    resync_extension_frontends_args,
+    package_install_call,
+    package_needs_version,
+    realm_identity_payload,
+    realm_reply,
     resolve_legacy_install_lists,
-    has_extension_installs,
+    setup_entry_kind,
+    setup_infrastructure_args,
+    setup_infrastructure_payload,
+    setup_install_args,
+    setup_install_payload,
+    realm_test_mode_payload,
+    tokens_payload,
     uses_realms_bootstrap,
     _resolve_file_registry_canister_id,
     _resolve_marketplace_canister_id,
@@ -87,7 +93,6 @@ from installer_config import (
     apply_installer_config,
     configured_cycle_threshold_cycles,
     configured_file_registry_id,
-    configured_gos_environment,
     configured_nft_canister_id,
     configured_shared_tokens,
     get_config,
@@ -120,20 +125,15 @@ except RuntimeError:
 # ── Inter-canister services ────────────────────────────────────────────
 
 class RealmTargetService(Service):
-    _arg_types = {
-        "install_extension_from_registry": "text",
-        "install_codex_from_registry": "text",
-        "run_codex_init": "text",
-        "resync_extension_frontends": "text",
-    }
+    """A Realms GOS backend: every operation by name, with JSON text arguments and reply.
+
+    ``read`` for the operations flagged read, ``run`` for the others.
+    """
+    _arg_types = {"run": "text", "read": "text"}
     @service_update
-    def install_extension_from_registry(self, args: text) -> text: ...
-    @service_update
-    def install_codex_from_registry(self, args: text) -> text: ...
-    @service_update
-    def run_codex_init(self, args: text) -> text: ...
-    @service_update
-    def resync_extension_frontends(self, args: text) -> text: ...
+    def run(self, name: text, args: text) -> text: ...
+    @service_query
+    def read(self, name: text, args: text) -> text: ...
 
 class RealmRegistryService(Service):
     @service_update
@@ -146,8 +146,11 @@ class RealmRegistryService(Service):
     def deployment_succeeded(self, job_id: text, caller_principal: text) -> text: ...
 
 class FileRegistryService(Service):
+    _arg_types = {"latest_version": "text"}
     @service_query
     def get_extension_manifest(self, args: text) -> text: ...
+    @service_query
+    def latest_version(self, args: text) -> text: ...
 
 class CasalsService(Service):
     """The Casals conductor: JSON text in, JSON text out ({"ok": true, ...} | {"ok": false, "error": …}).
@@ -464,6 +467,31 @@ def unwrap_call_result(result):
     return result
 
 
+def _realm_call(backend_id: str, name: str, args: dict, query: bool = False):
+    """Generator: run operation ``name`` on a Realms GOS backend; returns ``(reply, error)``.
+
+    ``error`` is "" only when the realm did it. A rejected inter-canister call
+    raises, so the step runner sees the rejection code and can retry.
+    """
+    target = RealmTargetService(Principal.from_str(backend_id))
+    method = target.read if query else target.run
+    result: CallResult = yield method(name, json.dumps(args))
+    return realm_reply(unwrap_call_result(result))
+
+
+def _realm_setup_step_logged(job_id_val: str, backend_id: str, payload: dict, what: str):
+    """Generator: one ``setup_step`` whose failure is logged, not fatal. Returns True when it ran."""
+    try:
+        _reply, error = yield from _realm_call(backend_id, "setup_step", payload)
+    except Exception as e:
+        error = str(e)
+    if error:
+        jlog(job_id_val).error(f"setup_step {payload.get('step')} ({what}) failed: {error[:300]}")
+        return False
+    jlog(job_id_val).info(f"setup_step {payload.get('step')}: {what}")
+    return True
+
+
 def schedule_registry_settlement(job_id: str, success: bool, reason: str = ""):
     def _cb():
         try:
@@ -608,182 +636,53 @@ def schedule_registration(job_id_val: str):
             # the frontend template declares the file and the realm dist ships
             # its CSP, so nothing is written to the asset canister from here.
 
-            if backend_id and realm_info:
-                # Identity fields only. When a codex package is installed,
-                # init.py enforces onboarding.registration (issue #244) —
-                # sending open_registration here would overwrite that policy
-                # because registration runs before this call.
-                config = {
-                    "name": realm_name,
-                    "manifesto": realm_info.get("manifesto", ""),
-                    "welcome_message": realm_info.get("welcome_message", ""),
-                }
-                if not realm_info.get("codex"):
-                    config["open_registration"] = realm_info.get(
-                        "open_registration", False
-                    )
-                # Wizard codex-parameter choices (issue #253): stored in
-                # manifest_data.config_overrides on the realm; the codex's
-                # get_config applies them over its declared defaults. Runs
-                # after codex init, so the lean manifest_data is preserved.
-                overrides = realm_info.get("config_overrides")
-                if isinstance(overrides, dict) and overrides:
-                    config["config_overrides"] = overrides
-                config_json = json.dumps(config).replace('\\', '\\\\').replace('"', '\\"')
-                config_arg = '("' + config_json + '")'
-                config_result: CallResult = yield ic.call_raw(
-                    Principal.from_str(backend_id), "update_realm_config",
-                    ic.candid_encode(config_arg), 0,
-                )
-                if isinstance(config_result, dict) and "Err" in config_result:
-                    jlog(job_id_val).error(f"update_realm_config failed: {config_result['Err']}")
-                else:
-                    jlog(job_id_val).info(f"realm config updated: name={realm_name}")
-
-            founder = resolve_founder(manifest)
-            if founder and backend_id and founder != "2vxsx-fae":
-                try:
-                    founder_arg = f'("{founder}")'
-                    founder_result: CallResult = yield ic.call_raw(
-                        Principal.from_str(backend_id), "register_founder",
-                        ic.candid_encode(founder_arg), 0,
-                    )
-                    if isinstance(founder_result, dict) and "Err" in founder_result:
-                        jlog(job_id_val).error(
-                            f"register_founder failed: {founder_result['Err']}"
+            # The founder finishes setup in the wizard and launches the realm.
+            # The wizard never asks for the name, and launch refuses a nameless
+            # realm, so naming it here is part of the install: a failure stops
+            # registration and the credit settlement.
+            # Tokens and branding are the wizard's to finish, so those stay
+            # warnings. The founder and the canister ids were set by the deploy
+            # task's setup_install / setup_infrastructure steps.
+            if backend_id and uses_realms_bootstrap(manifest):
+                if realm_info:
+                    named = dict(realm_info)
+                    if not (named.get("display_name") or named.get("name")):
+                        top = (manifest.get("name") or "").strip()
+                        if top:
+                            named["name"] = top
+                    identity = realm_identity_payload(named)
+                    if not (identity.get("name") or "").strip():
+                        raise RuntimeError(
+                            "the realm has no name (realm.display_name, realm.name, "
+                            "or manifest name); the founder cannot open a nameless realm"
                         )
-                    else:
-                        jlog(job_id_val).info(f"founder registered as admin: {founder[:8]}…")
-                except Exception as founder_err:
-                    jlog(job_id_val).error(f"register_founder error: {founder_err}")
+                    _reply, name_error = yield from _realm_call(backend_id, "setup_step", identity)
+                    if name_error:
+                        raise RuntimeError(f"setup_step realm (name) failed: {name_error[:500]}")
+                    jlog(job_id_val).info(f"setup_step realm: name={identity.get('name')}")
+                    realm_name = identity.get("name") or realm_name
 
-            fr_id = _resolve_file_registry_canister_id(manifest)
-            mp_id = _resolve_marketplace_canister_id(manifest)
-            network = (manifest.get("network") or "").strip()
-            can_test_mode = bool(manifest.get("can_test_mode"))
-            version = (manifest.get("deploy_version") or "").strip()
-            test_flags = manifest.get("test_flags") or {}
-            test_flags_json = json.dumps(test_flags) if test_flags else ""
-            if backend_id:
-                nft_id = configured_nft_canister_id()
+                tokens = tokens_payload(configured_nft_canister_id(), configured_shared_tokens())
+                if tokens:
+                    yield from _realm_setup_step_logged(
+                        job_id_val, backend_id, tokens,
+                        f"nft={tokens.get('nft_canister_id') or '–'}, "
+                        f"shared tokens={sorted(tokens.get('shared_tokens_json') or {})}",
+                    )
 
-                link_payload = {
-                    "frontend_canister_id": frontend_id or None,
-                    "file_registry_canister_id": fr_id or None,
-                    "gos_environment": (
-                        (manifest.get("gos_environment") or "").strip().lower()
-                        or configured_gos_environment()
-                        or None
-                    ),
-                    "marketplace_canister_id": mp_id or None,
-                    "installed_version": version or None,
-                    # the realm's shared-ledger catalog: the sheet's, via configure
-                    "shared_tokens": configured_shared_tokens(),
-                }
-                net_lower = network.lower()
-                if network and not (
-                    can_test_mode and net_lower in ("ic", "production")
-                ):
-                    link_payload["network"] = network
-                if can_test_mode:
-                    link_payload["can_test_mode"] = True
-                if test_flags_json:
-                    link_payload["test_flags_json"] = test_flags_json
-                if nft_id:
-                    link_payload["nft_canister_id"] = nft_id
-
-                link_json = json.dumps(
-                    {k: v for k, v in link_payload.items() if v is not None}
-                ).replace("\\", "\\\\").replace('"', '\\"')
-                link_arg = '("' + link_json + '")'
-                cc_result: CallResult = yield ic.call_raw(
-                    Principal.from_str(backend_id),
-                    "set_canister_config_json",
-                    ic.candid_encode(link_arg),
-                    0,
+                # The portal uploaded the user's logo/background straight into
+                # the file registry (signed by the user's II); the realm links
+                # to them where the registry serves them.
+                branding = branding_payload(
+                    manifest.get("branding") or {}, _resolve_file_registry_canister_id(manifest),
                 )
-                if isinstance(cc_result, dict) and "Err" in cc_result:
-                    jlog(job_id_val).error(
-                        f"set_canister_config_json failed: {cc_result['Err']}"
+                if branding:
+                    done = yield from _realm_setup_step_logged(
+                        job_id_val, backend_id, branding, "branding from the file registry",
                     )
-                else:
-                    jlog(job_id_val).info(
-                        f"set_canister_config_json: frontend={frontend_id}, "
-                        f"nft={nft_id or '–'}, "
-                        f"file_registry={fr_id}, marketplace={mp_id}, "
-                        f"version={version}, network={network}, "
-                        f"test_flags={test_flags_json}"
-                    )
-
-            # Per-realm branding: the wizard uploaded the user's logo/background
-            # straight into the file_registry (decentralized, signed by the
-            # user's II). Tell the realm backend to pull them and serve them at
-            # /custom/ on the frontend asset canister. manifest.branding maps
-            # 1:1 onto install_branding_from_registry's args.
-            branding = manifest.get("branding") or {}
-            b_files = branding.get("files") or {}
-            b_ns = (branding.get("namespace") or "").strip()
-            b_reg = (branding.get("file_registry_canister_id") or fr_id or "").strip()
-            if backend_id and frontend_id and b_files and b_ns and b_reg:
-                try:
-                    br_args = {
-                        "registry_canister_id": b_reg,
-                        "namespace": b_ns,
-                        "files": b_files,
-                        "frontend_canister_id": frontend_id,
-                    }
-                    br_json = json.dumps(br_args).replace('\\', '\\\\').replace('"', '\\"')
-                    br_arg = '("' + br_json + '")'
-                    br_result: CallResult = yield ic.call_raw(
-                        Principal.from_str(backend_id), "install_branding_from_registry",
-                        ic.candid_encode(br_arg), 0,
-                    )
-                    if isinstance(br_result, dict) and "Err" in br_result:
-                        jlog(job_id_val).error(f"install_branding_from_registry failed: {br_result['Err']}")
-                    else:
-                        jlog(job_id_val).info(f"branding installed from registry: ns={b_ns}")
+                    if done and branding.get("logo_url"):
                         # Surface the user's logo in the realm directory listing.
-                        if "/custom/logo.png" in b_files:
-                            logo = f"https://{frontend_id}.icp0.io/custom/logo.png"
-                except Exception as br_err:
-                    jlog(job_id_val).error(f"install_branding_from_registry error: {br_err}")
-
-            if frontend_id and backend_id:
-                for prefix in ("/custom/", "/ext/"):
-                    try:
-                        pin_arg = f'(record {{ prefix = "{prefix}" }})'
-                        pin_result: CallResult = yield ic.call_raw(
-                            Principal.from_str(frontend_id), "pin_directory",
-                            ic.candid_encode(pin_arg), 0,
-                        )
-                        if isinstance(pin_result, dict) and "Err" in pin_result:
-                            jlog(job_id_val).warning(
-                                f"pin_directory {prefix} failed (non-fatal): {pin_result['Err']}"
-                            )
-                        else:
-                            jlog(job_id_val).info(f"pinned {prefix} on frontend")
-                    except Exception as pin_err:
-                        jlog(job_id_val).warning(
-                            f"pin_directory {prefix} error (non-fatal): {pin_err}"
-                        )
-
-            # Store admin invite hash if present in manifest
-            admin_invite_hash = realm_info.get("admin_invite_hash", "")
-            if admin_invite_hash and backend_id:
-                try:
-                    invite_json = json.dumps({"code_hash": admin_invite_hash, "expires_in_hours": 24})
-                    invite_escaped = invite_json.replace('\\', '\\\\').replace('"', '\\"')
-                    invite_arg = '("' + invite_escaped + '")'
-                    invite_result: CallResult = yield ic.call_raw(
-                        Principal.from_str(backend_id), "store_admin_invite_hash",
-                        ic.candid_encode(invite_arg), 0,
-                    )
-                    if isinstance(invite_result, dict) and "Err" in invite_result:
-                        jlog(job_id_val).error(f"store_admin_invite_hash failed: {invite_result['Err']}")
-                    else:
-                        jlog(job_id_val).info("admin invite hash stored on backend")
-                except Exception as invite_err:
-                    jlog(job_id_val).error(f"store_admin_invite_hash error: {invite_err}")
+                        logo = branding["logo_url"]
 
             registry = RealmRegistryService(Principal.from_str(reg_id))
             result: CallResult = yield registry.register_realm(
@@ -854,7 +753,7 @@ def _count_expected_steps(manifest: dict, backend_id: str = "", frontend_id: str
     if needs_enter_setup_step(manifest, backend_id):
         count += 1
     if uses_realms_bootstrap(manifest) and (has_pair or deploy_scope == "both"):
-        count += 2  # configure_canister_ids + grant_frontend_access
+        count += 2  # setup_infrastructure + grant_frontend_access
     if not manifest_has_codex_block(manifest):
         return count
     realm_info = manifest.get("realm") or {}
@@ -863,15 +762,7 @@ def _count_expected_steps(manifest: dict, backend_id: str = "", frontend_id: str
             count += 1
         elif isinstance(ext, dict) and (ext.get("id") or "").strip():
             count += 1
-    count += 2  # codex install + run_codex_init
-    ext_list = realm_info.get("extensions") or []
-    if has_extension_installs({"extensions": ext_list}):
-        # One resync step per batch (see resync_extension_batches).
-        count += len(
-            resync_extension_batches(
-                {"extensions": [e if isinstance(e, dict) else {"id": e} for e in ext_list]}
-            )
-        )
+    count += 1  # codex_install (it runs the codex's init hook itself)
     return count
 
 
@@ -882,18 +773,21 @@ def _build_steps(task, manifest: dict) -> list:
     frontend_id = manifest.get("frontend_canister_id", "")
     backend_id = manifest.get("target_canister_id", "")
     if needs_enter_setup_step(manifest, backend_id):
-        _log.info(f"[{task.name}] step {idx}: enter_setup backend={backend_id}")
+        kind = setup_entry_kind(manifest)
+        args = (setup_install_args(manifest, backend_id) if kind == "setup_install"
+                else enter_setup_args(manifest, backend_id))
+        _log.info(f"[{task.name}] step {idx}: {kind} backend={backend_id}")
         steps.append(DeployStep(
-            task=task, idx=idx, kind="enter_setup", label="enter_setup",
-            args_json=json.dumps(enter_setup_args(manifest, backend_id)),
+            task=task, idx=idx, kind=kind, label=kind,
+            args_json=json.dumps(args),
             status="pending",
         ))
         idx += 1
     if uses_realms_bootstrap(manifest) and frontend_id and backend_id:
-        _log.info(f"[{task.name}] step {idx}: configure_canister_ids frontend={frontend_id}")
+        _log.info(f"[{task.name}] step {idx}: setup_infrastructure frontend={frontend_id}")
         steps.append(DeployStep(
-            task=task, idx=idx, kind="configure_canister_ids", label="configure_canister_ids",
-            args_json=json.dumps(configure_canister_ids_args(manifest, backend_id, frontend_id)),
+            task=task, idx=idx, kind="setup_infrastructure", label="setup_infrastructure",
+            args_json=json.dumps(setup_infrastructure_args(manifest, backend_id, frontend_id)),
             status="pending",
         ))
         idx += 1
@@ -914,9 +808,7 @@ def _build_steps(task, manifest: dict) -> list:
         _log.info(f"[{task.name}] step {idx}: extension '{ext_id}'")
         steps.append(DeployStep(
             task=task, idx=idx, kind="extension", label=ext_id,
-            args_json=json.dumps({"registry_canister_id": task.registry_canister_id,
-                                   "ext_id": ext_id, "version": ext.get("version"),
-                                   "frontend_canister_id": frontend_id}),
+            args_json=json.dumps({"id": ext_id, "version": ext.get("version")}),
             status="pending",
         ))
         idx += 1
@@ -929,36 +821,10 @@ def _build_steps(task, manifest: dict) -> list:
         _log.info(f"[{task.name}] step {idx}: codex '{cdx_id}'")
         steps.append(DeployStep(
             task=task, idx=idx, kind="codex", label=cdx_id,
-            args_json=json.dumps({"registry_canister_id": task.registry_canister_id,
-                                   "codex_id": cdx_id, "version": cdx.get("version"),
-                                   "run_init": False,
-                                   "install_dependencies": False,
-                                   "frontend_canister_id": frontend_id}),
+            args_json=json.dumps({"id": cdx_id, "version": cdx.get("version")}),
             status="pending",
         ))
         idx += 1
-        _log.info(f"[{task.name}] step {idx}: codex_init '{cdx_id}'")
-        steps.append(DeployStep(
-            task=task, idx=idx, kind="codex_init", label=f"{cdx_id}_init",
-            args_json=json.dumps({"codex_id": cdx_id}),
-            status="pending",
-        ))
-        idx += 1
-    if has_extension_installs(manifest):
-        for batch in resync_extension_batches(manifest):
-            args = resync_extension_frontends_args(manifest)
-            label = "resync_extension_frontends"
-            if batch:
-                args["extension_ids"] = batch
-                label = f"resync_extension_frontends[{batch[0]}…{batch[-1]}]"
-            _log.info(f"[{task.name}] step {idx}: {label}")
-            steps.append(DeployStep(
-                task=task, idx=idx, kind="resync_extension_frontends",
-                label=label,
-                args_json=json.dumps(args),
-                status="pending",
-            ))
-            idx += 1
     _log.info(f"[{task.name}] built {len(steps)} total steps")
     return steps
 
@@ -976,8 +842,12 @@ def _execute_step(task, step):
         args = json.loads(step.args_json or "{}")
         jlog(task.name).info(f"step {step.idx} args: {step.args_json[:200]}")
 
-        if step.kind == "configure_canister_ids":
-            yield from _execute_configure_canister_ids(task, step, args)
+        if step.kind == "setup_install":
+            yield from _execute_setup_install(task, step, args)
+            return
+
+        if step.kind == "setup_infrastructure":
+            yield from _execute_setup_infrastructure(task, step, args)
             return
 
         if step.kind == "enter_setup":
@@ -988,50 +858,12 @@ def _execute_step(task, step):
             yield from _execute_grant_frontend_access(task, step, args)
             return
 
-        target = RealmTargetService(Principal.from_str(task.target_canister_id))
-        if step.kind == "extension":
-            jlog(task.name).info(f"step {step.idx} calling install_extension_from_registry")
-            call_result: CallResult = yield target.install_extension_from_registry(json.dumps(args))
-        elif step.kind == "codex":
-            jlog(task.name).info(f"step {step.idx} calling install_codex_from_registry")
-            call_result: CallResult = yield target.install_codex_from_registry(json.dumps(args))
-        elif step.kind == "codex_init":
-            jlog(task.name).info(f"step {step.idx} calling run_codex_init")
-            call_result: CallResult = yield target.run_codex_init(json.dumps(args))
-        elif step.kind == "resync_extension_frontends":
-            jlog(task.name).info(f"step {step.idx} calling resync_extension_frontends")
-            call_result: CallResult = yield target.resync_extension_frontends(json.dumps(args))
-        else:
-            step.error = f"unknown kind: {step.kind}"
-            step.status = "failed"
-            step.completed_at = now_s()
+        if step.kind in ("extension", "codex"):
+            yield from _execute_package_install(task, step, args)
             return
-        raw = unwrap_call_result(call_result)
-        jlog(task.name).info(f"step {step.idx} raw result: {str(raw)[:300]}")
-        step.result_json = (raw if isinstance(raw, str) else json.dumps(raw))[:1990]
-        try:
-            parsed = json.loads(raw) if isinstance(raw, str) else raw
-        except Exception:
-            parsed = None
-        if step.kind == "codex" and install_step_in_progress(parsed):
-            step.result_json = (raw if isinstance(raw, str) else json.dumps(raw))[:1990]
-            step.status = "pending"
-            step.error = ""
-            step.completed_at = now_s()
-            jlog(task.name).info(
-                f"step {step.idx} ({step.label}) in progress — rescheduling "
-                f"(phase={parsed.get('phase') if isinstance(parsed, dict) else '?'})"
-            )
-            _schedule_step_runner(task.name, delay_s=1)
-            return True
-        failed, err = _install_step_failed(parsed)
-        if failed:
-            step.error = err[:1990]
-            step.status = "failed"
-            jlog(task.name).error(f"step {step.idx} ({step.label}) failed: {step.error[:200]}")
-        else:
-            step.status = "completed"
-            jlog(task.name).info(f"step {step.idx} ({step.label}) completed OK")
+
+        step.error = f"unknown kind: {step.kind}"
+        step.status = "failed"
     except Exception as e:
         step.error = f"{type(e).__name__}: {e}"[:1990]
         step.status = "failed"
@@ -1040,104 +872,134 @@ def _execute_step(task, step):
     return False
 
 
-def _execute_configure_canister_ids(task, step, args):
-    """Persist frontend (and infra) canister IDs on the realm backend before installs."""
-    backend_id = args.get("backend_canister_id", "")
-    frontend_id = args.get("frontend_canister_id", "")
-    if not backend_id or not frontend_id:
-        step.error = "missing backend_canister_id or frontend_canister_id"
-        step.status = "failed"
-        step.completed_at = now_s()
-        return
-
-    payload, config_warnings = configure_canister_ids_payload(args)
-    for msg in config_warnings:
-        jlog(task.name).warning(msg)
-    creator = (args.get("requesting_principal") or "").strip()
-
-    jlog(task.name).info(
-        f"setting canister config on backend {backend_id}: frontend={frontend_id}, "
-        f"file_registry={(args.get('file_registry_canister_id') or '').strip() or '–'}, "
-        f"realm_registry={(args.get('realm_registry_canister_id') or '').strip() or '–'}, "
-        f"marketplace={(args.get('marketplace_canister_id') or '').strip() or '–'}, "
-        f"creator={'set' if creator else 'missing'}"
-    )
-    config_json = json.dumps(payload).replace("\\", "\\\\").replace('"', '\\"')
-    config_arg = '("' + config_json + '")'
-    config_result: CallResult = yield ic.call_raw(
-        Principal.from_str(backend_id), "set_canister_config_json",
-        ic.candid_encode(config_arg), 0,
-    )
-    if isinstance(config_result, dict) and "Err" in config_result:
-        step.error = f"set_canister_config_json failed: {config_result['Err']}"[:1990]
-        step.status = "failed"
-        jlog(task.name).error(f"step {step.idx} configure_canister_ids failed: {step.error}")
-        step.completed_at = now_s()
-        return
-
-    try:
-        raw = unwrap_call_result(config_result)
-        parsed = json.loads(raw) if isinstance(raw, str) else raw
-    except Exception:
-        parsed = None
-    if isinstance(parsed, dict) and parsed.get("success") is False:
-        step.error = (parsed.get("error") or "set_canister_config_json failed")[:1990]
-        step.status = "failed"
-        jlog(task.name).error(f"step {step.idx} configure_canister_ids failed: {step.error}")
-        step.completed_at = now_s()
-        return
-
-    yield from _relax_marketplace_approval(task, backend_id)
-
-    step.status = "completed"
-    step.result_json = json.dumps({"frontend_canister_id": frontend_id})[:1990]
-    jlog(task.name).info(f"step {step.idx} frontend canister id configured on backend")
+def _fail_step(task, step, message: str):
+    step.error = message[:1990]
+    step.status = "failed"
     step.completed_at = now_s()
+    jlog(task.name).error(f"step {step.idx} ({step.label}) failed: {step.error[:300]}")
 
 
-def _relax_marketplace_approval(task, backend_id: str):
-    """GOS file_registry has no get_namespace_approval_icc; founding install cannot pass the gate."""
-    backend_id = (backend_id or "").strip()
-    if not backend_id:
-        return
-    payload = json.dumps({"require_marketplace_approval": False}).replace("\\", "\\\\").replace('"', '\\"')
-    arg = '("' + payload + '")'
-    try:
-        result: CallResult = yield ic.call_raw(
-            Principal.from_str(backend_id), "update_realm_config",
-            ic.candid_encode(arg), 0,
-        )
-        raw = unwrap_call_result(result)
-        parsed = coerce_realm_json(raw)
-        failed, message = realm_json_response_failed(parsed)
-        if failed:
-            jlog(task.name).warning(f"require_marketplace_approval=false failed: {message[:200]}")
-        else:
-            jlog(task.name).info("require_marketplace_approval=false (GOS file_registry has no approval API)")
-    except Exception as exc:
-        jlog(task.name).warning(f"require_marketplace_approval=false error: {exc}")
+def _finish_realm_step(task, step, error: str, result: dict):
+    """Record how a realm-facing step ended.
 
-
-def _record_enter_setup_failure(task, step, message: str):
-    """Fail an enter_setup step — unless the realm is already in setup.
-
-    A realm that is already in setup is in the state this step wanted, so the
-    step is satisfied; the result records that this pass was not the one that
-    did it. Every other rejection stays a failure.
+    A rejection that means an earlier pass already did this step (its record
+    was lost, so resume could not skip it) completes the step; the result says
+    this pass was not the one that did it. Every other rejection fails it.
     """
-    if enter_setup_already_satisfied(message):
+    if error and step_already_satisfied(step.kind, error):
         step.status = "completed"
-        step.result_json = json.dumps(
-            {"already_in_setup": True, "detail": (message or "")[:300]}
-        )[:1990]
+        step.result_json = json.dumps({"already_done": True, "detail": error[:300]})[:1990]
+        step.completed_at = now_s()
         jlog(task.name).info(
-            f"step {step.idx} enter_setup already satisfied by an earlier pass: {(message or '')[:200]}"
+            f"step {step.idx} ({step.label}) already done by an earlier pass: {error[:200]}"
         )
-    else:
-        step.error = f"enter_setup failed: {message}"[:1990]
-        step.status = "failed"
-        jlog(task.name).error(f"step {step.idx} enter_setup failed: {step.error[:300]}")
+        return
+    if error:
+        _fail_step(task, step, f"{step.kind} failed: {error}")
+        return
+    step.status = "completed"
+    step.result_json = json.dumps(result)[:1990]
     step.completed_at = now_s()
+    jlog(task.name).info(f"step {step.idx} ({step.label}) completed OK")
+
+
+def _execute_setup_install(task, step, args):
+    """``setup_step`` install: the realm's network, test-mode permission and founder, set once.
+
+    The founder gets the realm's founder profile, which lets them run the
+    setup wizard and launch the realm.
+    """
+    backend_id = (args.get("backend_canister_id") or "").strip()
+    payload = setup_install_payload(args)
+    problem = "missing backend_canister_id" if not backend_id else founder_error(payload["founder"])
+    if problem:
+        _fail_step(task, step, problem)
+        return
+    jlog(task.name).info(
+        f"setup_step install on {backend_id}: founder={payload['founder'][:8]}…, "
+        f"network={payload['network'] or '–'}, can_test_mode={payload['can_test_mode']}"
+    )
+    _reply, error = yield from _realm_call(backend_id, "setup_step", payload)
+    _finish_realm_step(task, step, error, {k: v for k, v in payload.items() if k != "step"})
+
+
+def _execute_setup_infrastructure(task, step, args):
+    """Tell the realm its canisters, test flags and trust policy before any package install."""
+    backend_id = (args.get("backend_canister_id") or "").strip()
+    frontend_id = (args.get("frontend_canister_id") or "").strip()
+    if not backend_id or not frontend_id:
+        _fail_step(task, step, "missing backend_canister_id or frontend_canister_id")
+        return
+
+    payload = setup_infrastructure_payload(args)
+    jlog(task.name).info(
+        f"setup_step infrastructure on {backend_id}: "
+        + ", ".join(f"{k}={v}" for k, v in payload.items() if k != "step")
+    )
+    _reply, error = yield from _realm_call(backend_id, "setup_step", payload)
+    if error:
+        _finish_realm_step(task, step, error, {})
+        return
+    result = {k: v for k, v in payload.items() if k != "step"}
+
+    flags = realm_test_mode_payload(args.get("test_flags"))
+    if flags:
+        _reply, flags_error = yield from _realm_call(backend_id, "setup_step", flags)
+        if flags_error:
+            # A realm without its test switches still works; failing the
+            # deploy over them would not.
+            result["test_flags_error"] = flags_error[:300]
+            jlog(task.name).warning(f"test flags not applied: {flags_error[:300]}")
+        else:
+            result["test_mode"] = flags["test_mode"]
+            jlog(task.name).info(f"test flags applied: test_mode={flags['test_mode']}, {flags['test_flags']}")
+
+    yield from _relax_trust_policy(task, backend_id)
+    _finish_realm_step(task, step, "", result)
+
+
+def _relax_trust_policy(task, backend_id: str):
+    """``setup_step`` trust_policy: no marketplace approval needed for the founding installs. Not fatal."""
+    try:
+        _reply, error = yield from _realm_call(backend_id, "setup_step", RELAX_TRUST_POLICY_STEP)
+    except Exception as exc:
+        error = str(exc)
+    if error:
+        jlog(task.name).warning(f"require_marketplace_approval=false failed: {error[:200]}")
+    else:
+        jlog(task.name).info("require_marketplace_approval=false for the founding installs")
+
+
+def _latest_package_version(registry_id: str, package_id: str):
+    """Generator: the highest version of ``package_id`` published under ``ext/`` in the file registry."""
+    registry = FileRegistryService(Principal.from_str(registry_id))
+    result: CallResult = yield registry.latest_version(
+        json.dumps({"category": "ext", "item_id": package_id})
+    )
+    data = coerce_realm_json(unwrap_call_result(result))
+    if not isinstance(data, dict) or not data.get("latest"):
+        detail = data.get("error") if isinstance(data, dict) else data
+        raise RuntimeError(f"no published version of {package_id} in {registry_id}: {detail}")
+    return str(data["latest"])
+
+
+def _execute_package_install(task, step, args):
+    """``extension_install`` / ``codex_install`` from the realm's file registry (``ext/<id>/<version>``).
+
+    The realm needs an exact version; a step without one installs the latest
+    published. ``codex_install`` runs the codex's init hook itself.
+    """
+    package_id = str(args.get("id") or "").strip()
+    if not package_id:
+        _fail_step(task, step, f"{step.kind} step names no package")
+        return
+    version = str(args.get("version") or "").strip()
+    if package_needs_version(version):
+        version = yield from _latest_package_version(task.registry_canister_id, package_id)
+    op, payload = package_install_call(step.kind, package_id, version)
+    jlog(task.name).info(f"step {step.idx} calling {op} {package_id}@{version}")
+    reply, error = yield from _realm_call(task.target_canister_id, op, payload)
+    _finish_realm_step(task, step, error, {**reply, "version": version})
 
 
 def _execute_enter_setup(task, step, args):
@@ -1167,7 +1029,7 @@ def _execute_enter_setup(task, step, args):
         ic.candid_encode(setup_arg), 0,
     )
     if isinstance(setup_result, dict) and "Err" in setup_result:
-        _record_enter_setup_failure(task, step, str(setup_result["Err"]))
+        _finish_realm_step(task, step, str(setup_result["Err"]) or "rejected", {})
         return
 
     try:
@@ -1177,27 +1039,13 @@ def _execute_enter_setup(task, step, args):
                 raw = ic.candid_decode(raw)
             except Exception:
                 raw = raw.decode("utf-8", errors="replace")
-        parsed = coerce_realm_json(raw)
-        failed, message = realm_json_response_failed(parsed)
-        if failed:
-            _record_enter_setup_failure(task, step, message)
-            if step.status == "completed":
-                yield from _relax_marketplace_approval(task, backend_id)
-            return
+        failed, message = realm_json_response_failed(coerce_realm_json(raw))
     except Exception as exc:
-        _record_enter_setup_failure(task, step, str(exc))
-        if step.status == "completed":
-            yield from _relax_marketplace_approval(task, backend_id)
-        return
-
-    yield from _relax_marketplace_approval(task, backend_id)
-
-    step.status = "completed"
-    step.result_json = json.dumps(
-        {"creator_principal": creator, "realm_registry_canister_id": registry_id or None}
-    )[:1990]
-    jlog(task.name).info(f"step {step.idx} enter_setup completed OK")
-    step.completed_at = now_s()
+        failed, message = True, str(exc) or type(exc).__name__
+    _finish_realm_step(
+        task, step, message if failed else "",
+        {"creator_principal": creator, "realm_registry_canister_id": registry_id or None},
+    )
 
 
 def _execute_grant_frontend_access(task, step, args):
@@ -1435,9 +1283,9 @@ def _resume_deploy_task(job) -> bool:
     """Re-drive this job's existing deploy task from its first unfinished step.
 
     Returns True when a prior task was resumed, in which case no new task is
-    built. Completed steps keep their status: ``enter_setup`` and
-    ``configure_canister_ids`` are one-shot on a live stand, so replaying them
-    would fail on a realm the first pass already configured.
+    built. Completed steps keep their status: ``setup_install`` (``enter_setup``
+    on Monad GOS) is one-shot on a live stand, so replaying it would fail on a
+    realm the first pass already configured.
     """
     task_id = (job.ext_deploy_task_id or "").strip()
     if not task_id:
@@ -1480,7 +1328,7 @@ def _resume_deploy_task(job) -> bool:
     return True
 
 
-def _start_extensions_for_job(job, manifest: dict) -> Async[None]:
+def _start_extensions_for_job(job, manifest: dict, baton_canister_id: str = "") -> Async[None]:
     if _resume_deploy_task(job):
         return
 
@@ -1526,7 +1374,12 @@ def _start_extensions_for_job(job, manifest: dict) -> Async[None]:
         "realm_registry_canister_id": realm_registry_id,
         "infra": manifest.get("infra") or {},
         "marketplace_canister_id": marketplace_id,
+        "installer_canister_id": ic.id().to_str(),
+        "baton_canister_id": (baton_canister_id or "").strip(),
         "network": network,
+        "can_test_mode": bool(manifest.get("can_test_mode")),
+        "test_flags": manifest.get("test_flags") or {},
+        "founder": (manifest.get("founder") or "").strip(),
         "requesting_principal": (manifest.get("requesting_principal") or "").strip(),
         "federation": manifest.get("federation") or {},
     }
@@ -2268,8 +2121,27 @@ def _parse_ic_text_json(raw) -> dict:
     return json.loads(s or "{}")
 
 
-def _fetch_realm_stage_gen(backend_id: text):
-    """Query realm backend get_runtime_flags for lifecycle stage."""
+def _method_missing(error) -> bool:
+    text = str(error)
+    return "no update method" in text or "no query method" in text or "method not found" in text.lower()
+
+
+def _fetch_realm_stage_gen(backend_id: text, manifest: dict):
+    """The realm's lifecycle stage: its ``status`` from ``read("realm_info")`` on Realms GOS,
+    ``realm_stage`` from ``get_runtime_flags`` on Monad GOS."""
+    # A backend without the method is a half-destroyed sweep shell from an
+    # aborted destroy (or a pre-stage build): alpha.
+    if uses_realms_bootstrap(manifest):
+        try:
+            reply, error = yield from _realm_call(backend_id, "realm_info", {}, query=True)
+        except Exception as e:
+            if _method_missing(e):
+                return "alpha"
+            raise
+        if error:
+            raise RuntimeError(f"failed to read realm stage: {error}")
+        return ((reply.get("realm") or {}).get("status") or "alpha").strip().lower()
+
     flags_res: CallResult = yield ic.call_raw(
         Principal.from_str(backend_id), "get_runtime_flags",
         ic.candid_encode("()"), 1,
@@ -2277,9 +2149,7 @@ def _fetch_realm_stage_gen(backend_id: text):
     try:
         raw = unwrap_call_result(flags_res)
     except Exception as e:
-        # Backends without get_runtime_flags are legacy builds (pre-stage) or
-        # half-destroyed sweep shells from an aborted destroy — both alpha.
-        if "no update method" in str(e) or "method not found" in str(e).lower():
+        if _method_missing(e):
             return "alpha"
         raise
     data = _parse_ic_text_json(raw)
@@ -2347,7 +2217,7 @@ def destroy_realm_job(job_id: text) -> Async[ResultJobCancel]:
         if not backend_id:
             return ResultJobCancel(Err=ie("deployment has no backend canister id"))
 
-        stage = yield from _fetch_realm_stage_gen(backend_id)
+        stage = yield from _fetch_realm_stage_gen(backend_id, json.loads(job.manifest_json or "{}"))
         if stage != "alpha":
             return ResultJobCancel(Err=ie(
                 f"cannot destroy realm in '{stage}' stage; only alpha realms can be destroyed"
@@ -2733,31 +2603,12 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
         f"stand '{stand}' installed: backend={backend_id} frontend={frontend_id}"
     )
 
-    # 3. Inject the Casals block into the realm's manifest_data so the
-    # auto-scale loop can grow its own stand (`stand_create` with the next
-    # `{stand}-quarter-{n}` template member; gated on manifest_data.casals in
-    # _quarter_casals_args) and its votes reach the stand's baton.
-    casals_config = realm_casals_block(stand, casals_id, file_registry_id, ready)
-    casals_config_json = json.dumps(casals_config).replace('\\', '\\\\').replace('"', '\\"')
-    try:
-        qpc_result: CallResult = yield ic.call_raw(
-            Principal.from_str(backend_id), "set_quarter_provisioning_config",
-            ic.candid_encode('("' + casals_config_json + '")'), 0,
-        )
-        if isinstance(qpc_result, dict) and "Err" in qpc_result:
-            jlog(job_id).warning(
-                f"set_quarter_provisioning_config failed (non-fatal): {qpc_result['Err']}"
-            )
-        else:
-            jlog(job_id).info(f"autoscale config injected: stand={stand}, casals={casals_id}")
-    except Exception as qpc_err:
-        jlog(job_id).warning(f"set_quarter_provisioning_config error (non-fatal): {qpc_err}")
-
-    # 4. Domain tail: bootstrap (configure_canister_ids, grant_frontend_access)
-    # then optional legacy codex/extension installs, then registration.
+    # 3. Domain tail: bootstrap (setup_install, setup_infrastructure with the
+    # stand's baton, grant_frontend_access) then optional codex/extension
+    # installs, then registration.
     job.status = "extensions"
     jlog(job_id).info("entering bootstrap/extensions phase (casals path)")
-    yield from _start_extensions_for_job(job, manifest)
+    yield from _start_extensions_for_job(job, manifest, stand_baton_id(stand, ready))
 
     return ProvisionOk(
         job_id=job_id, status=job.status or "", stand=stand,

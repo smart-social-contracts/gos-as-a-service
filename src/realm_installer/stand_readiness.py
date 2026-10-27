@@ -23,22 +23,13 @@ def installed_stand_canisters(view: dict, stand: str) -> dict[str, str]:
             if c.get("stand") == stand and c.get("canister_id") and c.get("status") in CANISTER_INSTALLED}
 
 
-def realm_casals_block(stand: str, casals_id: str, file_registry_id: str, ready: dict[str, str]) -> dict:
-    """The ``manifest_data.casals`` block the realm backend gets once its stand is built.
+def stand_baton_id(stand: str, ready: dict[str, str]) -> str:
+    """The stand's baton canister, or "" when the stand has none installed.
 
-    ``baton_canister_id`` is where a realm vote sends its approval of a stand
-    release; without it every ``upgrade``/``core`` proposal is refused.
+    The realm sends its approval of a stand release there
+    (``orchestration_decide``); without it every such vote is refused.
     """
-    block = {
-        "stand": stand,
-        "casals_canister_id": casals_id,
-        "registry_canister_id": file_registry_id,
-        "frontend_canister_id": ready.get(f"{stand}-frontend", ""),
-    }
-    baton = ready.get(f"{stand}-baton", "")
-    if baton:
-        block["baton_canister_id"] = baton
-    return block
+    return ready.get(f"{stand}-baton", "")
 
 
 def stand_readiness(view: dict, stand: str, required: list[str]) -> tuple[dict[str, str], list[str]]:

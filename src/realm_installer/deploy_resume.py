@@ -1,8 +1,8 @@
 """Resume planning for the installer's bootstrap / extension deploy task.
 
 A deployment whose canisters already exist must never be re-driven from step
-zero. ``enter_setup`` and ``configure_canister_ids`` are one-shot on a live
-stand: replaying them turns one recoverable failure (say, a missing
+zero. ``setup_install`` (``enter_setup`` on Monad GOS) is one-shot on a live
+stand: replaying it turns one recoverable failure (say, a missing
 asset-canister permission) into a task where every step fails, and the realm
 is left half-built with no way forward. A second pass therefore resumes the
 existing task from its first unfinished step and leaves completed steps alone.
@@ -17,15 +17,15 @@ STALE_RUNNING_S = 15 * 60
 
 # Steps that configure the realm once. They cannot be replayed against a live
 # stand, which is why a completed one is never reset.
-ONE_SHOT_STEP_KINDS = ("enter_setup", "configure_canister_ids")
+ONE_SHOT_STEP_KINDS = ("enter_setup", "setup_install")
 
 # Steps the realm cannot live without, whatever happens to extensions.
 BOOTSTRAP_STEP_KINDS = (
     "enter_setup",
-    "configure_canister_ids",
+    "setup_install",
+    "setup_infrastructure",
     "grant_frontend_access",
     "codex",
-    "codex_init",
 )
 
 # Task statuses the step runner will not pick up again (mirrors
@@ -35,21 +35,27 @@ TERMINAL_TASK_STATUSES = ("completed", "partial", "failed", "cancelled")
 # Statuses a step may be reset from on a resume pass.
 _RESETTABLE_STATUSES = ("failed", "running")
 
-# enter_setup markers that mean "the realm is already where this step wanted
-# it", i.e. a previous pass got through even though its bookkeeping was lost.
+# Rejections that mean "the realm is already where this step wanted it", i.e.
+# a previous pass got through even though its bookkeeping was lost.
 # Deliberately narrow: anything else stays a failure.
-_ALREADY_IN_SETUP_MARKERS = (
-    "already in setup",
-    "already_in_setup",
-    "already entered setup",
-    "already in_setup",
-    "setup already",
-    "already bootstrapped",
-    "already initialized",
-    "already initialised",
-    "already has a founder",
-    "founder already",
-)
+_ALREADY_DONE_MARKERS = {
+    "enter_setup": (
+        "already in setup",
+        "already_in_setup",
+        "already entered setup",
+        "already in_setup",
+        "setup already",
+        "already bootstrapped",
+        "already initialized",
+        "already initialised",
+        "already has a founder",
+        "founder already",
+    ),
+    # realm_backend api/setup.py setup_step
+    "setup_install": ("the install facts are set once",),
+    # realm_backend api/codex.py codex_install: "<id>@<version> is already active"
+    "codex": ("is already active",),
+}
 
 _MAX_TASK_ID_LEN = 64
 
@@ -235,8 +241,8 @@ def steps_satisfied_by_prior_task(new_steps, prior_signatures) -> list:
 
     A rebuild happens when the recorded task is gone or was shadowed by a name
     collision. The realm still carries the effects of whatever ran, so the
-    rebuild must not replay them: `enter_setup` on a realm already in setup and
-    `configure_canister_ids` on a configured one both fail.
+    rebuild must not replay them: `setup_install` on a realm that already has
+    its install facts fails, and so does `codex` on a realm that runs that codex.
     """
     remaining = list(prior_signatures or [])
     out = []
@@ -340,26 +346,14 @@ def coerce_realm_json(raw):
     return s
 
 
-def install_step_in_progress(parsed) -> bool:
-    """True when a realm install call advanced but needs another update."""
-    parsed = coerce_realm_json(parsed)
-    return (
-        isinstance(parsed, dict)
-        and parsed.get("success") is True
-        and parsed.get("status") == "in_progress"
-    )
-
-
 def realm_json_response_failed(parsed) -> tuple[bool, str]:
-    """Return ``(is_failure, error_message)`` for realm JSON text endpoints.
+    """Return ``(is_failure, error_message)`` for Monad GOS ``enter_setup``'s JSON text.
 
     Fail only on an explicit rejection (``ok``/``success`` false, or ``error``).
     Unparseable candid leftovers are not treated as failure.
     """
     parsed = coerce_realm_json(parsed)
     if not isinstance(parsed, dict):
-        return False, ""
-    if parsed.get("status") == "in_progress":
         return False, ""
     if parsed.get("ok") is False or parsed.get("success") is False:
         return True, str(parsed.get("error") or parsed.get("err") or parsed.get("Err") or "realm call rejected")
@@ -371,8 +365,8 @@ def realm_json_response_failed(parsed) -> tuple[bool, str]:
     return False, ""
 
 
-def enter_setup_already_satisfied(error_text: str) -> bool:
-    """True when an ``enter_setup`` rejection means the realm is already in setup.
+def step_already_satisfied(kind: str, error_text: str) -> bool:
+    """True when a ``kind`` step's rejection means the realm already is where the step wanted it.
 
     Only reached when the step record was lost (so resume could not skip it).
     The realm is in the state the step wanted, so treating this as satisfied is
@@ -381,4 +375,4 @@ def enter_setup_already_satisfied(error_text: str) -> bool:
     low = (error_text or "").strip().lower()
     if not low:
         return False
-    return any(marker in low for marker in _ALREADY_IN_SETUP_MARKERS)
+    return any(marker in low for marker in _ALREADY_DONE_MARKERS.get(kind, ()))

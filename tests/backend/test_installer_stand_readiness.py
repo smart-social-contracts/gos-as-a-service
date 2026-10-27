@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.join(_REPO_ROOT, "src/realm_installer"))
 
 from stand_readiness import (
     installed_stand_canisters,
-    realm_casals_block,
+    stand_baton_id,
     stand_build_gate,
     stand_declared,
     stand_of_canister,
@@ -119,14 +119,8 @@ def test_other_stands_and_missing_stand_are_ignored():
     assert missing == ["alpha-backend", "alpha-frontend"]
 
 
-def test_realm_casals_block_names_the_stand_baton():
+def test_stand_baton_id_names_the_stand_baton():
     ready = {"alpha-backend": "be-1", "alpha-frontend": "fe-1", "alpha-baton": "bt-1"}
-    assert realm_casals_block("alpha", "cas-1", "fr-1", ready) == {
-        "stand": "alpha",
-        "casals_canister_id": "cas-1",
-        "registry_canister_id": "fr-1",
-        "frontend_canister_id": "fe-1",
-        "baton_canister_id": "bt-1",
-    }
-    without = realm_casals_block("alpha", "cas-1", "fr-1", {"alpha-frontend": "fe-1"})
-    assert "baton_canister_id" not in without
+    assert stand_baton_id("alpha", ready) == "bt-1"
+    assert stand_baton_id("alpha", {"alpha-frontend": "fe-1"}) == ""
+    assert stand_baton_id("beta", ready) == ""

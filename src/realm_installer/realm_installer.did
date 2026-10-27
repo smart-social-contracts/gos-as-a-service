@@ -143,10 +143,10 @@ type GetRealmResult = variant { Ok : RealmRecord; Err : text };
 type GetBillingStatusResult = variant { Ok : BillingStatusRecord; Err : text };
 type UpgradeResult = variant { Ok : text; Err : text };
 type GenericResult = variant { Ok : text; Err : text };
-type RealmTargetService = service { install_extension_from_registry : (text) -> (text); install_codex_from_registry : (text) -> (text); run_codex_init : (text) -> (text); resync_extension_frontends : (text) -> (text) };
+type RealmTargetService = service { run : (text, text) -> (text); read : (text, text) -> (text) query };
 type RealmRegistryService = service { register_realm : (text, text, text, text, text) -> (text); remove_realm : (text) -> (text); deployment_failed : (text, text, text) -> (text); deployment_succeeded : (text, text) -> (text) };
-type FileRegistryService = service { get_extension_manifest : (text) -> (text) query };
-type CasalsService = service { get_tree : () -> (text) query; get_cycles_cached : () -> (text) query; create_stand : (text) -> (text); destroy_stand : (text) -> (text) };
+type FileRegistryService = service { get_extension_manifest : (text) -> (text) query; latest_version : (text) -> (text) query };
+type CasalsService = service { orchestra_get : (text) -> (text) query; cycles_get : (text) -> (text) query; stand_create : (text) -> (text); stand_destroy : (text) -> (text) };
 type RealmInstallerService = service { enqueue_deployment : (text) -> (RResultEnqueue); cancel_deployment : (text) -> (text); provision_via_casals : (text) -> (RResultProvision) };
 
 service : (text) -> {

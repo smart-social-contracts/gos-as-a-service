@@ -1,8 +1,9 @@
 """Tests for resuming a failed deploy instead of replaying the whole bootstrap.
 
 Live failure this covers (job_20260828152332_870e, test.gos.earth): the first
-pass created both canisters and completed ``enter_setup`` +
-``configure_canister_ids``, then failed ``grant_frontend_access`` because the
+pass created both canisters and completed the two setup steps (then
+``enter_setup`` + ``configure_canister_ids``; ``setup_install`` +
+``setup_infrastructure`` now), then failed ``grant_frontend_access`` because the
 installer holds no ManagePermissions on the asset canister. The heartbeat
 re-kicked the job, a brand-new deploy task was minted with every step pending,
 and all three bootstrap steps failed on replay — with the task id colliding
@@ -25,12 +26,11 @@ from deploy_resume import (  # noqa: E402
     completed_step_signatures,
     deploy_task_id,
     describe_resume,
-    enter_setup_already_satisfied,
     extensions_stall_reason,
-    install_step_in_progress,
     realm_json_response_failed,
     failed_bootstrap_step_kinds,
     plan_resume,
+    step_already_satisfied,
     steps_satisfied_by_prior_task,
     steps_to_reset,
     task_belongs_to_job,
@@ -76,8 +76,8 @@ class _FakeJob:
 def _live_failure_steps():
     """The three bootstrap steps as job_20260828152332_870e left them."""
     return [
-        _FakeStep(0, "enter_setup", "completed"),
-        _FakeStep(1, "configure_canister_ids", "completed"),
+        _FakeStep(0, "setup_install", "completed"),
+        _FakeStep(1, "setup_infrastructure", "completed"),
         _FakeStep(2, "grant_frontend_access", "failed"),
     ]
 
@@ -114,15 +114,15 @@ def test_task_id_is_stable_so_a_second_pass_finds_the_same_task():
     assert deploy_task_id("") == ""
 
 
-# ── A completed enter_setup is never re-run ────────────────────────────
+# ── A completed setup_install is never re-run ──────────────────────────
 
 def test_completed_bootstrap_steps_are_not_reset():
     steps = _live_failure_steps()
     plan = plan_resume(steps, now_s=NOW)
     assert plan["resume"] is True
     assert plan["reset_idx"] == [2]
-    assert plan["keep_completed"] == ["enter_setup", "configure_canister_ids"]
-    assert "enter_setup" not in [steps[i].kind for i in plan["reset_idx"]]
+    assert plan["keep_completed"] == ["setup_install", "setup_infrastructure"]
+    assert "setup_install" not in [steps[i].kind for i in plan["reset_idx"]]
 
 
 def test_steps_to_reset_covers_failed_only():
@@ -131,17 +131,17 @@ def test_steps_to_reset_covers_failed_only():
 
 
 def test_running_step_is_left_alone_until_its_runner_is_provably_gone():
-    steps = [_FakeStep(0, "enter_setup", "running", started_at=NOW - 60)]
+    steps = [_FakeStep(0, "setup_install", "running", started_at=NOW - 60)]
     assert steps_to_reset(steps, now_s=NOW) == []
 
-    stale = [_FakeStep(0, "enter_setup", "running", started_at=NOW - STALE_RUNNING_S - 1)]
+    stale = [_FakeStep(0, "setup_install", "running", started_at=NOW - STALE_RUNNING_S - 1)]
     assert steps_to_reset(stale, now_s=NOW) == [0]
 
 
 def test_resume_of_a_finished_task_resets_nothing():
     steps = [
-        _FakeStep(0, "enter_setup", "completed"),
-        _FakeStep(1, "configure_canister_ids", "completed"),
+        _FakeStep(0, "setup_install", "completed"),
+        _FakeStep(1, "setup_infrastructure", "completed"),
         _FakeStep(2, "grant_frontend_access", "completed"),
     ]
     plan = plan_resume(steps, now_s=NOW)
@@ -158,12 +158,12 @@ def test_no_task_steps_means_build_a_fresh_task():
 
 def test_completed_step_kinds_are_reported_in_step_order():
     steps = list(reversed(_live_failure_steps()))
-    assert completed_step_kinds(steps) == ["enter_setup", "configure_canister_ids"]
+    assert completed_step_kinds(steps) == ["setup_install", "setup_infrastructure"]
 
 
 def test_describe_resume_names_what_is_skipped():
     summary = describe_resume(plan_resume(_live_failure_steps(), now_s=NOW))
-    assert "enter_setup" in summary
+    assert "setup_install" in summary
     assert "2" in summary
 
 
@@ -195,7 +195,7 @@ def test_failed_grant_frontend_access_is_a_bootstrap_failure():
 
 def test_a_failed_extension_is_not_a_bootstrap_failure():
     steps = [
-        _FakeStep(0, "enter_setup", "completed"),
+        _FakeStep(0, "setup_install", "completed"),
         _FakeStep(1, "extension", "failed"),
     ]
     assert failed_bootstrap_step_kinds(steps) == []
@@ -204,32 +204,59 @@ def test_a_failed_extension_is_not_a_bootstrap_failure():
 def test_bootstrap_kinds_cover_one_shot_and_requested_codex_steps():
     assert BOOTSTRAP_STEP_KINDS == (
         "enter_setup",
-        "configure_canister_ids",
+        "setup_install",
+        "setup_infrastructure",
         "grant_frontend_access",
         "codex",
-        "codex_init",
     )
 
 
-# ── enter_setup idempotence (only when the step record was lost) ───────
+# ── Idempotence when the step record was lost ──────────────────────────
 
-def test_already_in_setup_rejection_counts_as_satisfied():
-    assert enter_setup_already_satisfied("Realm already in setup") is True
-    assert enter_setup_already_satisfied("realm already_in_setup") is True
-    assert enter_setup_already_satisfied("founder already registered") is True
+def test_install_facts_already_set_counts_as_satisfied():
+    """realm_backend setup_step: "the install facts are set once, by the installer"."""
+    assert step_already_satisfied(
+        "setup_install", "the install facts are set once, by the installer"
+    ) is True
 
 
-def test_other_enter_setup_rejections_stay_failures():
-    assert enter_setup_already_satisfied("") is False
-    assert enter_setup_already_satisfied("Rejection code 4, caller is not permitted") is False
-    assert enter_setup_already_satisfied("Couldn't send message") is False
+def test_other_setup_install_rejections_stay_failures():
+    assert step_already_satisfied("setup_install", "") is False
+    assert step_already_satisfied("setup_install", "setup_step needs realm.configure") is False
+    assert step_already_satisfied(
+        "setup_install", "the realm has launched: configuration is governed now"
+    ) is False
+    assert step_already_satisfied("setup_install", "Couldn't send message") is False
+
+
+def test_codex_already_active_counts_as_satisfied():
+    assert step_already_satisfied("codex", "agora@3.0.0 is already active") is True
+    assert step_already_satisfied("codex", "this realm runs codex API 2, not 1") is False
+
+
+def test_markers_belong_to_their_step_kind():
+    assert step_already_satisfied("extension", "agora@3.0.0 is already active") is False
+    assert step_already_satisfied("setup_infrastructure", "the install facts are set once") is False
+    assert step_already_satisfied("codex", "the install facts are set once") is False
+
+
+def test_monad_already_in_setup_rejection_counts_as_satisfied():
+    assert step_already_satisfied("enter_setup", "Realm already in setup") is True
+    assert step_already_satisfied("enter_setup", "realm already_in_setup") is True
+    assert step_already_satisfied("enter_setup", "founder already registered") is True
+
+
+def test_other_monad_enter_setup_rejections_stay_failures():
+    assert step_already_satisfied("enter_setup", "") is False
+    assert step_already_satisfied("enter_setup", "Rejection code 4, caller is not permitted") is False
+    assert step_already_satisfied("enter_setup", "Couldn't send message") is False
 
 
 def test_realm_json_response_failed_on_unauthorized_text():
     failed, message = realm_json_response_failed({"ok": False, "error": "unauthorized"})
     assert failed is True
     assert message == "unauthorized"
-    assert enter_setup_already_satisfied(message) is False
+    assert step_already_satisfied("enter_setup", message) is False
 
 
 def test_realm_json_response_failed_accepts_ok_true():
@@ -275,24 +302,24 @@ def _collided_rows():
     test8_own = _FakeTask(
         COLLIDED_TASK, TEST8_BACKEND, status="queued", started_at=100,
         steps=[
-            _FakeStep(0, "enter_setup", "pending"),
-            _FakeStep(1, "configure_canister_ids", "pending"),
+            _FakeStep(0, "setup_install", "pending"),
+            _FakeStep(1, "setup_infrastructure", "pending"),
             _FakeStep(2, "grant_frontend_access", "pending"),
         ],
     )
     test8_first_pass = _FakeTask(
         "deploy_1787931723064146992", TEST8_BACKEND, status="partial", started_at=50,
         steps=[
-            _FakeStep(0, "enter_setup", "completed"),
-            _FakeStep(1, "configure_canister_ids", "completed"),
+            _FakeStep(0, "setup_install", "completed"),
+            _FakeStep(1, "setup_infrastructure", "completed"),
             _FakeStep(2, "grant_frontend_access", "failed"),
         ],
     )
     realmtest2 = _FakeTask(
         COLLIDED_TASK, REALMTEST2_BACKEND, status="failed", started_at=110,
         steps=[
-            _FakeStep(0, "enter_setup", "failed"),
-            _FakeStep(1, "configure_canister_ids", "failed"),
+            _FakeStep(0, "setup_install", "failed"),
+            _FakeStep(1, "setup_infrastructure", "failed"),
             _FakeStep(2, "grant_frontend_access", "failed"),
         ],
     )
@@ -328,13 +355,13 @@ def test_a_rebuild_carries_over_what_this_realm_already_completed():
     _own, first, _realmtest2 = _collided_rows()
     signatures = completed_step_signatures(first.steps)
     assert signatures == [
-        ("enter_setup", "enter_setup"),
-        ("configure_canister_ids", "configure_canister_ids"),
+        ("setup_install", "setup_install"),
+        ("setup_infrastructure", "setup_infrastructure"),
     ]
 
     rebuilt = [
-        _FakeStep(0, "enter_setup", "pending"),
-        _FakeStep(1, "configure_canister_ids", "pending"),
+        _FakeStep(0, "setup_install", "pending"),
+        _FakeStep(1, "setup_infrastructure", "pending"),
         _FakeStep(2, "grant_frontend_access", "pending"),
     ]
     assert steps_satisfied_by_prior_task(rebuilt, signatures) == [0, 1]
@@ -414,7 +441,7 @@ def test_a_recent_or_running_extensions_job_is_left_alone():
 
     running = _FakeTask(
         "deploy_job_x", TEST8_BACKEND, status="running",
-        steps=[_FakeStep(0, "enter_setup", "running", started_at=NOW)],
+        steps=[_FakeStep(0, "setup_install", "running", started_at=NOW)],
     )
     assert extensions_stall_reason(
         task=running,
@@ -497,13 +524,13 @@ def test_grant_step_verifies_before_it_grants():
 
 def test_codex_steps_are_bootstrap_fatal_kinds():
     assert "codex" in BOOTSTRAP_STEP_KINDS
-    assert "codex_init" in BOOTSTRAP_STEP_KINDS
+    assert "codex_init" not in BOOTSTRAP_STEP_KINDS  # codex_install runs init itself
 
 
 def test_failed_codex_is_bootstrap_fatal():
     steps = [
-        _FakeStep(0, "enter_setup", "completed"),
-        _FakeStep(1, "configure_canister_ids", "completed"),
+        _FakeStep(0, "setup_install", "completed"),
+        _FakeStep(1, "setup_infrastructure", "completed"),
         _FakeStep(2, "grant_frontend_access", "completed"),
         _FakeStep(3, "codex", "failed"),
         _FakeStep(4, "extension", "completed"),
@@ -511,25 +538,20 @@ def test_failed_codex_is_bootstrap_fatal():
     assert failed_bootstrap_step_kinds(steps) == ["codex"]
 
 
-def test_failed_codex_init_is_bootstrap_fatal():
+def test_failed_setup_steps_are_bootstrap_fatal():
     steps = [
-        _FakeStep(0, "codex", "completed"),
-        _FakeStep(1, "codex_init", "failed"),
+        _FakeStep(0, "setup_install", "failed"),
+        _FakeStep(1, "setup_infrastructure", "failed"),
+        _FakeStep(2, "extension", "failed"),
     ]
-    assert failed_bootstrap_step_kinds(steps) == ["codex_init"]
+    assert failed_bootstrap_step_kinds(steps) == ["setup_install", "setup_infrastructure"]
 
 
-def test_install_step_in_progress():
-    assert install_step_in_progress(
-        {"success": True, "status": "in_progress", "phase": "pull_backend"}
-    )
-    assert not install_step_in_progress({"success": True, "status": "complete"})
-    assert not install_step_in_progress({"success": False, "error": "nope"})
-
-
-def test_codex_in_progress_reschedules_runner():
+def test_every_step_kind_has_an_executor():
     execute = _installer_source().split("def _execute_step", 1)[1].split(
-        "def _execute_configure_canister_ids", 1
+        "def _fail_step", 1
     )[0]
-    assert "install_step_in_progress" in execute
-    assert "_schedule_step_runner(task.name" in execute
+    for kind in ("setup_install", "setup_infrastructure", "enter_setup", "grant_frontend_access"):
+        assert f'step.kind == "{kind}"' in execute
+    assert 'step.kind in ("extension", "codex")' in execute
+    assert "unknown kind" in execute
