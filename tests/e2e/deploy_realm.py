@@ -71,9 +71,26 @@ def unquote_candid_text(out: str) -> str:
     """`("{\"ok\": true}")` → `{"ok": true}`."""
     s = out.strip()
     s = s[1:-1].strip().rstrip(",") if s.startswith("(") and s.endswith(")") else s
-    if s.startswith('"') and s.endswith('"'):
-        s = s[1:-1]
-    return s.replace('\\"', '"').replace("\\n", "\n").replace("\\\\", "\\")
+    if not (s.startswith('"') and s.endswith('"')):
+        return s
+    s, buf, i = s[1:-1], bytearray(), 0
+    simple = {"n": b"\n", "t": b"\t", "r": b"\r", '"': b'"', "'": b"'", "\\": b"\\"}
+    while i < len(s):
+        ch = s[i]
+        if ch != "\\":
+            buf += ch.encode()
+            i += 1
+        elif s[i + 1] in simple:
+            buf += simple[s[i + 1]]
+            i += 2
+        elif s[i + 1] == "u":
+            end = s.index("}", i)
+            buf += chr(int(s[i + 3:end], 16)).encode()
+            i = end + 1
+        else:
+            buf.append(int(s[i + 1:i + 3], 16))
+            i += 3
+    return buf.decode("utf-8", "replace")
 
 
 def call_json(cid: str, method: str, arg: str | None = None, *, query: bool = False) -> dict:
@@ -108,8 +125,8 @@ def conductor_backend() -> str:
 
 
 def bindings(casals_id: str) -> dict:
-    res = call_json(casals_id, "get_bindings", query=True)
-    return res.get("bindings") or {}
+    res = call_json(casals_id, "orchestra_get", "{}", query=True)
+    return {c["name"]: c["canister_id"] for c in res.get("canisters") or [] if c.get("canister_id")}
 
 
 def job_status(installer: str, job_id: str) -> dict:
@@ -236,7 +253,10 @@ def main() -> int:
         time.sleep(15)
     else:
         raise Fail(f"{url}: canister_ids.js HTTP {code} (names backend: {backend in js}), index.html HTTP {html_code}")
-    icp("canister", "call", backend, "status", "()", "--query")  # the realm backend answers
+    # The founder finishes in the wizard: the realm waits in setup, named by the installer.
+    status = json.loads(unquote_candid_text(icp("canister", "call", backend, "read", '("status", "{}")', "--query")))
+    if not status.get("ok") or status.get("status") != "setup" or status.get("name") != name:
+        raise Fail(f"realm status: want setup and name {name!r}, got {status}")
 
     installed = check_content(backend)
 
