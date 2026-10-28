@@ -10,7 +10,7 @@
   import { requestAssistantOpen } from '$lib/assistant-open.js';
   import { authSession } from '$lib/stores/authSession.js';
   import { CONFIG } from '$lib/config.js';
-  import { fetchRealmRuntimeFlags } from '$lib/realm-runtime-flags.js';
+  import { fetchRealmInfo } from '$lib/realm-gos-client.js';
   import { fetchDeploymentJobsFromInstaller } from '$lib/installer-queue.js';
   import { isUnknownSlugError, findJobForSlug, unknownSlugView } from '$lib/unknown-slug.js';
   import {
@@ -209,8 +209,7 @@
       logoUrl: '',
       env: CONFIG.deploy_queue_network
     };
-    const flags = await fetchRealmRuntimeFlags(data.backend_canister_id);
-    const logoUrl = String(flags?.logo_url || flags?.realm_logo || '').trim();
+    const logoUrl = (await fetchRealmInfo(data.backend_canister_id))?.logoUrl || '';
     realm = { ...realm, logoUrl };
     splashInputsFinal = true;
     writeSplashBrandHint(data.slug || slug, {

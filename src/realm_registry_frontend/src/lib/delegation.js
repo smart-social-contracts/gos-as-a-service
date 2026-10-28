@@ -1,6 +1,6 @@
 import { Principal } from '@dfinity/principal';
 import { DelegationChain, Ed25519PublicKey } from '@dfinity/identity';
-import { Actor, HttpAgent } from '@dfinity/agent';
+import { fetchJoinTargets } from './realm-gos-client.js';
 
 const DELEGATION_TTL_MS = 55 * 60 * 1000;
 
@@ -42,26 +42,17 @@ export async function createScopedDelegation(identity, targetCanisterIds, sessio
 
 /**
  * Resolve the full delegation target set for a realm: the capital backend plus
- * every quarter it reports via its public `get_join_targets` query. Falls back
- * to just the capital when the query fails (realm without quarter support).
+ * every quarter it may route a join to (`ggg_join_targets`, or `get_join_targets`
+ * on realms that predate GGG). Falls back to just the capital when the realm
+ * cannot say (realm without quarter support).
  *
  * @param {string} backendCanisterId the realm's capital backend
  * @returns {Promise<string[]>}
  */
 export async function resolveRealmDelegationTargets(backendCanisterId) {
 	const targets = [backendCanisterId];
-	try {
-		const idl = ({ IDL }) => IDL.Service({ get_join_targets: IDL.Func([], [IDL.Text], ['query']) });
-		const agent = new HttpAgent();
-		const actor = Actor.createActor(idl, { agent, canisterId: backendCanisterId });
-		const raw = await actor.get_join_targets();
-		const parsed = JSON.parse(raw);
-		for (const q of parsed?.quarters || []) {
-			const id = (q?.canister_id || '').trim();
-			if (id && !targets.includes(id)) targets.push(id);
-		}
-	} catch (e) {
-		console.warn('[delegation] get_join_targets failed; delegating to capital only:', e);
+	for (const id of await fetchJoinTargets(backendCanisterId)) {
+		if (!targets.includes(id)) targets.push(id);
 	}
 	return targets;
 }
