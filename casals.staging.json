@@ -200,8 +200,8 @@
     "bundles": [
       {
         "path": "frontend/realm-registry-frontend/main",
-        "source": "release:smart-social-contracts/gos-as-a-service@v0.6.0-rc3:realm_registry_frontend.tar.gz",
-        "sha256": "2ec828254cf54f8c48a62df9aeba71fa5eec719963e75c3ed2ef2038f17ff8c4"
+        "source": "release:smart-social-contracts/gos-as-a-service@v0.6.0-rc4:realm_registry_frontend.tar.gz",
+        "sha256": "cd8b779e18f05bfcf0ae3faa9cdbe284ef4210e2cd34cecb85c9d2f7cee9b560"
       },
       {
         "path": "frontend/realm-assets/main",
