@@ -3,6 +3,28 @@
   "name": "gaas",
   "description": "Governance Operating System-as-a-Service platform",
   "environments": {
+    "local": {
+      "network": "local",
+      "$comment": "Laptop: scripts/local_up.sh --gaas in the realms-gos checkout. Plaintext local-dev identity, no DNS.",
+      "dns": {
+        "provider": "none"
+      },
+      "portal_url": "http://${canister:realm-registry-frontend}.localhost:8000",
+      "gos_environment": "local",
+      "casals_url": "http://${canister:casals-frontend}.localhost:8000",
+      "principals": {
+        "operator": "$deployer",
+        "deployer": "$deployer",
+        "admin": "$new_access_code"
+      },
+      "realms_product": {
+        "marketplace_id": "$orchestra:realms-product/marketplace-backend"
+      },
+      "cycles": {
+        "budget_tc": 300
+      },
+      "can_test_mode": true
+    },
     "production": {
       "network": "ic",
       "$comment": "operator is prod-identity (YubiKey). Deploy through an icp delegation from it (`prod-session`, docs/OPERATIONS.md, Hardware keys): the IC sees the same principal. DNS lives in the Cloudflare zone gos.earth; the API token is read from $CLOUDFLARE_API_TOKEN, never written here. The CLI does not write Cloudflare records yet (`reconcile_domains` reports unverifiable): per host add, DNS only (grey cloud), CNAME <host> -> <host>.icp1.io, TXT _canister-id.<host> -> <canister id from bindings>, CNAME _acme-challenge.<host> -> _acme-challenge.<host>.icp2.io, then POST https://icp0.io/custom-domains/v1/<host>.",
@@ -27,7 +49,8 @@
       },
       "cycles": {
         "budget_tc": 40
-      }
+      },
+      "can_test_mode": false
     }
   },
   "conductor": {
@@ -296,7 +319,8 @@
                   "args": {
                     "portal_url": "$env.portal_url",
                     "installer_id": "$canister:realm-installer",
-                    "casals_frontend_canister_id": "$canister:casals-frontend"
+                    "casals_frontend_canister_id": "$canister:casals-frontend",
+                    "can_test_mode": "$env.can_test_mode"
                   },
                   "converged_when": {
                     "query": "get_env_config",
