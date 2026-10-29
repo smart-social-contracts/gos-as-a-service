@@ -22,7 +22,12 @@ INFRASTRUCTURE_FIELDS = (
     "marketplace_canister_id",
     "installer_canister_id",
     "baton_canister_id",
+    "conductor_canister_id",
+    "casals_stand",
 )
+# The Casals conductor and stand, which a realm needs to ask for its next quarter. A realm
+# built before it knew them refuses the fields; the step then goes again without them.
+CASALS_FIELDS = ("conductor_canister_id", "casals_stand")
 
 # GOS packages carry no marketplace approval the realm could check, so a
 # founding install that kept the realm's default policy would refuse them all.
@@ -139,6 +144,8 @@ def setup_infrastructure_args(manifest: dict, backend_id: str, frontend_id: str)
         "marketplace_canister_id": _resolve_marketplace_canister_id(manifest),
         "installer_canister_id": (manifest.get("installer_canister_id") or "").strip(),
         "baton_canister_id": (manifest.get("baton_canister_id") or "").strip(),
+        "conductor_canister_id": (manifest.get("conductor_canister_id") or "").strip(),
+        "casals_stand": (manifest.get("casals_stand") or "").strip(),
         "test_flags": manifest.get("test_flags") or {},
     }
 

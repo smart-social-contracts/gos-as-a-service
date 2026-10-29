@@ -79,6 +79,7 @@ from bootstrap import (
     setup_entry_kind,
     setup_infrastructure_args,
     setup_infrastructure_payload,
+    CASALS_FIELDS,
     setup_install_args,
     setup_install_payload,
     realm_test_mode_payload,
@@ -937,6 +938,10 @@ def _execute_setup_infrastructure(task, step, args):
         + ", ".join(f"{k}={v}" for k, v in payload.items() if k != "step")
     )
     _reply, error = yield from _realm_call(backend_id, "setup_step", payload)
+    if error and "cannot configure" in str(error) and any(k in payload for k in CASALS_FIELDS):
+        payload = {k: v for k, v in payload.items() if k not in CASALS_FIELDS}
+        jlog(task.name).info(f"{backend_id} predates the Casals fields; infrastructure again without them")
+        _reply, error = yield from _realm_call(backend_id, "setup_step", payload)
     if error:
         _finish_realm_step(task, step, error, {})
         return
@@ -1328,7 +1333,8 @@ def _resume_deploy_task(job) -> bool:
     return True
 
 
-def _start_extensions_for_job(job, manifest: dict, baton_canister_id: str = "") -> Async[None]:
+def _start_extensions_for_job(job, manifest: dict, baton_canister_id: str = "", conductor_canister_id: str = "",
+                              casals_stand: str = "") -> Async[None]:
     if _resume_deploy_task(job):
         return
 
@@ -1376,6 +1382,8 @@ def _start_extensions_for_job(job, manifest: dict, baton_canister_id: str = "") 
         "marketplace_canister_id": marketplace_id,
         "installer_canister_id": ic.id().to_str(),
         "baton_canister_id": (baton_canister_id or "").strip(),
+        "conductor_canister_id": (conductor_canister_id or "").strip(),
+        "casals_stand": (casals_stand or "").strip(),
         "network": network,
         "can_test_mode": bool(manifest.get("can_test_mode")),
         "test_flags": manifest.get("test_flags") or {},
@@ -2608,7 +2616,7 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
     # installs, then registration.
     job.status = "extensions"
     jlog(job_id).info("entering bootstrap/extensions phase (casals path)")
-    yield from _start_extensions_for_job(job, manifest, stand_baton_id(stand, ready))
+    yield from _start_extensions_for_job(job, manifest, stand_baton_id(stand, ready), casals_id, stand)
 
     return ProvisionOk(
         job_id=job_id, status=job.status or "", stand=stand,

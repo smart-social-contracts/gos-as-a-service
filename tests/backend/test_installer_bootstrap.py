@@ -75,7 +75,7 @@ def _legacy_codex_manifest(**overrides):
     )
 
 
-def _ext_manifest_for_job(manifest, baton=""):
+def _ext_manifest_for_job(manifest, baton="", conductor="", stand=""):
     """Build the deploy-task manifest shape used after _start_extensions_for_job."""
     network = (manifest.get("network") or "").strip()
     realm_registry_id = (
@@ -90,6 +90,8 @@ def _ext_manifest_for_job(manifest, baton=""):
         "infra": manifest.get("infra") or {},
         "installer_canister_id": "installer-id",
         "baton_canister_id": baton,
+        "conductor_canister_id": conductor,
+        "casals_stand": stand,
         "network": network,
         "can_test_mode": bool(manifest.get("can_test_mode")),
         "test_flags": manifest.get("test_flags") or {},
@@ -231,6 +233,19 @@ def test_infrastructure_payload_lists_the_realms_canisters():
     }
 
 
+def test_infrastructure_tells_the_realm_its_casals_conductor_and_stand():
+    """A realm asks Casals for its next quarter (quarter_add) on the stand it runs on."""
+    manifest = _bootstrap_manifest()
+    _args, payload = _infrastructure(_ext_manifest_for_job(manifest, baton="b", conductor="conductor-id", stand="agora"))
+    assert payload["conductor_canister_id"] == "conductor-id" and payload["casals_stand"] == "agora"
+
+
+def test_infrastructure_goes_again_without_the_casals_fields_for_an_older_realm():
+    body = _section(_installer_source(), "def _execute_setup_infrastructure", "def _relax_trust_policy")
+    retry = body.index('"cannot configure" in str(error)')
+    assert retry < body.index("if error:\n        _finish_realm_step") and "CASALS_FIELDS" in body
+
+
 def test_infrastructure_payload_omits_unknown_canisters():
     """No baked-in per-network defaults: an id nobody supplied is not sent at all."""
     _args, payload = _infrastructure(_bootstrap_manifest())
@@ -256,7 +271,7 @@ def test_infrastructure_payload_sends_only_infrastructure_fields():
     _args, payload = _infrastructure(_ext_manifest_for_job(manifest, baton="b"))
     assert set(payload) - {"step"} <= {
         "frontend_canister_id", "file_registry_canister_id", "marketplace_canister_id",
-        "installer_canister_id", "baton_canister_id",
+        "installer_canister_id", "baton_canister_id", "conductor_canister_id", "casals_stand",
     }
 
 
@@ -590,6 +605,6 @@ def test_destroy_reads_the_stage_from_realm_info():
     assert '.get("status")' in body
 
 
-def test_casals_path_passes_the_stand_baton_to_the_deploy_task():
+def test_casals_path_passes_the_stand_baton_conductor_and_stand_to_the_deploy_task():
     body = _section(_installer_source(), "def _provision_via_casals_body", "def _provision_ok_for_job")
-    assert "_start_extensions_for_job(job, manifest, stand_baton_id(stand, ready))" in body
+    assert "_start_extensions_for_job(job, manifest, stand_baton_id(stand, ready), casals_id, stand)" in body
