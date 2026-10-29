@@ -460,7 +460,8 @@
             "controllers": [
               "$stand.baton",
               "$multisig",
-              "$this"
+              "$this",
+              "$stand.backend"
             ]
           }
         ]
