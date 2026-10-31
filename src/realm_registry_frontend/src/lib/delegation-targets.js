@@ -12,6 +12,9 @@
 import { fetchFederationCapital, fetchJoinTargets } from './realm-gos-client.js';
 
 const REQUEST_TIMEOUT_MS = 5000;
+// A federation has at most this many quarters (realms-gos MAX_QUARTERS); a hijacked realm could
+// report millions to make the portal query them all.
+const MAX_QUARTERS = 500;
 
 function withTimeout(promise, timeoutMs) {
 	let timer;
@@ -57,13 +60,21 @@ export async function resolveRealmDelegationTargets(
 	} catch (err) {
 		console.warn('[delegation] could not read the realm quarters, delegating to its backend only', err);
 	}
-	const candidates = [...new Set(reported)].filter((id) => id !== backendCanisterId);
-	const notPlatform = candidates.filter((id) => !platformCanisterIds.includes(id));
-	for (const id of candidates.filter((id) => !notPlatform.includes(id))) {
-		console.warn(`[delegation] not delegating to ${id}: it is a platform canister`);
+	const candidates = [];
+	for (const id of new Set(reported)) {
+		if (id === backendCanisterId) continue;
+		if (platformCanisterIds.includes(id)) {
+			console.warn(`[delegation] not delegating to ${id}: it is a platform canister`);
+		} else {
+			candidates.push(id);
+		}
+	}
+	if (candidates.length > MAX_QUARTERS) {
+		console.warn(`[delegation] the realm reports ${candidates.length} quarters, checking the first ${MAX_QUARTERS}`);
+		candidates.length = MAX_QUARTERS;
 	}
 	const verified = await Promise.all(
-		notPlatform.map((id) => claimsToBeQuarterOf(backendCanisterId, id, fetchCapital, timeoutMs))
+		candidates.map((id) => claimsToBeQuarterOf(backendCanisterId, id, fetchCapital, timeoutMs))
 	);
-	return [backendCanisterId, ...notPlatform.filter((_, i) => verified[i])];
+	return [backendCanisterId, ...candidates.filter((_, i) => verified[i])];
 }

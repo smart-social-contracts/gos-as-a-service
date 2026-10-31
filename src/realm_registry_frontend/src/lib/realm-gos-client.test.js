@@ -82,11 +82,23 @@ test('a quarter names its capital; anything else reads as no capital', async () 
 	resetRealmGosClient();
 	assert.equal(await fetchFederationCapital('cap-1', { createActor: () => gggRealm() }), '');
 	resetRealmGosClient();
-	assert.equal(await fetchFederationCapital('old', { createActor: () => legacyRealm() }), '');
 	resetRealmGosClient();
 	const down = gggRealm({ ggg_realm_info: async () => Promise.reject(new Error('IC0301')) });
 	assert.equal(await fetchFederationCapital('q1', { createActor: () => down }), '');
 	assert.equal(await fetchFederationCapital('', {}), '');
+});
+
+test('a pre-GGG quarter names its capital in get_quarter_info', async () => {
+	resetRealmGosClient();
+	const reply = (info) => ({ success: true, data: { message: JSON.stringify(info) } });
+	const quarter = { ...legacyRealm(), get_quarter_info: async () => reply({ parent_realm_canister_id: ' cap-1 ' }) };
+	assert.equal(await fetchFederationCapital('old-q', { createActor: () => quarter }), 'cap-1');
+	resetRealmGosClient();
+	const capital = { ...legacyRealm(), get_quarter_info: async () => reply({ parent_realm_canister_id: '' }) };
+	assert.equal(await fetchFederationCapital('old-cap', { createActor: () => capital }), '');
+	resetRealmGosClient();
+	const failing = { ...legacyRealm(), get_quarter_info: async () => ({ success: false, data: { error: 'boom' } }) };
+	assert.equal(await fetchFederationCapital('old-bad', { createActor: () => failing }), '');
 });
 
 test('ICRC-10 is asked once per canister', async () => {

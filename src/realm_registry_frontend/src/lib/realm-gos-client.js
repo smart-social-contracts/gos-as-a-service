@@ -39,6 +39,10 @@ export const idlFactory = ({ IDL }) => {
 		targets: IDL.Vec(IDL.Text),
 		mode: IDL.Opt(IDL.Text)
 	});
+	const QuarterInfoReply = IDL.Record({
+		success: IDL.Bool,
+		data: IDL.Variant({ message: IDL.Text, error: IDL.Text })
+	});
 	return IDL.Service({
 		icrc10_supported_standards: IDL.Func(
 			[],
@@ -48,7 +52,8 @@ export const idlFactory = ({ IDL }) => {
 		ggg_realm_info: IDL.Func([], [Realm], ['query']),
 		ggg_join_targets: IDL.Func([], [IDL.Variant({ Ok: JoinTargets, Err: GggError })], ['query']),
 		get_runtime_flags: IDL.Func([], [IDL.Text], ['query']),
-		get_join_targets: IDL.Func([], [IDL.Text], ['query'])
+		get_join_targets: IDL.Func([], [IDL.Text], ['query']),
+		get_quarter_info: IDL.Func([], [QuarterInfoReply], ['query'])
 	});
 };
 
@@ -157,9 +162,16 @@ export async function fetchJoinTargets(canisterId, { createActor } = {}) {
 	}
 }
 
+/** The capital a pre-GGG realm names in get_quarter_info, or '' when it is not a quarter. */
+async function legacyFederationCapital(actor) {
+	const reply = await actor.get_quarter_info();
+	if (!reply.success) throw new Error(`get_quarter_info: ${reply.data.error}`);
+	return (JSON.parse(reply.data.message).parent_realm_canister_id || '').trim();
+}
+
 /**
- * The capital a quarter says it belongs to, or '' when the canister is not a quarter, predates
- * GGG or cannot be read. It is the canister's own claim: compare it with a canister you trust.
+ * The capital a quarter says it belongs to, or '' when the canister is not a quarter or cannot be
+ * read. It is the canister's own claim: compare it with a canister you trust.
  * @param {string} canisterId
  * @param {{ createActor?: (id: string) => any }} [options]
  * @returns {Promise<string>}
@@ -169,7 +181,7 @@ export async function fetchFederationCapital(canisterId, { createActor } = {}) {
 	if (!cid) return '';
 	try {
 		const actor = await actorFor(cid, createActor);
-		if (!(await supportsGgg(actor, cid))) return '';
+		if (!(await supportsGgg(actor, cid))) return await legacyFederationCapital(actor);
 		const realm = await actor.ggg_realm_info();
 		return (realm.federation_realm_id[0] || '').trim();
 	} catch (err) {

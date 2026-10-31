@@ -45,6 +45,20 @@ test('drops platform canisters without asking them', async () => {
 	assert.deepEqual(asked, ['q1']);
 });
 
+test('checks at most 500 reported quarters', async () => {
+	const reported = Array.from({ length: 501 }, (_, i) => `q${i}`);
+	const asked = [];
+	const targets = await resolve('realm', reported, {}, {
+		fetchCapital: async (id) => {
+			asked.push(id);
+			return 'realm';
+		}
+	});
+	assert.equal(asked.length, 500);
+	assert.equal(targets.length, 501);
+	assert.ok(!targets.includes('q500'));
+});
+
 test('refuses a platform canister recorded as the backend', async () => {
 	await assert.rejects(resolve('installer-id', [], {}), /platform canister installer-id/);
 });
