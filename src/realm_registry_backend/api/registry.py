@@ -1,5 +1,5 @@
 from api.listings import caller_may_manage, remove_listing_details
-from core.env_config import get_installer_id
+from core.env_config import is_installer
 from core.models import RealmRecord, SlugRecord
 from _cdk import ic
 from ic_python_logging import get_logger
@@ -25,8 +25,7 @@ def register_realm_by_caller(
     realm_id = realm_id_override.strip() if realm_id_override else caller
     if not name or not name.strip():
         return {"success": False, "error": "Realm name cannot be empty"}
-    installer = get_installer_id()
-    if realm_id != caller and not (installer and caller == installer) and not ic.is_controller(ic.caller()):
+    if realm_id != caller and not is_installer(caller) and not ic.is_controller(ic.caller()):
         return {"success": False, "error": f"Caller {caller} may not register realm {realm_id}"}
     try:
         existing = RealmRecord[realm_id]

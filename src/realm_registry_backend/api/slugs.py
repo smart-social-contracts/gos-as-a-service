@@ -1,6 +1,6 @@
 import json
 
-from core.env_config import get_portal_url
+from core.env_config import get_portal_url, is_installer
 from core.models import RealmRecord, SlugRecord, RegistryConfig
 from _cdk import ic
 from ic_python_logging import get_logger
@@ -100,7 +100,11 @@ def claim_slug_by_caller(
     if err:
         return {"success": False, "error": err}
 
-    backend_id = (realm_id or str(ic.caller())).strip()
+    caller = str(ic.caller())
+    is_controller = ic.is_controller(ic.caller())
+    backend_id = (realm_id or caller).strip()
+    if caller != backend_id and not is_installer(caller) and not is_controller:
+        return {"success": False, "error": f"Caller {caller} may not claim a slug for realm {backend_id}"}
     frontend_id = (frontend_canister_id or "").strip()
 
     realm = RealmRecord[backend_id]
@@ -115,6 +119,14 @@ def claim_slug_by_caller(
     existing = SlugRecord[normalized]
     if existing and existing.realm_id != backend_id:
         return {"success": False, "error": f"Slug '{normalized}' already claimed"}
+    # The frontend is what the portal iframes and delegates the visitor's login to.
+    if (
+        existing
+        and frontend_id != existing.frontend_canister_id
+        and caller != backend_id
+        and not is_controller
+    ):
+        return {"success": False, "error": f"Only the realm or a controller may change the frontend of '{normalized}'"}
 
     portal_base = _portal_base_url(portal_base_url)
     if not portal_base:
@@ -123,7 +135,6 @@ def claim_slug_by_caller(
     pretty = _pretty_hostname(normalized, portal_base, pretty_hostname)
 
     now = float(ic.time() / 1_000_000_000)
-    caller = str(ic.caller())
 
     if existing:
         existing.realm_id = backend_id
@@ -201,7 +212,9 @@ def list_pending_pretty_hostnames() -> list:
     return out
 
 
-def mark_pretty_hostname_status(slug: str, status: str) -> dict:
+def mark_pretty_hostname_status(slug: str, status: str, is_controller: bool) -> dict:
+    if not is_controller:
+        return {"success": False, "error": "Only controllers can set the pretty hostname status"}
     normalized = normalize_slug(slug)
     allowed = {"pending", "live", "failed"}
     if status not in allowed:

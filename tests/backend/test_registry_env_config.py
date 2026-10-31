@@ -83,18 +83,11 @@ def test_add_credits_enforces_billing_service_principal():
     billing_principal = "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa"
     apply_env_config({"billing_service_principal": billing_principal})
 
-    denied = check_billing_service_caller("wrong-principal", "add credits")
+    denied = check_billing_service_caller("wrong-principal", "add credits", is_controller=False)
     assert denied is not None
     assert "billing service" in denied.lower()
-    assert check_billing_service_caller(billing_principal, "add credits") is None
-    assert check_billing_service_caller(billing_principal, "deduct credits") is None
-
-
-def test_add_credits_allows_any_caller_when_principal_unset():
-    from realm_registry_backend.core.env_config import check_billing_service_caller
-
-    _clear_env_config()
-    assert check_billing_service_caller("any-caller", "add credits") is None
+    assert check_billing_service_caller(billing_principal, "add credits", is_controller=False) is None
+    assert check_billing_service_caller(billing_principal, "deduct credits", is_controller=False) is None
 
 
 def test_can_test_mode_defaults_closed():
