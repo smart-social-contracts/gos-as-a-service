@@ -20,7 +20,7 @@
   import { getAuthenticatedRegistryActor } from '$lib/canisters.js';
   import { deploymentJobUrl } from '$lib/deployment-url.js';
   import { friendlyNetworkError, retryOnTransientNetworkError } from '$lib/network-retry.js';
-  import { ALPHA_INVITE_REQUEST_URL } from '$lib/invite-request-url.js';
+  import AlphaAccessNotice from '$lib/components/AlphaAccessNotice.svelte';
   import {
     findRecentDeploymentJob,
     isAmbiguousDeploymentRequestError,
@@ -300,6 +300,7 @@
       const result = await registry.redeem_invitation_code(invitationCode.trim());
       if (result?.Ok) {
         principalActivated = true;
+        await loadUserCredits();
       } else {
         invitationError = result?.Err || 'Invalid invitation code';
       }
@@ -656,16 +657,7 @@
         </p>
       </div>
       <div class="invitation-request-info">
-        <p>Don't have an invitation code?</p>
-        <p class="invitation-request-hint">Request access — we'll review your submission and email you a code. The form collects your email address; see the <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</p>
-        <a
-          href={ALPHA_INVITE_REQUEST_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="btn btn-outline invitation-request-btn"
-        >
-          Request Invite
-        </a>
+        <AlphaAccessNotice />
       </div>
     </div>
   </div>
@@ -681,6 +673,9 @@
       <h2>Sign In Required</h2>
       <p class="invitation-desc">Please sign in with Internet Identity to continue. An invitation code is required to create a realm.</p>
       <button class="btn btn-primary" on:click={handleLogin}>Sign In</button>
+      <div class="invitation-request-info">
+        <AlphaAccessNotice />
+      </div>
     </div>
   </div>
 {:else}
@@ -1218,27 +1213,11 @@
   }
 
   .invitation-request-info {
+    display: flex;
+    justify-content: center;
     margin-top: 2.5rem;
     padding-top: 1.5rem;
     border-top: 1px solid #e5e5e5;
-  }
-
-  .invitation-request-info p {
-    margin: 0 0 0.5rem;
-    color: #737373;
-    font-size: 0.875rem;
-  }
-
-  .invitation-request-hint {
-    color: #525252;
-    margin-bottom: 1rem !important;
-  }
-
-  .invitation-request-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 180px;
   }
 
   .wizard-container {

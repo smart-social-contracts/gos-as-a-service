@@ -3,6 +3,8 @@
 
 import json
 
+import pytest
+
 from core.models import RegistryConfig
 from core.runtime_flags import (
     apply_test_flags,
@@ -66,6 +68,22 @@ def test_rejects_test_flags_on_mainnet():
         assert False, "expected ValueError"
     except ValueError as exc:
         assert "mainnet" in str(exc).lower()
+
+
+def test_billing_and_notice_flags_can_be_enabled_on_ic():
+    """They are ordinary flags, so the test-flag guard leaves them alone."""
+    _clear_card_billing_flag()
+    apply_test_flags(
+        {"disable_card_billing": True, "assistant_experimental_notice": True},
+        network="ic",
+    )
+    payload = get_runtime_flags_payload()
+    assert payload["test_mode_disable_card_billing"] is True
+    assert payload["test_mode_assistant_experimental_notice"] is True
+
+    with pytest.raises(ValueError):
+        apply_test_flags({"disable_card_billing": True, "ii_bypass": True})
+    _clear_card_billing_flag()
 
 
 def test_disable_card_billing_has_no_network_default():

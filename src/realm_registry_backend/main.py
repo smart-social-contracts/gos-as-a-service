@@ -380,11 +380,6 @@ def _is_invitation_mode() -> bool:
     return cfg is not None and cfg.value == "true"
 
 
-def _hash_code(code: str) -> str:
-    import hashlib
-    return hashlib.sha256(code.strip().encode("utf-8")).hexdigest()
-
-
 def _realm_record(r: dict) -> RealmRecord:
     return RealmRecord(
         id=r.get("id", ""), name=r.get("name", ""),
@@ -1096,32 +1091,14 @@ def is_principal_activated(principal_id: text) -> GenericResult:
 
 @update
 def redeem_invitation_code(code: text) -> GenericResult:
+    """Activate the caller and add the credits the code carries."""
     try:
-        caller = str(ic.caller())
         if not _is_invitation_mode():
             return {"Ok": "Invitation mode is not active"}
 
-        if ActivatedPrincipal[caller]:
-            return {"Ok": "Already activated"}
+        from api.invitations import redeem_invitation
 
-        code_hash = _hash_code(code)
-        invitation = InvitationCode[code_hash]
-        if not invitation or not invitation.is_active:
-            return {"Err": "Invalid invitation code"}
-        if invitation.redeemed_by:
-            return {"Err": "This invitation code has already been used"}
-
-        invitation.redeemed_by = caller
-        invitation.redeemed_at = float(ic.time() / 1_000_000_000)
-        invitation.is_active = False
-
-        ActivatedPrincipal(
-            principal_id=caller,
-            invitation_code_hash=code_hash,
-            activated_at=float(ic.time() / 1_000_000_000),
-        )
-        logger.info(f"Principal {caller} activated with invitation code")
-        return {"Ok": "Account activated"}
+        return redeem_invitation(code, str(ic.caller()), float(ic.time() / 1_000_000_000))
     except Exception as e:
         return {"Err": str(e)}
 
@@ -1144,29 +1121,27 @@ def set_invitation_mode(enabled: text) -> GenericResult:
 
 
 @update
-def create_invitation_codes(hashes_json: text) -> GenericResult:
-    """Controller-only. Input: '["sha256hex1","sha256hex2",...]'"""
+def create_invitation_codes(invitations_json: text) -> text:
+    """Controller-only. Input: '[{"hash": sha256hex, "credits": 50, "expires_at": unix_seconds_or_0}, ...]'
+
+    Text out, not GenericResult: the GaaS multisig calls this through
+    ``CallCanister`` and only records a text reply.
+    Returns: {"success": bool, "created"?: int, "total_submitted"?: int, "error"?: str}.
+    """
     try:
         if not ic.is_controller(ic.caller()):
-            return {"Err": "Only controllers can create invitation codes"}
-        hashes = json.loads(hashes_json)
-        created = 0
-        for h in hashes:
-            h = h.strip()
-            if not h:
-                continue
-            if InvitationCode[h]:
-                continue
-            InvitationCode(
-                code_hash=h, redeemed_by="", is_active=True,
-                redeemed_at=0.0,
-                created_at=float(ic.time() / 1_000_000_000),
+            return json.dumps(
+                {"success": False, "error": "Only controllers can create invitation codes"}
             )
-            created += 1
-        logger.info(f"Created {created} invitation codes")
-        return {"Ok": json.dumps({"created": created, "total_submitted": len(hashes)})}
+
+        from api.invitations import create_invitations
+
+        result = create_invitations(json.loads(invitations_json), float(ic.time() / 1_000_000_000))
+        if "Err" in result:
+            return json.dumps({"success": False, "error": result["Err"]})
+        return json.dumps({"success": True, **result["Ok"]})
     except Exception as e:
-        return {"Err": str(e)}
+        return json.dumps({"success": False, "error": str(e)})
 
 
 @update

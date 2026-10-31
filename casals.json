@@ -23,7 +23,10 @@
       "cycles": {
         "budget_tc": 300
       },
-      "can_test_mode": true
+      "can_test_mode": true,
+      "test_flags": {
+        "disable_card_billing": false
+      }
     },
     "production": {
       "network": "ic",
@@ -50,7 +53,10 @@
       "cycles": {
         "budget_tc": 40
       },
-      "can_test_mode": false
+      "can_test_mode": false,
+      "test_flags": {
+        "disable_card_billing": true
+      }
     }
   },
   "conductor": {
@@ -325,6 +331,19 @@
                   "converged_when": {
                     "query": "get_env_config",
                     "equals_args": true
+                  }
+                },
+                {
+                  "$comment": "Alpha has no billing: environments set test_flags.disable_card_billing.",
+                  "method": "set_canister_config_json",
+                  "args": {
+                    "test_flags": "$env.test_flags"
+                  },
+                  "converged_when": {
+                    "query": "get_runtime_flags",
+                    "contains": {
+                      "test_mode_disable_card_billing": "$env.test_flags.disable_card_billing"
+                    }
                   }
                 }
               ]

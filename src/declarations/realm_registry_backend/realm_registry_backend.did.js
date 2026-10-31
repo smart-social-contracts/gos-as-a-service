@@ -108,7 +108,7 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'configure' : IDL.Func([IDL.Text], [GenericResult], []),
-    'create_invitation_codes' : IDL.Func([IDL.Text], [GenericResult], []),
+    'create_invitation_codes' : IDL.Func([IDL.Text], [IDL.Text], []),
     'deactivate_principal' : IDL.Func([IDL.Text], [GenericResult], []),
     'deduct_credits' : IDL.Func(
         [IDL.Text, IDL.Nat64, IDL.Text],

@@ -11,9 +11,24 @@ test('alpha invite request URL is the production Tally form', () => {
 	assert.equal(ALPHA_INVITE_REQUEST_URL, 'https://tally.so/r/GxQ8QL');
 });
 
-test('deploy-gos invitation gate links to Tally, not OpenChat', () => {
-	const source = readFileSync(join(here, '../routes/deploy-gos/+page.svelte'), 'utf8');
-	assert.match(source, /ALPHA_INVITE_REQUEST_URL/);
-	assert.match(source, /Request Invite/);
-	assert.doesNotMatch(source, /oc\.app\/community\/x2nkd-waaaa-aaaar-bhh4q-cai/);
+test('deploy-gos invitation gate shows the Alpha notice, which links to Tally, not OpenChat', () => {
+	const gate = readFileSync(join(here, '../routes/deploy-gos/+page.svelte'), 'utf8');
+	const notice = readFileSync(join(here, 'components/AlphaAccessNotice.svelte'), 'utf8');
+	assert.match(gate, /<AlphaAccessNotice \/>/);
+	assert.match(notice, /ALPHA_INVITE_REQUEST_URL/);
+	assert.doesNotMatch(gate, /oc\.app\/community\/x2nkd-waaaa-aaaar-bhh4q-cai/);
+});
+
+test('the Alpha notice keeps the privacy line the request form needs', () => {
+	const notice = readFileSync(join(here, 'components/AlphaAccessNotice.svelte'), 'utf8');
+	assert.match(notice, /href="\/privacy"/);
+});
+
+test('the landing page shows the Alpha notice only in invitation mode, to visitors who are not signed in, until dismissed', () => {
+	const landing = readFileSync(join(here, '../routes/+page.svelte'), 'utf8');
+	assert.match(
+		landing,
+		/\{#if invitationMode && !authLoading && !isLoggedIn && !alphaNoticeDismissed\}\s*<div class="alpha-notice-slot">\s*<AlphaAccessNotice \/>/
+	);
+	assert.match(landing, /on:click=\{dismissAlphaNotice\}/);
 });
