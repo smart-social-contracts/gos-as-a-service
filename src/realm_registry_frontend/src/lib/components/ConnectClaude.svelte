@@ -68,12 +68,12 @@
 
   /**
    * POST to a token route. The server acts for the principal the proof shows, and each call
-   * needs a challenge of its own.
+   * needs a challenge of its own, issued for the `operation` (mint, list or revoke) it authorizes.
    */
-  async function postProven(path, body = {}) {
+  async function postProven(operation, path, body = {}) {
     const identity = await getIdentity();
     if (!identity) throw new Error('not signed in');
-    const { nonce, proof } = await proveChallenge(identity, `${GEISTER_API}/api/mcp/challenge`);
+    const { nonce, proof } = await proveChallenge(identity, `${GEISTER_API}/api/mcp/challenge?operation=${operation}`);
     return fetch(`${GEISTER_API}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -85,7 +85,7 @@
     loadingList = true;
     listError = '';
     try {
-      const res = await postProven('/api/mcp/tokens/list');
+      const res = await postProven('list', '/api/mcp/tokens/list');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       tokens = Array.isArray(data?.tokens) ? data.tokens : [];
@@ -110,7 +110,7 @@
       const ttl = parseInt(ttlDays, 10);
       if (Number.isFinite(ttl) && ttl > 0) body.ttl_days = ttl;
 
-      const res = await postProven('/api/mcp/tokens', body);
+      const res = await postProven('mint', '/api/mcp/tokens', body);
       const data = await res.json();
       if (!res.ok || !data?.success) {
         throw new Error(data?.error || `HTTP ${res.status}`);
@@ -132,7 +132,7 @@
 
   async function revokeToken(id) {
     try {
-      const res = await postProven(`/api/mcp/tokens/${id}/revoke`);
+      const res = await postProven('revoke', `/api/mcp/tokens/${id}/revoke`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       await loadTokens();
     } catch (err) {
