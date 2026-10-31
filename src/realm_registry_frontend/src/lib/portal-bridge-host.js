@@ -20,8 +20,8 @@ function platformCanisterIds() {
 /**
  * Host-side portal bridge: MessageChannel handshake + scoped delegation to iframe.
  * @param {HTMLIFrameElement} iframe
- * @param {{ slug: string, backendCanisterId: string, quarterCanisterIds?: string[], frontendCanisterId: string, env?: string }} realm
- *   as recorded by the registry; the delegation covers only these canisters.
+ * @param {{ slug: string, backendCanisterId: string, frontendCanisterId: string, env?: string }} realm
+ *   as recorded by the registry.
  * @param {{ onAuthState?: (needsLogin: boolean) => void, onFocus?: (focus: { source: string, uri: string, label?: string } | null) => void, onAssistantOpen?: () => void, onUiReady?: () => void }} [opts]
  *   `onAuthState(true)` fires when the iframe asks for a delegation but the
  *   portal has no session. Sign-in itself is `auth:open-login`, which leaves
@@ -146,10 +146,14 @@ export function attachPortalBridge(iframe, realm, opts = {}) {
 				});
 				return;
 			}
-			// Delegate to the capital and the quarters the registry recorded for
-			// it: auto-scaled realms route joins/calls to quarter canisters, which
-			// must be delegation targets or the replica rejects the signed calls.
-			const targets = resolveRealmDelegationTargets(realm, platformCanisterIds());
+			// Delegate to the capital and its verified quarters: auto-scaled realms
+			// route joins/calls to quarter canisters, which must be delegation
+			// targets or the replica rejects the signed calls. Resolved fresh on
+			// each request so a quarter minted mid-session is covered on renewal.
+			const targets = await resolveRealmDelegationTargets(
+				realm.backendCanisterId,
+				platformCanisterIds()
+			);
 			// One retry: transient net::ERR_NETWORK_CHANGED / chunk-fetch blips
 			// used to surface as a fatal "Login was cancelled" in the iframe.
 			let scoped;

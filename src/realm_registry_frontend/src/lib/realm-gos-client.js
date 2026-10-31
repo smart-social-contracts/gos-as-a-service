@@ -22,7 +22,8 @@ export const idlFactory = ({ IDL }) => {
 	const Realm = IDL.Record({
 		name: IDL.Text,
 		status: RealmStatus,
-		logo_url: IDL.Opt(IDL.Text)
+		logo_url: IDL.Opt(IDL.Text),
+		federation_realm_id: IDL.Opt(IDL.Text)
 	});
 	const GggError = IDL.Variant({
 		NotFound: IDL.Null,
@@ -153,5 +154,26 @@ export async function fetchJoinTargets(canisterId, { createActor } = {}) {
 	} catch (err) {
 		console.warn('[realm] could not read join targets of', cid, err);
 		return [];
+	}
+}
+
+/**
+ * The capital a quarter says it belongs to, or '' when the canister is not a quarter, predates
+ * GGG or cannot be read. It is the canister's own claim: compare it with a canister you trust.
+ * @param {string} canisterId
+ * @param {{ createActor?: (id: string) => any }} [options]
+ * @returns {Promise<string>}
+ */
+export async function fetchFederationCapital(canisterId, { createActor } = {}) {
+	const cid = (canisterId || '').trim();
+	if (!cid) return '';
+	try {
+		const actor = await actorFor(cid, createActor);
+		if (!(await supportsGgg(actor, cid))) return '';
+		const realm = await actor.ggg_realm_info();
+		return (realm.federation_realm_id[0] || '').trim();
+	} catch (err) {
+		console.warn('[realm] could not read the capital of', cid, err);
+		return '';
 	}
 }
