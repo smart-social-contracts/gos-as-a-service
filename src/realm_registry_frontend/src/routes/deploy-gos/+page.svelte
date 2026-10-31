@@ -650,10 +650,14 @@
         >
           {invitationLoading ? 'Verifying...' : 'Submit Code'}
         </button>
+        <p class="invitation-request-hint">
+          By continuing you accept the <a href="/terms" target="_blank" rel="noopener noreferrer">Terms of Use</a>
+          and the <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
+        </p>
       </div>
       <div class="invitation-request-info">
         <p>Don't have an invitation code?</p>
-        <p class="invitation-request-hint">Request access — we'll review your submission and email you a code.</p>
+        <p class="invitation-request-hint">Request access — we'll review your submission and email you a code. The form collects your email address; see the <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</p>
         <a
           href={ALPHA_INVITE_REQUEST_URL}
           target="_blank"

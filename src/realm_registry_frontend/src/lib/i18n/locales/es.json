@@ -90,7 +90,12 @@
     "description": "Esta aplicación se ejecuta en modo de prueba. Algunas funciones pueden comportarse de forma diferente a la producción.",
     "dismiss_label": "Descartar aviso de modo de prueba"
   },
+  "legal": {
+    "last_updated": "Última actualización"
+  },
   "footer": {
+    "terms": "Términos",
+    "privacy": "Privacidad",
     "built_on_ic": "Construido en Internet Computer",
     "local_deployment": "Despliegue local",
     "casals": "Casals",

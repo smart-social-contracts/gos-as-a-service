@@ -78,7 +78,12 @@
     "description": "This application is running in test mode. Some features may behave differently than in production.",
     "dismiss_label": "Dismiss test mode notice"
   },
+  "legal": {
+    "last_updated": "Last updated"
+  },
   "footer": {
+    "terms": "Terms",
+    "privacy": "Privacy",
     "built_on_ic": "Built on the Internet Computer",
     "local_deployment": "Local deployment",
     "casals": "Casals",

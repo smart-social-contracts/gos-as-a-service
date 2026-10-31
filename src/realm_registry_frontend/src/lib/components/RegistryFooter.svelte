@@ -14,7 +14,11 @@
 
 {#if !$realmPanelOpen}
 <footer class="registry-footer registry-desktop-only">
-  <a class="about-link" href={MAINTAINER_CONTACT_URL} rel="noopener noreferrer">{$_('about.footer')}</a>
+  <div class="footer-meta">
+    <a class="about-link" href={MAINTAINER_CONTACT_URL} rel="noopener noreferrer">{$_('about.footer')}</a>
+    <a class="about-link" href="/terms">{$_('footer.terms')}</a>
+    <a class="about-link" href="/privacy">{$_('footer.privacy')}</a>
+  </div>
   <div class="footer-meta">
     <a href="https://github.com/smart-social-contracts/gos-as-a-service" target="_blank" rel="noopener noreferrer" class="github-link" aria-label="GitHub">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
