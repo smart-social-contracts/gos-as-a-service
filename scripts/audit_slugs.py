@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""List the registry's slugs whose frontend canister the installer never deployed.
+"""List the registry's slugs whose frontend canister the installer never deployed,
+and the canisters that deployment jobs of more than one requester claim.
 
     REGISTRY_BACKEND=<id> REALM_INSTALLER=<id> python3 scripts/audit_slugs.py --network ic --identity <controller>
 
@@ -9,7 +10,10 @@ required and must be a controller of both canisters. The portal iframes a slug's
 `frontend_canister_id` and delegates the visitor's login to it, so every slug
 must point at the realm and frontend a deployment job created (audit C1). Slugs
 listed here need a look: a hijack, or an older realm whose job record is gone.
-Exit status 1 when any slug is listed.
+A canister recorded under two requesters means one job was pointed at the
+other's realm. A realm upgrading itself files jobs as its own backend; those
+are not counted as a second requester.
+Exit status 1 when anything is listed.
 
 Environment: REGISTRY_BACKEND, REALM_INSTALLER, canister ids from `casals export`.
 """
@@ -70,6 +74,27 @@ def unverified_slugs(slugs: list, jobs: list) -> list:
     return [s for s in slugs if (s.get("realm_id"), s.get("frontend_canister_id")) not in deployed]
 
 
+def shared_canisters(jobs: list) -> dict:
+    """``canister id -> requesters`` for every canister recorded by jobs of more than one requester."""
+    # A realm upgrading itself calls as its own backend; credit that to whoever deployed it.
+    # A canister that only ever requested itself has no deployer and stays its own requester.
+    # With several non-self deployers the last job listed wins.
+    deployer = {
+        job.get("backend_canister_id"): job.get("caller_principal")
+        for job in jobs
+        if job.get("caller_principal") != job.get("backend_canister_id")
+    }
+    requesters: dict = {}
+    for job in jobs:
+        caller = job.get("caller_principal")
+        if caller == job.get("backend_canister_id"):
+            caller = deployer.get(caller, caller)
+        for canister in (job.get("backend_canister_id"), job.get("frontend_canister_id")):
+            if canister:
+                requesters.setdefault(canister, set()).add(caller)
+    return {c: sorted(r) for c, r in requesters.items() if len(r) > 1}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--network", default="ic", help="icp network (default ic)")
@@ -82,11 +107,15 @@ def main() -> int:
     slugs = entities(os.environ["REGISTRY_BACKEND"], REGISTRY_MAP, "SlugRecord", args.network, args.identity)
     jobs = entities(os.environ["REALM_INSTALLER"], INSTALLER_MAP, "DeploymentJob", args.network, args.identity)
     suspicious = unverified_slugs(slugs, jobs)
+    shared = shared_canisters(jobs)
 
     print(f"{len(slugs)} slugs, {len(jobs)} deployment jobs, {len(suspicious)} slugs to check")
     for s in suspicious:
         print(f"  {s['slug']}: frontend {s['frontend_canister_id']} (realm {s['realm_id']}, claimed by {s['claimed_by']})")
-    return 1 if suspicious else 0
+    print(f"{len(shared)} canisters recorded by more than one requester")
+    for canister, callers in shared.items():
+        print(f"  {canister}: {', '.join(callers)}")
+    return 1 if suspicious or shared else 0
 
 
 if __name__ == "__main__":

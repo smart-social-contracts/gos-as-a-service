@@ -7,7 +7,6 @@ deploys via dfx, and reports back.
 
 __basilisk_features__ = ["shell", "browse"]
 
-import hashlib
 import json
 import traceback
 from typing import Tuple
@@ -53,7 +52,7 @@ from deploy_resume import (
     task_owner_job,
 )
 from claim_args import build_claim_slug_args
-from stand_create_args import build_stand_create_args, casals_placement_from_cfg
+from stand_create_args import build_stand_create_args, casals_placement_from_cfg, new_job_id, stand_for_new_job
 from stand_readiness import (
     stand_baton_id,
     stand_build_gate,
@@ -62,7 +61,14 @@ from stand_readiness import (
     stand_readiness,
     stand_required_members,
 )
-from manifest_access import is_registry_or_controller, can_report_on_job, can_view_deployment_manifest
+from manifest_access import (
+    is_registry_or_controller,
+    can_report_on_job,
+    can_view_deployment_manifest,
+    names_only_own_canisters,
+    canisters_of_requester,
+    canisters_of_other_requesters,
+)
 from bootstrap import (
     RELAX_TRUST_POLICY_STEP,
     branding_payload,
@@ -1144,17 +1150,21 @@ def _check_job_after_extensions(task):
             job.status = "registering"
             schedule_registration(job.name)
         else:
-            job.status = "failed"
             failed_steps = [s for s in task.steps if s.status == "failed"]
             errors = "; ".join(
                 f"{s.label}: {s.error}" for s in failed_steps[:10]
             )
             phase = "realm bootstrap" if broken_bootstrap else "extension install"
-            job.error = f"{phase} failed ({len(failed_steps)} failed): {errors}"[:1990]
-            job.completed_at = now_s()
-            schedule_registry_settlement(job.name, success=False, reason=job.error)
+            _fail_job(job, f"{phase} failed ({len(failed_steps)} failed): {errors}")
     except Exception as e:
         jlog(task.name).error(f"_check_job_after_extensions: {e}")
+
+
+def _fail_job(job, error: str):
+    job.status = "failed"
+    job.error = error[:1990]
+    job.completed_at = now_s()
+    schedule_registry_settlement(job.name, success=False, reason=job.error)
 
 
 def _schedule_step_runner(task_id: str, delay_s: int = 0):
@@ -1458,8 +1468,8 @@ def _start_extensions_for_job(job, manifest: dict, baton_canister_id: str = "", 
     except Exception as e:
         jlog(job.name).error(f"failed to create extension task: {type(e).__name__}: {e}")
         jlog(job.name).error(f"ext_manifest keys: {list(ext_manifest.keys())}, ext_list sample: {ext_list[:3]}")
-        job.status = "registering"
-        schedule_registration(job.name)
+        # Nothing was installed, so registering would publish a realm that is not set up.
+        _fail_job(job, f"could not create the extension task: {type(e).__name__}: {e}")
 
 
 def _realm_name_from_manifest(job: DeploymentJob) -> str:
@@ -1737,6 +1747,12 @@ def enqueue_deployment(manifest_json: text) -> Async[ResultEnqueue]:
         registry_id = (manifest.get("registry_canister_id") or "").strip()
         requester = (manifest.get("requesting_principal") or str(ic.caller())).strip()
         canister_ids = manifest.get("canister_ids", {})
+        caller_is_controller = ic.is_controller(ic.caller())
+        if not caller_is_controller and not names_only_own_canisters(
+            named_ids=canister_ids,
+            own_canister_ids=canisters_of_requester(list(DeploymentJob.instances()), requester),
+        ):
+            return ResultEnqueue(Err=ie("canister_ids may only name canisters of your own realms"))
 
         realm_info = manifest.get("realm", {})
         ext_count = len(realm_info.get("extensions") or [])
@@ -1765,10 +1781,16 @@ def enqueue_deployment(manifest_json: text) -> Async[ResultEnqueue]:
         if m <= 2:
             y += 1
         ts = "%04d%02d%02d%02d%02d%02d" % (y, m, d, hh, mm, ss)
-        suffix = hashlib.sha256(realm_name.encode()).hexdigest()[:4]
-        job_id = "job_%s_%s" % (ts, suffix)
+        job_id = new_job_id(timestamp=ts, realm_name=realm_name, requester=requester)
         expected_hashes = manifest.get("expected_hashes", {})
         casals_manifest = bool(manifest.get("casals"))
+        if casals_manifest:
+            # Stored with the job so every later pass (re-kick, retry, destroy) finds the same stand.
+            manifest["casals"]["stand"] = stand_for_new_job(
+                requested=manifest["casals"].get("stand"), realm_slug=_slugify(realm_name),
+                job_id=job_id, enqueuer_is_controller=caller_is_controller,
+            )
+            manifest_json = json.dumps(manifest, separators=(",", ":"))
         canister_ids = manifest.get("canister_ids") or {}
         expected_steps = _count_expected_steps(
             manifest,
@@ -1783,6 +1805,11 @@ def enqueue_deployment(manifest_json: text) -> Async[ResultEnqueue]:
             preflight_err = yield from _cycles_preflight_gen(manifest, cfg)
             if preflight_err:
                 jlog(job_id).error(f"cycles preflight rejected: {preflight_err}")
+
+        # Checked after the preflight awaits, with none before the job is created: another
+        # enqueue may have taken this id meanwhile, and overwriting would repoint its canisters.
+        if DeploymentJob[job_id] is not None:
+            return ResultEnqueue(Err=ie("a deployment with this job id already exists; retry in a second"))
 
         if preflight_err:
             initial_status = "failed"
@@ -2626,6 +2653,12 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
 
     backend_id = ready[f"{stand}-backend"]
     frontend_id = ready[f"{stand}-frontend"]
+    held_by_others = canisters_of_other_requesters(list(DeploymentJob.instances()), job.caller_principal or "")
+    if {backend_id, frontend_id} & held_by_others:
+        # Never record another requester's canisters: registration and "own realm" checks trust the job's ids.
+        _fail_job(job, f"stand '{stand}' belongs to another requester")
+        jlog(job_id).error(job.error)
+        return _provision_ok_for_job(job_id, job)
     job.backend_canister_id = backend_id
     job.frontend_canister_id = frontend_id
     # Reached only after stand_build_gate says built, so the frontend files
