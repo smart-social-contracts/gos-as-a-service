@@ -17,6 +17,9 @@ billing in Alpha: card checkout reads "Coming soon".
 A code works once, expires after `--days` (default 30) and never leaves the
 operator's machine except in that email: the registry holds the hash only.
 
+A principal that was activated before invitations existed cannot get credits
+from a code; give existing testers a voucher instead.
+
 ## One-time setup per environment
 
 - **The registry wasm with invitations must be live first.** The script calls

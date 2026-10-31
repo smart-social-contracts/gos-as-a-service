@@ -208,13 +208,25 @@
 
   function dismissAlphaNotice() {
     alphaNoticeDismissed = true;
-    localStorage.setItem(ALPHA_NOTICE_DISMISSED_KEY, 'true');
+    try {
+      localStorage.setItem(ALPHA_NOTICE_DISMISSED_KEY, 'true');
+    } catch (e) {
+      /* storage blocked: the notice stays dismissed for this visit only */
+    }
+  }
+
+  function readAlphaNoticeDismissed() {
+    try {
+      return localStorage.getItem(ALPHA_NOTICE_DISMISSED_KEY) === 'true';
+    } catch (e) {
+      return false;
+    }
   }
 
   onMount(async () => {
     if (!browser) return;
 
-    alphaNoticeDismissed = localStorage.getItem(ALPHA_NOTICE_DISMISSED_KEY) === 'true';
+    alphaNoticeDismissed = readAlphaNoticeDismissed();
 
     const layoutMq = window.matchMedia('(min-width: 768px)');
     const syncLayout = () => {
