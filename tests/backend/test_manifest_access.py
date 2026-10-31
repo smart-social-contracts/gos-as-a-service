@@ -64,32 +64,27 @@ def test_nobody_but_a_controller_enqueues_while_no_registry_is_configured():
     assert _may_enqueue("a-controller", registry="", is_controller=True)
 
 
-def _may_report(caller, owner="owner-principal", casals=CASALS, is_controller=False):
+def _may_report(caller, casals=CASALS, is_controller=False):
     return can_report_on_job(
-        caller=caller, owner=owner, casals_principal=casals, is_controller=is_controller
+        caller=caller, casals_principal=casals, is_controller=is_controller
     )
 
 
-def test_owner_casals_and_controller_may_report_on_a_job():
-    assert _may_report("owner-principal")
+def test_casals_and_controller_may_report_on_a_job():
     assert _may_report(CASALS)
     assert _may_report("a-controller", is_controller=True)
 
 
 def test_other_callers_may_not_report_on_a_job():
-    assert not _may_report("some-other-user")
+    assert not _may_report("job-owner")
     assert not _may_report(ANONYMOUS)
     assert not _may_report(REGISTRY)
 
 
-def test_nobody_but_the_owner_or_a_controller_reports_while_casals_is_unset():
+def test_nobody_but_a_controller_reports_while_casals_is_unset():
     assert not _may_report(ANONYMOUS, casals="")
     assert not _may_report("", casals="")
-    assert _may_report("owner-principal", casals="")
-
-
-def test_a_job_without_an_owner_is_not_open_to_the_anonymous_caller():
-    assert not _may_report(ANONYMOUS, owner="")
+    assert _may_report("a-controller", casals="", is_controller=True)
 
 
 def _endpoint_source(name: str) -> str:
@@ -101,6 +96,6 @@ def _endpoint_source(name: str) -> str:
 def test_every_guarded_endpoint_checks_the_caller():
     for name in ("report_deployment_failure", "report_canister_ready",
                  "report_frontend_verified", "take_pre_upgrade_snapshot"):
-        assert "_caller_may_report_on(job)" in _endpoint_source(name), name
+        assert "_caller_may_report()" in _endpoint_source(name), name
     assert "can_enqueue_deployment(" in _endpoint_source("enqueue_deployment")
     assert "ic.is_controller(ic.caller())" in _endpoint_source("get_pending_deployments")

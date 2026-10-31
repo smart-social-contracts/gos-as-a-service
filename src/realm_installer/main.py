@@ -1710,10 +1710,9 @@ def _cycles_preflight_gen(manifest: dict, cfg: InstallerConfig):
     )
 
 
-def _caller_may_report_on(job: DeploymentJob) -> bool:
+def _caller_may_report() -> bool:
     return can_report_on_job(
         caller=str(ic.caller()),
-        owner=job.caller_principal or "",
         casals_principal=(_config().casals_canister_id or "").strip(),
         is_controller=ic.is_controller(ic.caller()),
     )
@@ -1852,8 +1851,8 @@ def take_pre_upgrade_snapshot(args: text) -> Async[ResultTakeSnapshot]:
         job = DeploymentJob[job_id]
         if job is None:
             return ResultTakeSnapshot(Err=ie(f"unknown job_id: {job_id}"))
-        if not _caller_may_report_on(job):
-            return ResultTakeSnapshot(Err=ie("unauthorized: controller, job owner or Casals only"))
+        if not _caller_may_report():
+            return ResultTakeSnapshot(Err=ie("unauthorized: controller or Casals only"))
         if (job.status or "pending") != "pending":
             return ResultTakeSnapshot(Err=ie(f"job in '{job.status}', expected 'pending'"))
 
@@ -2281,8 +2280,8 @@ def report_deployment_failure(args: text) -> ResultReportFailure:
         job = DeploymentJob[job_id]
         if job is None:
             return ResultReportFailure(Err=ie(f"unknown: {job_id}"))
-        if not _caller_may_report_on(job):
-            return ResultReportFailure(Err=ie("unauthorized: controller, job owner or Casals only"))
+        if not _caller_may_report():
+            return ResultReportFailure(Err=ie("unauthorized: controller or Casals only"))
         prev = job.status or "pending"
         if prev in _JOB_TERMINAL_STATUSES:
             return ResultReportFailure(Ok=JobStatusAck(job_id=job_id, prev_status=prev, status=prev, noop=True))
@@ -2728,8 +2727,8 @@ def report_canister_ready(args: text) -> Async[ResultReportReady]:
         job = DeploymentJob[job_id]
         if job is None:
             return ResultReportReady(Err=ie(f"unknown: {job_id}"))
-        if not _caller_may_report_on(job):
-            return ResultReportReady(Err=ie("unauthorized: controller, job owner or Casals only"))
+        if not _caller_may_report():
+            return ResultReportReady(Err=ie("unauthorized: controller or Casals only"))
         if (job.status or "pending") != "pending":
             return ResultReportReady(Err=ie(f"job in '{job.status}', expected 'pending'"))
 
@@ -2824,8 +2823,8 @@ def report_frontend_verified(args: text) -> Async[ResultReportFrontend]:
         job = DeploymentJob[job_id]
         if job is None:
             return ResultReportFrontend(Err=ie(f"unknown: {job_id}"))
-        if not _caller_may_report_on(job):
-            return ResultReportFrontend(Err=ie("unauthorized: controller, job owner or Casals only"))
+        if not _caller_may_report():
+            return ResultReportFrontend(Err=ie("unauthorized: controller or Casals only"))
         if (job.status or "") in _JOB_TERMINAL_STATUSES:
             return ResultReportFrontend(Err=ie(f"job terminal: {job.status}"))
 

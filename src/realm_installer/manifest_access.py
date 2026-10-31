@@ -14,8 +14,8 @@ def can_enqueue_deployment(*, caller: str, registry_principal: str, is_controlle
     return bool(registry_principal) and caller == registry_principal
 
 
-def can_report_on_job(*, caller: str, owner: str, casals_principal: str, is_controller: bool) -> bool:
-    """The job's owner (its deployer) or Casals may report progress on it."""
+def can_report_on_job(*, caller: str, casals_principal: str, is_controller: bool) -> bool:
+    """Only Casals drives a job's progress; the job's owner must not name its own canisters."""
     if is_controller:
         return True
-    return caller == (owner or "") or (bool(casals_principal) and caller == casals_principal)
+    return bool(casals_principal) and caller == casals_principal
