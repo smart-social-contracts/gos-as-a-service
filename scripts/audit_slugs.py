@@ -78,6 +78,7 @@ def shared_canisters(jobs: list) -> dict:
     """``canister id -> requesters`` for every canister recorded by jobs of more than one requester."""
     # A realm upgrading itself calls as its own backend; credit that to whoever deployed it.
     # A canister that only ever requested itself has no deployer and stays its own requester.
+    # With several non-self deployers the last job listed wins.
     deployer = {
         job.get("backend_canister_id"): job.get("caller_principal")
         for job in jobs

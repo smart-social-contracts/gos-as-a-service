@@ -7,7 +7,6 @@ deploys via dfx, and reports back.
 
 __basilisk_features__ = ["shell", "browse"]
 
-import hashlib
 import json
 import traceback
 from typing import Tuple
@@ -53,7 +52,7 @@ from deploy_resume import (
     task_owner_job,
 )
 from claim_args import build_claim_slug_args
-from stand_create_args import build_stand_create_args, casals_placement_from_cfg, stand_for_new_job
+from stand_create_args import build_stand_create_args, casals_placement_from_cfg, new_job_id, stand_for_new_job
 from stand_readiness import (
     stand_baton_id,
     stand_build_gate,
@@ -1782,11 +1781,7 @@ def enqueue_deployment(manifest_json: text) -> Async[ResultEnqueue]:
         if m <= 2:
             y += 1
         ts = "%04d%02d%02d%02d%02d%02d" % (y, m, d, hh, mm, ss)
-        suffix = hashlib.sha256(realm_name.encode()).hexdigest()[:4]
-        job_id = "job_%s_%s" % (ts, suffix)
-        if DeploymentJob[job_id] is not None:
-            # Overwriting a job would repoint the canisters it recorded.
-            return ResultEnqueue(Err=ie("a deployment with this job id already exists; retry in a second"))
+        job_id = new_job_id(timestamp=ts, realm_name=realm_name, requester=requester)
         expected_hashes = manifest.get("expected_hashes", {})
         casals_manifest = bool(manifest.get("casals"))
         if casals_manifest:
@@ -1810,6 +1805,11 @@ def enqueue_deployment(manifest_json: text) -> Async[ResultEnqueue]:
             preflight_err = yield from _cycles_preflight_gen(manifest, cfg)
             if preflight_err:
                 jlog(job_id).error(f"cycles preflight rejected: {preflight_err}")
+
+        # Checked after the preflight awaits, with none before the job is created: another
+        # enqueue may have taken this id meanwhile, and overwriting would repoint its canisters.
+        if DeploymentJob[job_id] is not None:
+            return ResultEnqueue(Err=ie("a deployment with this job id already exists; retry in a second"))
 
         if preflight_err:
             initial_status = "failed"

@@ -1,10 +1,21 @@
 """Pure helpers for Casals stand_create JSON arguments (no IC/basilisk imports)."""
 
+import hashlib
+
 
 def casals_placement_from_cfg(casals_cfg: dict) -> tuple[str, str]:
     subnet = (casals_cfg.get("subnet") or "").strip()
     subnet_type = (casals_cfg.get("subnet_type") or "").strip()
     return subnet, subnet_type
+
+
+def new_job_id(*, timestamp: str, realm_name: str, requester: str) -> str:
+    """``job_<timestamp>_<suffix>``; the suffix covers the requester, so two requesters never share an id.
+
+    The stand name is derived from the id, so this also keeps their stands apart.
+    """
+    suffix = hashlib.sha256(f"{requester}|{realm_name}".encode()).hexdigest()[:4]
+    return f"job_{timestamp}_{suffix}"
 
 
 def stand_for_new_job(*, requested: str, realm_slug: str, job_id: str, enqueuer_is_controller: bool) -> str:

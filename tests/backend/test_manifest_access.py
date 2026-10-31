@@ -15,7 +15,7 @@ from manifest_access import (  # noqa: E402
     canisters_of_requester,
     names_only_own_canisters,
 )
-from stand_create_args import stand_for_new_job  # noqa: E402
+from stand_create_args import new_job_id, stand_for_new_job  # noqa: E402
 
 
 def test_controller_may_view_any_manifest():
@@ -220,7 +220,15 @@ def test_enqueue_stores_the_chosen_stand_so_every_later_pass_finds_it():
     assert source.index("stand_for_new_job(") < stored < source.index("manifest_json=manifest_json[:8190]")
 
 
-def test_enqueue_refuses_a_job_id_that_already_exists_before_registering_anything():
+def test_enqueue_refuses_a_job_id_that_already_exists_right_before_creating_the_job():
     source = _endpoint_source("enqueue_deployment")
     refused = source.index("if DeploymentJob[job_id] is not None:")
-    assert source.index('job_id = "job_%s_%s"') < refused < source.index("DeploymentJob(")
+    # No await may sit between the check and the creation, or another enqueue could take the id.
+    assert source.index("_cycles_preflight_gen(") < refused < source.index("DeploymentJob(")
+
+
+def test_two_requesters_with_the_same_realm_name_and_second_get_different_job_ids():
+    first = new_job_id(timestamp="20261031120000", realm_name="Casals", requester="aaaaa-aa")
+    second = new_job_id(timestamp="20261031120000", realm_name="Casals", requester="bbbbb-bb")
+    assert first != second
+    assert first == new_job_id(timestamp="20261031120000", realm_name="Casals", requester="aaaaa-aa")
