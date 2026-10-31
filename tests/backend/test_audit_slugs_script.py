@@ -10,8 +10,8 @@ audit_slugs = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(audit_slugs)
 
 
-def _job(backend: str, frontend: str) -> dict:
-    return {"backend_canister_id": backend, "frontend_canister_id": frontend}
+def _job(backend: str, frontend: str, caller: str = "") -> dict:
+    return {"backend_canister_id": backend, "frontend_canister_id": frontend, "caller_principal": caller}
 
 
 def test_slug_with_an_unknown_frontend_is_flagged():
@@ -49,3 +49,18 @@ def test_entities_reads_every_page_and_keeps_only_the_requested_type(monkeypatch
     monkeypatch.setattr(audit_slugs, "browse", fake_browse)
     found = audit_slugs.entities("registry", "storage", "SlugRecord", "ic", None)
     assert [e["slug"] for e in found] == ["one", "two"]
+
+
+def test_a_canister_recorded_by_two_requesters_is_listed():
+    jobs = [_job("backend-a", "frontend-a", "alice"), _job("backend-a", "frontend-x", "mallory")]
+    assert audit_slugs.shared_canisters(jobs) == {"backend-a": ["alice", "mallory"]}
+
+
+def test_one_requesters_repeat_jobs_are_not_shared():
+    jobs = [_job("backend-a", "frontend-a", "alice"), _job("backend-a", "frontend-a", "alice")]
+    assert audit_slugs.shared_canisters(jobs) == {}
+
+
+def test_a_realm_upgrading_itself_is_not_a_second_requester():
+    jobs = [_job("backend-a", "frontend-a", "alice"), _job("backend-a", "frontend-a", "backend-a")]
+    assert audit_slugs.shared_canisters(jobs) == {}

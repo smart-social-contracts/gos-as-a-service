@@ -21,6 +21,32 @@ def can_report_on_job(*, caller: str, casals_principal: str, is_controller: bool
     return bool(casals_principal) and caller == casals_principal
 
 
+def _job_canisters(job) -> set:
+    return {cid for cid in (job.backend_canister_id, job.frontend_canister_id) if cid}
+
+
+def canisters_of_requester(jobs, requester: str) -> set:
+    """Canisters of the jobs ``requester`` filed, plus those of the job that deployed ``requester``.
+
+    The second part is a realm backend upgrading itself: the registry files that
+    job as the backend, so its frontend is vouched for by the job that created both.
+    """
+    own = set()
+    for job in jobs:
+        if (job.caller_principal or "") == requester or (job.backend_canister_id or "") == requester:
+            own |= _job_canisters(job)
+    own.add(requester)
+    return own
+
+
+def canisters_of_other_requesters(jobs, requester: str) -> set:
+    held = set()
+    for job in jobs:
+        if (job.caller_principal or "") != requester:
+            held |= _job_canisters(job)
+    return held
+
+
 def names_only_own_canisters(*, named_ids: dict, own_canister_ids: set) -> bool:
     """A manifest may name canisters only to upgrade a realm its requester deployed.
 

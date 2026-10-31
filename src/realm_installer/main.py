@@ -53,7 +53,7 @@ from deploy_resume import (
     task_owner_job,
 )
 from claim_args import build_claim_slug_args
-from stand_create_args import build_stand_create_args, casals_placement_from_cfg
+from stand_create_args import build_stand_create_args, casals_placement_from_cfg, stand_for_new_job
 from stand_readiness import (
     stand_baton_id,
     stand_build_gate,
@@ -67,6 +67,8 @@ from manifest_access import (
     can_report_on_job,
     can_view_deployment_manifest,
     names_only_own_canisters,
+    canisters_of_requester,
+    canisters_of_other_requesters,
 )
 from bootstrap import (
     RELAX_TRUST_POLICY_STEP,
@@ -1735,15 +1737,6 @@ def _caller_is_registry_or_controller() -> bool:
     )
 
 
-def _canisters_of_jobs_owned_by(principal: str) -> set:
-    owned = set()
-    for job in list(DeploymentJob.instances()):
-        if (job.caller_principal or "") == principal:
-            owned.update((job.backend_canister_id or "", job.frontend_canister_id or ""))
-    owned.discard("")
-    return owned
-
-
 @update
 def enqueue_deployment(manifest_json: text) -> Async[ResultEnqueue]:
     try:
@@ -1755,8 +1748,10 @@ def enqueue_deployment(manifest_json: text) -> Async[ResultEnqueue]:
         registry_id = (manifest.get("registry_canister_id") or "").strip()
         requester = (manifest.get("requesting_principal") or str(ic.caller())).strip()
         canister_ids = manifest.get("canister_ids", {})
-        if not ic.is_controller(ic.caller()) and not names_only_own_canisters(
-            named_ids=canister_ids, own_canister_ids=_canisters_of_jobs_owned_by(requester),
+        caller_is_controller = ic.is_controller(ic.caller())
+        if not caller_is_controller and not names_only_own_canisters(
+            named_ids=canister_ids,
+            own_canister_ids=canisters_of_requester(list(DeploymentJob.instances()), requester),
         ):
             return ResultEnqueue(Err=ie("canister_ids may only name canisters of your own realms"))
 
@@ -1791,6 +1786,13 @@ def enqueue_deployment(manifest_json: text) -> Async[ResultEnqueue]:
         job_id = "job_%s_%s" % (ts, suffix)
         expected_hashes = manifest.get("expected_hashes", {})
         casals_manifest = bool(manifest.get("casals"))
+        if casals_manifest:
+            # Stored with the job so every later pass (re-kick, retry, destroy) finds the same stand.
+            manifest["casals"]["stand"] = stand_for_new_job(
+                requested=manifest["casals"].get("stand"), realm_slug=_slugify(realm_name),
+                job_id=job_id, enqueuer_is_controller=caller_is_controller,
+            )
+            manifest_json = json.dumps(manifest, separators=(",", ":"))
         canister_ids = manifest.get("canister_ids") or {}
         expected_steps = _count_expected_steps(
             manifest,
@@ -2648,6 +2650,12 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
 
     backend_id = ready[f"{stand}-backend"]
     frontend_id = ready[f"{stand}-frontend"]
+    held_by_others = canisters_of_other_requesters(list(DeploymentJob.instances()), job.caller_principal or "")
+    if {backend_id, frontend_id} & held_by_others:
+        # Never record another requester's canisters: registration and "own realm" checks trust the job's ids.
+        _fail_job(job, f"stand '{stand}' belongs to another requester")
+        jlog(job_id).error(job.error)
+        return _provision_ok_for_job(job_id, job)
     job.backend_canister_id = backend_id
     job.frontend_canister_id = frontend_id
     # Reached only after stand_build_gate says built, so the frontend files

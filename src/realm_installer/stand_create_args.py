@@ -7,6 +7,20 @@ def casals_placement_from_cfg(casals_cfg: dict) -> tuple[str, str]:
     return subnet, subnet_type
 
 
+def stand_for_new_job(*, requested: str, realm_slug: str, job_id: str, enqueuer_is_controller: bool) -> str:
+    """The stand a new job provisions into.
+
+    Casals' ``stand_create`` hands back an existing stand whoever owns it, so a
+    stand name taken from a user's manifest could land on another requester's
+    canisters. Only a controller may name its stand; everyone else gets one that
+    no other job can share.
+    """
+    requested = (requested or "").strip()
+    if enqueuer_is_controller and requested:
+        return requested
+    return f"{realm_slug}-{job_id.split('_', 1)[-1].replace('_', '-')}"
+
+
 def build_stand_create_args(
     section: str,
     stand: str,

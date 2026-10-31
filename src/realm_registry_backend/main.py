@@ -933,9 +933,11 @@ def request_upgrade(args_json: text) -> Async[text]:
     Checks realm credit balance and reported cycles, then enqueues the
     upgrade via realm_installer.
 
+    The frontend is the one the registry has on record for the caller; the
+    caller cannot name another.
+
     args_json: {
         "backend_canister_id": str,
-        "frontend_canister_id": str,
         "reported_cycles": int,
         "current_version": str,
         "network": str
@@ -946,7 +948,6 @@ def request_upgrade(args_json: text) -> Async[text]:
         params = json.loads(args_json)
 
         backend_id = params.get("backend_canister_id", "").strip()
-        frontend_id = params.get("frontend_canister_id", "").strip()
         reported_cycles = int(params.get("reported_cycles", 0))
         current_version = params.get("current_version", "")
         network = params.get("network", "").strip()
@@ -954,9 +955,6 @@ def request_upgrade(args_json: text) -> Async[text]:
         if caller != backend_id:
             return json.dumps({"success": False,
                 "error": f"Caller {caller} does not match backend_canister_id {backend_id}"})
-
-        if not frontend_id:
-            return json.dumps({"success": False, "error": "frontend_canister_id is required"})
 
         if not network:
             return json.dumps({"success": False, "error": "network is required"})
@@ -966,6 +964,11 @@ def request_upgrade(args_json: text) -> Async[text]:
         if not realm.get("success"):
             return json.dumps({"success": False,
                 "error": f"Realm not registered: {caller}"})
+
+        frontend_id = (realm.get("realm") or {}).get("frontend_canister_id", "")
+        if not frontend_id:
+            return json.dumps({"success": False,
+                "error": f"No frontend recorded for realm: {caller}"})
 
         from core.env_config import is_can_test_mode
 
