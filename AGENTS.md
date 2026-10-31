@@ -167,14 +167,15 @@ Returns JSON with `job_id`, `credits_held`, `status`.
 
 | Method | Type | Role |
 |---|---|---|
-| `enqueue_deployment(manifest_json)` | update | Parse manifest, allocate job, return `job_id` |
+| `enqueue_deployment(manifest_json)` | update | Parse manifest, allocate job, return `job_id` (configured registry or controller only) |
 | `provision_via_casals(job_id)` | update (async) | Opt-in Casals stand provisioning (`InstallerConfig.provision_via_casals`) |
-| `report_canister_ready(…)` | update | Worker reports backend WASM installed |
+| `report_canister_ready(…)` | update | Worker reports backend WASM installed (Casals or controller only; same for `report_frontend_verified`, `report_deployment_failure`, `take_pre_upgrade_snapshot`) |
 | `report_frontend_verified(…)` | update | Worker confirms frontend hash |
+| `get_pending_deployments()` | query | Pending jobs with manifests (controller only) |
 | `get_deployment_job_status(job_id)` | query | Poll job state |
 | `list_deployment_jobs()` | query | List all jobs |
 | `health()` | query | `{ ok: true }` sanity check |
-| `cancel_deployment(job_id)` | update | Cancel queued job |
+| `cancel_deployment(job_id)` | update | Cancel queued job (configured registry or controller only) |
 | `retry_deployment(job_id)` | update | **Resume** a failed job from its failed step (owner or controller) |
 
 The off-chain **realms-deployer** worker polls pending jobs, downloads release artifacts, runs `dfx` installs, and reports back. Casals path is triggered when `provision_via_casals` is enabled and the job enters `provisioning` status.
@@ -220,6 +221,8 @@ backend when it provisions the frontend bundle. The installer holds no
 realm asset canister — it verifies the grant with `list_permitted` and reports
 a precise failure when it is missing. Remaining platform-side work:
 [docs/CASALS_FOLLOWUP_ASSET_PERMISSIONS.md](docs/CASALS_FOLLOWUP_ASSET_PERMISSIONS.md).
+
+**Deploy precondition:** before deploying this installer, `get_installer_config` must show a non-empty `registry_backend_id` and `casals_canister_id`. Otherwise only controllers can enqueue, cancel or report.
 
 #### Platform provisioner (Casals)
 

@@ -1,5 +1,5 @@
-/** Go-live copy for disabled portal card checkout. Do not substitute. */
-export const CARD_PAY_UNAVAILABLE_COPY = 'Currently not available';
+/** Alpha copy for disabled portal card checkout: billing is not open yet. */
+export const CARD_PAY_UNAVAILABLE_COPY = 'Coming soon';
 
 /**
  * Card checkout stays in the Stripe path; this flag only disables charging.

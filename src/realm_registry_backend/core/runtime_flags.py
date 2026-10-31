@@ -28,7 +28,9 @@ _FLAG_MAP = {
 
 # disable_card_billing / assistant_experimental_notice are ordinary stored
 # flags: an environment that wants them sets them in casals.json
-# (``environments.<env>.test_flags``). No network name switches them on.
+# (``environments.<env>.test_flags``). No network name switches them on, and
+# the mainnet guard in ``apply_test_flags`` does not apply to them.
+_ORDINARY_FLAGS = ("disable_card_billing", "assistant_experimental_notice")
 
 
 def _config_key(flag_attr: str) -> str:
@@ -86,9 +88,9 @@ def _set_flag(name: str, value: bool) -> None:
 
 
 def apply_test_flags(flags: dict, network: str | None = None) -> None:
-    """Persist test-mode flags. Rejects enabling any flag on mainnet (network=ic)."""
+    """Persist test-mode flags. Rejects enabling a test flag on mainnet (network=ic)."""
     effective_network = (network or get_network() or "").strip().lower()
-    any_true = any(bool(v) for v in flags.values())
+    any_true = any(bool(v) for k, v in flags.items() if k not in _ORDINARY_FLAGS)
     if any_true and effective_network == "ic":
         raise ValueError("Test mode flags cannot be enabled on mainnet (network=ic)")
 

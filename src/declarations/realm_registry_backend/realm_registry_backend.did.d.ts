@@ -542,7 +542,7 @@ export interface _SERVICE {
     GenericResult
   >,
   'configure' : ActorMethod<[string], GenericResult>,
-  'create_invitation_codes' : ActorMethod<[string], GenericResult>,
+  'create_invitation_codes' : ActorMethod<[string], string>,
   'deactivate_principal' : ActorMethod<[string], GenericResult>,
   'deduct_credits' : ActorMethod<[string, bigint, string], DeductCreditsResult>,
   'deployment_failed' : ActorMethod<[string, string, string], string>,

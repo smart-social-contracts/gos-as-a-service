@@ -73,6 +73,14 @@
     "showing": "Showing {filtered} of {total} realms",
     "users": "{count} users"
   },
+  "alpha_access": {
+    "title": "gos.earth is in Alpha",
+    "body": "Tell us what you want to build and we will reply soon. Approved requests get 50 free credits.",
+    "request": "Request an invitation",
+    "privacy": "The form collects your email address; see the",
+    "privacy_link": "Privacy Policy",
+    "dismiss_label": "Dismiss"
+  },
   "demo_banner": {
     "title": "Test Mode Active",
     "description": "This application is running in test mode. Some features may behave differently than in production.",

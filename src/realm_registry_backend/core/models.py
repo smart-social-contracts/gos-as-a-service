@@ -163,6 +163,8 @@ class InvitationCode(Entity, TimestampedMixin):
     is_active = Boolean(default=True)
     redeemed_at = Float()
     created_at = Float()
+    credits = Integer()
+    expires_at = Float()  # unix seconds; 0 = never expires
 
     def to_dict(self) -> dict:
         return {
@@ -171,6 +173,8 @@ class InvitationCode(Entity, TimestampedMixin):
             "is_active": bool(self.is_active),
             "redeemed_at": self.redeemed_at or 0.0,
             "created_at": self.created_at or 0.0,
+            "credits": self.credits or 0,
+            "expires_at": self.expires_at or 0.0,
         }
 
 

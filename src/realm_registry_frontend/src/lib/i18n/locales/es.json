@@ -85,6 +85,14 @@
     "showing": "Mostrando {filtered} de {total} reinos",
     "users": "{count} usuarios"
   },
+  "alpha_access": {
+    "title": "gos.earth está en Alpha",
+    "body": "Cuéntanos qué quieres crear y te responderemos pronto. Las solicitudes aprobadas reciben 50 créditos gratis.",
+    "request": "Solicitar una invitación",
+    "privacy": "El formulario recoge tu correo electrónico; consulta la",
+    "privacy_link": "Política de privacidad",
+    "dismiss_label": "Cerrar"
+  },
   "demo_banner": {
     "title": "Modo de prueba activo",
     "description": "Esta aplicación se ejecuta en modo de prueba. Algunas funciones pueden comportarse de forma diferente a la producción.",
