@@ -218,3 +218,9 @@ def test_enqueue_stores_the_chosen_stand_so_every_later_pass_finds_it():
     source = _endpoint_source("enqueue_deployment")
     stored = source.index("manifest_json = json.dumps(manifest")
     assert source.index("stand_for_new_job(") < stored < source.index("manifest_json=manifest_json[:8190]")
+
+
+def test_enqueue_refuses_a_job_id_that_already_exists_before_registering_anything():
+    source = _endpoint_source("enqueue_deployment")
+    refused = source.index("if DeploymentJob[job_id] is not None:")
+    assert source.index('job_id = "job_%s_%s"') < refused < source.index("DeploymentJob(")

@@ -1784,6 +1784,9 @@ def enqueue_deployment(manifest_json: text) -> Async[ResultEnqueue]:
         ts = "%04d%02d%02d%02d%02d%02d" % (y, m, d, hh, mm, ss)
         suffix = hashlib.sha256(realm_name.encode()).hexdigest()[:4]
         job_id = "job_%s_%s" % (ts, suffix)
+        if DeploymentJob[job_id] is not None:
+            # Overwriting a job would repoint the canisters it recorded.
+            return ResultEnqueue(Err=ie("a deployment with this job id already exists; retry in a second"))
         expected_hashes = manifest.get("expected_hashes", {})
         casals_manifest = bool(manifest.get("casals"))
         if casals_manifest:

@@ -76,11 +76,18 @@ def unverified_slugs(slugs: list, jobs: list) -> list:
 
 def shared_canisters(jobs: list) -> dict:
     """``canister id -> requesters`` for every canister recorded by jobs of more than one requester."""
+    # A realm upgrading itself calls as its own backend; credit that to whoever deployed it.
+    # A canister that only ever requested itself has no deployer and stays its own requester.
+    deployer = {
+        job.get("backend_canister_id"): job.get("caller_principal")
+        for job in jobs
+        if job.get("caller_principal") != job.get("backend_canister_id")
+    }
     requesters: dict = {}
     for job in jobs:
         caller = job.get("caller_principal")
         if caller == job.get("backend_canister_id"):
-            continue
+            caller = deployer.get(caller, caller)
         for canister in (job.get("backend_canister_id"), job.get("frontend_canister_id")):
             if canister:
                 requesters.setdefault(canister, set()).add(caller)

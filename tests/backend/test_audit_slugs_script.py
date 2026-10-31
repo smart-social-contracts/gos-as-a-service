@@ -61,6 +61,12 @@ def test_one_requesters_repeat_jobs_are_not_shared():
     assert audit_slugs.shared_canisters(jobs) == {}
 
 
+def test_a_self_job_naming_a_victims_frontend_lists_that_frontend():
+    jobs = [_job("backend-v", "frontend-v", "victim"), _job("backend-c", "frontend-v", "backend-c")]
+    jobs.insert(0, _job("backend-c", "frontend-c", "mallory"))
+    assert audit_slugs.shared_canisters(jobs) == {"frontend-v": ["mallory", "victim"]}
+
+
 def test_a_realm_upgrading_itself_is_not_a_second_requester():
     jobs = [_job("backend-a", "frontend-a", "alice"), _job("backend-a", "frontend-a", "backend-a")]
     assert audit_slugs.shared_canisters(jobs) == {}
