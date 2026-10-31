@@ -167,10 +167,11 @@ Returns JSON with `job_id`, `credits_held`, `status`.
 
 | Method | Type | Role |
 |---|---|---|
-| `enqueue_deployment(manifest_json)` | update | Parse manifest, allocate job, return `job_id` |
+| `enqueue_deployment(manifest_json)` | update | Parse manifest, allocate job, return `job_id` (configured registry or controller only) |
 | `provision_via_casals(job_id)` | update (async) | Opt-in Casals stand provisioning (`InstallerConfig.provision_via_casals`) |
-| `report_canister_ready(…)` | update | Worker reports backend WASM installed |
+| `report_canister_ready(…)` | update | Worker reports backend WASM installed (job owner, Casals or controller only; same for `report_frontend_verified`, `report_deployment_failure`, `take_pre_upgrade_snapshot`) |
 | `report_frontend_verified(…)` | update | Worker confirms frontend hash |
+| `get_pending_deployments()` | query | Pending jobs with manifests (controller only) |
 | `get_deployment_job_status(job_id)` | query | Poll job state |
 | `list_deployment_jobs()` | query | List all jobs |
 | `health()` | query | `{ ok: true }` sanity check |

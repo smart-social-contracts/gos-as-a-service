@@ -62,7 +62,7 @@ from stand_readiness import (
     stand_readiness,
     stand_required_members,
 )
-from manifest_access import can_view_deployment_manifest
+from manifest_access import can_enqueue_deployment, can_report_on_job, can_view_deployment_manifest
 from bootstrap import (
     RELAX_TRUST_POLICY_STEP,
     branding_payload,
@@ -1710,9 +1710,24 @@ def _cycles_preflight_gen(manifest: dict, cfg: InstallerConfig):
     )
 
 
+def _caller_may_report_on(job: DeploymentJob) -> bool:
+    return can_report_on_job(
+        caller=str(ic.caller()),
+        owner=job.caller_principal or "",
+        casals_principal=(_config().casals_canister_id or "").strip(),
+        is_controller=ic.is_controller(ic.caller()),
+    )
+
+
 @update
 def enqueue_deployment(manifest_json: text) -> Async[ResultEnqueue]:
     try:
+        if not can_enqueue_deployment(
+            caller=str(ic.caller()),
+            registry_principal=(_config().registry_principal or "").strip(),
+            is_controller=ic.is_controller(ic.caller()),
+        ):
+            return ResultEnqueue(Err=ie("unauthorized: controller or configured registry only"))
         manifest = json.loads(manifest_json)
         network = manifest.get("network", "")
         realm_name = (manifest.get("realm") or {}).get("name", "unknown")
@@ -1837,6 +1852,8 @@ def take_pre_upgrade_snapshot(args: text) -> Async[ResultTakeSnapshot]:
         job = DeploymentJob[job_id]
         if job is None:
             return ResultTakeSnapshot(Err=ie(f"unknown job_id: {job_id}"))
+        if not _caller_may_report_on(job):
+            return ResultTakeSnapshot(Err=ie("unauthorized: controller, job owner or Casals only"))
         if (job.status or "pending") != "pending":
             return ResultTakeSnapshot(Err=ie(f"job in '{job.status}', expected 'pending'"))
 
@@ -1877,7 +1894,10 @@ def take_pre_upgrade_snapshot(args: text) -> Async[ResultTakeSnapshot]:
 
 @query
 def get_pending_deployments() -> ResultPendingJobs:
+    """Pending jobs with their manifests (controller only: manifests are not public)."""
     try:
+        if not ic.is_controller(ic.caller()):
+            return ResultPendingJobs(Err=ie("unauthorized: controller only"))
         list(DeploymentJob.instances())
         pending = []
         for job in DeploymentJob.instances():
@@ -2261,6 +2281,8 @@ def report_deployment_failure(args: text) -> ResultReportFailure:
         job = DeploymentJob[job_id]
         if job is None:
             return ResultReportFailure(Err=ie(f"unknown: {job_id}"))
+        if not _caller_may_report_on(job):
+            return ResultReportFailure(Err=ie("unauthorized: controller, job owner or Casals only"))
         prev = job.status or "pending"
         if prev in _JOB_TERMINAL_STATUSES:
             return ResultReportFailure(Ok=JobStatusAck(job_id=job_id, prev_status=prev, status=prev, noop=True))
@@ -2706,6 +2728,8 @@ def report_canister_ready(args: text) -> Async[ResultReportReady]:
         job = DeploymentJob[job_id]
         if job is None:
             return ResultReportReady(Err=ie(f"unknown: {job_id}"))
+        if not _caller_may_report_on(job):
+            return ResultReportReady(Err=ie("unauthorized: controller, job owner or Casals only"))
         if (job.status or "pending") != "pending":
             return ResultReportReady(Err=ie(f"job in '{job.status}', expected 'pending'"))
 
@@ -2800,6 +2824,8 @@ def report_frontend_verified(args: text) -> Async[ResultReportFrontend]:
         job = DeploymentJob[job_id]
         if job is None:
             return ResultReportFrontend(Err=ie(f"unknown: {job_id}"))
+        if not _caller_may_report_on(job):
+            return ResultReportFrontend(Err=ie("unauthorized: controller, job owner or Casals only"))
         if (job.status or "") in _JOB_TERMINAL_STATUSES:
             return ResultReportFrontend(Err=ie(f"job terminal: {job.status}"))
 
