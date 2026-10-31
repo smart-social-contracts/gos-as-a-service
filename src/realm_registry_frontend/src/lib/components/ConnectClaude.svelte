@@ -13,7 +13,9 @@
   import { onMount } from 'svelte';
   import { _ } from 'svelte-i18n';
 
+  import { getIdentity } from '$lib/auth.js';
   import { GEISTER_API_ORIGIN, MCP_URL } from '$lib/geister/constants.js';
+  import { proveChallenge } from '$lib/read-state-proof.js';
 
   // Geister API host — same origin the registry assistant talks to.
   const GEISTER_API = GEISTER_API_ORIGIN;
@@ -64,13 +66,26 @@
     else loadingList = false;
   });
 
+  /**
+   * POST to a token route. The server acts for the principal the proof shows, and each call
+   * needs a challenge of its own.
+   */
+  async function postProven(path, body = {}) {
+    const identity = await getIdentity();
+    if (!identity) throw new Error('not signed in');
+    const { nonce, proof } = await proveChallenge(identity, `${GEISTER_API}/api/mcp/challenge`);
+    return fetch(`${GEISTER_API}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nonce, proof, ...body }),
+    });
+  }
+
   async function loadTokens() {
     loadingList = true;
     listError = '';
     try {
-      const res = await fetch(
-        `${GEISTER_API}/api/mcp/tokens?user_principal=${encodeURIComponent(principal)}`
-      );
+      const res = await postProven('/api/mcp/tokens/list');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       tokens = Array.isArray(data?.tokens) ? data.tokens : [];
@@ -91,15 +106,11 @@
     createError = '';
     newToken = '';
     try {
-      const body = { user_principal: principal, label: label.trim(), scope };
+      const body = { label: label.trim(), scope };
       const ttl = parseInt(ttlDays, 10);
       if (Number.isFinite(ttl) && ttl > 0) body.ttl_days = ttl;
 
-      const res = await fetch(`${GEISTER_API}/api/mcp/tokens`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
+      const res = await postProven('/api/mcp/tokens', body);
       const data = await res.json();
       if (!res.ok || !data?.success) {
         throw new Error(data?.error || `HTTP ${res.status}`);
@@ -121,11 +132,7 @@
 
   async function revokeToken(id) {
     try {
-      const res = await fetch(`${GEISTER_API}/api/mcp/tokens/${id}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_principal: principal }),
-      });
+      const res = await postProven(`/api/mcp/tokens/${id}/revoke`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       await loadTokens();
     } catch (err) {

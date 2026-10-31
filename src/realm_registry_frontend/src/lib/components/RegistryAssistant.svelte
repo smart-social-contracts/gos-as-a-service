@@ -28,7 +28,9 @@
   import { portalDocumentFocus } from '$lib/portal-focus.js';
   import { assistantChrome } from '$lib/assistant-chrome.js';
   import { assistantOpenRequest, assistantToggleRequest, assistantCloseRequest } from '$lib/assistant-open.js';
+  import { aiFetch } from '$lib/geister/ai-fetch.js';
   import { API_URL, CHAT_REQUEST_TIMEOUT_MS, geisterNetwork } from '$lib/geister/constants.js';
+  import { SIGN_IN_REQUIRED_MESSAGE } from '$lib/geister/session.js';
   import { CONFIG } from '$lib/config.js';
   import { registryRuntimeFlags } from '$lib/stores/registryRuntimeFlags.js';
   import {
@@ -484,11 +486,10 @@
   }
 
   async function loadSuggestions() {
-    if (!showSuggestions || isLoadingSuggestions) return;
+    if (!showSuggestions || !userPrincipal || isLoadingSuggestions) return;
     isLoadingSuggestions = true;
     try {
       suggestions = await fetchSuggestions({
-        userPrincipal,
         contextRealm: contextRealmId || '',
         persona: selectedAssistant?.id || 'ashoka',
       });
@@ -837,7 +838,6 @@
       /** @type {Record<string, unknown>} */
       const payload = {
         question,
-        user_principal: principal,
         stream: true,
         verbosity: 1,
         persona,
@@ -868,7 +868,7 @@
       const timeoutController = new AbortController();
       timeoutId = setTimeout(() => timeoutController.abort(), CHAT_REQUEST_TIMEOUT_MS);
 
-      const response = await fetch(API_URL, {
+      const response = await aiFetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
         body: JSON.stringify(payload),
@@ -969,6 +969,10 @@
     if (!question) return;
     error = '';
     await refreshAuth();
+    if (!userPrincipal) {
+      error = $_('assistant.sign_in_required', { default: SIGN_IN_REQUIRED_MESSAGE });
+      return;
+    }
     await ensureConversation();
 
     if (conversationId && isPending(conversationId)) return;
@@ -1348,18 +1352,22 @@
             {/if}
           </div>
         {/if}
-        <div class="input-row">
-          <textarea
-            bind:value={newMessage}
-            on:keydown={onKeydown}
-            rows="1"
-            placeholder={$_('assistant.placeholder', { default: 'Type your message…' })}
-            disabled={viewingPending}
-          ></textarea>
-          <button class="assistant-send" on:click={send} disabled={viewingPending || !newMessage.trim()}>
-            {$_('assistant.send', { default: 'Send' })}
-          </button>
-        </div>
+        {#if userPrincipal}
+          <div class="input-row">
+            <textarea
+              bind:value={newMessage}
+              on:keydown={onKeydown}
+              rows="1"
+              placeholder={$_('assistant.placeholder', { default: 'Type your message…' })}
+              disabled={viewingPending}
+            ></textarea>
+            <button class="assistant-send" on:click={send} disabled={viewingPending || !newMessage.trim()}>
+              {$_('assistant.send', { default: 'Send' })}
+            </button>
+          </div>
+        {:else}
+          <p class="sign-in-note">{$_('assistant.sign_in_required', { default: SIGN_IN_REQUIRED_MESSAGE })}</p>
+        {/if}
       </div>
       </div>
     </div>
@@ -1934,6 +1942,13 @@
     display: flex;
     align-items: stretch;
     gap: 8px;
+  }
+  .sign-in-note {
+    margin: 0;
+    padding: 0.5rem 0;
+    text-align: center;
+    font-size: 0.85rem;
+    color: #737373;
   }
   .assistant-input textarea {
     flex: 1;

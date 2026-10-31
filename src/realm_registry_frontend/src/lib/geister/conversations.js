@@ -1,3 +1,4 @@
+import { aiFetch } from './ai-fetch.js';
 import { CONVERSATIONS_API_URL } from './constants.js';
 
 /**
@@ -26,13 +27,13 @@ export function newConversationId() {
  */
 export async function fetchConversations(userPrincipal, contextRealm = '') {
   if (!userPrincipal) return { conversations: [], error: null };
-  const params = new URLSearchParams({ user_principal: userPrincipal });
+  const params = new URLSearchParams();
   if (contextRealm) {
     params.set('context_realm', contextRealm);
     params.set('realm_principal', contextRealm);
   }
   try {
-    const res = await fetch(`${CONVERSATIONS_API_URL}?${params}`, {
+    const res = await aiFetch(`${CONVERSATIONS_API_URL}?${params}`, {
       headers: { 'Content-Type': 'application/json' },
     });
     if (!res.ok) {
@@ -65,7 +66,6 @@ export async function createConversation(userPrincipal, persona, contextRealm = 
   if (!userPrincipal) return null;
   /** @type {Record<string, string>} */
   const body = {
-    user_principal: userPrincipal,
     persona: persona || 'ashoka',
   };
   if (contextRealm) {
@@ -73,7 +73,7 @@ export async function createConversation(userPrincipal, persona, contextRealm = 
     body.realm_principal = contextRealm;
   }
   try {
-    const res = await fetch(CONVERSATIONS_API_URL, {
+    const res = await aiFetch(CONVERSATIONS_API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -92,7 +92,7 @@ export async function createConversation(userPrincipal, persona, contextRealm = 
  */
 export async function loadConversationMessages(conversationId) {
   if (!conversationId) return [];
-  const res = await fetch(`${CONVERSATIONS_API_URL}/${conversationId}/messages`, {
+  const res = await aiFetch(`${CONVERSATIONS_API_URL}/${conversationId}/messages`, {
     headers: { 'Content-Type': 'application/json' },
   });
   if (!res.ok) return [];
@@ -103,7 +103,7 @@ export async function loadConversationMessages(conversationId) {
 /** @param {string} conversationId */
 export async function deleteConversation(conversationId) {
   if (!conversationId) return;
-  await fetch(`${CONVERSATIONS_API_URL}/${conversationId}`, { method: 'DELETE' });
+  await aiFetch(`${CONVERSATIONS_API_URL}/${conversationId}`, { method: 'DELETE' });
 }
 
 /**
@@ -116,7 +116,6 @@ export async function touchConversation(opts) {
   if (!conversationId || !userPrincipal || !question?.trim()) return null;
   /** @type {Record<string, string>} */
   const body = {
-    user_principal: userPrincipal,
     question: question.trim(),
     persona: opts.persona || 'ashoka',
   };
@@ -125,7 +124,7 @@ export async function touchConversation(opts) {
     body.realm_principal = opts.contextRealm;
   }
   try {
-    const res = await fetch(`${CONVERSATIONS_API_URL}/${conversationId}/touch`, {
+    const res = await aiFetch(`${CONVERSATIONS_API_URL}/${conversationId}/touch`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
