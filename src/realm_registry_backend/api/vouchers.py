@@ -26,7 +26,7 @@ def checksum_for_code(code: str) -> str:
     return f"sha256:{digest}"
 
 
-def _sha256_hex(value: str) -> bool:
+def is_sha256_hex(value: str) -> bool:
     if len(value) != 64:
         return False
     for ch in value:
@@ -40,7 +40,7 @@ def parse_checksum(value: str) -> str:
     if not text.startswith("sha256:"):
         text = f"sha256:{text}"
     digest = text[7:]
-    if not _sha256_hex(digest):
+    if not is_sha256_hex(digest):
         raise ValueError("checksum must be sha256: and 64 hex characters")
     return text
 
@@ -65,7 +65,7 @@ def issue_voucher(checksum: str, credits: int, *, is_controller: bool) -> dict:
     return {"success": True, "checksum": stored, "credits": amount}
 
 
-def _credit_caller(principal_id: str, amount: int) -> dict:
+def credit_caller(principal_id: str, amount: int, description: str) -> dict:
     uc = UserCredits[principal_id]
     if uc:
         uc.balance = (uc.balance or 0) + amount
@@ -80,7 +80,7 @@ def _credit_caller(principal_id: str, amount: int) -> dict:
         principal_id=principal_id,
         amount=amount,
         transaction_type="topup",
-        description="Voucher",
+        description=description,
         stripe_session_id="",
         timestamp=time.time(),
     )
@@ -103,7 +103,7 @@ def redeem_voucher(code: str, caller: str) -> dict:
     amount = int(voucher.credits or 0)
     if amount < MIN_CREDITS:
         return {"success": False, "error": INVALID}
-    credits = _credit_caller(caller, amount)
+    credits = credit_caller(caller, amount, "Voucher")
     voucher.redeemer = caller
     voucher.redeemed_at = time.time()
     logger.info(f"redeemed voucher {stored[:16]} by {caller}")
