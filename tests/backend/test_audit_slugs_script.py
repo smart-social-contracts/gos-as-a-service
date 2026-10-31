@@ -10,17 +10,26 @@ audit_slugs = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(audit_slugs)
 
 
+def _job(backend: str, frontend: str) -> dict:
+    return {"backend_canister_id": backend, "frontend_canister_id": frontend}
+
+
 def test_slug_with_an_unknown_frontend_is_flagged():
     slugs = [
-        {"slug": "mine", "frontend_canister_id": "frontend-a"},
-        {"slug": "hijacked", "frontend_canister_id": "attacker-frontend"},
+        {"slug": "mine", "realm_id": "backend-a", "frontend_canister_id": "frontend-a"},
+        {"slug": "hijacked", "realm_id": "backend-b", "frontend_canister_id": "attacker-frontend"},
     ]
-    jobs = [{"frontend_canister_id": "frontend-a"}, {"frontend_canister_id": "frontend-b"}]
+    jobs = [_job("backend-a", "frontend-a"), _job("backend-b", "frontend-b")]
     assert audit_slugs.unverified_slugs(slugs, jobs) == [slugs[1]]
 
 
+def test_slug_pairing_a_real_frontend_with_another_realm_is_flagged():
+    slugs = [{"slug": "swapped", "realm_id": "attacker-backend", "frontend_canister_id": "frontend-a"}]
+    assert audit_slugs.unverified_slugs(slugs, [_job("backend-a", "frontend-a")]) == slugs
+
+
 def test_every_slug_is_flagged_when_there_are_no_jobs():
-    slugs = [{"slug": "mine", "frontend_canister_id": "frontend-a"}]
+    slugs = [{"slug": "mine", "realm_id": "backend-a", "frontend_canister_id": "frontend-a"}]
     assert audit_slugs.unverified_slugs(slugs, []) == slugs
 
 

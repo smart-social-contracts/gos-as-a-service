@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """List the registry's slugs whose frontend canister the installer never deployed.
 
-    REGISTRY_BACKEND=<id> REALM_INSTALLER=<id> python3 scripts/audit_slugs.py --network ic
+    REGISTRY_BACKEND=<id> REALM_INSTALLER=<id> python3 scripts/audit_slugs.py --network ic --identity <controller>
 
-Read-only: both canisters are read through their public `__browse__` query. The
-portal iframes a slug's `frontend_canister_id` and delegates the visitor's login
-to it, so every slug must point at a frontend a deployment job created (audit
-C1). Slugs listed here need a look: a hijack, or an older realm whose job record
-is gone. Exit status 1 when any slug is listed.
+Read-only: both canisters are read through their `__browse__` query. It is
+controller-only (basilisk's guard_against_non_controllers), so --identity is
+required and must be a controller of both canisters. The portal iframes a slug's
+`frontend_canister_id` and delegates the visitor's login to it, so every slug
+must point at the realm and frontend a deployment job created (audit C1). Slugs
+listed here need a look: a hijack, or an older realm whose job record is gone.
+Exit status 1 when any slug is listed.
 
 Environment: REGISTRY_BACKEND, REALM_INSTALLER, canister ids from `casals export`.
-The installer's jobs are read as-is; no identity is needed, but pass --identity
-to use a named one.
 """
 
 import argparse
@@ -65,15 +65,15 @@ def entities(canister: str, map_name: str, type_name: str, network: str, identit
 
 
 def unverified_slugs(slugs: list, jobs: list) -> list:
-    """The slugs whose frontend no deployment job recorded."""
-    deployed_frontends = {job.get("frontend_canister_id") for job in jobs}
-    return [s for s in slugs if s.get("frontend_canister_id") not in deployed_frontends]
+    """The slugs whose realm and frontend no single deployment job recorded together."""
+    deployed = {(job.get("backend_canister_id"), job.get("frontend_canister_id")) for job in jobs}
+    return [s for s in slugs if (s.get("realm_id"), s.get("frontend_canister_id")) not in deployed]
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--network", default="ic", help="icp network (default ic)")
-    parser.add_argument("--identity", help="icp identity to query as")
+    parser.add_argument("--identity", required=True, help="icp identity of a controller of both canisters")
     args = parser.parse_args()
     missing = [name for name in ("REGISTRY_BACKEND", "REALM_INSTALLER") if not os.environ.get(name)]
     if missing:

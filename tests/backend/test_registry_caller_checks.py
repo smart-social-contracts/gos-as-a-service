@@ -68,24 +68,54 @@ def test_claim_slug_refuses_other_callers(caller):
     assert SlugRecord["victim"] is None
 
 
-@pytest.mark.parametrize("caller,controller", [(REALM, False), (INSTALLER, False), (STRANGER, True)])
-def test_claim_slug_allows_realm_installer_and_controller(caller, controller):
+@pytest.mark.parametrize("caller,controller", [(INSTALLER, False), (STRANGER, True)])
+def test_claim_slug_creates_a_new_slug_for_the_installer_and_controller(caller, controller):
     _register_realm()
     _call_as(caller, controller)
     result = claim_slug_by_caller("my-realm", FRONTEND, REALM)
     assert result["success"], result.get("error")
 
 
-def test_claim_slug_defaults_the_realm_to_the_caller():
-    _register_realm()
+def test_a_self_registered_realm_cannot_squat_a_pending_slug():
     _call_as(REALM)
-    assert claim_slug_by_caller("my-realm", FRONTEND)["success"]
+    assert register_realm_by_caller("Attacker", url="", frontend_canister_id=ATTACKER_FRONTEND)["success"]
+    result = claim_slug_by_caller("acme", ATTACKER_FRONTEND)
+    assert result["success"] is False
+    assert "may create a new slug" in result["error"]
+    assert SlugRecord["acme"] is None
+
+    _register_realm(OTHER_REALM)
+    _call_as(INSTALLER)
+    assert claim_slug_by_caller("acme", FRONTEND, OTHER_REALM)["success"]
+    assert SlugRecord["acme"].realm_id == OTHER_REALM
+
+
+def test_the_installer_creates_only_one_slug_per_realm():
+    _claimed_slug()
+    _call_as(INSTALLER)
+    result = claim_slug_by_caller("second-slug", FRONTEND, REALM)
+    assert result["success"] is False
+    assert "already holds a slug" in result["error"]
+    assert SlugRecord["second-slug"] is None
+
+
+def test_a_controller_may_create_a_second_slug_for_a_realm():
+    _claimed_slug()
+    _call_as(STRANGER, controller=True)
+    assert claim_slug_by_caller("second-slug", FRONTEND, REALM)["success"]
+
+
+def test_claim_slug_defaults_the_realm_to_the_caller():
+    _claimed_slug()
+    _call_as(REALM)
+    assert claim_slug_by_caller("my-realm", "new-frontend")["success"]
     assert SlugRecord["my-realm"].realm_id == REALM
+    assert SlugRecord["my-realm"].frontend_canister_id == "new-frontend"
 
 
 def _claimed_slug():
     _register_realm()
-    _call_as(REALM)
+    _call_as(INSTALLER)
     assert claim_slug_by_caller("my-realm", FRONTEND, REALM)["success"]
 
 
@@ -190,9 +220,7 @@ def test_register_realm_lets_a_realm_register_itself():
 
 
 def test_pretty_hostname_status_is_for_controllers():
-    _register_realm()
-    _call_as(REALM)
-    assert claim_slug_by_caller("my-realm", FRONTEND, REALM)["success"]
+    _claimed_slug()
     result = mark_pretty_hostname_status("my-realm", "live", is_controller=False)
     assert result["success"] is False
     assert SlugRecord["my-realm"].pretty_hostname_status == "pending"

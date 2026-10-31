@@ -128,7 +128,7 @@ Federation slugs map realms to portal URLs (`/r/{slug}`). Logic lives in `src/re
 - Normalizes slug (lowercase, alphanumeric + hyphens, max 48 chars).
 - Rejects reserved slugs (`www`, `api`, `registry`, `create-realm`, …).
 - Requires the realm to already exist in `RealmRecord` (installer calls this after `register_realm`).
-- Caller must be the realm, the configured installer or a controller. Changing the `frontend_canister_id` of an existing slug is for the realm or a controller only: the portal iframes it and delegates the visitor's login to it.
+- Caller must be the realm, the configured installer or a controller. A new slug is created only by the installer (once per realm) or a controller, so a self-registered realm cannot squat the slug of a pending deployment; a realm may only update a slug it holds. Changing the `frontend_canister_id` of an existing slug is for the realm or a controller only: the portal iframes it and delegates the visitor's login to it.
 - Stores metadata on `SlugRecord`:
 
 | Field | Default (Realms GOS) | Purpose |

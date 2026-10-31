@@ -84,6 +84,10 @@ def _pretty_hostname(slug: str, portal_base: str, explicit: str = "") -> str:
     return f"{slug}.{host}"
 
 
+def _realm_holds_a_slug(realm_id: str) -> bool:
+    return any(rec.realm_id == realm_id for rec in SlugRecord.instances())
+
+
 def claim_slug_by_caller(
     slug: str,
     frontend_canister_id: str = "",
@@ -119,6 +123,13 @@ def claim_slug_by_caller(
     existing = SlugRecord[normalized]
     if existing and existing.realm_id != backend_id:
         return {"success": False, "error": f"Slug '{normalized}' already claimed"}
+    if existing is None:
+        # A self-registered realm must not squat the slug of a pending deployment
+        # (manifests show it), so only the deployer of the realm creates its slug.
+        if not is_installer(caller) and not is_controller:
+            return {"success": False, "error": "Only the installer or a controller may create a new slug"}
+        if not is_controller and _realm_holds_a_slug(backend_id):
+            return {"success": False, "error": f"Realm '{backend_id}' already holds a slug"}
     # The frontend is what the portal iframes and delegates the visitor's login to.
     if (
         existing
