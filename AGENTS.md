@@ -128,6 +128,7 @@ Federation slugs map realms to portal URLs (`/r/{slug}`). Logic lives in `src/re
 - Normalizes slug (lowercase, alphanumeric + hyphens, max 48 chars).
 - Rejects reserved slugs (`www`, `api`, `registry`, `create-realm`, …).
 - Requires the realm to already exist in `RealmRecord` (installer calls this after `register_realm`).
+- Caller must be the realm, the configured installer or a controller. Changing the `frontend_canister_id` of an existing slug is for the realm or a controller only: the portal iframes it and delegates the visitor's login to it.
 - Stores metadata on `SlugRecord`:
 
 | Field | Default (Realms GOS) | Purpose |
@@ -158,7 +159,7 @@ Flow in `main.py`:
 
 Returns JSON with `job_id`, `credits_held`, `status`.
 
-**Settlement callbacks** (installer → registry, controller-gated):
+**Settlement callbacks** (installer → registry, accepted only from the configured `installer_id`):
 
 - `deployment_succeeded(job_id, caller_principal)` → `capture_deployment_hold`
 - `deployment_failed(job_id, reason, caller_principal)` → `release_deployment_hold`
