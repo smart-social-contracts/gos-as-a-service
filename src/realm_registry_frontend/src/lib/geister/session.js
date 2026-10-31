@@ -52,10 +52,12 @@ export function createAiSession({ origin, getIdentity }) {
 
   /**
    * `fetch` with the session token. Signed out: throws SignInRequiredError.
+   * Refuses any url outside `origin`, so the token is never sent to another host.
    * @param {string} url
    * @param {RequestInit} [init]
    */
   async function aiFetch(url, init = {}) {
+    if (!url.startsWith(`${origin}/`)) throw new Error(`Refusing to send the assistant token to ${url}.`);
     const identity = await getIdentity();
     if (!identity) throw new SignInRequiredError();
     const send = async () =>

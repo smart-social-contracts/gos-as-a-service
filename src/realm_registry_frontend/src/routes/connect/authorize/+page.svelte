@@ -67,14 +67,18 @@
 
   async function decide(approve) {
     if (submitting) return;
-    if (approve && !principal) {
+    if (approve && !info?.redirect_uri_host) return;
+    // A denial acts for nobody, so only an approval needs an identity and its proof.
+    let identity = approve ? await getIdentity() : null;
+    if (approve && !identity) {
+      // The Internet Identity session expired since the page loaded.
       await signIn();
-      if (!principal) return;
+      identity = await getIdentity();
+      if (!identity) return;
     }
     submitting = true;
     try {
-      // A denial acts for nobody, so only an approval needs the proof.
-      const proof = approve ? await signProof(await getIdentity(), await requestIdNonce(requestId)) : undefined;
+      const proof = approve ? await signProof(identity, await requestIdNonce(requestId)) : undefined;
       const res = await fetch(`${MCP_HOST}/oauth/consent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -132,13 +136,15 @@
         })}
       </p>
       <!-- The client name is whatever the client registered; the host is where approval sends you. -->
-      <div class="redirect-host">
-        <span class="who-label">{$_('mcpConsent.redirect_host', { default: 'After you approve, you return to' })}</span>
-        <code title={info?.redirect_uri_host}>{info?.redirect_uri_host}</code>
-        <small>{$_('mcpConsent.redirect_host_hint', {
-          default: 'Approve only if you recognise this address.',
-        })}</small>
-      </div>
+      {#if info?.redirect_uri_host}
+        <div class="redirect-host">
+          <span class="who-label">{$_('mcpConsent.redirect_host', { default: 'After you approve, you return to' })}</span>
+          <code title={info.redirect_uri_host}>{info.redirect_uri_host}</code>
+          <small>{$_('mcpConsent.redirect_host_hint', {
+            default: 'Approve only if you recognise this address.',
+          })}</small>
+        </div>
+      {/if}
 
       <div class="who">
         {#if principal}
@@ -174,7 +180,7 @@
         <button class="deny" on:click={() => decide(false)} disabled={submitting}>
           {$_('mcpConsent.deny', { default: 'Deny' })}
         </button>
-        <button class="approve" on:click={() => decide(true)} disabled={submitting || !principal}>
+        <button class="approve" on:click={() => decide(true)} disabled={submitting || !principal || !info?.redirect_uri_host}>
           {#if submitting}
             <span class="spinner small-spin"></span>
           {:else}
