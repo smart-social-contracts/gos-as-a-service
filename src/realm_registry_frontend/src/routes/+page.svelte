@@ -7,6 +7,7 @@
   import { casalsFrontendUrl } from '$lib/architecture-link.js';
   import { runtimeCanisterIds } from '$lib/network.js';
   import { registryRuntimeFlags } from '$lib/stores/registryRuntimeFlags.js';
+  import AlphaAccessNotice from '$lib/components/AlphaAccessNotice.svelte';
   import RegistryHeader from '$lib/components/RegistryHeader.svelte';
   import RegistryEdgeTabs from '$lib/components/RegistryEdgeTabs.svelte';
   import RegistryKpiLine from '$lib/components/RegistryKpiLine.svelte';
@@ -296,6 +297,11 @@
     {#if !loading}
       <RegistryKpiLine realms={filteredRealms} {realmZoneData} />
     {/if}
+    {#if !authLoading && !isLoggedIn}
+      <div class="alpha-notice-slot">
+        <AlphaAccessNotice />
+      </div>
+    {/if}
   </main>
 
   <RealmPanel
@@ -384,6 +390,16 @@
 
   .map-shell.map-shell-transition {
     transition: left 0.25s ease, right 0.25s ease;
+  }
+
+  .alpha-notice-slot {
+    position: absolute;
+    top: calc(var(--header-height) + 1rem);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    width: calc(100% - 2rem);
+    max-width: 28rem;
   }
 
   .page-loading {

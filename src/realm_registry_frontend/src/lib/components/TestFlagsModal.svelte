@@ -34,7 +34,7 @@
     { key: 'demo_data', store: 'testModeDemoData', label: 'Demo data', hint: 'Auto-activate the demo data simulator' },
     { key: 'skip_terms', store: 'testModeSkipTerms', label: 'Skip terms', hint: 'Skip the terms & conditions step on join' },
     { key: 'skip_passport_zkproof', store: 'testModeSkipPassportZkproof', label: 'Skip passport ZK-proof', hint: 'Bypass passport zero-knowledge verification' },
-    { key: 'disable_card_billing', store: 'testModeDisableCardBilling', label: 'Disable card billing', hint: 'Keep Top Up Credits visible; Pay with Card cannot charge (Currently not available)' },
+    { key: 'disable_card_billing', store: 'testModeDisableCardBilling', label: 'Disable card billing', hint: 'Keep Top Up Credits visible; Pay with Card cannot charge (Coming soon)' },
     { key: 'assistant_experimental_notice', store: 'testModeAssistantExperimentalNotice', label: 'Assistant experimental notice', hint: 'Keep the assistant available; show the unofficial / not legal-advice line in chrome' }
   ];
 

@@ -24,7 +24,7 @@
     {
       id: 'vouchers',
       question: 'What are Voucher Codes?',
-      answer: 'Voucher codes are promotional codes that can be redeemed for free credits. They may be distributed during special events, partnerships, or promotional campaigns. Each voucher can typically only be redeemed once per user.'
+      answer: 'Voucher codes are promotional codes that can be redeemed for free credits. They may be distributed during special events, partnerships, or promotional campaigns. Each voucher can typically only be redeemed once per user. During Alpha, access is by invitation: the invitation code we email you when your request is approved includes 50 free credits, added when you redeem it on the Launch a realm page.'
     },
     {
       id: 'realms',
