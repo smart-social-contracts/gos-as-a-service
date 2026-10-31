@@ -7,10 +7,8 @@ import {
 	isCardBillingDisabled
 } from './card-billing-flag.js';
 
-test('unavailable copy is the go-live string', () => {
-	assert.equal(CARD_PAY_UNAVAILABLE_COPY, 'Currently not available');
-	assert.notEqual(CARD_PAY_UNAVAILABLE_COPY.toLowerCase(), 'coming soon');
-	assert.notEqual(CARD_PAY_UNAVAILABLE_COPY, 'Not available in this demo');
+test('unavailable copy is the Alpha string', () => {
+	assert.equal(CARD_PAY_UNAVAILABLE_COPY, 'Coming soon');
 });
 
 test('disable_card_billing is OFF unless the registry stored it — no network default', () => {
@@ -37,7 +35,7 @@ test('Pay with Card label becomes the unavailable state when disabled', () => {
 			network: 'test',
 			availableLabel: 'Pay with Card'
 		}),
-		'Currently not available'
+		'Coming soon'
 	);
 	assert.equal(
 		cardPayButtonLabel({

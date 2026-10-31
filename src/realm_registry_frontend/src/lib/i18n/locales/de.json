@@ -85,6 +85,14 @@
     "showing": "Zeige {filtered} von {total} Realms",
     "users": "{count} Benutzer"
   },
+  "alpha_access": {
+    "title": "gos.earth ist in der Alpha-Phase",
+    "body": "Sagen Sie uns, was Sie aufbauen möchten, wir antworten bald. Freigegebene Anfragen erhalten 50 Gratis-Credits.",
+    "request": "Einladung anfragen",
+    "privacy": "Das Formular erfasst Ihre E-Mail-Adresse; siehe",
+    "privacy_link": "Datenschutzerklärung",
+    "dismiss_label": "Schließen"
+  },
   "demo_banner": {
     "title": "Testmodus aktiv",
     "description": "Diese Anwendung läuft im Testmodus. Einige Funktionen können sich anders verhalten als in der Produktion.",

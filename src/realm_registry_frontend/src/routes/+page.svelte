@@ -6,7 +6,9 @@
   import MapView from '$lib/components/MapView.svelte';
   import { casalsFrontendUrl } from '$lib/architecture-link.js';
   import { runtimeCanisterIds } from '$lib/network.js';
+  import { getTestModeIIBypass } from '$lib/config.js';
   import { registryRuntimeFlags } from '$lib/stores/registryRuntimeFlags.js';
+  import AlphaAccessNotice from '$lib/components/AlphaAccessNotice.svelte';
   import RegistryHeader from '$lib/components/RegistryHeader.svelte';
   import RegistryEdgeTabs from '$lib/components/RegistryEdgeTabs.svelte';
   import RegistryKpiLine from '$lib/components/RegistryKpiLine.svelte';
@@ -40,6 +42,10 @@
   let isLoggedIn = false;
   let userPrincipal = null;
   let authLoading = true;
+
+  const ALPHA_NOTICE_DISMISSED_KEY = 'gos_alpha_notice_dismissed';
+  let invitationMode = false;
+  let alphaNoticeDismissed = false;
 
   let commitHash = '';
   let commitDatetime = '';
@@ -191,8 +197,24 @@
     authLoading = session.loading;
   }
 
+  async function loadInvitationMode() {
+    try {
+      const result = await backend.get_invitation_mode();
+      invitationMode = result?.Ok === 'enabled' && !getTestModeIIBypass();
+    } catch (e) {
+      console.warn('[registry] invitation mode check failed:', e);
+    }
+  }
+
+  function dismissAlphaNotice() {
+    alphaNoticeDismissed = true;
+    localStorage.setItem(ALPHA_NOTICE_DISMISSED_KEY, 'true');
+  }
+
   onMount(async () => {
     if (!browser) return;
+
+    alphaNoticeDismissed = localStorage.getItem(ALPHA_NOTICE_DISMISSED_KEY) === 'true';
 
     const layoutMq = window.matchMedia('(min-width: 768px)');
     const syncLayout = () => {
@@ -205,6 +227,7 @@
 
     const { backend: b } = await import('$lib/canisters');
     backend = b;
+    loadInvitationMode();
     await loadRealms();
 
     const commitHashMeta = document.querySelector('meta[name="commit-hash"]');
@@ -296,6 +319,12 @@
     {#if !loading}
       <RegistryKpiLine realms={filteredRealms} {realmZoneData} />
     {/if}
+    {#if invitationMode && !authLoading && !isLoggedIn && !alphaNoticeDismissed}
+      <div class="alpha-notice-slot">
+        <AlphaAccessNotice />
+        <button type="button" class="alpha-notice-dismiss" on:click={dismissAlphaNotice} aria-label={$_('alpha_access.dismiss_label')}>✕</button>
+      </div>
+    {/if}
   </main>
 
   <RealmPanel
@@ -384,6 +413,26 @@
 
   .map-shell.map-shell-transition {
     transition: left 0.25s ease, right 0.25s ease;
+  }
+
+  .alpha-notice-slot {
+    position: absolute;
+    top: calc(var(--header-height) + 1rem);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    width: calc(100% - 2rem);
+    max-width: 28rem;
+  }
+
+  .alpha-notice-dismiss {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    border: none;
+    background: none;
+    color: var(--text-secondary);
+    cursor: pointer;
   }
 
   .page-loading {
