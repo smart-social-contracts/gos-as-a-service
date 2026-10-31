@@ -19,6 +19,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import secrets
 import smtplib
 import subprocess
@@ -34,7 +35,7 @@ REQUIRED_SMTP_ENV = ("SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD")
 
 
 def new_code() -> str:
-    return secrets.token_hex(6).upper()
+    return secrets.token_hex(16).upper()
 
 
 def hash_code(code: str) -> str:
@@ -61,21 +62,48 @@ def propose_args(registry: str, payload: str) -> str:
     )
 
 
-def create_code(args, registry: str, multisig: str, payload: str) -> None:
-    cmd = [
-        "icp",
-        "canister",
-        "call",
-        multisig,
-        "propose",
-        propose_args(registry, payload),
-    ]
+def icp_call(args, canister: str, method: str, candid_args: str, *flags) -> str:
+    cmd = ["icp", "canister", "call", canister, method, candid_args, *flags]
     cmd += ["-n", args.network, "--identity", args.identity]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-    if result.returncode or "variant { Err" in result.stdout:
-        reason = (result.stderr or result.stdout).strip()[-400:]
-        raise SystemExit(f"multisig propose failed: {reason}")
-    print(result.stdout.strip())
+    if result.returncode:
+        raise SystemExit(f"{method} failed: {result.stderr.strip()[-400:]}")
+    return result.stdout.strip()
+
+
+def proposal_id(propose_output: str) -> int:
+    """propose answers with the new proposal's id, e.g. ``(7 : nat)``."""
+    found = re.search(r"\(\s*([\d_]+)\s*:\s*nat\s*\)", propose_output)
+    if not found:
+        raise SystemExit(f"propose returned no proposal id: {propose_output[-400:]}")
+    return int(found.group(1).replace("_", ""))
+
+
+def check_executed(proposal_output: str) -> None:
+    """Fail unless the proposal executed and the registry's reply says success.
+
+    propose returns the id even when the action fails, and the multisig counts
+    any text reply as executed, so the registry's own reply (the proposal's
+    ``result``) is what says whether the code was stored.
+    """
+    status = re.search(r"status = variant \{ (\w+) \}", proposal_output)
+    if not status or status.group(1) != "executed":
+        raise SystemExit(f"proposal did not execute: {proposal_output[-400:]}")
+    result = re.search(r'result = opt "((?:[^"\\]|\\.)*)"', proposal_output)
+    try:
+        reply = json.loads(json.loads(f'"{result.group(1)}"'))
+    except (AttributeError, ValueError):
+        raise SystemExit(f"proposal has no readable registry reply: {proposal_output[-400:]}")
+    if not isinstance(reply, dict) or reply.get("success") is not True:
+        raise SystemExit(f"registry refused the invitation: {reply}")
+
+
+def create_code(args, registry: str, multisig: str, payload: str) -> None:
+    proposed = icp_call(args, multisig, "propose", propose_args(registry, payload))
+    proposal = icp_call(
+        args, multisig, "get_proposal", f"({proposal_id(proposed)} : nat)", "--query"
+    )
+    check_executed(proposal)
 
 
 def compose_email(to: str, code: str, credits: int, expires_at: int, portal: str):

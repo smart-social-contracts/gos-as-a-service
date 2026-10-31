@@ -1,5 +1,8 @@
 """Invitation codes: one use, optional expiry, and the credits they carry."""
 
+import pytest
+
+from realm_registry_backend.api import invitations
 from realm_registry_backend.api.invitations import (
     create_invitations,
     hash_code,
@@ -40,6 +43,21 @@ def test_redeem_activates_and_credits_once():
     assert second == {"Err": "This invitation code has already been used"}
     assert ActivatedPrincipal[OTHER] is None
     assert UserCredits[OTHER] is None
+
+
+def test_code_is_spent_before_credits_are_added(monkeypatch):
+    _clear()
+    _invite("ALPHA2")
+
+    def failing_credit(*args):
+        raise RuntimeError("ledger write failed")
+
+    monkeypatch.setattr(invitations, "credit_caller", failing_credit)
+    with pytest.raises(RuntimeError):
+        redeem_invitation("ALPHA2", CALLER, NOW)
+
+    assert InvitationCode[hash_code("ALPHA2")].redeemed_by == CALLER
+    assert ActivatedPrincipal[CALLER] is not None
 
 
 def test_unknown_and_revoked_codes_are_invalid():
@@ -126,6 +144,8 @@ def test_create_rejects_bad_credits_and_expiry():
         ("50", 0),
         (50, -5),
         (50, "never"),
+        (True, 0),
+        (50, True),
     ]:
         entry = {"hash": digest, "credits": credits, "expires_at": expires_at}
         assert "Err" in create_invitations([entry], NOW), (credits, expires_at)

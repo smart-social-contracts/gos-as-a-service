@@ -309,7 +309,7 @@ service : {
   "is_principal_activated" : (text) -> (GenericResult) query;
   "redeem_invitation_code" : (text) -> (GenericResult);
   "set_invitation_mode" : (text) -> (GenericResult);
-  "create_invitation_codes" : (text) -> (GenericResult);
+  "create_invitation_codes" : (text) -> (text);
   "revoke_invitation_code" : (text) -> (GenericResult);
   "deactivate_principal" : (text) -> (GenericResult);
   "list_invitation_codes" : () -> (text) query;

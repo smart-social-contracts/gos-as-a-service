@@ -19,8 +19,25 @@ operator's machine except in that email: the registry holds the hash only.
 
 ## One-time setup per environment
 
-- **Card billing off.** `casals up` applies `test_flags.disable_card_billing`
-  from the sheet (`casals.json` and the other sheets).
+- **The registry wasm with invitations must be live first.** The script calls
+  the registry's `create_invitation_codes` with `{hash, credits, expires_at}`
+  entries and reads its JSON reply; an older registry build expects a plain
+  list of hashes and answers differently. Upgrade the registry before the first
+  invitation.
+- **Card billing off.** A fresh build applies `test_flags.disable_card_billing`
+  from the sheet (`casals.json` and the other sheets) in its `configure` step.
+  `casals up` does not reach an environment that is already built, so there
+  the flag goes in through a proposal like the one below, and the registry
+  must then report it:
+
+  ```sh
+  icp canister call "$GAAS_MULTISIG" propose \
+    "(variant { CallCanister = record { canister = principal \"$REGISTRY_BACKEND\"; method = \"set_canister_config_json\"; arg_json = \"{\\\"test_flags\\\":{\\\"disable_card_billing\\\":true}}\" } }, null)" \
+    -n ic --identity <operator identity>
+  icp canister call "$REGISTRY_BACKEND" get_runtime_flags '()' -n ic --query
+  ```
+
+  `get_runtime_flags` must show `test_mode_disable_card_billing` as `true`.
 - **Invitation mode on.** Without it there is no gate (anyone can create a
   realm) and `redeem_invitation_code` does nothing, so no credits are granted. The
   registry's controller is the GaaS multisig; turn the mode on with a proposal

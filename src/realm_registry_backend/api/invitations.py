@@ -18,6 +18,11 @@ def hash_code(code: str) -> str:
     return hashlib.sha256(code.strip().encode("utf-8")).hexdigest()
 
 
+def _is_number(value, kinds) -> bool:
+    """isinstance(value, kinds), but True/False are not numbers here."""
+    return isinstance(value, kinds) and not isinstance(value, bool)
+
+
 def _validate_entry(entry) -> str | None:
     """Return why *entry* is not a valid {"hash","credits","expires_at"}, else None."""
     if not isinstance(entry, dict):
@@ -25,10 +30,10 @@ def _validate_entry(entry) -> str | None:
     if not is_sha256_hex(str(entry.get("hash", ""))):
         return "hash must be 64 lowercase hex characters"
     credits = entry.get("credits")
-    if not isinstance(credits, int) or credits < 0 or credits > MAX_CREDITS:
+    if not _is_number(credits, int) or credits < 0 or credits > MAX_CREDITS:
         return f"credits must be an integer from 0 to {MAX_CREDITS}"
     expires_at = entry.get("expires_at")
-    if not isinstance(expires_at, (int, float)) or expires_at < 0:
+    if not _is_number(expires_at, (int, float)) or expires_at < 0:
         return "expires_at must be unix seconds, or 0 for never"
     return None
 
@@ -75,15 +80,17 @@ def redeem_invitation(code: str, caller: str, now: float) -> dict:
     if invitation.expires_at and now > invitation.expires_at:
         return {"Err": "This invitation code has expired"}
 
+    # Spend the code before crediting, so a failure part-way can't leave a
+    # code that credits again on the next redeem.
     credits = int(invitation.credits or 0)
-    if credits:
-        credit_caller(caller, credits, "Invitation")
     invitation.redeemed_by = caller
     invitation.redeemed_at = now
     invitation.is_active = False
     ActivatedPrincipal(
         principal_id=caller, invitation_code_hash=code_hash, activated_at=now
     )
+    if credits:
+        credit_caller(caller, credits, "Invitation")
     logger.info(
         f"principal {caller} activated with invitation {code_hash[:16]} credits={credits}"
     )

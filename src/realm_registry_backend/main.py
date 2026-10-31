@@ -1121,20 +1121,27 @@ def set_invitation_mode(enabled: text) -> GenericResult:
 
 
 @update
-def create_invitation_codes(invitations_json: text) -> GenericResult:
-    """Controller-only. Input: '[{"hash": sha256hex, "credits": 50, "expires_at": unix_seconds_or_0}, ...]'"""
+def create_invitation_codes(invitations_json: text) -> text:
+    """Controller-only. Input: '[{"hash": sha256hex, "credits": 50, "expires_at": unix_seconds_or_0}, ...]'
+
+    Text out, not GenericResult: the GaaS multisig calls this through
+    ``CallCanister`` and only records a text reply.
+    Returns: {"success": bool, "created"?: int, "total_submitted"?: int, "error"?: str}.
+    """
     try:
         if not ic.is_controller(ic.caller()):
-            return {"Err": "Only controllers can create invitation codes"}
+            return json.dumps(
+                {"success": False, "error": "Only controllers can create invitation codes"}
+            )
 
         from api.invitations import create_invitations
 
         result = create_invitations(json.loads(invitations_json), float(ic.time() / 1_000_000_000))
         if "Err" in result:
-            return result
-        return {"Ok": json.dumps(result["Ok"])}
+            return json.dumps({"success": False, "error": result["Err"]})
+        return json.dumps({"success": True, **result["Ok"]})
     except Exception as e:
-        return {"Err": str(e)}
+        return json.dumps({"success": False, "error": str(e)})
 
 
 @update

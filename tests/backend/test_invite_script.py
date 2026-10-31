@@ -25,16 +25,36 @@ ENV = {
 }
 
 
+def proposal_output(status="executed", reply='{"success": true, "created": 1}'):
+    """What `get_proposal` prints: the registry's reply is the proposal's result."""
+    result = reply.replace("\\", "\\\\").replace('"', '\\"')
+    return (
+        f"(opt record {{ id = 7 : nat; status = variant {{ {status} }}; "
+        f'result = opt "{result}"; }})'
+    )
+
+
+def icp_replies(proposal):
+    """A fake `icp canister call`: propose answers with the id, get_proposal with *proposal*."""
+
+    def fake_run(cmd, **kwargs):
+        stdout = "(7 : nat)" if cmd[4] == "propose" else proposal
+        return SimpleNamespace(returncode=0, stdout=stdout, stderr="")
+
+    return fake_run
+
+
 @pytest.fixture
 def live(monkeypatch):
     """Real-run environment with the icp call and the mail server recorded."""
     for name, value in ENV.items():
         monkeypatch.setenv(name, value)
     events = []
+    reply = icp_replies(proposal_output())
 
     def fake_run(cmd, **kwargs):
         events.append(("icp", cmd))
-        return SimpleNamespace(returncode=0, stdout="(variant { Ok })", stderr="")
+        return reply(cmd)
 
     def fake_send(message):
         events.append(("mail", message))
@@ -95,21 +115,44 @@ def test_dry_run_neither_proposes_nor_sends(live, capsys):
 
 def test_real_run_proposes_then_emails_the_same_code(live):
     invite.main(["a@example.org", "--identity", "operator"])
-    (kind_a, cmd), (kind_b, message) = live
-    assert (kind_a, kind_b) == ("icp", "mail")
-    assert cmd[:5] == ["icp", "canister", "call", "multisig-id", "propose"]
-    assert cmd[-4:] == ["-n", "ic", "--identity", "operator"]
+    (kind_a, propose), (kind_b, check), (kind_c, message) = live
+    assert (kind_a, kind_b, kind_c) == ("icp", "icp", "mail")
+    assert propose[:5] == ["icp", "canister", "call", "multisig-id", "propose"]
+    assert propose[-4:] == ["-n", "ic", "--identity", "operator"]
+    assert check[:6] == ["icp", "canister", "call", "multisig-id", "get_proposal", "(7 : nat)"]
     code = message.get_content().split("Invitation code: ")[1].split()[0]
-    assert registry_hash_code(code) in cmd[5].replace("\\", "")
+    assert registry_hash_code(code) in propose[5].replace("\\", "")
 
 
-def test_failed_proposal_sends_no_email(live, monkeypatch):
-    def failing_run(cmd, **kwargs):
-        return SimpleNamespace(
+def test_codes_carry_at_least_128_bits():
+    assert len(bytes.fromhex(invite.new_code())) >= 16
+
+
+@pytest.mark.parametrize(
+    "proposal",
+    [
+        proposal_output(status="failed", reply="empty reply"),
+        proposal_output(status="pending", reply="{}"),
+        proposal_output(reply='{"success": false, "error": "bad hash"}'),
+        proposal_output(reply="not json"),
+        "(null)",
+    ],
+)
+def test_unexecuted_or_refused_proposal_sends_no_email(live, monkeypatch, proposal):
+    monkeypatch.setattr(invite.subprocess, "run", icp_replies(proposal))
+    with pytest.raises(SystemExit):
+        invite.main(["a@example.org", "--identity", "operator"])
+    assert live == []
+
+
+def test_propose_without_an_id_sends_no_email(live, monkeypatch):
+    monkeypatch.setattr(
+        invite.subprocess,
+        "run",
+        lambda cmd, **kwargs: SimpleNamespace(
             returncode=0, stdout='(variant { Err = "no" })', stderr=""
-        )
-
-    monkeypatch.setattr(invite.subprocess, "run", failing_run)
+        ),
+    )
     with pytest.raises(SystemExit):
         invite.main(["a@example.org", "--identity", "operator"])
     assert live == []
