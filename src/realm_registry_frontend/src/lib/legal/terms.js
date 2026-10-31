@@ -1,9 +1,4 @@
-import {
-  LEGAL_ADDRESS_PLACEHOLDER,
-  LEGAL_CONTACT_EMAIL,
-  LEGAL_COURT_PLACEHOLDER,
-  LEGAL_NAME_PLACEHOLDER,
-} from './legal-info.js';
+import { LEGAL_CONTACT_EMAIL } from './legal-info.js';
 
 /** Terms of Use for the Alpha, by locale. Each section: heading and paragraphs (plain text). */
 export const TERMS = {
@@ -14,13 +9,13 @@ export const TERMS = {
       {
         heading: '1. Who we are',
         paragraphs: [
-          `gos.earth and realmsgos.org (the "Service") are operated by Smart Social Contracts (${LEGAL_NAME_PLACEHOLDER}, ${LEGAL_ADDRESS_PLACEHOLDER}). Contact: ${LEGAL_CONTACT_EMAIL}.`,
+          `gos.earth and realmsgos.org (the "Service") are operated by Smart Social Contracts. Contact: ${LEGAL_CONTACT_EMAIL}.`,
         ],
       },
       {
         heading: '2. This is an Alpha',
         paragraphs: [
-          'The Service is an early test version. Nothing is charged and nothing can be bought. Credits are free, given by invitation, and have no cash value.',
+          'The Service is an early test version. During the Alpha, nothing is charged. Credits are free, given by invitation, and have no cash value.',
           'Features change or disappear without notice, may not work, and are provided without any guarantee of availability. Data, realms and credits may be reset or deleted at any time. Do not rely on the Service for anything important, and do not put anything in it that you cannot afford to lose.',
         ],
       },
@@ -67,7 +62,7 @@ export const TERMS = {
         heading: '9. Changes, law and courts',
         paragraphs: [
           'We may change these terms; the date above shows the current version. If you keep using the Service after a change, you accept it. We may end the Alpha or your access at any time.',
-          `Swiss law applies, excluding its conflict-of-law rules. Courts: ${LEGAL_COURT_PLACEHOLDER}. Mandatory consumer protection rules in your country of residence remain unaffected.`,
+          'Swiss law applies, excluding its conflict-of-law rules. Mandatory consumer protection rules in your country of residence remain unaffected.',
         ],
       },
     ],
@@ -79,13 +74,13 @@ export const TERMS = {
       {
         heading: '1. Quiénes somos',
         paragraphs: [
-          `gos.earth y realmsgos.org (el "Servicio") los opera Smart Social Contracts (${LEGAL_NAME_PLACEHOLDER}, ${LEGAL_ADDRESS_PLACEHOLDER}). Contacto: ${LEGAL_CONTACT_EMAIL}.`,
+          `gos.earth y realmsgos.org (el "Servicio") los opera Smart Social Contracts. Contacto: ${LEGAL_CONTACT_EMAIL}.`,
         ],
       },
       {
         heading: '2. Esto es una versión Alpha',
         paragraphs: [
-          'El Servicio es una versión de prueba temprana. No se cobra nada y no se puede comprar nada. Los créditos son gratuitos, se dan por invitación y no tienen valor en dinero.',
+          'El Servicio es una versión de prueba temprana. Durante el Alpha no se cobra nada. Los créditos son gratuitos, se dan por invitación y no tienen valor en dinero.',
           'Las funciones cambian o desaparecen sin aviso, pueden no funcionar y se ofrecen sin garantía de disponibilidad. Los datos, los realms y los créditos pueden reiniciarse o borrarse en cualquier momento. No dependa del Servicio para nada importante y no guarde en él nada que no pueda permitirse perder.',
         ],
       },
@@ -132,7 +127,7 @@ export const TERMS = {
         heading: '9. Cambios, ley y tribunales',
         paragraphs: [
           'Podemos modificar estos términos; la fecha indicada muestra la versión vigente. Si sigue usando el Servicio tras un cambio, lo acepta. Podemos terminar el Alpha o su acceso en cualquier momento.',
-          `Se aplica el derecho suizo, con exclusión de sus normas de conflicto de leyes. Tribunales: ${LEGAL_COURT_PLACEHOLDER}. Las normas imperativas de protección del consumidor de su país de residencia no se ven afectadas.`,
+          'Se aplica el derecho suizo, con exclusión de sus normas de conflicto de leyes. Las normas imperativas de protección del consumidor de su país de residencia no se ven afectadas.',
         ],
       },
     ],

@@ -19,6 +19,9 @@
     <p class="lede">
       {$_('about.body_before')}<a href={MAINTAINER_CONTACT_URL} rel="noopener noreferrer">{$_('about.link')}</a>{$_('about.body_after')}
     </p>
+    <p class="legal-links">
+      <a href="/terms">{$_('footer.terms')}</a> · <a href="/privacy">{$_('footer.privacy')}</a>
+    </p>
   </div>
 </div>
 
@@ -63,7 +66,14 @@
     line-height: 1.6;
   }
 
-  .lede a {
+  .legal-links {
+    margin: 1rem 0 0;
+    color: #525252;
+    font-size: 0.875rem;
+  }
+
+  .lede a,
+  .legal-links a {
     color: #171717;
     font-weight: 600;
   }
