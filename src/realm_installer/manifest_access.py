@@ -7,8 +7,8 @@ def can_view_deployment_manifest(*, caller: str, owner: str, is_controller: bool
     return (owner or "") == (caller or "")
 
 
-def can_enqueue_deployment(*, caller: str, registry_principal: str, is_controller: bool) -> bool:
-    """Only the configured registry (which checked the invitation and held the credits) may file jobs."""
+def is_registry_or_controller(*, caller: str, registry_principal: str, is_controller: bool) -> bool:
+    """Only the configured registry (which checked the invitation and held the credits) may file or cancel jobs."""
     if is_controller:
         return True
     return bool(registry_principal) and caller == registry_principal

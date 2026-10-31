@@ -7,7 +7,7 @@ _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 sys.path.insert(0, os.path.join(_REPO_ROOT, "src/realm_installer"))
 
 from manifest_access import (  # noqa: E402
-    can_enqueue_deployment,
+    is_registry_or_controller,
     can_report_on_job,
     can_view_deployment_manifest,
 )
@@ -43,7 +43,7 @@ ANONYMOUS = "2vxsx-fae"
 
 
 def _may_enqueue(caller, registry=REGISTRY, is_controller=False):
-    return can_enqueue_deployment(
+    return is_registry_or_controller(
         caller=caller, registry_principal=registry, is_controller=is_controller
     )
 
@@ -97,5 +97,6 @@ def test_every_guarded_endpoint_checks_the_caller():
     for name in ("report_deployment_failure", "report_canister_ready",
                  "report_frontend_verified", "take_pre_upgrade_snapshot"):
         assert "_caller_may_report()" in _endpoint_source(name), name
-    assert "can_enqueue_deployment(" in _endpoint_source("enqueue_deployment")
+    for name in ("enqueue_deployment", "cancel_deployment"):
+        assert "_caller_is_registry_or_controller()" in _endpoint_source(name), name
     assert "ic.is_controller(ic.caller())" in _endpoint_source("get_pending_deployments")

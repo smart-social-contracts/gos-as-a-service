@@ -175,7 +175,7 @@ Returns JSON with `job_id`, `credits_held`, `status`.
 | `get_deployment_job_status(job_id)` | query | Poll job state |
 | `list_deployment_jobs()` | query | List all jobs |
 | `health()` | query | `{ ok: true }` sanity check |
-| `cancel_deployment(job_id)` | update | Cancel queued job |
+| `cancel_deployment(job_id)` | update | Cancel queued job (configured registry or controller only) |
 | `retry_deployment(job_id)` | update | **Resume** a failed job from its failed step (owner or controller) |
 
 The off-chain **realms-deployer** worker polls pending jobs, downloads release artifacts, runs `dfx` installs, and reports back. Casals path is triggered when `provision_via_casals` is enabled and the job enters `provisioning` status.
@@ -221,6 +221,8 @@ backend when it provisions the frontend bundle. The installer holds no
 realm asset canister — it verifies the grant with `list_permitted` and reports
 a precise failure when it is missing. Remaining platform-side work:
 [docs/CASALS_FOLLOWUP_ASSET_PERMISSIONS.md](docs/CASALS_FOLLOWUP_ASSET_PERMISSIONS.md).
+
+**Deploy precondition:** before deploying this installer, `get_installer_config` must show a non-empty `registry_backend_id` and `casals_canister_id`. Otherwise only controllers can enqueue, cancel or report.
 
 #### Platform provisioner (Casals)
 

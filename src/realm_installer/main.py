@@ -62,7 +62,7 @@ from stand_readiness import (
     stand_readiness,
     stand_required_members,
 )
-from manifest_access import can_enqueue_deployment, can_report_on_job, can_view_deployment_manifest
+from manifest_access import is_registry_or_controller, can_report_on_job, can_view_deployment_manifest
 from bootstrap import (
     RELAX_TRUST_POLICY_STEP,
     branding_payload,
@@ -1718,14 +1718,18 @@ def _caller_may_report() -> bool:
     )
 
 
+def _caller_is_registry_or_controller() -> bool:
+    return is_registry_or_controller(
+        caller=str(ic.caller()),
+        registry_principal=(_config().registry_principal or "").strip(),
+        is_controller=ic.is_controller(ic.caller()),
+    )
+
+
 @update
 def enqueue_deployment(manifest_json: text) -> Async[ResultEnqueue]:
     try:
-        if not can_enqueue_deployment(
-            caller=str(ic.caller()),
-            registry_principal=(_config().registry_principal or "").strip(),
-            is_controller=ic.is_controller(ic.caller()),
-        ):
+        if not _caller_is_registry_or_controller():
             return ResultEnqueue(Err=ie("unauthorized: controller or configured registry only"))
         manifest = json.loads(manifest_json)
         network = manifest.get("network", "")
@@ -1834,7 +1838,7 @@ def enqueue_deployment(manifest_json: text) -> Async[ResultEnqueue]:
 def take_pre_upgrade_snapshot(args: text) -> Async[ResultTakeSnapshot]:
     """Take an IC canister snapshot before upgrading the backend WASM.
 
-    Called by the off-chain deployment worker before dfx canister install.
+    Called by Casals or a controller before the backend WASM is installed.
     The snapshot is stored on the job so it can be loaded on failure or
     deleted on success.
     """
@@ -1847,12 +1851,12 @@ def take_pre_upgrade_snapshot(args: text) -> Async[ResultTakeSnapshot]:
         if not backend_id:
             return ResultTakeSnapshot(Err=ie("backend_canister_id required"))
 
+        if not _caller_may_report():
+            return ResultTakeSnapshot(Err=ie("unauthorized: controller or Casals only"))
         list(DeploymentJob.instances())
         job = DeploymentJob[job_id]
         if job is None:
             return ResultTakeSnapshot(Err=ie(f"unknown job_id: {job_id}"))
-        if not _caller_may_report():
-            return ResultTakeSnapshot(Err=ie("unauthorized: controller or Casals only"))
         if (job.status or "pending") != "pending":
             return ResultTakeSnapshot(Err=ie(f"job in '{job.status}', expected 'pending'"))
 
@@ -2032,6 +2036,8 @@ def list_deployment_jobs(offset: Opt[nat32] = None, limit: Opt[nat32] = None) ->
 @update
 def cancel_deployment(job_id: text) -> ResultJobCancel:
     try:
+        if not _caller_is_registry_or_controller():
+            return ResultJobCancel(Err=ie("unauthorized: controller or configured registry only"))
         list(DeploymentJob.instances())
         job = DeploymentJob[job_id]
         if job is None:
@@ -2276,12 +2282,12 @@ def report_deployment_failure(args: text) -> ResultReportFailure:
         err = (params.get("error") or "deployment failed")[:1990]
         if not job_id:
             return ResultReportFailure(Err=ie("job_id required"))
+        if not _caller_may_report():
+            return ResultReportFailure(Err=ie("unauthorized: controller or Casals only"))
         list(DeploymentJob.instances())
         job = DeploymentJob[job_id]
         if job is None:
             return ResultReportFailure(Err=ie(f"unknown: {job_id}"))
-        if not _caller_may_report():
-            return ResultReportFailure(Err=ie("unauthorized: controller or Casals only"))
         prev = job.status or "pending"
         if prev in _JOB_TERMINAL_STATUSES:
             return ResultReportFailure(Ok=JobStatusAck(job_id=job_id, prev_status=prev, status=prev, noop=True))
@@ -2723,12 +2729,12 @@ def report_canister_ready(args: text) -> Async[ResultReportReady]:
         job_id = params.get("job_id", "")
         if not job_id:
             return ResultReportReady(Err=ie("job_id required"))
+        if not _caller_may_report():
+            return ResultReportReady(Err=ie("unauthorized: controller or Casals only"))
         list(DeploymentJob.instances())
         job = DeploymentJob[job_id]
         if job is None:
             return ResultReportReady(Err=ie(f"unknown: {job_id}"))
-        if not _caller_may_report():
-            return ResultReportReady(Err=ie("unauthorized: controller or Casals only"))
         if (job.status or "pending") != "pending":
             return ResultReportReady(Err=ie(f"job in '{job.status}', expected 'pending'"))
 
@@ -2819,12 +2825,12 @@ def report_frontend_verified(args: text) -> Async[ResultReportFrontend]:
         frontend_wasm_hash = (params.get("frontend_wasm_hash") or "").strip().lower()
         if not job_id:
             return ResultReportFrontend(Err=ie("job_id required"))
+        if not _caller_may_report():
+            return ResultReportFrontend(Err=ie("unauthorized: controller or Casals only"))
         list(DeploymentJob.instances())
         job = DeploymentJob[job_id]
         if job is None:
             return ResultReportFrontend(Err=ie(f"unknown: {job_id}"))
-        if not _caller_may_report():
-            return ResultReportFrontend(Err=ie("unauthorized: controller or Casals only"))
         if (job.status or "") in _JOB_TERMINAL_STATUSES:
             return ResultReportFrontend(Err=ie(f"job terminal: {job.status}"))
 
