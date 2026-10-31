@@ -1,6 +1,5 @@
 import { Principal } from '@dfinity/principal';
 import { DelegationChain, Ed25519PublicKey } from '@dfinity/identity';
-import { fetchJoinTargets } from './realm-gos-client.js';
 
 const DELEGATION_TTL_MS = 55 * 60 * 1000;
 
@@ -10,7 +9,8 @@ const DELEGATION_TTL_MS = 55 * 60 * 1000;
  * `targets` must cover every backend the embedded realm may call as the user:
  * the capital *and* its quarter canisters (auto-scaled realms route joins to a
  * quarter, and a capital-only delegation makes the replica reject those calls
- * with "not one of the delegation targets").
+ * with "not one of the delegation targets"). Choose them with
+ * `resolveRealmDelegationTargets`.
  *
  * Imports are static (not dynamic) so a mid-session network blip or a stale
  * chunk hash after a portal redeploy cannot break the auth bridge with
@@ -38,21 +38,4 @@ export async function createScopedDelegation(identity, targetCanisterIds, sessio
 		backendCanisterId: targetCanisterIds[0] || '',
 		expiresAt: expiration.getTime()
 	};
-}
-
-/**
- * Resolve the full delegation target set for a realm: the capital backend plus
- * every quarter it may route a join to (`ggg_join_targets`, or `get_join_targets`
- * on realms that predate GGG). Falls back to just the capital when the realm
- * cannot say (realm without quarter support).
- *
- * @param {string} backendCanisterId the realm's capital backend
- * @returns {Promise<string[]>}
- */
-export async function resolveRealmDelegationTargets(backendCanisterId) {
-	const targets = [backendCanisterId];
-	for (const id of await fetchJoinTargets(backendCanisterId)) {
-		if (!targets.includes(id)) targets.push(id);
-	}
-	return targets;
 }

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { IDL } from '@dfinity/candid';
 import {
+	fetchFederationCapital,
 	fetchJoinTargets,
 	fetchRealmInfo,
 	idlFactory,
@@ -20,7 +21,7 @@ function gggRealm(overrides = {}) {
 				{ name: 'GGG', url: 'https://github.com/smart-social-contracts/ggg/blob/v0.1.0/ggg.did' }
 			];
 		},
-		ggg_realm_info: async () => ({ name: 'Agora', status: { Beta: null }, logo_url: ['  https://x/logo.png '] }),
+		ggg_realm_info: async () => ({ name: 'Agora', status: { Beta: null }, logo_url: ['  https://x/logo.png '], federation_realm_id: [] }),
 		ggg_join_targets: async () => ({ Ok: { default: ['q1'], targets: ['q1', ' q2 ', ''], mode: [] } }),
 		get_runtime_flags: async () => {
 			throw new Error('a GGG realm is not asked for runtime flags');
@@ -72,6 +73,34 @@ test('a refused or failing call reads as nothing', async () => {
 	assert.equal(await fetchRealmInfo('', {}), null);
 });
 
+test('a quarter names its capital; anything else reads as no capital', async () => {
+	resetRealmGosClient();
+	const quarter = gggRealm({
+		ggg_realm_info: async () => ({ name: 'Q', status: { Beta: null }, logo_url: [], federation_realm_id: [' cap-1 '] })
+	});
+	assert.equal(await fetchFederationCapital('q1', { createActor: () => quarter }), 'cap-1');
+	resetRealmGosClient();
+	assert.equal(await fetchFederationCapital('cap-1', { createActor: () => gggRealm() }), '');
+	resetRealmGosClient();
+	resetRealmGosClient();
+	const down = gggRealm({ ggg_realm_info: async () => Promise.reject(new Error('IC0301')) });
+	assert.equal(await fetchFederationCapital('q1', { createActor: () => down }), '');
+	assert.equal(await fetchFederationCapital('', {}), '');
+});
+
+test('a pre-GGG quarter names its capital in get_quarter_info', async () => {
+	resetRealmGosClient();
+	const reply = (info) => ({ success: true, data: { message: JSON.stringify(info) } });
+	const quarter = { ...legacyRealm(), get_quarter_info: async () => reply({ parent_realm_canister_id: ' cap-1 ' }) };
+	assert.equal(await fetchFederationCapital('old-q', { createActor: () => quarter }), 'cap-1');
+	resetRealmGosClient();
+	const capital = { ...legacyRealm(), get_quarter_info: async () => reply({ parent_realm_canister_id: '' }) };
+	assert.equal(await fetchFederationCapital('old-cap', { createActor: () => capital }), '');
+	resetRealmGosClient();
+	const failing = { ...legacyRealm(), get_quarter_info: async () => ({ success: false, data: { error: 'boom' } }) };
+	assert.equal(await fetchFederationCapital('old-bad', { createActor: () => failing }), '');
+});
+
 test('ICRC-10 is asked once per canister', async () => {
 	resetRealmGosClient();
 	const realm = gggRealm();
@@ -89,13 +118,15 @@ test('the IDL decodes what a realm sends, extra fields included', () => {
 		status: IDL.Variant({ Setup: IDL.Null, Alpha: IDL.Null, Beta: IDL.Null, Production: IDL.Null,
 			Deprecation: IDL.Null, Terminated: IDL.Null }),
 		logo_url: IDL.Opt(IDL.Text),
+		federation_realm_id: IDL.Opt(IDL.Text),
 		is_capital: IDL.Bool
 	});
 	const bytes = IDL.encode([Full], [{ id: '1', name: 'Agora', manifesto: '', status: { Alpha: null },
-		logo_url: [], is_capital: true }]);
+		logo_url: [], federation_realm_id: ['cap-1'], is_capital: true }]);
 	const service = idlFactory({ IDL });
 	const [realm] = IDL.decode(service._fields.find(([n]) => n === 'ggg_realm_info')[1].retTypes, bytes);
 	assert.equal(realm.name, 'Agora');
 	assert.deepEqual(realm.status, { Alpha: null });
 	assert.deepEqual(realm.logo_url, []);
+	assert.deepEqual(realm.federation_realm_id, ['cap-1']);
 });

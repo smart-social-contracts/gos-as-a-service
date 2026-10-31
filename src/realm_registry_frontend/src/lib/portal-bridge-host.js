@@ -1,13 +1,27 @@
-import { createScopedDelegation, resolveRealmDelegationTargets } from '$lib/delegation.js';
+import { createScopedDelegation } from '$lib/delegation.js';
+import { resolveRealmDelegationTargets } from '$lib/delegation-targets.js';
 import { getIdentity } from '$lib/auth.js';
+import { CONFIG } from '$lib/config.js';
 import { portalPath } from '$lib/federation.js';
 
 const BRIDGE_VERSION = '1';
+
+/** Canisters a realm must never receive the visitor's delegation for. */
+function platformCanisterIds() {
+	return [
+		CONFIG.realm_registry_backend_canister_id,
+		CONFIG.realm_installer_canister_id,
+		CONFIG.file_registry_canister_id,
+		CONFIG.marketplace_canister_id,
+		CONFIG.casals_backend_canister_id
+	].filter(Boolean);
+}
 
 /**
  * Host-side portal bridge: MessageChannel handshake + scoped delegation to iframe.
  * @param {HTMLIFrameElement} iframe
  * @param {{ slug: string, backendCanisterId: string, frontendCanisterId: string, env?: string }} realm
+ *   as recorded by the registry.
  * @param {{ onAuthState?: (needsLogin: boolean) => void, onFocus?: (focus: { source: string, uri: string, label?: string } | null) => void, onAssistantOpen?: () => void, onUiReady?: () => void }} [opts]
  *   `onAuthState(true)` fires when the iframe asks for a delegation but the
  *   portal has no session. Sign-in itself is `auth:open-login`, which leaves
@@ -132,17 +146,20 @@ export function attachPortalBridge(iframe, realm, opts = {}) {
 				});
 				return;
 			}
-			// Delegate to the capital and all of its quarters: auto-scaled realms
+			// Delegate to the capital and its verified quarters: auto-scaled realms
 			// route joins/calls to quarter canisters, which must be delegation
 			// targets or the replica rejects the signed calls. Resolved fresh on
 			// each request so a quarter minted mid-session is covered on renewal.
+			const targets = await resolveRealmDelegationTargets(
+				realm.backendCanisterId,
+				platformCanisterIds()
+			);
 			// One retry: transient net::ERR_NETWORK_CHANGED / chunk-fetch blips
 			// used to surface as a fatal "Login was cancelled" in the iframe.
 			let scoped;
 			let lastErr;
 			for (let attempt = 0; attempt < 2; attempt++) {
 				try {
-					const targets = await resolveRealmDelegationTargets(realm.backendCanisterId);
 					scoped = await createScopedDelegation(identity, targets, sessionPublicKeyDer);
 					lastErr = null;
 					break;
