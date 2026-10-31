@@ -41,21 +41,18 @@ def get_billing_service_principal() -> str:
     return (cfg.value if cfg else "").strip()
 
 
-def check_billing_service_caller(caller: str, action: str, *, log_warning=None) -> str | None:
+def check_billing_service_caller(caller: str, action: str, *, is_controller: bool) -> str | None:
     """Return an error message when *caller* may not mutate credits; else None.
 
-    When ``billing_service_principal`` is unset, any caller is allowed (backward
-    compat). When set, only that principal may call ``add_credits`` / ``deduct_credits``.
+    When ``billing_service_principal`` is set, only that principal may call
+    ``add_credits`` / ``deduct_credits``. When it is unset the check fails
+    closed: only controllers may.
     """
     expected = get_billing_service_principal()
     if not expected:
-        if log_warning:
-            log_warning(
-                "%s: billing_service_principal unset; allowing caller %s (backward compat)",
-                action,
-                caller,
-            )
-        return None
+        if is_controller:
+            return None
+        return f"Only a controller may {action} (billing_service_principal is not configured)"
     if caller != expected:
         return f"Only the configured billing service ({expected}) may {action}"
     return None
@@ -73,6 +70,11 @@ def is_can_test_mode() -> bool:
 def get_installer_id() -> str:
     cfg = RegistryConfig[_INSTALLER_ID_KEY]
     return (cfg.value if cfg else "").strip()
+
+
+def is_installer(caller: str) -> bool:
+    installer = get_installer_id()
+    return bool(installer) and caller == installer
 
 
 def get_casals_frontend_canister_id() -> str:
@@ -171,8 +173,19 @@ def configure_registry(args_json: str, is_controller: bool) -> dict:
     return {"Ok": json.dumps(get_env_config_payload())}
 
 
-def settle_deployment_succeeded(job_id: str) -> dict:
+def _require_installer(caller: str, action: str) -> dict | None:
+    """Settlement moves credit holds, so only the installer that runs the job may call."""
+    if is_installer(caller):
+        return None
+    return {"success": False, "error": f"Only the configured installer may {action}"}
+
+
+def settle_deployment_succeeded(job_id: str, caller: str) -> dict:
     from api.credits import capture_deployment_hold
+
+    denied = _require_installer(caller, "report a deployment as succeeded")
+    if denied:
+        return denied
 
     hold_result = capture_deployment_hold(job_id, "Deployment completed")
     if hold_result.get("success"):
@@ -182,8 +195,12 @@ def settle_deployment_succeeded(job_id: str) -> dict:
     return {"success": False, "error": hold_result.get("error", "capture failed")}
 
 
-def settle_deployment_failed(job_id: str, reason: str) -> dict:
+def settle_deployment_failed(job_id: str, reason: str, caller: str) -> dict:
     from api.credits import release_deployment_hold
+
+    denied = _require_installer(caller, "report a deployment as failed")
+    if denied:
+        return denied
 
     hold_result = release_deployment_hold(job_id, f"Failed: {reason}")
     if hold_result.get("success"):

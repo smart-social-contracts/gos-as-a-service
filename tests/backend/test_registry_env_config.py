@@ -83,18 +83,11 @@ def test_add_credits_enforces_billing_service_principal():
     billing_principal = "aaaaa-aaaaa-aaaaa-aaaaa-aaaaa-aaa"
     apply_env_config({"billing_service_principal": billing_principal})
 
-    denied = check_billing_service_caller("wrong-principal", "add credits")
+    denied = check_billing_service_caller("wrong-principal", "add credits", is_controller=False)
     assert denied is not None
     assert "billing service" in denied.lower()
-    assert check_billing_service_caller(billing_principal, "add credits") is None
-    assert check_billing_service_caller(billing_principal, "deduct credits") is None
-
-
-def test_add_credits_allows_any_caller_when_principal_unset():
-    from realm_registry_backend.core.env_config import check_billing_service_caller
-
-    _clear_env_config()
-    assert check_billing_service_caller("any-caller", "add credits") is None
+    assert check_billing_service_caller(billing_principal, "add credits", is_controller=False) is None
+    assert check_billing_service_caller(billing_principal, "deduct credits", is_controller=False) is None
 
 
 def test_can_test_mode_defaults_closed():
@@ -134,6 +127,8 @@ def test_claim_slug_refuses_without_a_configured_portal():
     assert register_realm_by_caller(
         "No Portal", url="https://x.example", frontend_canister_id="frontend-portal-0"
     )["success"]
+    mock_ic.caller.return_value = "installer-portal"
+    apply_env_config({"installer_id": "installer-portal"})
     result = claim_slug_by_caller("no-portal", "frontend-portal-0", backend_id)
     assert result["success"] is False
     assert "portal_url" in result["error"]
@@ -146,12 +141,13 @@ def test_claim_slug_uses_configured_portal_base():
     for realm in list(RealmRecord.instances()):
         realm.delete()
 
-    apply_env_config({"portal_url": "https://configured.example"})
+    apply_env_config({"portal_url": "https://configured.example", "installer_id": "installer-portal"})
     backend_id = "backend-portal-1"
     frontend_id = "frontend-portal-1"
     mock_ic.caller.return_value = backend_id
     register_realm_by_caller("Portal Realm", url="", frontend_canister_id=frontend_id)
 
+    mock_ic.caller.return_value = "installer-portal"
     result = claim_slug_by_caller("my-slug", frontend_id, backend_id)
     assert result["success"], result.get("error")
     assert result["portal_url"] == "https://configured.example/r/my-slug"
