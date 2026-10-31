@@ -1,5 +1,6 @@
 """Tests for the installer's caller checks."""
 
+import ast
 import os
 import sys
 
@@ -10,6 +11,7 @@ from manifest_access import (  # noqa: E402
     is_registry_or_controller,
     can_report_on_job,
     can_view_deployment_manifest,
+    names_only_own_canisters,
 )
 
 
@@ -100,3 +102,45 @@ def test_every_guarded_endpoint_checks_the_caller():
     for name in ("enqueue_deployment", "cancel_deployment"):
         assert "_caller_is_registry_or_controller()" in _endpoint_source(name), name
     assert "ic.is_controller(ic.caller())" in _endpoint_source("get_pending_deployments")
+
+
+def test_a_new_deployment_may_name_no_canisters():
+    assert names_only_own_canisters(named_ids={}, own_canister_ids=set())
+    assert names_only_own_canisters(named_ids=None, own_canister_ids=set())
+    assert names_only_own_canisters(named_ids={"backend": "", "frontend": " "}, own_canister_ids=set())
+
+
+def test_a_foreign_backend_is_refused():
+    assert not names_only_own_canisters(
+        named_ids={"backend": "victim-backend"}, own_canister_ids={"my-backend", "my-frontend"},
+    )
+
+
+def test_a_foreign_frontend_is_refused_even_with_an_own_backend():
+    assert not names_only_own_canisters(
+        named_ids={"backend": "my-backend", "frontend": "victim-frontend"},
+        own_canister_ids={"my-backend", "my-frontend"},
+    )
+
+
+def test_an_upgrade_of_the_requesters_own_realm_is_allowed():
+    assert names_only_own_canisters(
+        named_ids={"backend": "my-backend", "frontend": "my-frontend"},
+        own_canister_ids={"my-backend", "my-frontend"},
+    )
+
+
+def test_enqueue_checks_named_canisters_unless_a_controller_files_the_job():
+    source = _endpoint_source("enqueue_deployment")
+    assert "names_only_own_canisters(" in source
+    assert "not ic.is_controller(ic.caller())" in source
+
+
+def test_a_job_whose_extension_task_could_not_be_created_is_failed_not_registered():
+    with open(os.path.join(_REPO_ROOT, "src/realm_installer/main.py"), encoding="utf-8") as fh:
+        tree = ast.parse(fh.read())
+    fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_start_extensions_for_job")
+    handler = next(n for n in ast.walk(fn) if isinstance(n, ast.ExceptHandler))
+    called = {n.func.id for n in ast.walk(handler) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
+    assert "_fail_job" in called
+    assert "schedule_registration" not in called

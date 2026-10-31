@@ -62,7 +62,12 @@ from stand_readiness import (
     stand_readiness,
     stand_required_members,
 )
-from manifest_access import is_registry_or_controller, can_report_on_job, can_view_deployment_manifest
+from manifest_access import (
+    is_registry_or_controller,
+    can_report_on_job,
+    can_view_deployment_manifest,
+    names_only_own_canisters,
+)
 from bootstrap import (
     RELAX_TRUST_POLICY_STEP,
     branding_payload,
@@ -1144,17 +1149,21 @@ def _check_job_after_extensions(task):
             job.status = "registering"
             schedule_registration(job.name)
         else:
-            job.status = "failed"
             failed_steps = [s for s in task.steps if s.status == "failed"]
             errors = "; ".join(
                 f"{s.label}: {s.error}" for s in failed_steps[:10]
             )
             phase = "realm bootstrap" if broken_bootstrap else "extension install"
-            job.error = f"{phase} failed ({len(failed_steps)} failed): {errors}"[:1990]
-            job.completed_at = now_s()
-            schedule_registry_settlement(job.name, success=False, reason=job.error)
+            _fail_job(job, f"{phase} failed ({len(failed_steps)} failed): {errors}")
     except Exception as e:
         jlog(task.name).error(f"_check_job_after_extensions: {e}")
+
+
+def _fail_job(job, error: str):
+    job.status = "failed"
+    job.error = error[:1990]
+    job.completed_at = now_s()
+    schedule_registry_settlement(job.name, success=False, reason=job.error)
 
 
 def _schedule_step_runner(task_id: str, delay_s: int = 0):
@@ -1458,8 +1467,8 @@ def _start_extensions_for_job(job, manifest: dict, baton_canister_id: str = "", 
     except Exception as e:
         jlog(job.name).error(f"failed to create extension task: {type(e).__name__}: {e}")
         jlog(job.name).error(f"ext_manifest keys: {list(ext_manifest.keys())}, ext_list sample: {ext_list[:3]}")
-        job.status = "registering"
-        schedule_registration(job.name)
+        # Nothing was installed, so registering would publish a realm that is not set up.
+        _fail_job(job, f"could not create the extension task: {type(e).__name__}: {e}")
 
 
 def _realm_name_from_manifest(job: DeploymentJob) -> str:
@@ -1726,6 +1735,15 @@ def _caller_is_registry_or_controller() -> bool:
     )
 
 
+def _canisters_of_jobs_owned_by(principal: str) -> set:
+    owned = set()
+    for job in list(DeploymentJob.instances()):
+        if (job.caller_principal or "") == principal:
+            owned.update((job.backend_canister_id or "", job.frontend_canister_id or ""))
+    owned.discard("")
+    return owned
+
+
 @update
 def enqueue_deployment(manifest_json: text) -> Async[ResultEnqueue]:
     try:
@@ -1737,6 +1755,10 @@ def enqueue_deployment(manifest_json: text) -> Async[ResultEnqueue]:
         registry_id = (manifest.get("registry_canister_id") or "").strip()
         requester = (manifest.get("requesting_principal") or str(ic.caller())).strip()
         canister_ids = manifest.get("canister_ids", {})
+        if not ic.is_controller(ic.caller()) and not names_only_own_canisters(
+            named_ids=canister_ids, own_canister_ids=_canisters_of_jobs_owned_by(requester),
+        ):
+            return ResultEnqueue(Err=ie("canister_ids may only name canisters of your own realms"))
 
         realm_info = manifest.get("realm", {})
         ext_count = len(realm_info.get("extensions") or [])
