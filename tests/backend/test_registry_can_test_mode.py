@@ -14,8 +14,11 @@ from realm_registry_backend.core.models import DeploymentCreditHold, UserCredits
 
 mock_ic = basilisk.ic
 
+INSTALLER_ID = "installer-principal"
+
 
 def _clear_credits():
+    apply_env_config({"installer_id": INSTALLER_ID})
     for hold in list(DeploymentCreditHold.instances()):
         hold.delete()
     for uc in list(UserCredits.instances()):
@@ -27,7 +30,7 @@ def test_can_test_mode_skips_hold_requirement_on_settlement():
     apply_env_config({"can_test_mode": True})
     assert is_can_test_mode() is True
 
-    out = settle_deployment_succeeded("job-open-1")
+    out = settle_deployment_succeeded("job-open-1", INSTALLER_ID)
     assert out["success"] is True
     assert out["settlement"] == "skipped_can_test_mode"
 
@@ -37,7 +40,7 @@ def test_deprecated_open_mode_configure_still_skips_settlement():
     apply_env_config({"open_mode": True})
     assert is_can_test_mode() is True
 
-    out = settle_deployment_succeeded("job-legacy-1")
+    out = settle_deployment_succeeded("job-legacy-1", INSTALLER_ID)
     assert out["success"] is True
     assert out["settlement"] == "skipped_can_test_mode"
 
@@ -46,7 +49,7 @@ def test_closed_mode_settlement_requires_hold():
     _clear_credits()
     apply_env_config({"can_test_mode": False})
 
-    out = settle_deployment_succeeded("job-closed-1")
+    out = settle_deployment_succeeded("job-closed-1", INSTALLER_ID)
     assert out["success"] is False
     assert "not found" in out["error"].lower()
 

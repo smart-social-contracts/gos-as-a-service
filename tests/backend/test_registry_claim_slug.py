@@ -17,6 +17,8 @@ from realm_registry_backend.core.models import RealmRecord, SlugRecord
 
 mock_ic = basilisk.ic
 
+INSTALLER = "installer-principal"
+
 
 def _clear_slugs_and_realms():
     for slug in list(SlugRecord.instances()):
@@ -24,7 +26,7 @@ def _clear_slugs_and_realms():
     for realm in list(RealmRecord.instances()):
         realm.delete()
     # A claim needs the environment's portal origin (casals.json portal_url).
-    apply_env_config({"portal_url": "https://portal.example"})
+    apply_env_config({"portal_url": "https://portal.example", "installer_id": INSTALLER})
 
 
 def _register(backend_id: str, frontend_id: str):
@@ -42,6 +44,7 @@ def test_claim_slug_stores_explicit_gos_metadata():
     backend_id = "backend-gos-1"
     frontend_id = "frontend-gos-1"
     _register(backend_id, frontend_id)
+    mock_ic.caller.return_value = INSTALLER
 
     result = claim_slug_by_caller(
         "gos-realm",
@@ -67,6 +70,7 @@ def test_claim_slug_defaults_without_gos_args():
     backend_id = "backend-gos-2"
     frontend_id = "frontend-gos-2"
     _register(backend_id, frontend_id)
+    mock_ic.caller.return_value = INSTALLER
 
     result = claim_slug_by_caller("legacy-realm", frontend_id, backend_id)
     assert result["success"], result.get("error")

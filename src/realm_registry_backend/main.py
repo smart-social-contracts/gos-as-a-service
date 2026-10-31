@@ -605,7 +605,7 @@ def list_pending_pretty_hostnames() -> text:
 @update
 def set_pretty_hostname_status(slug: text, status: text) -> GenericResult:
     try:
-        result = mark_pretty_hostname_status(slug, status)
+        result = mark_pretty_hostname_status(slug, status, ic.is_controller(ic.caller()))
         if result["success"]:
             return {"Ok": json.dumps(result)}
         return {"Err": result["error"]}
@@ -617,7 +617,9 @@ def set_pretty_hostname_status(slug: text, status: text) -> GenericResult:
 def _require_billing_service_caller(action: text) -> text | None:
     from core.env_config import check_billing_service_caller
 
-    return check_billing_service_caller(ic.caller().to_str(), action, log_warning=logger.warning)
+    return check_billing_service_caller(
+        ic.caller().to_str(), action, is_controller=ic.is_controller(ic.caller()),
+    )
 
 
 @query
@@ -835,7 +837,7 @@ def deployment_failed(job_id: text, reason: text, caller_principal: text = "") -
     try:
         from core.env_config import settle_deployment_failed
 
-        return json.dumps(settle_deployment_failed(job_id, reason))
+        return json.dumps(settle_deployment_failed(job_id, reason, str(ic.caller())))
     except Exception as e:
         return json.dumps({"success": False, "error": str(e)})
 
@@ -845,7 +847,7 @@ def deployment_succeeded(job_id: text, caller_principal: text = "") -> text:
     try:
         from core.env_config import settle_deployment_succeeded
 
-        return json.dumps(settle_deployment_succeeded(job_id))
+        return json.dumps(settle_deployment_succeeded(job_id, str(ic.caller())))
     except Exception as e:
         return json.dumps({"success": False, "error": str(e)})
 
