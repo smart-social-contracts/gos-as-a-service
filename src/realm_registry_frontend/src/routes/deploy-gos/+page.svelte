@@ -1209,6 +1209,13 @@
     min-width: 160px;
   }
 
+  .invitation-request-hint {
+    margin: 0.5rem 0 0;
+    color: #525252;
+    font-size: 0.8rem;
+    line-height: 1.5;
+  }
+
   .invitation-request-info {
     display: flex;
     justify-content: center;
