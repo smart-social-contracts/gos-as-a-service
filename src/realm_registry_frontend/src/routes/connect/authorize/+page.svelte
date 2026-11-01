@@ -4,8 +4,8 @@
   Claude (or any MCP client) sends the browser here from the MCP server's
   /authorize endpoint with ?request_id=<id>. We authenticate the human with
   Internet Identity — pinned to the same derivationOrigin as the whole platform
-  so the principal matches their realms/credits — and POST the approved
-  principal back to the MCP server, which mints a one-time authorization code
+  so the principal matches their realms/credits — and POST a proof of that
+  principal (signed with their identity) back to the MCP server, which mints a one-time authorization code
   and hands the browser back to Claude's callback.
 
   Svelte 4 (the registry frontend is Svelte 4).
@@ -13,14 +13,15 @@
 <script>
   import { onMount } from 'svelte';
   import { _ } from 'svelte-i18n';
-  import { login, getPrincipal, isAuthenticated } from '$lib/auth.js';
+  import { login, getIdentity, getPrincipal, isAuthenticated } from '$lib/auth.js';
+  import { requestIdNonce, signProof } from '$lib/read-state-proof.js';
 
   const MCP_HOST = 'https://geister-mcp.realmsgos.dev';
 
   let phase = 'loading'; // loading | error | consent | redirecting
   let errorMsg = '';
   let requestId = '';
-  let info = null; // { client_name, requested_scopes, valid_scopes }
+  let info = null; // { client_name, redirect_uri_host, requested_scopes, valid_scopes }
   let principal = '';
   let submitting = false;
 
@@ -66,21 +67,22 @@
 
   async function decide(approve) {
     if (submitting) return;
-    if (approve && !principal) {
+    if (approve && !info?.redirect_uri_host) return;
+    // A denial acts for nobody, so only an approval needs an identity and its proof.
+    let identity = approve ? await getIdentity() : null;
+    if (approve && !identity) {
+      // The Internet Identity session expired since the page loaded.
       await signIn();
-      if (!principal) return;
+      identity = await getIdentity();
+      if (!identity) return;
     }
     submitting = true;
     try {
+      const proof = approve ? await signProof(identity, await requestIdNonce(requestId)) : undefined;
       const res = await fetch(`${MCP_HOST}/oauth/consent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          request_id: requestId,
-          user_principal: principal,
-          scope: 'read',
-          approve,
-        }),
+        body: JSON.stringify({ request_id: requestId, proof, scope: 'read', approve }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.redirect_to) {
@@ -133,6 +135,16 @@
           default: 'wants read-only access to your Realms account through the Geister assistant.',
         })}
       </p>
+      <!-- The client name is whatever the client registered; the host is where approval sends you. -->
+      {#if info?.redirect_uri_host}
+        <div class="redirect-host">
+          <span class="who-label">{$_('mcpConsent.redirect_host', { default: 'After you approve, you return to' })}</span>
+          <code title={info.redirect_uri_host}>{info.redirect_uri_host}</code>
+          <small>{$_('mcpConsent.redirect_host_hint', {
+            default: 'Approve only if you recognise this address.',
+          })}</small>
+        </div>
+      {/if}
 
       <div class="who">
         {#if principal}
@@ -168,7 +180,7 @@
         <button class="deny" on:click={() => decide(false)} disabled={submitting}>
           {$_('mcpConsent.deny', { default: 'Deny' })}
         </button>
-        <button class="approve" on:click={() => decide(true)} disabled={submitting || !principal}>
+        <button class="approve" on:click={() => decide(true)} disabled={submitting || !principal || !info?.redirect_uri_host}>
           {#if submitting}
             <span class="spinner small-spin"></span>
           {:else}
@@ -229,6 +241,27 @@
     font-size: 0.9rem;
     line-height: 1.5;
     margin: 0 0 1.25rem;
+  }
+  .redirect-host {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    border: 1px solid #f59e0b;
+    background: #fffbeb;
+    border-radius: 0.6rem;
+    padding: 0.7rem 0.8rem;
+    margin: 0 0 1.25rem;
+  }
+  .redirect-host code {
+    font-family: ui-monospace, monospace;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #111;
+    word-break: break-all;
+  }
+  .redirect-host small {
+    font-size: 0.78rem;
+    color: #525252;
   }
   .who {
     background: #f7f7f8;

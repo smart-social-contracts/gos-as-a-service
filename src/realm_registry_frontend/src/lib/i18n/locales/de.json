@@ -187,6 +187,7 @@
     "send": "Send",
     "thinking": "Thinking…",
     "no_response": "No response from the assistant.",
+    "sign_in_required": "Melden Sie sich an, um den Assistenten zu nutzen.",
     "timeout": "The assistant took too long to respond. Please try again.",
     "offline": "The AI assistant is temporarily unavailable. Please try again shortly.",
     "new_chat": "New chat",
