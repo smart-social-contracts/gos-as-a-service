@@ -74,6 +74,8 @@ from bootstrap import (
     branding_payload,
     build_enter_setup_candid,
     enter_setup_args,
+    founder_admin_args,
+    founder_admin_payload,
     founder_error,
     manifest_has_codex_block,
     needs_enter_setup_step,
@@ -758,7 +760,7 @@ def _count_expected_steps(manifest: dict, backend_id: str = "", frontend_id: str
     deploy_scope = (manifest.get("deploy_scope") or "both").strip()
     has_pair = bool((backend_id or "").strip() and (frontend_id or "").strip())
     if needs_enter_setup_step(manifest, backend_id):
-        count += 1
+        count += 2 if uses_realms_bootstrap(manifest) else 1  # + founder_admin
     if uses_realms_bootstrap(manifest) and (has_pair or deploy_scope == "both"):
         count += 2  # setup_infrastructure + grant_frontend_access
     if not manifest_has_codex_block(manifest):
@@ -790,6 +792,14 @@ def _build_steps(task, manifest: dict) -> list:
             status="pending",
         ))
         idx += 1
+        if uses_realms_bootstrap(manifest):
+            _log.info(f"[{task.name}] step {idx}: founder_admin backend={backend_id}")
+            steps.append(DeployStep(
+                task=task, idx=idx, kind="founder_admin", label="founder_admin",
+                args_json=json.dumps(founder_admin_args(manifest, backend_id)),
+                status="pending",
+            ))
+            idx += 1
     if uses_realms_bootstrap(manifest) and frontend_id and backend_id:
         _log.info(f"[{task.name}] step {idx}: setup_infrastructure frontend={frontend_id}")
         steps.append(DeployStep(
@@ -851,6 +861,10 @@ def _execute_step(task, step):
 
         if step.kind == "setup_install":
             yield from _execute_setup_install(task, step, args)
+            return
+
+        if step.kind == "founder_admin":
+            yield from _execute_founder_admin(task, step, args)
             return
 
         if step.kind == "setup_infrastructure":
@@ -928,6 +942,24 @@ def _execute_setup_install(task, step, args):
     )
     _reply, error = yield from _realm_call(backend_id, "setup_step", payload)
     _finish_realm_step(task, step, error, {k: v for k, v in payload.items() if k != "step"})
+
+
+def _execute_founder_admin(task, step, args):
+    """``role_assign``: the founder becomes the realm's administrator.
+
+    The realm gives the founder only the setup-time ``founder`` profile, which
+    launching the realm removes. The installer holds every permission on the
+    realm, so it can assign ``admin`` while the realm is still in setup.
+    """
+    backend_id = (args.get("backend_canister_id") or "").strip()
+    payload = founder_admin_payload(args)
+    problem = "missing backend_canister_id" if not backend_id else founder_error(payload["user"])
+    if problem:
+        _fail_step(task, step, problem)
+        return
+    jlog(task.name).info(f"role_assign {payload['profile']} to founder {payload['user'][:8]}… on {backend_id}")
+    _reply, error = yield from _realm_call(backend_id, "role_assign", payload)
+    _finish_realm_step(task, step, error, payload)
 
 
 def _execute_setup_infrastructure(task, step, args):

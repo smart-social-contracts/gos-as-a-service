@@ -18,6 +18,8 @@ from bootstrap import (  # noqa: E402
     build_enter_setup_candid,
     deploy_step_kinds,
     enter_setup_args,
+    founder_admin_args,
+    founder_admin_payload,
     founder_error,
     gos_implementation,
     manifest_has_codex_block,
@@ -131,6 +133,7 @@ def test_deploy_steps_without_codex_only_bootstrap():
     ext_manifest = _ext_manifest_for_job(_bootstrap_manifest())
     assert deploy_step_kinds(ext_manifest) == [
         "setup_install",
+        "founder_admin",
         "setup_infrastructure",
         "grant_frontend_access",
     ]
@@ -141,6 +144,7 @@ def test_deploy_steps_with_codex_install_extensions_then_the_codex():
     ext_manifest = _ext_manifest_for_job(_legacy_codex_manifest())
     assert deploy_step_kinds(ext_manifest) == [
         "setup_install",
+        "founder_admin",
         "setup_infrastructure",
         "grant_frontend_access",
         "extension",
@@ -204,6 +208,21 @@ def test_setup_install_without_test_mode_says_so():
     payload = setup_install_payload(setup_install_args(_bootstrap_manifest(), "be"))
     assert payload["can_test_mode"] is False
     assert payload["network"] == "test"
+
+
+def test_the_founder_becomes_administrator():
+    """The realm's launch removes the founder profile, so the installer assigns admin."""
+    args = founder_admin_args(_ext_manifest_for_job(_bootstrap_manifest()), "backend-principal")
+    assert args["backend_canister_id"] == "backend-principal"
+    assert founder_admin_payload(args) == {"user": args["founder"], "profile": "admin"}
+    assert args["founder"] == resolve_founder(_bootstrap_manifest())
+
+
+def test_the_administrator_is_the_same_principal_as_the_founder_install():
+    manifest = _bootstrap_manifest(founder="chosen-founder")
+    manifest["requesting_principal"] = "portal-caller"
+    assert founder_admin_payload(founder_admin_args(manifest, "be"))["user"] == "chosen-founder"
+    assert setup_install_payload(setup_install_args(manifest, "be"))["founder"] == "chosen-founder"
 
 
 def test_founder_must_be_a_signed_in_principal():
@@ -517,6 +536,7 @@ def test_realms_gos_explicit_gets_setup_install_and_infrastructure():
     assert setup_entry_kind(manifest) == "setup_install"
     assert deploy_step_kinds(manifest) == [
         "setup_install",
+        "founder_admin",
         "setup_infrastructure",
         "grant_frontend_access",
     ]
@@ -527,6 +547,7 @@ def test_blank_gos_implementation_is_realms_gos():
     assert uses_realms_bootstrap(manifest)
     assert deploy_step_kinds(manifest) == [
         "setup_install",
+        "founder_admin",
         "setup_infrastructure",
         "grant_frontend_access",
     ]
@@ -570,6 +591,19 @@ def test_the_installer_never_launches_the_realm():
 def test_setup_install_step_refuses_a_missing_founder_before_calling():
     body = _section(_installer_source(), "def _execute_setup_install", "def _execute_setup_infrastructure")
     assert body.index("founder_error(") < body.index('_realm_call(backend_id, "setup_step"')
+
+
+def test_founder_admin_step_refuses_a_missing_founder_before_calling():
+    body = _section(_installer_source(), "def _execute_founder_admin", "def _execute_setup_infrastructure")
+    assert body.index("founder_error(") < body.index('_realm_call(backend_id, "role_assign"')
+
+
+def test_founder_admin_step_follows_setup_install_and_is_counted():
+    src = _installer_source()
+    build = _section(src, "def _build_steps", "def _next_pending")
+    assert build.index('kind=kind, label=kind') < build.index('kind="founder_admin"') < build.index('kind="setup_infrastructure"')
+    count = _section(src, "def _count_expected_steps", "def _build_steps")
+    assert "count += 2 if uses_realms_bootstrap(manifest) else 1" in count
 
 
 def test_infrastructure_step_order():
