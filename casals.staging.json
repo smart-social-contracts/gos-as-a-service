@@ -178,14 +178,14 @@
       {
         "family": "realm-installer",
         "version": "main",
-        "source": "release:smart-social-contracts/gos-as-a-service@v0.6.0-rc3:realm_installer.wasm.gz",
-        "sha256": "477b58164e6d025ca3322600be9bef0ee55f4681726858280f5083b1bb2481f0"
+        "source": "release:smart-social-contracts/gos-as-a-service@v0.6.0-rc6:realm_installer.wasm.gz",
+        "sha256": "e548aaa826f889313fb2641596ac14ea4a111ae99023f076852ccc24988740bf"
       },
       {
         "family": "realm-registry-backend",
         "version": "main",
-        "source": "release:smart-social-contracts/gos-as-a-service@v0.6.0-rc3:realm_registry_backend.wasm.gz",
-        "sha256": "d0c79f7bfa4dd5a9b8e77d1cb806e8e6ae00e1de34983e79424a32470ce7cd69"
+        "source": "release:smart-social-contracts/gos-as-a-service@v0.6.0-rc6:realm_registry_backend.wasm.gz",
+        "sha256": "c15ed70fc6097f767cda15ecd59c1d471b7f2b9570e0168ce61bb94421dcd054"
       },
       {
         "family": "realm-backend",
@@ -203,8 +203,8 @@
     "bundles": [
       {
         "path": "frontend/realm-registry-frontend/main",
-        "source": "release:smart-social-contracts/gos-as-a-service@v0.6.0-rc5:realm_registry_frontend.tar.gz",
-        "sha256": "661c6e1e14f11e7fdb3d4e5cece80594039d23caadb6109a6b95d68b6135ae6c"
+        "source": "release:smart-social-contracts/gos-as-a-service@v0.6.0-rc6:realm_registry_frontend.tar.gz",
+        "sha256": "dd2eae10d1969bbbb27bee684668e6312e659c696482712be867ec037682f9b1"
       },
       {
         "path": "frontend/realm-assets/main",
