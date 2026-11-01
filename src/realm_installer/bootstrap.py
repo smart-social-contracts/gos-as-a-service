@@ -29,6 +29,11 @@ INFRASTRUCTURE_FIELDS = (
 # built before it knew them refuses the fields; the step then goes again without them.
 CASALS_FIELDS = ("conductor_canister_id", "casals_stand")
 
+# The profile that makes the founder the realm's administrator. The realm gives the founder only
+# the setup-time ``founder`` profile and ``setup_launch`` removes it, so without this the creator of
+# a realm would end up a plain member.
+FOUNDER_ADMIN_PROFILE = "admin"
+
 # GOS packages carry no marketplace approval the realm could check, so a
 # founding install that kept the realm's default policy would refuse them all.
 RELAX_TRUST_POLICY_STEP = {"step": "trust_policy", "require_marketplace_approval": False}
@@ -133,6 +138,16 @@ def setup_install_payload(args: dict) -> dict:
         "can_test_mode": bool(args.get("can_test_mode")),
         "founder": (args.get("founder") or "").strip(),
     }
+
+
+def founder_admin_args(manifest: dict, backend_id: str) -> dict:
+    """Args for the founder_admin deploy step."""
+    return {"backend_canister_id": backend_id, "founder": resolve_founder(manifest)}
+
+
+def founder_admin_payload(args: dict) -> dict:
+    """``role_assign`` arguments that make the founder an administrator."""
+    return {"user": (args.get("founder") or "").strip(), "profile": FOUNDER_ADMIN_PROFILE}
 
 
 def setup_infrastructure_args(manifest: dict, backend_id: str, frontend_id: str) -> dict:
@@ -309,6 +324,8 @@ def deploy_step_kinds(manifest: dict) -> list[str]:
     backend_id = manifest.get("target_canister_id", "")
     if needs_enter_setup_step(manifest, backend_id):
         kinds.append(setup_entry_kind(manifest))
+        if uses_realms_bootstrap(manifest):
+            kinds.append("founder_admin")
     if uses_realms_bootstrap(manifest) and frontend_id and backend_id:
         kinds.extend(["setup_infrastructure", "grant_frontend_access"])
 

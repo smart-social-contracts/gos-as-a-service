@@ -205,6 +205,7 @@ def test_bootstrap_kinds_cover_one_shot_and_requested_codex_steps():
     assert BOOTSTRAP_STEP_KINDS == (
         "enter_setup",
         "setup_install",
+        "founder_admin",
         "setup_infrastructure",
         "grant_frontend_access",
         "codex",
@@ -227,6 +228,30 @@ def test_other_setup_install_rejections_stay_failures():
         "setup_install", "the realm has launched: configuration is governed now"
     ) is False
     assert step_already_satisfied("setup_install", "Couldn't send message") is False
+
+
+def test_a_founder_who_is_already_administrator_counts_as_satisfied():
+    """A retry whose first pass assigned admin but lost the step record."""
+    assert step_already_satisfied("founder_admin", "ojzmw-37yik already has admin") is True
+    assert step_already_satisfied("founder_admin", "ojzmw-37yik already has founder") is False
+    assert step_already_satisfied("founder_admin", "role.assign needs a permission you do not hold") is False
+    assert step_already_satisfied("setup_install", "ojzmw-37yik already has admin") is False
+
+
+def test_a_resume_keeps_a_completed_founder_admin_step():
+    steps = [
+        _FakeStep(0, "setup_install", "completed"),
+        _FakeStep(1, "founder_admin", "completed"),
+        _FakeStep(2, "setup_infrastructure", "failed"),
+    ]
+    plan = plan_resume(steps, now_s=NOW)
+    assert plan["keep_completed"] == ["setup_install", "founder_admin"]
+    assert plan["reset_idx"] == [2]
+
+
+def test_a_failed_founder_admin_step_fails_the_bootstrap():
+    steps = [_FakeStep(0, "setup_install", "completed"), _FakeStep(1, "founder_admin", "failed")]
+    assert failed_bootstrap_step_kinds(steps) == ["founder_admin"]
 
 
 def test_codex_already_active_counts_as_satisfied():

@@ -23,6 +23,7 @@ ONE_SHOT_STEP_KINDS = ("enter_setup", "setup_install")
 BOOTSTRAP_STEP_KINDS = (
     "enter_setup",
     "setup_install",
+    "founder_admin",
     "setup_infrastructure",
     "grant_frontend_access",
     "codex",
@@ -53,6 +54,8 @@ _ALREADY_DONE_MARKERS = {
     ),
     # realm_backend api/setup.py setup_step
     "setup_install": ("the install facts are set once",),
+    # realm_backend api/members.py role_assign: "<user> already has <profile>"
+    "founder_admin": ("already has admin",),
     # realm_backend api/codex.py codex_install: "<id>@<version> is already active"
     "codex": ("is already active",),
 }

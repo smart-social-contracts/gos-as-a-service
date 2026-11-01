@@ -209,6 +209,10 @@ stand, so a replay fails every bootstrap step and leaves the realm half-built.
 - A failed bootstrap step (`enter_setup`, `configure_canister_ids`,
   `grant_frontend_access`) fails the job. It is not a partial success: the
   realm never entered setup or cannot write its own frontend.
+- `founder_admin` (right after `setup_install`) makes the creator the realm's
+  administrator with `role_assign admin`. The realm gives the founder only the
+  setup-time `founder` profile and `setup_launch` removes it, so without this
+  step the creator is a plain member once the wizard has launched the realm.
 - `realm_stage` is **not** proof that `enter_setup` ran — a freshly installed
   realm reports `setup` with `realm_name: "Default Realm"`. Use the task
   records (or the realm's own name/network fields) to tell them apart.
