@@ -2,7 +2,8 @@
 
 Alpha access is by invitation. An invitation code unlocks the portal for one
 person and adds 50 free credits to their account (a realm costs 5). There is no
-billing in Alpha: card checkout reads "Coming soon".
+billing in Alpha: the buy button is disabled and reads "Buy credits", with
+"Not available" under it.
 
 ## The flow
 
@@ -11,8 +12,11 @@ billing in Alpha: card checkout reads "Coming soon".
 2. The operator reviews the request and runs `scripts/invite.py <email>`.
 3. The script stores the code's sha256 hash in the registry and emails the code
    from `contact@realmsgos.org`.
-4. The applicant signs in at gos.earth/deploy-gos and enters the code. The
-   registry activates their account and adds the credits in one step.
+4. The applicant signs in at gos.earth/deploy-gos (or the Billing tab of My
+   Dashboard) and enters the code. The registry activates their account and adds
+   the credits in one step. Until then both pages show a "Request an invitation"
+   button that opens the Tally form, and the Billing tab asks for the code where
+   the voucher box will appear once they are activated.
 
 A code works once, expires after `--days` (default 30) and never leaves the
 operator's machine except in that email: the registry holds the hash only.

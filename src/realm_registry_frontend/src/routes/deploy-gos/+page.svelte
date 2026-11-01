@@ -21,6 +21,8 @@
   import { deploymentJobUrl } from '$lib/deployment-url.js';
   import { friendlyNetworkError, retryOnTransientNetworkError } from '$lib/network-retry.js';
   import AlphaAccessNotice from '$lib/components/AlphaAccessNotice.svelte';
+  import RequestInvitationButton from '$lib/components/RequestInvitationButton.svelte';
+  import { loadInvitationState } from '$lib/invitation-state.js';
   import {
     findRecentDeploymentJob,
     isAmbiguousDeploymentRequestError,
@@ -238,14 +240,11 @@
       try {
         const { backend } = await import('$lib/canisters.js');
         const { getTestModeIIBypass } = await import('$lib/config.js');
-        const modeResult = await backend.get_invitation_mode();
-        invitationMode = modeResult?.Ok === 'enabled' && !getTestModeIIBypass();
-        if (invitationMode && isLoggedIn && userPrincipal) {
-          const actResult = await backend.is_principal_activated(userPrincipal.toText());
-          principalActivated = actResult?.Ok === 'activated' || actResult?.Ok === 'open';
-        } else if (!invitationMode) {
-          principalActivated = true;
-        }
+        ({ invitationMode, activated: principalActivated } = await loadInvitationState(
+          backend,
+          isLoggedIn && userPrincipal ? userPrincipal.toText() : null,
+          getTestModeIIBypass(),
+        ));
       } catch (e) {
         console.error('Invitation mode check failed:', e);
         principalActivated = true;
@@ -651,13 +650,11 @@
         >
           {invitationLoading ? 'Verifying...' : 'Submit Code'}
         </button>
+        <RequestInvitationButton />
         <p class="invitation-request-hint">
           By continuing you accept the <a href="/terms" target="_blank" rel="noopener noreferrer">Terms of Use</a>
           and the <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
         </p>
-      </div>
-      <div class="invitation-request-info">
-        <AlphaAccessNotice />
       </div>
     </div>
   </div>

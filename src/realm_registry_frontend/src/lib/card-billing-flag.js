@@ -1,5 +1,8 @@
-/** Alpha copy for disabled portal card checkout: billing is not open yet. */
-export const CARD_PAY_UNAVAILABLE_COPY = 'Coming soon';
+/** Alpha copy under the disabled buy button: billing is not open yet. */
+export const CARD_PAY_UNAVAILABLE_COPY = 'Not available';
+
+/** The disabled button names no payment method. */
+export const CARD_PAY_DISABLED_LABEL = 'Buy credits';
 
 /**
  * Card checkout stays in the Stripe path; this flag only disables charging.
@@ -20,7 +23,7 @@ export function canStartCardCheckout(options = {}) {
 
 export function cardPayButtonLabel({ disableCardBilling, network, availableLabel } = {}) {
 	if (isCardBillingDisabled({ disableCardBilling, network })) {
-		return CARD_PAY_UNAVAILABLE_COPY;
+		return CARD_PAY_DISABLED_LABEL;
 	}
 	return availableLabel || 'Pay with Card';
 }
