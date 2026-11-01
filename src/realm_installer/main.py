@@ -957,9 +957,27 @@ def _execute_founder_admin(task, step, args):
     if problem:
         _fail_step(task, step, problem)
         return
+    problem = yield from _setup_stage_problem(backend_id)
+    if problem:
+        _fail_step(task, step, problem)
+        return
     jlog(task.name).info(f"role_assign {payload['profile']} to founder {payload['user'][:8]}… on {backend_id}")
     _reply, error = yield from _realm_call(backend_id, "role_assign", payload)
     _finish_realm_step(task, step, error, payload)
+
+
+def _setup_stage_problem(backend_id: str):
+    """Generator: why the realm is not in setup, or "".
+
+    The installer holds every permission, so it must not assign admin on a
+    realm that has launched: its governance decides who administers it.
+    """
+    reply, error = yield from _realm_call(backend_id, "status", {}, query=True)
+    if error:
+        return f"status failed: {error}"
+    if reply.get("status") != "setup":
+        return "the realm has launched: admin is governed now"
+    return ""
 
 
 def _execute_setup_infrastructure(task, step, args):

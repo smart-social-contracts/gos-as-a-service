@@ -598,6 +598,16 @@ def test_founder_admin_step_refuses_a_missing_founder_before_calling():
     assert body.index("founder_error(") < body.index('_realm_call(backend_id, "role_assign"')
 
 
+def test_founder_admin_step_checks_the_realm_is_in_setup_before_assigning():
+    """The installer holds every permission: on a launched realm the realm's governance decides who administers."""
+    src = _installer_source()
+    body = _section(src, "def _execute_founder_admin", "def _setup_stage_problem")
+    assert body.index("_setup_stage_problem(backend_id)") < body.index('_realm_call(backend_id, "role_assign"')
+    check = _section(src, "def _setup_stage_problem", "def _execute_setup_infrastructure")
+    assert '_realm_call(backend_id, "status", {}, query=True)' in check
+    assert '!= "setup"' in check
+
+
 def test_founder_admin_step_follows_setup_install_and_is_counted():
     src = _installer_source()
     build = _section(src, "def _build_steps", "def _next_pending")
