@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Ed25519KeyIdentity } from '@dfinity/identity';
 
-import { createAiSession, SignInRequiredError } from './session.js';
+import { createAiSession, SIGN_IN_TIMEOUT_MS, SignInRequiredError } from './session.js';
 
 const ORIGIN = 'https://ai.example';
 
@@ -92,4 +92,29 @@ test('a 401 that survives the retry is returned to the caller', async (t) => {
   const res = await sessionFor(identity)(`${ORIGIN}/api/conversations`);
 
   assert.equal(res.status, 401);
+});
+
+test('a sign-in the server never answers fails, and the next call signs in again', { timeout: 5000 }, async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const identity = Ed25519KeyIdentity.generate();
+  const principal = identity.getPrincipal().toText();
+  let challengeAnswered = false;
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    if (url.endsWith('/challenge')) {
+      if (!challengeAnswered) return new Promise(() => {});
+      return { ok: true, json: async () => ({ nonce: '0a0b' }) };
+    }
+    if (url.endsWith('/session')) return { ok: true, json: async () => ({ token: 't', principal, expires_in: 3600 }) };
+    return { ok: true, status: 200 };
+  });
+  const aiFetch = sessionFor(identity);
+
+  const stuck = assert.rejects(aiFetch(`${ORIGIN}/api/suggestions`), /did not answer/);
+  await new Promise((resolve) => setImmediate(resolve));
+  t.mock.timers.tick(SIGN_IN_TIMEOUT_MS);
+  await stuck;
+
+  challengeAnswered = true;
+  const res = await aiFetch(`${ORIGIN}/api/suggestions`);
+  assert.equal(res.status, 200);
 });
