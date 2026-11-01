@@ -59,24 +59,71 @@ from a code; give existing testers a voucher instead.
 
   The query must answer `enabled`.
 
-## Sending an invitation
+## Inviting someone on staging / production
 
-Canister ids come from `casals export`; the operator identity is the one that
-ran `casals up` (the multisig's only signer, threshold 1, so a proposal executes
-at once). SMTP settings come from the secrets file and are never printed.
+The script makes the code through the GaaS multisig (the registry's controller;
+threshold 1 with the operator as its only signer, so the proposal executes at
+once), checks the registry's own reply, then emails the code. It needs:
+
+- `REGISTRY_BACKEND` and `GAAS_MULTISIG`: the environment's canister ids. They
+  are not written in this repo outside `casals.json`; read them with
+  `casals export` (below).
+- `--identity`: the operator identity that ran `casals up` for that
+  environment. Staging uses the session identity that built it
+  (`dev-session-31oct` at the time of writing); production uses the identity
+  from `Casals/docs/OPERATIONS.md` "Hardware keys" (the short-lived delegation
+  from `prod-identity`, one HSM touch).
+- `--portal`: where the applicant signs in. **Pass it on every environment but
+  production**: the default is `https://gos.earth`, and a code made on staging
+  does not work there.
+- SMTP settings (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`) from
+  the secrets file. Run the script through `.cto/secrets.sh run`, which injects
+  them without printing them. `--dry-run` needs none.
+
+Always run the dry run first: it shows the email and the proposal and creates
+and sends nothing.
+
+Read the two ids from the Casals checkout (`PYTHONPATH` set to it), for the
+environment you invite on. In the export they are the `realm-registry-backend`
+canister and the multisig:
 
 ```sh
-export REGISTRY_BACKEND=<realm-registry-backend id> GAAS_MULTISIG=<multisig id>
+python3 -m casals_cli.main -e staging export casals.staging.json      # staging
+python3 -m casals_cli.main -e production export casals.json          # production
+```
 
-# Show the email and the proposal, create and send nothing:
+### Staging (staging.gos.earth)
+
+```sh
+export REGISTRY_BACKEND=<staging realm-registry-backend id> GAAS_MULTISIG=<staging multisig id>
+
+python3 scripts/invite.py applicant@example.org --dry-run \
+  --portal https://staging.gos.earth
+
+.cto/secrets.sh run python3 scripts/invite.py applicant@example.org \
+  --identity dev-session-31oct --portal https://staging.gos.earth
+```
+
+### Production (gos.earth)
+
+Check first that invitation mode is on (`get_invitation_mode` answers
+`enabled`), then:
+
+```sh
+export REGISTRY_BACKEND=<production realm-registry-backend id> GAAS_MULTISIG=<production multisig id>
+
 python3 scripts/invite.py applicant@example.org --dry-run
 
 .cto/secrets.sh run python3 scripts/invite.py applicant@example.org \
-  --identity <operator identity>
+  --identity <production operator identity>
 ```
 
-Options: `--days N` (validity, default 30), `--credits N` (default 50),
-`--network` (default `ic`), `--portal` (default `https://gos.earth`).
+No `--portal` here: the default is the production portal.
+
+### Options and failures
+
+`--days N` (validity, default 30), `--credits N` (default 50), `--network`
+(default `ic`), `--portal` (default `https://gos.earth`).
 
 If the email fails after the code was stored, the script prints the code on
 stderr so it can be sent by hand; do not run it again for the same person.
