@@ -3,7 +3,20 @@ import { proveChallenge } from '../read-state-proof.js';
 // Renew a little early so a token never expires between the check and the request.
 const RENEW_MARGIN_MS = 60_000;
 
+// A sign-in that never answers must not block every later call.
+export const SIGN_IN_TIMEOUT_MS = 15_000;
+const SIGN_IN_TIMEOUT_MESSAGE = 'The assistant did not answer the sign-in.';
+
 export const SIGN_IN_REQUIRED_MESSAGE = 'Sign in to use the assistant.';
+
+/** Rejects when `promise` has not settled after `ms`. */
+function withTimeout(promise, ms, message) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
 
 export class SignInRequiredError extends Error {
   constructor() {
@@ -44,7 +57,9 @@ export function createAiSession({ origin, getIdentity }) {
       Date.now() < session.expiresAt - RENEW_MARGIN_MS;
     if (!usable) {
       // Calls that start together (history, suggestions) share one sign-in.
-      opening ??= open(identity).finally(() => (opening = null));
+      opening ??= withTimeout(open(identity), SIGN_IN_TIMEOUT_MS, SIGN_IN_TIMEOUT_MESSAGE).finally(
+        () => (opening = null),
+      );
       await opening;
     }
     return session.token;
