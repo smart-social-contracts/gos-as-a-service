@@ -227,7 +227,14 @@ def test_failed_email_reports_the_code_without_the_password(live, monkeypatch, c
         invite.main(["a@example.org", "--identity", "operator"])
     err = capsys.readouterr().err
     assert "by hand" in err
+    assert "do not rerun" in err
     assert ENV["SMTP_PASSWORD"] not in err
+
+
+def test_portal_must_be_https(live):
+    with pytest.raises(SystemExit):
+        invite.main(["a@example.org", "--dry-run", "--portal", "http://gos.earth"])
+    assert live == []
 
 
 def test_missing_settings_are_named_before_anything_runs(live, monkeypatch):
