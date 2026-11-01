@@ -941,12 +941,13 @@
         } else if (isLlmBackendError(state.text)) {
           error = classifyChatError(new Error(state.text), 503);
         }
-        await loadSuggestions();
+        // Not awaited: the answer is done, so its pending state must not wait on these requests.
+        void loadSuggestions();
       }
 
       if (principal) {
         upsertConversationInList(sendConversationId, state.text.trim() ? 2 : 1);
-        if (showHistory) await refreshConversations();
+        if (showHistory) void refreshConversations();
       }
     } catch (err) {
       if (err?.name === 'AbortError') return;
