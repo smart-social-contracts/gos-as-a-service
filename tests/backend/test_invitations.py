@@ -1,6 +1,9 @@
 """Invitation codes: one use, optional expiry, and the credits they carry."""
 
+import copy
+
 import pytest
+from ic_python_db.schema import build_schema, diff_schemas
 
 from realm_registry_backend.api import invitations
 from realm_registry_backend.api.invitations import (
@@ -150,3 +153,14 @@ def test_create_rejects_bad_credits_and_expiry():
         entry = {"hash": digest, "credits": credits, "expires_at": expires_at}
         assert "Err" in create_invitations([entry], NOW), (credits, expires_at)
     assert "Err" in create_invitations(["just-a-hash"], NOW)
+
+
+def test_fields_added_since_rc3_pass_the_upgrade_guard():
+    """ic-python-db rejects an upgrade that adds a field without a default (it stopped rc3 -> rc6 on staging)."""
+    current = build_schema({"InvitationCode": InvitationCode})
+    stored_by_rc3 = copy.deepcopy(current)
+    for field in ("credits", "expires_at"):
+        del stored_by_rc3["InvitationCode"]["fields"][field]
+
+    breaking = [c for c in diff_schemas(stored_by_rc3, current) if not c.safe]
+    assert breaking == []
