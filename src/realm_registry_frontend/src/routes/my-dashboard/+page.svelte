@@ -891,7 +891,6 @@
 
                 <button 
                   class="topup-btn"
-                  class:unavailable={cardBillingDisabled}
                   on:click={handleTopUp}
                   disabled={cardBillingDisabled || topUpLoading || topUpAmount < 1 || topUpAmount > 50}
                 >
@@ -1740,12 +1739,9 @@
   }
 
   .topup-btn:disabled {
-    opacity: 0.5;
+    background: #E5E5E5;
+    color: #737373;
     cursor: not-allowed;
-  }
-
-  .topup-btn.unavailable {
-    opacity: 0.72;
   }
 
   .topup-unavailable {

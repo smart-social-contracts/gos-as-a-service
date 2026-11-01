@@ -27,9 +27,11 @@ import sys
 import time
 from datetime import datetime, timezone
 from email.message import EmailMessage
+from urllib.parse import urlparse
 
 SENDER = "contact@realmsgos.org"
 SECONDS_PER_DAY = 86400
+DRY_RUN_CODE = "DRY-RUN-CODE-NOT-STORED"
 REQUIRED_ENV = ("REGISTRY_BACKEND", "GAAS_MULTISIG")
 REQUIRED_SMTP_ENV = ("SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD")
 
@@ -108,13 +110,15 @@ def create_code(args, registry: str, multisig: str, payload: str) -> None:
 
 def compose_email(to: str, code: str, credits: int, expires_at: int, portal: str):
     until = datetime.fromtimestamp(expires_at, timezone.utc).strftime("%d %B %Y")
+    # The host tells a staging invitation from a production one.
+    host = urlparse(portal).netloc
     message = EmailMessage()
     message["From"] = SENDER
     message["To"] = to
-    message["Subject"] = "Your gos.earth invitation code"
+    message["Subject"] = f"Your {host} invitation code"
     message.set_content(
         "Hello,\n\n"
-        "Your request to try gos.earth (Alpha) is approved.\n\n"
+        f"Your request to try {host} (Alpha) is approved.\n\n"
         f"Invitation code: {code}\n\n"
         f"1. Open {portal}/deploy-gos and sign in with Internet Identity.\n"
         f"2. Enter the code. {credits} free credits are added to your account.\n\n"
@@ -124,17 +128,19 @@ def compose_email(to: str, code: str, credits: int, expires_at: int, portal: str
     return message
 
 
-def send_email(message: EmailMessage) -> None:
+def open_mail_server():
+    """Connect and log in. A failure here is fatal before any code is created."""
     host, port = os.environ["SMTP_HOST"], int(os.environ["SMTP_PORT"])
-    if port == 465:
-        server = smtplib.SMTP_SSL(host, port, timeout=30)
-    else:
-        server = smtplib.SMTP(host, port, timeout=30)
-    with server:
-        if port != 465:
+    try:
+        if port == 465:
+            server = smtplib.SMTP_SSL(host, port, timeout=30)
+        else:
+            server = smtplib.SMTP(host, port, timeout=30)
             server.starttls()
         server.login(os.environ["SMTP_USER"], os.environ["SMTP_PASSWORD"])
-        server.send_message(message)
+    except (OSError, smtplib.SMTPException) as error:
+        raise SystemExit(f"SMTP login failed, no code was created: {error}")
+    return server
 
 
 def missing_env(names) -> list:
@@ -152,14 +158,14 @@ def parse_args(argv):
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="print the email and the proposal; create and send nothing",
+        help="print the email and the proposal (placeholder code); create and send nothing",
     )
     return parser.parse_args(argv)
 
 
 def main(argv=None) -> None:
     args = parse_args(argv)
-    code = new_code()
+    code = DRY_RUN_CODE if args.dry_run else new_code()
     expires_at = expiry_seconds(args.days, time.time())
     payload = invitation_payload(code, args.credits, expires_at)
     message = compose_email(args.email, code, args.credits, expires_at, args.portal)
@@ -175,18 +181,20 @@ def main(argv=None) -> None:
     if not args.identity:
         raise SystemExit("pass --identity, the icp identity that signs the proposal")
 
-    create_code(
-        args, os.environ["REGISTRY_BACKEND"], os.environ["GAAS_MULTISIG"], payload
-    )
-    try:
-        send_email(message)
-    except (OSError, smtplib.SMTPException) as error:
-        # The code already exists on-chain; losing it would waste an invitation.
-        print(
-            f"Email failed ({error}). Send {code} to {args.email} by hand.",
-            file=sys.stderr,
+    # Log in before creating the code, so a broken mail setup leaves nothing stored.
+    with open_mail_server() as server:
+        create_code(
+            args, os.environ["REGISTRY_BACKEND"], os.environ["GAAS_MULTISIG"], payload
         )
-        raise SystemExit(1)
+        try:
+            server.send_message(message)
+        except (OSError, smtplib.SMTPException) as error:
+            # The code already exists on-chain; losing it would waste an invitation.
+            print(
+                f"Email failed ({error}). Send {code} to {args.email} by hand.",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
     print(f"Invitation sent to {args.email}, valid {args.days} days.")
 
 
