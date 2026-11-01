@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { awaitingInvitation, loadInvitationState } from './invitation-state.js';
+import { awaitingInvitation, loadInvitationState, normalizeInvitationCode } from './invitation-state.js';
 
 const PRINCIPAL = 'kpbof-gom7k-b4gsj-sfmka-fvbac-y72nv-sb7f2-b4v4e-4557j-erlzq-2qe';
 
@@ -72,4 +72,10 @@ test('an unreadable registry never locks the user out of the page', async () => 
 	} finally {
 		console.error = original;
 	}
+});
+
+test('a code is sent trimmed and in upper case, as invite.py issues it', () => {
+	assert.equal(normalizeInvitationCode('  a1b2c3  '), 'A1B2C3');
+	assert.equal(normalizeInvitationCode('A1B2C3'), 'A1B2C3');
+	assert.equal(normalizeInvitationCode(undefined), '');
 });

@@ -22,7 +22,7 @@
   import { friendlyNetworkError, retryOnTransientNetworkError } from '$lib/network-retry.js';
   import AlphaAccessNotice from '$lib/components/AlphaAccessNotice.svelte';
   import RequestInvitationButton from '$lib/components/RequestInvitationButton.svelte';
-  import { loadInvitationState } from '$lib/invitation-state.js';
+  import { loadInvitationState, normalizeInvitationCode } from '$lib/invitation-state.js';
   import {
     findRecentDeploymentJob,
     isAmbiguousDeploymentRequestError,
@@ -296,7 +296,7 @@
     try {
       const { getAuthenticatedRegistryActor } = await import('$lib/canisters.js');
       const registry = await getAuthenticatedRegistryActor();
-      const result = await registry.redeem_invitation_code(invitationCode.trim());
+      const result = await registry.redeem_invitation_code(normalizeInvitationCode(invitationCode));
       if (result?.Ok) {
         principalActivated = true;
         await loadUserCredits();

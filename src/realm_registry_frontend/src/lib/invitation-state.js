@@ -1,5 +1,13 @@
 /** Invitation mode and activation, as the portal pages read them from the registry. */
 
+/**
+ * Codes are issued in upper case and the registry hashes them exactly as sent, so a code
+ * typed in lower case would be refused: normalise before sending.
+ */
+export function normalizeInvitationCode(code) {
+	return String(code ?? '').trim().toUpperCase();
+}
+
 /** Signed in, invitation mode on, no code redeemed yet: the user must be invited first. */
 export function awaitingInvitation({ invitationMode, signedIn, activated } = {}) {
 	return invitationMode === true && signedIn === true && activated !== true;

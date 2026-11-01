@@ -19,7 +19,7 @@
   import ConfirmModal from '$lib/components/ConfirmModal.svelte';
   import ConnectClaude from '$lib/components/ConnectClaude.svelte';
   import RequestInvitationButton from '$lib/components/RequestInvitationButton.svelte';
-  import { awaitingInvitation, loadInvitationState } from '$lib/invitation-state.js';
+  import { awaitingInvitation, loadInvitationState, normalizeInvitationCode } from '$lib/invitation-state.js';
   import {
     indexCreatedRealmsByBackend,
     preferredVisitUrl,
@@ -126,7 +126,8 @@
 
   // Invitation state: until a code is redeemed the billing tab asks for it instead of a voucher
   let invitationMode = false;
-  let principalActivated = true;
+  // null until the registry has answered, so the voucher box does not flash for a user who needs a code
+  let principalActivated = null;
   let invitationCode = '';
   let invitationLoading = false;
   let invitationError = null;
@@ -172,7 +173,10 @@
       loadWizardDrafts();
       
       loadVouchers();
-      loadInvitation(getTestModeIIBypass());
+      loadInvitation(getTestModeIIBypass()).catch((err) => {
+        console.error('Failed to load invitation state:', err);
+        principalActivated = true;
+      });
       await loadCredits();
       
       // Start polling for deployment status updates
@@ -532,7 +536,7 @@
     try {
       const { getAuthenticatedRegistryActor } = await import('$lib/canisters.js');
       const actor = await getAuthenticatedRegistryActor();
-      const result = await actor.redeem_invitation_code(invitationCode.trim());
+      const result = await actor.redeem_invitation_code(normalizeInvitationCode(invitationCode));
       if (!result?.Ok) {
         invitationError = result?.Err || 'Invalid invitation code';
         return;
@@ -784,13 +788,13 @@
                 {#if invitationError}
                   <div class="error-message">{invitationError}</div>
                 {/if}
-                
-                {#if invitationSuccess}
-                  <div class="success-message">{invitationSuccess}</div>
-                {/if}
               </div>
             </div>
-            {:else}
+            {:else if principalActivated !== null}
+            <!-- The invitation box unmounts once the code works, so its message shows here -->
+            {#if invitationSuccess}
+              <div class="success-message">{invitationSuccess}</div>
+            {/if}
             <!-- Voucher Redemption Section -->
             <div class="voucher-section">
               <h3>Redeem Voucher</h3>
@@ -955,7 +959,7 @@
                   {/each}
                 </ul>
               {:else}
-                <p class="no-purchases-note">No card purchases yet</p>
+                <p class="no-purchases-note">No purchases yet</p>
               {/if}
             </div>
           </div>
