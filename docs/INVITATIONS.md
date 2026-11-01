@@ -78,10 +78,20 @@ once), checks the registry's own reply, then emails the code. It needs:
   does not work there.
 - SMTP settings (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`) from
   the secrets file. Run the script through `.cto/secrets.sh run`, which injects
-  them without printing them. `--dry-run` needs none.
+  them without printing them. `--dry-run` needs none. `SMTP_USER` is the
+  mailbox `contact@smartsocialcontracts.org`: `realmsgos.org` is only a domain
+  alias on Infomaniak and cannot log in. `SMTP_PASSWORD` is an Infomaniak
+  device password, made with the mail configuration wizard for that mailbox,
+  not the account password. The email is still sent From
+  `contact@realmsgos.org`.
+
+The script logs in to the mail server first and creates the code only after
+that succeeds, so a wrong SMTP login stops it with nothing stored.
 
 Always run the dry run first: it shows the email and the proposal and creates
-and sends nothing.
+and sends nothing. The code it prints is a placeholder, not a stored code. The
+email subject names the portal host (`Your staging.gos.earth invitation code`),
+which is why `--portal` matters.
 
 Read the two ids from the Casals checkout (`PYTHONPATH` set to it), for the
 environment you invite on. In the export they are the `realm-registry-backend`

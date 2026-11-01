@@ -44,6 +44,23 @@ def icp_replies(proposal):
     return fake_run
 
 
+class FakeMailServer:
+    """Records the login (on opening) and the sent message; never touches the network."""
+
+    def __init__(self, events):
+        self.events = events
+        events.append(("login", None))
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def send_message(self, message):
+        self.events.append(("mail", message))
+
+
 @pytest.fixture
 def live(monkeypatch):
     """Real-run environment with the icp call and the mail server recorded."""
@@ -56,11 +73,8 @@ def live(monkeypatch):
         events.append(("icp", cmd))
         return reply(cmd)
 
-    def fake_send(message):
-        events.append(("mail", message))
-
     monkeypatch.setattr(invite.subprocess, "run", fake_run)
-    monkeypatch.setattr(invite, "send_email", fake_send)
+    monkeypatch.setattr(invite, "open_mail_server", lambda: FakeMailServer(events))
     return events
 
 
@@ -92,6 +106,16 @@ def test_proposal_argument_is_candid_with_the_payload_escaped():
     assert args.endswith(", null)")
 
 
+@pytest.mark.parametrize(
+    "portal, host",
+    [("https://gos.earth", "gos.earth"), ("https://staging.gos.earth", "staging.gos.earth")],
+)
+def test_subject_names_the_portal_host(portal, host):
+    message = invite.compose_email("a@example.org", "ABC123", 50, 1_800_000_000, portal)
+    assert message["Subject"] == f"Your {host} invitation code"
+    assert f"try {host} (Alpha)" in message.get_content()
+
+
 def test_email_has_the_code_sender_and_expiry():
     message = invite.compose_email(
         "a@example.org", "ABC123", 50, 1_800_000_000, "https://gos.earth"
@@ -113,10 +137,46 @@ def test_dry_run_neither_proposes_nor_sends(live, capsys):
     assert "To: a@example.org" in out
 
 
+def test_dry_run_prints_a_placeholder_not_a_real_code(live, monkeypatch, capsys):
+    monkeypatch.setattr(invite, "new_code", lambda: pytest.fail("minted a real code"))
+    invite.main(["a@example.org", "--dry-run"])
+    assert f"Invitation code: {invite.DRY_RUN_CODE}" in capsys.readouterr().out
+
+
+def test_failed_login_creates_no_code(live, monkeypatch, capsys):
+    def refuse_login():
+        raise SystemExit("SMTP login failed, no code was created: refused")
+
+    monkeypatch.setattr(invite, "open_mail_server", refuse_login)
+    with pytest.raises(SystemExit, match="no code was created"):
+        invite.main(["a@example.org", "--identity", "operator"])
+    assert live == []
+    assert capsys.readouterr().err == ""
+
+
+def test_smtp_login_error_becomes_a_fatal_exit(monkeypatch):
+    class RefusingServer:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def starttls(self):
+            pass
+
+        def login(self, user, password):
+            raise smtplib.SMTPAuthenticationError(535, b"bad credentials")
+
+    for name, value in ENV.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(invite.smtplib, "SMTP", RefusingServer)
+    with pytest.raises(SystemExit, match="no code was created") as refused:
+        invite.open_mail_server()
+    assert ENV["SMTP_PASSWORD"] not in str(refused.value)
+
+
 def test_real_run_proposes_then_emails_the_same_code(live):
     invite.main(["a@example.org", "--identity", "operator"])
-    (kind_a, propose), (kind_b, check), (kind_c, message) = live
-    assert (kind_a, kind_b, kind_c) == ("icp", "icp", "mail")
+    (kind_0, _), (kind_a, propose), (kind_b, check), (kind_c, message) = live
+    assert (kind_0, kind_a, kind_b, kind_c) == ("login", "icp", "icp", "mail")
     assert propose[:5] == ["icp", "canister", "call", "multisig-id", "propose"]
     assert propose[-4:] == ["-n", "ic", "--identity", "operator"]
     assert check[:6] == ["icp", "canister", "call", "multisig-id", "get_proposal", "(7 : nat)"]
@@ -142,7 +202,7 @@ def test_unexecuted_or_refused_proposal_sends_no_email(live, monkeypatch, propos
     monkeypatch.setattr(invite.subprocess, "run", icp_replies(proposal))
     with pytest.raises(SystemExit):
         invite.main(["a@example.org", "--identity", "operator"])
-    assert live == []
+    assert "mail" not in [kind for kind, _ in live]
 
 
 def test_propose_without_an_id_sends_no_email(live, monkeypatch):
@@ -155,14 +215,14 @@ def test_propose_without_an_id_sends_no_email(live, monkeypatch):
     )
     with pytest.raises(SystemExit):
         invite.main(["a@example.org", "--identity", "operator"])
-    assert live == []
+    assert "mail" not in [kind for kind, _ in live]
 
 
 def test_failed_email_reports_the_code_without_the_password(live, monkeypatch, capsys):
-    def failing_send(message):
+    def failing_send(self, message):
         raise smtplib.SMTPException("refused")
 
-    monkeypatch.setattr(invite, "send_email", failing_send)
+    monkeypatch.setattr(FakeMailServer, "send_message", failing_send)
     with pytest.raises(SystemExit):
         invite.main(["a@example.org", "--identity", "operator"])
     err = capsys.readouterr().err
