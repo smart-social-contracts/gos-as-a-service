@@ -38,3 +38,13 @@ def test_request_upgrade_takes_the_frontend_from_the_callers_registry_record():
     assert 'params.get("frontend_canister_id"' not in body
     assert 'realm.get("realm")' in body and 'frontend_canister_id' in body
     assert body.index("get_registered_realm(caller)") < body.index('"frontend": frontend_id')
+
+
+def test_request_deployment_makes_the_caller_the_founder():
+    """The installer makes the founder an administrator, so a caller cannot name someone else."""
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    with open(os.path.join(repo_root, "src/realm_registry_backend/main.py"), encoding="utf-8") as fh:
+        source = fh.read()
+    body = source.split("def request_deployment(", 1)[1].split("\n@", 1)[0]
+    assert 'manifest["founder"] = caller' in body
+    assert 'manifest.get("founder")' not in body

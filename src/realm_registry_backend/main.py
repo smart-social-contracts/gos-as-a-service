@@ -762,12 +762,10 @@ def request_deployment(manifest_json: text) -> Async[text]:
                 "error": "No installer configured (set installer_id via configure)",
             })
 
+        # The creator of a realm is its founder and administrator: the installer gives that
+        # principal full rights, so a manifest must not name anybody else.
         manifest["requesting_principal"] = caller
-        founder = (manifest.get("founder") or "").strip()
-        if founder:
-            manifest["founder"] = founder
-        else:
-            manifest.pop("founder", None)
+        manifest["founder"] = caller
         manifest["registry_canister_id"] = str(ic.id())
 
         from core.env_config import apply_env_inheritance
