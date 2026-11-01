@@ -163,8 +163,9 @@ class InvitationCode(Entity, TimestampedMixin):
     is_active = Boolean(default=True)
     redeemed_at = Float()
     created_at = Float()
-    credits = Integer()
-    expires_at = Float()  # unix seconds; 0 = never expires
+    # Defaults, not bare fields: ic-python-db rejects an upgrade that adds a field without one
+    credits = Integer(default=0)
+    expires_at = Float(default=0.0)  # unix seconds; 0 = never expires
 
     def to_dict(self) -> dict:
         return {
