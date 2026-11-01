@@ -18,6 +18,8 @@
   import { stageLabel } from '$lib/realm-stages.js';
   import ConfirmModal from '$lib/components/ConfirmModal.svelte';
   import ConnectClaude from '$lib/components/ConnectClaude.svelte';
+  import RequestInvitationButton from '$lib/components/RequestInvitationButton.svelte';
+  import { awaitingInvitation, loadInvitationState, normalizeInvitationCode } from '$lib/invitation-state.js';
   import {
     indexCreatedRealmsByBackend,
     preferredVisitUrl,
@@ -122,6 +124,20 @@
   let topUpLoading = false;
   let topUpError = null;
 
+  // Invitation state: until a code is redeemed the billing tab asks for it instead of a voucher
+  let invitationMode = false;
+  // null until the registry has answered, so the voucher box does not flash for a user who needs a code
+  let principalActivated = null;
+  let invitationCode = '';
+  let invitationLoading = false;
+  let invitationError = null;
+  let invitationSuccess = null;
+  $: pendingInvitation = awaitingInvitation({
+    invitationMode,
+    signedIn: !!userPrincipal,
+    activated: principalActivated,
+  });
+
   // Voucher state
   let voucherCode = '';
   let voucherLoading = false;
@@ -157,6 +173,10 @@
       loadWizardDrafts();
       
       loadVouchers();
+      loadInvitation(getTestModeIIBypass()).catch((err) => {
+        console.error('Failed to load invitation state:', err);
+        principalActivated = true;
+      });
       await loadCredits();
       
       // Start polling for deployment status updates
@@ -497,6 +517,42 @@
     return new Date(ms).toLocaleString();
   }
 
+  async function loadInvitation(iiBypass) {
+    const { backend } = await import('$lib/canisters.js');
+    ({ invitationMode, activated: principalActivated } = await loadInvitationState(
+      backend,
+      userPrincipal.toText(),
+      iiBypass,
+    ));
+  }
+
+  async function handleRedeemInvitation() {
+    if (!userPrincipal || !invitationCode.trim()) return;
+
+    invitationLoading = true;
+    invitationError = null;
+    invitationSuccess = null;
+
+    try {
+      const { getAuthenticatedRegistryActor } = await import('$lib/canisters.js');
+      const actor = await getAuthenticatedRegistryActor();
+      const result = await actor.redeem_invitation_code(normalizeInvitationCode(invitationCode));
+      if (!result?.Ok) {
+        invitationError = result?.Err || 'Invalid invitation code';
+        return;
+      }
+      invitationSuccess = result.Ok;
+      invitationCode = '';
+      principalActivated = true;
+      await loadCredits();
+    } catch (err) {
+      console.error('Invitation redemption failed:', err);
+      invitationError = 'Failed to redeem the invitation code. Please try again.';
+    } finally {
+      invitationLoading = false;
+    }
+  }
+
   async function loadVouchers() {
     if (!userPrincipal) return;
     try {
@@ -621,6 +677,12 @@
         <p>{$_('dashboard.loading')}</p>
       </div>
     {:else}
+      {#if pendingInvitation}
+        <div class="invitation-request">
+          <RequestInvitationButton />
+        </div>
+      {/if}
+
       <!-- Tabs -->
       <div class="tabs">
         <button 
@@ -694,6 +756,45 @@
               </div>
             </div>
 
+            {#if pendingInvitation}
+            <!-- Invitation code: replaces the voucher box until the account is activated -->
+            <div class="voucher-section">
+              <h3>Enter your invitation code</h3>
+              <p class="voucher-description">An invitation code activates your account and adds its credits.</p>
+              
+              <div class="voucher-form">
+                <div class="voucher-input-group">
+                  <input 
+                    type="text" 
+                    bind:value={invitationCode}
+                    placeholder="Enter your invitation code"
+                    class="voucher-input"
+                    class:error={invitationError}
+                    disabled={invitationLoading}
+                  />
+                  <button 
+                    class="voucher-btn"
+                    on:click={handleRedeemInvitation}
+                    disabled={invitationLoading || !invitationCode.trim()}
+                  >
+                    {#if invitationLoading}
+                      <div class="btn-spinner"></div>
+                    {:else}
+                      Redeem
+                    {/if}
+                  </button>
+                </div>
+                
+                {#if invitationError}
+                  <div class="error-message">{invitationError}</div>
+                {/if}
+              </div>
+            </div>
+            {:else if principalActivated !== null}
+            <!-- The invitation box unmounts once the code works, so its message shows here -->
+            {#if invitationSuccess}
+              <div class="success-message">{invitationSuccess}</div>
+            {/if}
             <!-- Voucher Redemption Section -->
             <div class="voucher-section">
               <h3>Redeem Voucher</h3>
@@ -731,6 +832,7 @@
                 {/if}
               </div>
             </div>
+            {/if}
 
             <!-- Top-up Section -->
             <div class="topup-section">
@@ -792,7 +894,6 @@
                   class:unavailable={cardBillingDisabled}
                   on:click={handleTopUp}
                   disabled={cardBillingDisabled || topUpLoading || topUpAmount < 1 || topUpAmount > 50}
-                  title={cardBillingDisabled ? CARD_PAY_UNAVAILABLE_COPY : undefined}
                 >
                   {#if cardBillingDisabled}
                     {cardPayLabel}
@@ -807,6 +908,9 @@
                     {cardPayLabel}
                   {/if}
                 </button>
+                {#if cardBillingDisabled}
+                  <p class="topup-unavailable">{CARD_PAY_UNAVAILABLE_COPY}</p>
+                {/if}
               </div>
             </div>
 
@@ -855,7 +959,7 @@
                   {/each}
                 </ul>
               {:else}
-                <p class="no-purchases-note">No card purchases yet</p>
+                <p class="no-purchases-note">No purchases yet</p>
               {/if}
             </div>
           </div>
@@ -1249,6 +1353,12 @@
     to { transform: rotate(360deg); }
   }
 
+  .invitation-request {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 1rem;
+  }
+
   .tabs {
     display: flex;
     gap: 0.5rem;
@@ -1636,6 +1746,13 @@
 
   .topup-btn.unavailable {
     opacity: 0.72;
+  }
+
+  .topup-unavailable {
+    margin: 0.5rem 0 0;
+    text-align: center;
+    font-size: 0.875rem;
+    color: #737373;
   }
 
   .btn-spinner {

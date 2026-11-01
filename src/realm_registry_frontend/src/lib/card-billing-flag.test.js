@@ -1,14 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+	CARD_PAY_DISABLED_LABEL,
 	CARD_PAY_UNAVAILABLE_COPY,
 	canStartCardCheckout,
 	cardPayButtonLabel,
 	isCardBillingDisabled
 } from './card-billing-flag.js';
 
-test('unavailable copy is the Alpha string', () => {
-	assert.equal(CARD_PAY_UNAVAILABLE_COPY, 'Coming soon');
+test('unavailable copy is the Alpha string, and the disabled button names no card', () => {
+	assert.equal(CARD_PAY_UNAVAILABLE_COPY, 'Not available');
+	assert.equal(CARD_PAY_DISABLED_LABEL, 'Buy credits');
+	assert.doesNotMatch(CARD_PAY_DISABLED_LABEL, /card/i);
 });
 
 test('disable_card_billing is OFF unless the registry stored it — no network default', () => {
@@ -24,7 +27,7 @@ test('the stored flag is the only switch', () => {
 	assert.equal(isCardBillingDisabled({ disableCardBilling: false, network: 'staging' }), false);
 });
 
-test('Pay with Card label becomes the unavailable state when disabled', () => {
+test('Pay with Card label becomes the neutral Buy credits label when disabled', () => {
 	assert.equal(
 		cardPayButtonLabel({ network: 'staging', availableLabel: 'Pay with Card' }),
 		'Pay with Card'
@@ -35,7 +38,7 @@ test('Pay with Card label becomes the unavailable state when disabled', () => {
 			network: 'test',
 			availableLabel: 'Pay with Card'
 		}),
-		'Coming soon'
+		'Buy credits'
 	);
 	assert.equal(
 		cardPayButtonLabel({
