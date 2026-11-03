@@ -16,7 +16,7 @@
   import { login, getIdentity, getPrincipal, isAuthenticated } from '$lib/auth.js';
   import { requestIdNonce, signProof } from '$lib/read-state-proof.js';
 
-  const MCP_HOST = 'https://geister-mcp.realmsgos.dev';
+  const MCP_HOST = 'http://localhost:8732';
 
   let phase = 'loading'; // loading | error | consent | redirecting
   let errorMsg = '';

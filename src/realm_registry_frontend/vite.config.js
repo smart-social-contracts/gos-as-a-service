@@ -71,6 +71,7 @@ export default defineConfig({
       },
     },
   },
+  preview: { proxy: { "/api": { target: "https://icp-api.io", changeOrigin: true } } },
   server: {
     proxy: {
       "/api": {

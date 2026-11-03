@@ -18,7 +18,7 @@
   import { proveChallenge } from '$lib/read-state-proof.js';
 
   // Geister API host — same origin the registry assistant talks to.
-  const GEISTER_API = GEISTER_API_ORIGIN;
+  const GEISTER_API = 'http://localhost:8732';
 
   /** The user's IC principal as text (passed from the dashboard page). */
   export let principal = '';
