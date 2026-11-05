@@ -167,7 +167,7 @@
     .title h1 { font-size: 3.2rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.05; }
     .title h1 span { display: block; margin-top: 0.5rem; font-size: 0.62em; color: var(--gray-500); font-weight: 700; letter-spacing: -0.02em; }
     .title .lead { margin-top: 1.3rem; font-size: 1.3rem; max-width: 34rem; }
-    .title .art { height: 78%; }
+    .title .art { height: 82%; align-self: center; }
     .start-hint { margin-top: 2.2rem; font-size: 1.05rem; font-weight: 650; color: var(--gray-500); }
     .page.active .start-hint { animation: hint-pulse 2.6s ease-in-out 1.5s infinite; }
     @keyframes hint-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
@@ -325,7 +325,91 @@
       <marker id="arrr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
         <path d="M0 0L10 5L0 10z" fill="#b94a48"/>
       </marker>
-      <!-- the hub: one standard, many realms (title and closing slides) -->
+      <!-- the title map: hexagonal land with what lives on it; realms outlined in teal, a region dashed.
+           Tile positions come from a small generator (pointy-top hexes, radius 27). -->
+      <symbol id="hx" viewBox="-27 -27 54 54" overflow="visible"><polygon points="0,-27 23.38,-13.5 23.38,13.5 0,27 -23.38,13.5 -23.38,-13.5"/></symbol>
+      <symbol id="i-tree" viewBox="-20 -20 40 40"><rect x="-1" y="1" width="2" height="7" fill="#8a8a8a"/><circle cy="-3" r="6.5" fill="#bcd0c8" stroke="#8fb0a3" stroke-width="1.2"/></symbol>
+      <symbol id="i-mount" viewBox="-20 -20 40 40"><path d="M2 10 L10 -3 L18 10Z" fill="#e4e4e4" stroke="#a3a3a3" stroke-width="1.2" stroke-linejoin="round"/><path d="M-16 10 L-3 -12 L10 10Z" fill="#d6d6d6" stroke="#a3a3a3" stroke-width="1.2" stroke-linejoin="round"/><path d="M-3 -12 L-7.2 -4.8 L-3.6 -6.6 L-0.2 -4.6Z" fill="#fff"/></symbol>
+      <symbol id="i-wave" viewBox="-20 -20 40 40"><path d="M-11 0 q2.75 -3 5.5 0 t5.5 0 t5.5 0 t5.5 0" fill="none" stroke="rgb(107, 163, 163)" stroke-width="1.6" stroke-linecap="round"/></symbol>
+      <symbol id="i-field" viewBox="-20 -20 40 40"><g stroke="#ddd6bf" stroke-width="2.2" stroke-linecap="round"><path d="M-13 -5 L3 -13M-15 3 L11 -10M-13 11 L14 -2M-3 15 L13 7"/></g></symbol>
+      <symbol id="i-house" viewBox="-20 -20 40 40"><path d="M-6.5 0 L0 -6.5 L6.5 0 V7.5 H-6.5Z" fill="#fff" stroke="#737373" stroke-width="1.3" stroke-linejoin="round"/><rect x="-1.5" y="2.5" width="3" height="5" fill="#a3a3a3"/></symbol>
+      <symbol id="i-towers" viewBox="-20 -20 40 40"><g fill="#fff" stroke="#737373" stroke-width="1.3"><rect x="-13" y="-3" width="8" height="14"/><rect x="-4" y="-13" width="9" height="24"/><rect x="6" y="-7" width="8" height="18"/></g><g fill="#a3a3a3"><rect x="-2" y="-9" width="2" height="2"/><rect x="2" y="-9" width="2" height="2"/><rect x="-2" y="-4" width="2" height="2"/><rect x="2" y="-4" width="2" height="2"/><rect x="-2" y="1" width="2" height="2"/><rect x="2" y="1" width="2" height="2"/><rect x="-10" y="1" width="2" height="2"/><rect x="9" y="-3" width="2" height="2"/></g></symbol>
+      <symbol id="i-city" viewBox="-20 -20 40 40"><use href="#i-towers" x="-20" y="-20" width="40" height="40"/><path d="M0.5 -13 V-19.5" stroke="#525252" stroke-width="1.1"/><path d="M0.9 -19.5 h5.5 l-1.4 1.6 1.4 1.6 h-5.5z" fill="rgb(107, 163, 163)"/></symbol>
+      <symbol id="i-people" viewBox="-20 -20 40 40"><g fill="#737373"><use href="#person" x="-12" y="-7" width="7" height="11"/><use href="#person" x="-3.5" y="-9" width="7" height="11"/><use href="#person" x="5" y="-7" width="7" height="11"/><use href="#person" x="-8" y="3" width="7" height="11"/><use href="#person" x="1" y="3" width="7" height="11"/></g></symbol>
+      <symbol id="i-factory" viewBox="-20 -20 40 40"><path d="M-14 10 V0 L-8 -4.5 V0 L-2 -4.5 V0 L4 -4.5 V10Z" fill="#fff" stroke="#737373" stroke-width="1.3" stroke-linejoin="round"/><rect x="6" y="-10" width="4.5" height="20" fill="#fff" stroke="#737373" stroke-width="1.3"/><circle cx="9.5" cy="-14" r="2.6" fill="#d4d4d4"><animate attributeName="opacity" values="0.9;0.2;0.9" dur="3.4s" repeatCount="indefinite"/></circle><circle cx="13" cy="-18" r="2" fill="#e2e2e2"><animate attributeName="opacity" values="0.2;0.9;0.2" dur="3.4s" repeatCount="indefinite"/></circle></symbol>
+      <symbol id="i-turbine" viewBox="-20 -20 40 40"><path d="M0 -6 V12" stroke="#737373" stroke-width="1.6"/><g><path d="M0 -6 L0 -18M0 -6 L10.4 0M0 -6 L-10.4 0" stroke="#737373" stroke-width="1.6" stroke-linecap="round"/><animateTransform attributeName="transform" type="rotate" from="0 0 -6" to="360 0 -6" dur="7s" repeatCount="indefinite"/></g><circle cy="-6" r="1.6" fill="#525252"/></symbol>
+      <symbol id="landmap" viewBox="0 25 490 365">
+        <g stroke-linejoin="round" fill="#e2e2e2">
+          <use href="#hx" x="100.5" y="42.0" width="54" height="54"/><use href="#hx" x="147.3" y="42.0" width="54" height="54"/><use href="#hx" x="194.1" y="42.0" width="54" height="54"/><use href="#hx" x="240.8" y="42.0" width="54" height="54"/>
+          <use href="#hx" x="77.1" y="82.5" width="54" height="54"/><use href="#hx" x="123.9" y="82.5" width="54" height="54"/><use href="#hx" x="170.7" y="82.5" width="54" height="54"/><use href="#hx" x="217.4" y="82.5" width="54" height="54"/><use href="#hx" x="264.2" y="82.5" width="54" height="54"/><use href="#hx" x="311.0" y="82.5" width="54" height="54"/><use href="#hx" x="357.7" y="82.5" width="54" height="54"/>
+          <use href="#hx" x="7.0" y="123.0" width="54" height="54"/><use href="#hx" x="53.8" y="123.0" width="54" height="54"/><use href="#hx" x="100.5" y="123.0" width="54" height="54"/><use href="#hx" x="147.3" y="123.0" width="54" height="54"/><use href="#hx" x="194.1" y="123.0" width="54" height="54"/><use href="#hx" x="240.8" y="123.0" width="54" height="54"/><use href="#hx" x="287.6" y="123.0" width="54" height="54"/><use href="#hx" x="334.4" y="123.0" width="54" height="54"/><use href="#hx" x="381.1" y="123.0" width="54" height="54"/>
+          <use href="#hx" x="77.1" y="163.5" width="54" height="54"/><use href="#hx" x="123.9" y="163.5" width="54" height="54"/><use href="#hx" x="170.7" y="163.5" width="54" height="54"/><use href="#hx" x="217.4" y="163.5" width="54" height="54"/><use href="#hx" x="264.2" y="163.5" width="54" height="54"/><use href="#hx" x="311.0" y="163.5" width="54" height="54"/><use href="#hx" x="357.7" y="163.5" width="54" height="54"/><use href="#hx" x="404.5" y="163.5" width="54" height="54"/>
+          <use href="#hx" x="53.8" y="204.0" width="54" height="54"/><use href="#hx" x="100.5" y="204.0" width="54" height="54"/><use href="#hx" x="147.3" y="204.0" width="54" height="54"/><use href="#hx" x="194.1" y="204.0" width="54" height="54"/><use href="#hx" x="240.8" y="204.0" width="54" height="54"/><use href="#hx" x="287.6" y="204.0" width="54" height="54"/><use href="#hx" x="334.4" y="204.0" width="54" height="54"/><use href="#hx" x="381.1" y="204.0" width="54" height="54"/><use href="#hx" x="427.9" y="204.0" width="54" height="54"/>
+          <use href="#hx" x="123.9" y="244.5" width="54" height="54"/><use href="#hx" x="170.7" y="244.5" width="54" height="54"/><use href="#hx" x="217.4" y="244.5" width="54" height="54"/><use href="#hx" x="264.2" y="244.5" width="54" height="54"/><use href="#hx" x="311.0" y="244.5" width="54" height="54"/><use href="#hx" x="357.7" y="244.5" width="54" height="54"/><use href="#hx" x="404.5" y="244.5" width="54" height="54"/>
+          <use href="#hx" x="147.3" y="285.0" width="54" height="54"/><use href="#hx" x="194.1" y="285.0" width="54" height="54"/><use href="#hx" x="240.8" y="285.0" width="54" height="54"/><use href="#hx" x="287.6" y="285.0" width="54" height="54"/><use href="#hx" x="334.4" y="285.0" width="54" height="54"/><use href="#hx" x="381.1" y="285.0" width="54" height="54"/>
+          <use href="#hx" x="217.4" y="325.5" width="54" height="54"/><use href="#hx" x="264.2" y="325.5" width="54" height="54"/><use href="#hx" x="311.0" y="325.5" width="54" height="54"/><use href="#hx" x="357.7" y="325.5" width="54" height="54"/>
+        </g>
+        <g stroke-linejoin="round" stroke="#fff" stroke-width="2">
+          <use href="#hx" x="100.5" y="37.0" width="54" height="54" fill="#efefef"/><use href="#hx" x="147.3" y="37.0" width="54" height="54" fill="#efefef"/><use href="#hx" x="194.1" y="37.0" width="54" height="54" fill="#eef2ef"/><use href="#hx" x="240.8" y="37.0" width="54" height="54" fill="#eef2ef"/>
+          <use href="#hx" x="77.1" y="77.5" width="54" height="54" fill="#efefef"/><use href="#hx" x="123.9" y="77.5" width="54" height="54" fill="#efefef"/><use href="#hx" x="170.7" y="77.5" width="54" height="54" fill="#eef2ef"/><use href="#hx" x="217.4" y="77.5" width="54" height="54" fill="#eef2ef"/><use href="#hx" x="264.2" y="77.5" width="54" height="54" fill="#f4f4f0"/><use href="#hx" x="311.0" y="77.5" width="54" height="54" fill="#f4f4f0"/><use href="#hx" x="357.7" y="77.5" width="54" height="54" fill="#ecf3f3"/>
+          <use href="#hx" x="7.0" y="118.0" width="54" height="54" fill="#efefef"/><use href="#hx" x="53.8" y="118.0" width="54" height="54" fill="#efefef"/><use href="#hx" x="100.5" y="118.0" width="54" height="54" fill="#eef2ef"/><use href="#hx" x="147.3" y="118.0" width="54" height="54" fill="#f7f7f7"/><use href="#hx" x="194.1" y="118.0" width="54" height="54" fill="#f4f4f0"/><use href="#hx" x="240.8" y="118.0" width="54" height="54" fill="#ecf3f3"/><use href="#hx" x="287.6" y="118.0" width="54" height="54" fill="#ecf3f3"/><use href="#hx" x="334.4" y="118.0" width="54" height="54" fill="#ecf3f3"/><use href="#hx" x="381.1" y="118.0" width="54" height="54" fill="#ecf3f3"/>
+          <use href="#hx" x="77.1" y="158.5" width="54" height="54" fill="#eef2ef"/><use href="#hx" x="123.9" y="158.5" width="54" height="54" fill="#f7f7f7"/><use href="#hx" x="170.7" y="158.5" width="54" height="54" fill="#f4f4f0"/><use href="#hx" x="217.4" y="158.5" width="54" height="54" fill="#f7f7f7"/><use href="#hx" x="264.2" y="158.5" width="54" height="54" fill="#ecf3f3"/><use href="#hx" x="311.0" y="158.5" width="54" height="54" fill="#ecf3f3"/><use href="#hx" x="357.7" y="158.5" width="54" height="54" fill="#f2f2f2"/><use href="#hx" x="404.5" y="158.5" width="54" height="54" fill="#f4f4f0"/>
+          <use href="#hx" x="53.8" y="199.0" width="54" height="54" fill="#e1eded"/><use href="#hx" x="100.5" y="199.0" width="54" height="54" fill="#e1eded"/><use href="#hx" x="147.3" y="199.0" width="54" height="54" fill="#f7f7f7"/><use href="#hx" x="194.1" y="199.0" width="54" height="54" fill="#f7f7f7"/><use href="#hx" x="240.8" y="199.0" width="54" height="54" fill="#ecf3f3"/><use href="#hx" x="287.6" y="199.0" width="54" height="54" fill="#ecf3f3"/><use href="#hx" x="334.4" y="199.0" width="54" height="54" fill="#f4f4f0"/><use href="#hx" x="381.1" y="199.0" width="54" height="54" fill="#f2f2f2"/><use href="#hx" x="427.9" y="199.0" width="54" height="54" fill="#f7f7f7"/>
+          <use href="#hx" x="123.9" y="239.5" width="54" height="54" fill="#e1eded"/><use href="#hx" x="170.7" y="239.5" width="54" height="54" fill="#e1eded"/><use href="#hx" x="217.4" y="239.5" width="54" height="54" fill="#f4f4f0"/><use href="#hx" x="264.2" y="239.5" width="54" height="54" fill="#f7f7f7"/><use href="#hx" x="311.0" y="239.5" width="54" height="54" fill="#f7f7f7"/><use href="#hx" x="357.7" y="239.5" width="54" height="54" fill="#eef2ef"/><use href="#hx" x="404.5" y="239.5" width="54" height="54" fill="#eef2ef"/>
+          <use href="#hx" x="147.3" y="280.0" width="54" height="54" fill="#e1eded"/><use href="#hx" x="194.1" y="280.0" width="54" height="54" fill="#f7f7f7"/><use href="#hx" x="240.8" y="280.0" width="54" height="54" fill="#f4f4f0"/><use href="#hx" x="287.6" y="280.0" width="54" height="54" fill="#eef2ef"/><use href="#hx" x="334.4" y="280.0" width="54" height="54" fill="#eef2ef"/><use href="#hx" x="381.1" y="280.0" width="54" height="54" fill="#efefef"/>
+          <use href="#hx" x="217.4" y="320.5" width="54" height="54" fill="#e1eded"/><use href="#hx" x="264.2" y="320.5" width="54" height="54" fill="#f7f7f7"/><use href="#hx" x="311.0" y="320.5" width="54" height="54" fill="#eef2ef"/><use href="#hx" x="357.7" y="320.5" width="54" height="54" fill="#efefef"/>
+        </g>
+        <path d="M150.9 239.5L174.3 253.0M150.9 212.5L150.9 239.5M150.9 212.5L174.3 199.0M454.9 199.0L478.3 212.5M478.3 212.5L478.3 239.5M454.9 253.0L478.3 239.5M244.4 293.5L267.8 280.0M221.1 280.0L244.4 293.5M384.7 293.5L408.1 280.0M361.4 280.0L384.7 293.5M338.0 77.5L361.4 91.0M314.6 91.0L338.0 77.5M197.7 77.5L221.1 91.0M174.3 91.0L174.3 118.0M174.3 91.0L197.7 77.5M408.1 118.0L431.5 131.5M431.5 131.5L431.5 158.5M174.3 172.0L174.3 199.0M338.0 293.5L361.4 280.0M314.6 280.0L338.0 293.5M197.7 293.5L221.1 280.0M174.3 280.0L197.7 293.5M174.3 253.0L174.3 280.0M291.2 77.5L314.6 91.0M267.8 91.0L291.2 77.5M431.5 158.5L454.9 172.0M454.9 172.0L454.9 199.0M291.2 293.5L314.6 280.0M267.8 280.0L291.2 293.5M454.9 253.0L454.9 280.0M431.5 293.5L454.9 280.0M408.1 280.0L431.5 293.5M244.4 77.5L267.8 91.0M221.1 91.0L244.4 77.5M150.9 158.5L174.3 172.0M150.9 131.5L150.9 158.5M150.9 131.5L174.3 118.0M384.7 77.5L408.1 91.0M408.1 91.0L408.1 118.0M361.4 91.0L384.7 77.5" fill="none" stroke="#a3a3a3" stroke-width="1.6" stroke-dasharray="5 5" stroke-linecap="round"/>
+        <path d="M267.8 253.0L291.2 239.5M244.4 239.5L267.8 253.0M244.4 212.5L244.4 239.5M244.4 212.5L267.8 199.0M314.6 118.0L338.0 131.5M338.0 131.5L338.0 158.5M291.2 131.5L314.6 118.0M267.8 118.0L291.2 131.5M244.4 158.5L267.8 172.0M244.4 131.5L244.4 158.5M244.4 131.5L267.8 118.0M338.0 158.5L361.4 172.0M361.4 172.0L361.4 199.0M338.0 212.5L361.4 199.0M338.0 212.5L338.0 239.5M314.6 253.0L338.0 239.5M291.2 239.5L314.6 253.0M267.8 172.0L267.8 199.0" fill="none" stroke="rgb(107, 163, 163)" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M384.7 77.5L408.1 91.0M408.1 91.0L408.1 118.0M361.4 91.0L361.4 118.0M361.4 91.0L384.7 77.5M361.4 172.0L384.7 158.5M338.0 158.5L361.4 172.0M338.0 131.5L338.0 158.5M338.0 131.5L361.4 118.0M408.1 118.0L431.5 131.5M431.5 131.5L431.5 158.5M408.1 172.0L431.5 158.5M384.7 158.5L408.1 172.0" fill="none" stroke="rgb(107, 163, 163)" stroke-width="2" stroke-linecap="round"/>
+        <g>
+          <use href="#i-mount" x="107.5" y="46.0" width="40" height="40"/><use href="#i-mount" x="154.3" y="46.0" width="40" height="40"/>
+          <use href="#i-tree" x="192.1" y="47.0" width="40" height="40"/><use href="#i-tree" x="208.1" y="42.0" width="40" height="40"/><use href="#i-tree" x="201.1" y="53.0" width="40" height="40"/>
+          <use href="#i-tree" x="238.8" y="47.0" width="40" height="40"/><use href="#i-tree" x="254.8" y="42.0" width="40" height="40"/><use href="#i-tree" x="247.8" y="53.0" width="40" height="40"/>
+          <use href="#i-mount" x="84.1" y="86.5" width="40" height="40"/><use href="#i-mount" x="130.9" y="86.5" width="40" height="40"/>
+          <use href="#i-tree" x="168.7" y="87.5" width="40" height="40"/><use href="#i-tree" x="184.7" y="82.5" width="40" height="40"/><use href="#i-tree" x="177.7" y="93.5" width="40" height="40"/>
+          <use href="#i-tree" x="215.4" y="87.5" width="40" height="40"/><use href="#i-tree" x="231.4" y="82.5" width="40" height="40"/><use href="#i-tree" x="224.4" y="93.5" width="40" height="40"/>
+          <use href="#i-field" x="271.2" y="84.5" width="40" height="40"/><use href="#i-field" x="318.0" y="84.5" width="40" height="40"/>
+          <use href="#i-house" x="357.7" y="87.5" width="40" height="40"/><use href="#i-house" x="372.7" y="83.5" width="40" height="40"/>
+          <use href="#i-mount" x="14.0" y="127.0" width="40" height="40"/><use href="#i-mount" x="60.8" y="127.0" width="40" height="40"/>
+          <use href="#i-tree" x="98.5" y="128.0" width="40" height="40"/><use href="#i-tree" x="114.5" y="123.0" width="40" height="40"/><use href="#i-tree" x="107.5" y="134.0" width="40" height="40"/>
+          <use href="#i-field" x="201.1" y="125.0" width="40" height="40"/>
+          <use href="#i-house" x="240.8" y="128.0" width="40" height="40"/><use href="#i-house" x="255.8" y="124.0" width="40" height="40"/>
+          <use href="#i-towers" x="294.6" y="127.0" width="40" height="40"/>
+          <use href="#i-house" x="334.4" y="128.0" width="40" height="40"/><use href="#i-house" x="349.4" y="124.0" width="40" height="40"/>
+          <use href="#i-turbine" x="388.1" y="127.0" width="40" height="40"/>
+          <use href="#i-tree" x="75.1" y="168.5" width="40" height="40"/><use href="#i-tree" x="91.1" y="163.5" width="40" height="40"/><use href="#i-tree" x="84.1" y="174.5" width="40" height="40"/>
+          <use href="#i-field" x="177.7" y="165.5" width="40" height="40"/>
+          <use href="#i-people" x="224.4" y="169.5" width="40" height="40"/>
+          <use href="#i-towers" x="271.2" y="167.5" width="40" height="40"/>
+          <use href="#i-city" x="318.0" y="167.5" width="40" height="40"/>
+          <use href="#i-factory" x="364.7" y="167.5" width="40" height="40"/>
+          <use href="#i-field" x="411.5" y="165.5" width="40" height="40"/>
+          <use href="#i-wave" x="60.8" y="202.0" width="40" height="40"/><use href="#i-wave" x="62.8" y="212.0" width="40" height="40"/>
+          <use href="#i-wave" x="107.5" y="202.0" width="40" height="40"/><use href="#i-wave" x="109.5" y="212.0" width="40" height="40"/>
+          <use href="#i-house" x="194.1" y="209.0" width="40" height="40"/><use href="#i-house" x="209.1" y="205.0" width="40" height="40"/>
+          <use href="#i-towers" x="247.8" y="208.0" width="40" height="40"/>
+          <use href="#i-people" x="294.6" y="210.0" width="40" height="40"/>
+          <use href="#i-field" x="341.4" y="206.0" width="40" height="40"/>
+          <use href="#i-factory" x="388.1" y="208.0" width="40" height="40"/>
+          <use href="#i-turbine" x="434.9" y="208.0" width="40" height="40"/>
+          <use href="#i-wave" x="130.9" y="242.5" width="40" height="40"/><use href="#i-wave" x="132.9" y="252.5" width="40" height="40"/>
+          <use href="#i-wave" x="177.7" y="242.5" width="40" height="40"/><use href="#i-wave" x="179.7" y="252.5" width="40" height="40"/>
+          <use href="#i-field" x="224.4" y="246.5" width="40" height="40"/>
+          <use href="#i-house" x="264.2" y="249.5" width="40" height="40"/><use href="#i-house" x="279.2" y="245.5" width="40" height="40"/>
+          <use href="#i-tree" x="355.7" y="249.5" width="40" height="40"/><use href="#i-tree" x="371.7" y="244.5" width="40" height="40"/><use href="#i-tree" x="364.7" y="255.5" width="40" height="40"/>
+          <use href="#i-tree" x="402.5" y="249.5" width="40" height="40"/><use href="#i-tree" x="418.5" y="244.5" width="40" height="40"/><use href="#i-tree" x="411.5" y="255.5" width="40" height="40"/>
+          <use href="#i-wave" x="154.3" y="283.0" width="40" height="40"/><use href="#i-wave" x="156.3" y="293.0" width="40" height="40"/>
+          <use href="#i-field" x="247.8" y="287.0" width="40" height="40"/>
+          <use href="#i-tree" x="285.6" y="290.0" width="40" height="40"/><use href="#i-tree" x="301.6" y="285.0" width="40" height="40"/><use href="#i-tree" x="294.6" y="296.0" width="40" height="40"/>
+          <use href="#i-tree" x="332.4" y="290.0" width="40" height="40"/><use href="#i-tree" x="348.4" y="285.0" width="40" height="40"/><use href="#i-tree" x="341.4" y="296.0" width="40" height="40"/>
+          <use href="#i-mount" x="388.1" y="289.0" width="40" height="40"/>
+          <use href="#i-wave" x="224.4" y="323.5" width="40" height="40"/><use href="#i-wave" x="226.4" y="333.5" width="40" height="40"/>
+          <use href="#i-tree" x="309.0" y="330.5" width="40" height="40"/><use href="#i-tree" x="325.0" y="325.5" width="40" height="40"/><use href="#i-tree" x="318.0" y="336.5" width="40" height="40"/>
+          <use href="#i-mount" x="364.7" y="329.5" width="40" height="40"/>
+        </g>
+      </symbol>
+      <!-- the hub: one standard, many realms (closing slide) -->
       <symbol id="hub" viewBox="0 0 520 440">
         <g stroke="#d4d4d4" stroke-width="1.3" stroke-dasharray="4 5" fill="none">
           <path d="M260 66 L403 148 L403 312 L260 394 L117 312 L117 148 Z"/>
@@ -357,12 +441,10 @@
       <div class="page active" data-slide="0">
         <section class="title">
           <div>
-            <div class="kicker">gos.earth · GGG 0.1.0</div>
             <h1>Generalized Global Governance (GGG) <span>A standard for scalable governance systems</span></h1>
-            <p class="lead">What every governance system can share, so that communities of any size, from a club to a state, can work together.</p>
             <p class="start-hint"><span class="hint-pointer">Click or press → to start</span><span class="hint-touch">Tap to start</span></p>
           </div>
-          <div class="art"><svg viewBox="0 0 520 440" aria-label="One standard at the centre, linking realms of every kind"><use href="#hub"/></svg></div>
+          <div class="art map"><svg viewBox="0 25 490 365" aria-label="An abstract map of hexagonal land: mountains, forests, fields, water, houses, a city, industry and wind turbines, with realms outlined"><use href="#landmap"/></svg></div>
         </section>
       </div>
 
