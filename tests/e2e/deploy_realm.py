@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -65,6 +66,18 @@ def icp(*args: str, timeout: int = 300) -> str:
     if res.returncode != 0:
         raise Fail(f"{' '.join(cmd[:5])} failed:\n{res.stderr[-1500:]}")
     return res.stdout
+
+
+def realm_status(backend: str) -> dict:
+    """{ok, status, name} of a realm backend: the `read` API, or `status` on releases before it."""
+    try:
+        return json.loads(unquote_candid_text(icp("canister", "call", backend, "read", '("status", "{}")', "--query")))
+    except Fail as exc:
+        if "no query method 'read'" not in str(exc):
+            raise
+    out = icp("canister", "call", backend, "status", "()", "--query")
+    stage, rname = (re.search(rf'{key} = "([^"]*)"', out) for key in ("realm_stage", "realm_name"))
+    return {"ok": bool(stage and rname), "status": stage and stage.group(1), "name": rname and rname.group(1)}
 
 
 def unquote_candid_text(out: str) -> str:
@@ -254,7 +267,7 @@ def main() -> int:
     else:
         raise Fail(f"{url}: canister_ids.js HTTP {code} (names backend: {backend in js}), index.html HTTP {html_code}")
     # The founder finishes in the wizard: the realm waits in setup, named by the installer.
-    status = json.loads(unquote_candid_text(icp("canister", "call", backend, "read", '("status", "{}")', "--query")))
+    status = realm_status(backend)
     if not status.get("ok") or status.get("status") != "setup" or status.get("name") != name:
         raise Fail(f"realm status: want setup and name {name!r}, got {status}")
 
