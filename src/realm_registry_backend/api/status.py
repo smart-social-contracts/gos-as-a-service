@@ -4,9 +4,9 @@ from api.registry import count_registered_realms
 
 
 def get_status() -> dict:
-    version = "VERSION_PLACEHOLDER"
-    commit = "COMMIT_HASH_PLACEHOLDER"
-    commit_datetime = "COMMIT_DATETIME_PLACEHOLDER"
+    version = "main-9735ed7"
+    commit = "9735ed7"
+    commit_datetime = "2026-11-01 20:34:21"
     return {
         "version": version,
         "commit": commit,
@@ -14,9 +14,9 @@ def get_status() -> dict:
         "status": "ok",
         "realms_count": count_registered_realms(),
         "dependencies": [
-            "ic-basilisk==BASILISK_VERSION_PLACEHOLDER",
-            "ic-python-db==IC_PYTHON_DB_VERSION_PLACEHOLDER",
-            "ic-python-logging==IC_PYTHON_LOGGING_VERSION_PLACEHOLDER",
+            "ic-basilisk==BASILISK_main-9735ed7",
+            "ic-python-db==IC_PYTHON_DB_main-9735ed7",
+            "ic-python-logging==IC_PYTHON_LOGGING_main-9735ed7",
         ],
         "python_version": sys.version,
     }
@@ -30,9 +30,9 @@ def get_status() -> dict:
 # placeholders below). A field still holding its placeholder (local/dev
 # builds) is omitted honestly — never invented at query time.
 
-_VERSION_STAMP = "VERSION_PLACEHOLDER"
-_SHA_STAMP = "COMMIT_HASH_PLACEHOLDER"
-_BUILT_AT_STAMP = "BUILT_AT_ISO_PLACEHOLDER"
+_VERSION_STAMP = "main-9735ed7"
+_SHA_STAMP = "9735ed7"
+_BUILT_AT_STAMP = "2026-11-01T20:34:21Z"
 
 _CANISTER_NAME = "realm_registry_backend"
 

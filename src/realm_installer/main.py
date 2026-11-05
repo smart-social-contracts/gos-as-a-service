@@ -1704,8 +1704,8 @@ def _on_post_upgrade() -> None:
 @query
 def status() -> GetStatusResult:
     return {"Ok": StatusRecord(
-        version="VERSION_PLACEHOLDER", commit="COMMIT_HASH_PLACEHOLDER",
-        commit_datetime="COMMIT_DATETIME_PLACEHOLDER", status="ok",
+        version="main-9735ed7", commit="9735ed7",
+        commit_datetime="2026-11-01 20:34:21", status="ok",
     )}
 
 @query

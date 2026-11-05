@@ -9,9 +9,9 @@ builds) is omitted honestly — never invented at query time.
 
 import json
 
-_VERSION_STAMP = "VERSION_PLACEHOLDER"
-_SHA_STAMP = "COMMIT_HASH_PLACEHOLDER"
-_BUILT_AT_STAMP = "BUILT_AT_ISO_PLACEHOLDER"
+_VERSION_STAMP = "main-9735ed7"
+_SHA_STAMP = "9735ed7"
+_BUILT_AT_STAMP = "2026-11-01T20:34:21Z"
 
 _CANISTER_NAME = "realm_installer"
 
