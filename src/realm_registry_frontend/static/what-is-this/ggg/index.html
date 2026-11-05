@@ -1,0 +1,1562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>gos.earth · Generalized Global Governance (GGG) · A standard for scalable governance systems</title>
+  <style>
+    :root {
+      --gray-50: #fafafa;
+      --gray-100: #f0f0f0;
+      --gray-200: #e5e5e5;
+      --gray-300: #d4d4d4;
+      --gray-400: #a3a3a3;
+      --gray-500: #737373;
+      --gray-600: #525252;
+      --gray-700: #404040;
+      --gray-800: #262626;
+      --gray-900: #171717;
+      --text: var(--gray-900);
+      --muted: var(--gray-600);
+      --border: var(--gray-200);
+      --panel: #ffffff;
+      --teal: rgb(107, 163, 163);
+      --teal-d: rgb(47, 95, 95);
+      --teal-bg: rgba(107, 163, 163, 0.1);
+      --red: #b94a48;
+      --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    /* Slides are sized in rem and never scroll, so short screens shrink the root size. */
+    html { font-size: clamp(10px, 2.1vh, 16px); font-size: clamp(10px, 2.1dvh, 16px); }
+
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: var(--panel);
+      color: var(--text);
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .deck {
+      width: 100%;
+      height: 100vh;
+      height: 100dvh;
+      background: var(--panel);
+      padding: 1.25rem 2.5rem 1rem;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+    }
+
+    .viewport { flex: 1; min-height: 0; position: relative; }
+    .dots, footer { user-select: none; -webkit-user-select: none; }
+
+    .page {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      z-index: 0;
+      transition: opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.45s;
+    }
+    .page.active { opacity: 1; visibility: visible; pointer-events: auto; z-index: 2; }
+
+    footer { margin-top: 0.75rem; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+    footer .site { font-size: 1.17rem; color: var(--gray-500); }
+    footer a.all { font-size: 0.95rem; color: var(--gray-500); text-decoration: none; transition: color 0.2s; }
+    footer a.all:hover { color: var(--teal-d); }
+
+    .dots { display: flex; gap: 0.35rem; justify-content: center; margin-top: 0.45rem; flex-wrap: wrap; }
+    .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--gray-200); border: none; padding: 0; cursor: pointer;
+      transition: background 0.3s, transform 0.3s;
+    }
+    .dot.active { background: var(--gray-900); transform: scale(1.2); }
+
+    /* ---- a slide: heading, lead, then art beside its points ------------------------------- */
+    .sl {
+      position: absolute;
+      inset: 0;
+      margin: 0 auto;
+      width: min(84rem, 100%);
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      padding: 0.4rem 0.5rem 0;
+    }
+    .box-header { border-bottom: 2px solid var(--gray-900); padding-bottom: 0.7rem; flex-shrink: 0; }
+    .box-header h2 { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+    .kicker {
+      display: flex; align-items: center; gap: 0.6rem;
+      font-size: 0.8rem; font-weight: 650; letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--gray-500); margin-bottom: 0.3rem;
+    }
+    .layer {
+      padding: 0.05rem 0.5rem; border-radius: 999px; font-size: 0.68rem; letter-spacing: 0.12em;
+      border: 1.5px solid var(--gray-300); color: var(--gray-600);
+    }
+    .layer.std { border-color: var(--teal); background: var(--teal-bg); color: var(--teal-d); }
+    .lead { font-size: 1.22rem; color: var(--gray-600); line-height: 1.35; flex-shrink: 0; }
+    .lead code, .wc-note code, .wc-label code, .card code { font-family: var(--mono); font-size: 0.9em; }
+
+    .body {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr);
+      column-gap: 2.5rem;
+      align-items: center;
+    }
+    .body.art-wide { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+    .body.one { grid-template-columns: minmax(0, 1fr); }
+
+    .art { align-self: stretch; min-height: 0; display: flex; align-items: center; justify-content: center; }
+    .art svg { display: block; width: 100%; height: 100%; overflow: visible; }
+
+    .pts { list-style: none; display: flex; flex-direction: column; gap: 1.1rem; }
+    .pts li { padding-left: 1rem; border-left: 3px solid var(--gray-200); }
+    .pts li.teal { border-left-color: var(--teal); }
+    .pts li.red { border-left-color: var(--red); }
+    .wc-label { display: block; font-weight: 650; font-size: 1.3rem; line-height: 1.25; color: var(--text); }
+    .wc-note { display: block; font-size: 1.02rem; line-height: 1.4; margin-top: 0.25rem; color: var(--gray-500); }
+
+    .tag {
+      display: inline-block; margin-left: 0.5rem; padding: 0.08rem 0.5rem;
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+      border: 1.5px solid var(--gray-300); border-radius: 999px; color: var(--gray-600);
+      vertical-align: 0.2em; white-space: nowrap;
+    }
+    .tag.teal { border-color: var(--teal); background: var(--teal-bg); color: var(--teal-d); }
+
+    /* ---- fragments: HTML and SVG pieces come in one click at a time -------------------- */
+    .wc-frag { opacity: 0; transform: translateY(8px); transition: opacity 0.45s ease-out, transform 0.45s cubic-bezier(0.2, 0.7, 0.2, 1); }
+    .wc-frag.shown { opacity: 1; transform: none; }
+    .wc-frag:not(.shown) { pointer-events: none; }
+    .fx { opacity: 0; transition: opacity 0.4s ease; }
+    .fx.shown { opacity: 1; transition: opacity 0.7s ease-out var(--in, 0s); }
+    .fxu { transition: opacity 0.4s ease; }
+    .fxu:not(.shown) { opacity: 0; }
+
+    /* ---- SVG vocabulary ------------------------------------------------------------------ */
+    svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .t { fill: var(--gray-800); font-size: 15px; font-weight: 650; }
+    .tb { fill: var(--gray-900); font-size: 18px; font-weight: 750; }
+    .ts { fill: var(--gray-500); font-size: 12px; }
+    .tm { fill: var(--gray-600); font-size: 11px; font-family: var(--mono); }
+    .tw { fill: #fff; }
+    .tt { fill: var(--teal-d); }
+    .tr { fill: var(--red); }
+    .mid { text-anchor: middle; }
+    .end { text-anchor: end; }
+    .flow { stroke-dasharray: 5 7; animation: flow 1.3s linear infinite; }
+    @keyframes flow { to { stroke-dashoffset: -12; } }
+
+    /* ---- the title and closing slides ------------------------------------------------------ */
+    .title {
+      position: absolute; inset: 0; margin: 0 auto; width: min(84rem, 100%);
+      display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); align-items: center; column-gap: 3rem;
+    }
+    .title h1 { font-size: 3.2rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.05; }
+    .title h1 span { display: block; margin-top: 0.5rem; font-size: 0.62em; color: var(--gray-500); font-weight: 700; letter-spacing: -0.02em; }
+    .title .lead { margin-top: 1.3rem; font-size: 1.3rem; max-width: 34rem; }
+    .title .art { height: 78%; }
+    .start-hint { margin-top: 2.2rem; font-size: 1.05rem; font-weight: 650; color: var(--gray-500); }
+    .page.active .start-hint { animation: hint-pulse 2.6s ease-in-out 1.5s infinite; }
+    @keyframes hint-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    .hint-touch { display: none; }
+    @media (hover: none) and (pointer: coarse) { .hint-pointer { display: none; } .hint-touch { display: inline; } }
+    .links { list-style: none; margin-top: 1.6rem; display: flex; flex-direction: column; gap: 0.55rem; }
+    .links a { color: var(--gray-800); font-weight: 650; text-decoration: none; border-bottom: 1.5px solid rgba(107, 163, 163, 0.6); transition: color 0.2s; }
+    .links a:hover { color: var(--teal-d); }
+    .links span { color: var(--gray-500); font-size: 0.95rem; margin-left: 0.5rem; }
+
+    /* ---- the divider between the standard and one implementation -------------------------- */
+    .divider { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 1.4rem; padding: 0 1rem; }
+    .divider h2 { font-size: 2.8rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; }
+    .divider p { font-size: 1.3rem; color: var(--gray-600); line-height: 1.4; max-width: 46rem; }
+    .divider .legend { display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap; font-size: 1.05rem; color: var(--gray-600); }
+    .divider .legend span { display: inline-flex; align-items: center; gap: 0.5rem; }
+
+    /* ---- cards ----------------------------------------------------------------------------- */
+    .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.1rem; align-self: center; width: 100%; }
+    .cards.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .card {
+      border: 2px solid var(--gray-300); border-radius: 10px; background: #fff;
+      padding: 1rem 1.15rem; display: flex; flex-direction: column; gap: 0.55rem; min-width: 0;
+    }
+    .card.wide { grid-column: 1 / -1; display: grid; grid-template-columns: 10rem minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.1fr); align-items: center; column-gap: 1.2rem; }
+    .card h3 { display: flex; align-items: center; gap: 0.55rem; font-size: 1.3rem; font-weight: 750; letter-spacing: -0.01em; line-height: 1.2; }
+    .card h3 svg { width: 1.5rem; height: 1.5rem; flex: none; }
+    .card .sub { font-size: 1rem; color: var(--gray-600); line-height: 1.4; }
+    .card .who { font-size: 0.72rem; font-weight: 650; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gray-500); }
+    .mini {
+      font-family: var(--mono); font-size: 0.82rem; line-height: 1.45; white-space: pre; overflow: hidden;
+      background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 6px; padding: 0.45rem 0.6rem;
+    }
+    .res { display: flex; align-items: flex-start; gap: 0.45rem; font-size: 1.02rem; font-weight: 650; line-height: 1.3; }
+    .res svg { width: 1.15rem; height: 1.15rem; flex: none; margin-top: 0.1rem; }
+    .res.ok { color: var(--teal-d); }
+    .res.no { color: var(--red); }
+    .card ul { list-style: none; display: flex; flex-direction: column; gap: 0.5rem; font-size: 1.02rem; color: var(--gray-700); line-height: 1.35; }
+    .card ul li { padding-left: 0.9rem; position: relative; }
+    .card ul li::before { content: ""; position: absolute; left: 0; top: 0.55em; width: 0.35rem; height: 0.35rem; border-radius: 50%; background: var(--gray-400); }
+    .card.pro { border-color: var(--teal); background: var(--teal-bg); }
+    .card.pro h3 { color: var(--teal-d); }
+    .card.pro ul li::before { background: var(--teal); }
+    .card.con h3 { color: var(--red); }
+    .card.con ul li::before { background: var(--red); }
+
+    /* ---- code ------------------------------------------------------------------------------ */
+    .code {
+      font-family: var(--mono); font-size: 0.86rem; line-height: 1.5; white-space: pre; overflow: hidden;
+      background: var(--gray-900); color: var(--gray-200); border-radius: 10px; padding: 1rem 1.15rem;
+    }
+    .code .c { color: #8a8a8a; }
+    .code .k { color: #a3a3a3; }
+    .code .s { color: rgb(150, 200, 200); }
+    .code .n { color: #f0d9a8; }
+    .code .h { color: #fff; font-weight: 650; }
+    .codehead { font-size: 0.72rem; font-weight: 650; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gray-500); margin-bottom: 0.4rem; }
+    .codes { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+
+    @media (max-height: 640px) and (min-aspect-ratio: 1/1) {
+      .pts { gap: 0.7rem; }
+      .wc-note { font-size: 0.95rem; }
+      .mini { font-size: 0.76rem; }
+      .code { font-size: 0.8rem; }
+    }
+
+    /* Portrait screens: the art on top, the points below it; tall slides scroll inside. */
+    @media (max-aspect-ratio: 1/1) {
+      .deck { padding: 0.75rem 1rem 0.6rem; }
+      footer .site { font-size: 0.95rem; }
+      .sl { overflow-y: auto; }
+      .box-header h2 { font-size: 1.4rem; }
+      .lead { font-size: 1rem; }
+      .body, .body.art-wide { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; row-gap: 0.8rem; }
+      .body.one { flex: none; grid-template-rows: auto; }
+      .pts { gap: 0.55rem; }
+      .wc-label { font-size: 1rem; }
+      .wc-note { font-size: 0.82rem; }
+      .title { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); row-gap: 1rem; padding-top: 1rem; }
+      .title h1 { font-size: 2.1rem; }
+      .title .lead { font-size: 1.02rem; }
+      .title .art { height: 100%; }
+      .divider h2 { font-size: 1.9rem; }
+      .divider p { font-size: 1.02rem; }
+      .cards, .cards.two { grid-template-columns: minmax(0, 1fr); gap: 0.6rem; }
+      .card.wide { grid-template-columns: minmax(0, 1fr); row-gap: 0.5rem; }
+      .card { padding: 0.7rem 0.85rem; gap: 0.4rem; }
+      .card h3 { font-size: 1.08rem; }
+      .card .sub, .card ul { font-size: 0.88rem; }
+      .mini { font-size: 0.72rem; }
+      .code { font-size: 0.66rem; padding: 0.7rem 0.8rem; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .flow, .page.active .start-hint { animation: none !important; }
+      .wc-frag, .fx, .fxu, .page { transition: none !important; transform: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Shared drawing parts: a canister, a capital's flag, a person, a chapter, marks. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="can" viewBox="0 0 64 54">
+        <polygon points="2,12 14,2 62,2 50,12" fill="#fafafa" stroke="#a3a3a3" stroke-width="1.5" stroke-linejoin="round"/>
+        <rect x="2" y="12" width="48" height="40" rx="2" fill="#fff" stroke="#a3a3a3" stroke-width="1.5"/>
+        <polygon points="50,12 62,2 62,42 50,52" fill="#ececec" stroke="#a3a3a3" stroke-width="1.5" stroke-linejoin="round"/>
+        <path d="M10 24h32M10 31h32M10 38h20" stroke="#d4d4d4" stroke-width="2.2" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="flag" viewBox="0 0 20 22">
+        <path d="M2 22V1" stroke="#525252" stroke-width="1.8"/>
+        <path d="M2.8 1.5h14l-3.6 4.5 3.6 4.5h-14z" fill="rgb(107, 163, 163)"/>
+      </symbol>
+      <symbol id="flagr" viewBox="0 0 20 22">
+        <path d="M2 22V1" stroke="#b94a48" stroke-width="1.8"/>
+        <path d="M2.8 1.5h14l-3.6 4.5 3.6 4.5h-14z" fill="#b94a48"/>
+      </symbol>
+      <symbol id="person" viewBox="0 0 12 18">
+        <circle cx="6" cy="4.2" r="3.4"/>
+        <path d="M0.5 18c0-6 2.3-9 5.5-9s5.5 3 5.5 9z"/>
+      </symbol>
+      <symbol id="doc" viewBox="0 0 30 38">
+        <path d="M2 2h18l8 8v26H2z" fill="#fff" stroke="#737373" stroke-width="1.5" stroke-linejoin="round"/>
+        <path d="M20 2v8h8" fill="none" stroke="#737373" stroke-width="1.5" stroke-linejoin="round"/>
+        <path d="M7 17h16M7 22h16M7 27h11" stroke="#a3a3a3" stroke-width="1.8" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="check" viewBox="0 0 20 20">
+        <circle cx="10" cy="10" r="9.5" fill="rgb(47, 95, 95)"/>
+        <path d="M5.5 10.3l3 3 6-6.3" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="cross" viewBox="0 0 20 20">
+        <circle cx="10" cy="10" r="9.5" fill="#b94a48"/>
+        <path d="M6.5 6.5l7 7M13.5 6.5l-7 7" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="lock" viewBox="0 0 20 22">
+        <rect x="2" y="9" width="16" height="12" rx="2.5" fill="#262626"/>
+        <path d="M6 9V6.5a4 4 0 0 1 8 0V9" fill="none" stroke="#262626" stroke-width="2.2"/>
+      </symbol>
+      <symbol id="ballot" viewBox="0 0 26 26">
+        <path d="M7 12V3h12v9" fill="#fff" stroke="#737373" stroke-width="1.5" stroke-linejoin="round"/>
+        <path d="M10 7.5l2 2 4-4" stroke="rgb(47, 95, 95)" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="2" y="11" width="22" height="13" rx="2" fill="#fff" stroke="#737373" stroke-width="1.5"/>
+        <path d="M8 11h10" stroke="#262626" stroke-width="2"/>
+      </symbol>
+      <symbol id="mail" viewBox="0 0 26 18">
+        <rect x="1" y="1" width="24" height="16" rx="2" fill="#fff" stroke="#737373" stroke-width="1.5"/>
+        <path d="M2 2l11 8 11-8" fill="none" stroke="#737373" stroke-width="1.5"/>
+      </symbol>
+      <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0L10 5L0 10z" fill="#737373"/>
+      </marker>
+      <marker id="arrt" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0L10 5L0 10z" fill="rgb(47, 95, 95)"/>
+      </marker>
+      <marker id="arrr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0L10 5L0 10z" fill="#b94a48"/>
+      </marker>
+      <!-- the hub: one standard, many realms (title and closing slides) -->
+      <symbol id="hub" viewBox="0 0 520 440">
+        <g stroke="#d4d4d4" stroke-width="1.3" stroke-dasharray="4 5" fill="none">
+          <path d="M260 66 L403 148 L403 312 L260 394 L117 312 L117 148 Z"/>
+        </g>
+        <g fill="none" stroke="rgb(107, 163, 163)" stroke-width="2" class="flow">
+          <path d="M260 150 V84M320 186 L388 150M320 254 L388 292M260 290 V356M200 254 L132 292M200 186 L132 150"/>
+        </g>
+        <circle cx="260" cy="220" r="72" fill="rgba(107,163,163,0.1)" stroke="rgb(107, 163, 163)" stroke-width="2.5"/>
+        <text x="260" y="226" text-anchor="middle" style="font-size:30px;font-weight:800;fill:rgb(47,95,95)">GGG</text>
+        <text x="260" y="248" text-anchor="middle" class="ts">the standard</text>
+        <g>
+          <use href="#can" x="238" y="40" width="44" height="37"/><use href="#flag" x="247" y="24" width="14" height="16"/><text class="ts" x="290" y="62">a town</text>
+          <use href="#can" x="381" y="122" width="44" height="37"/><use href="#flag" x="390" y="106" width="14" height="16"/><text class="ts" x="433" y="144">a region</text>
+          <use href="#can" x="381" y="284" width="44" height="37"/><use href="#flag" x="390" y="268" width="14" height="16"/><text class="ts" x="433" y="306">a state</text>
+          <use href="#can" x="238" y="366" width="44" height="37"/><use href="#flag" x="247" y="350" width="14" height="16"/><text class="ts" x="290" y="388">a cooperative</text>
+          <use href="#can" x="95" y="284" width="44" height="37"/><use href="#flag" x="104" y="268" width="14" height="16"/><text class="ts end" x="88" y="306">a city</text>
+          <use href="#can" x="95" y="122" width="44" height="37"/><use href="#flag" x="104" y="106" width="14" height="16"/><text class="ts end" x="88" y="144">a union</text>
+        </g>
+      </symbol>
+    </defs>
+  </svg>
+
+  <article class="deck">
+    <div class="viewport" id="viewport">
+
+      <!-- ======================================================================================
+           Title
+           ====================================================================================== -->
+      <div class="page active" data-slide="0">
+        <section class="title">
+          <div>
+            <div class="kicker">gos.earth · GGG 0.1.0</div>
+            <h1>Generalized Global Governance (GGG) <span>A standard for scalable governance systems</span></h1>
+            <p class="lead">What every governance system can share, so that communities of any size, from a club to a state, can work together.</p>
+            <p class="start-hint"><span class="hint-pointer">Click or press → to start</span><span class="hint-touch">Tap to start</span></p>
+          </div>
+          <div class="art"><svg viewBox="0 0 520 440" aria-label="One standard at the centre, linking realms of every kind"><use href="#hub"/></svg></div>
+        </section>
+      </div>
+
+      <!-- ======================================================================================
+           Part 1: why
+           ====================================================================================== -->
+      <div class="page" data-slide="1">
+        <section class="sl">
+          <header class="box-header"><div class="kicker">Why</div><h2>Governance is a stream of acts</h2></header>
+          <p class="lead">Each act has the same form: someone does something to someone, or to something.</p>
+          <div class="body">
+            <div class="art">
+              <svg viewBox="0 0 640 360" aria-label="Three acts, each who, does what, to whom">
+                <text class="ts mid" x="105" y="24" style="font-weight:650">who</text>
+                <text class="ts mid" x="320" y="24" style="font-weight:650">does</text>
+                <text class="ts mid" x="535" y="24" style="font-weight:650">to whom or what</text>
+                <g class="fx" data-frag="0">
+                  <rect x="20" y="44" width="170" height="48" rx="10" fill="#fff" stroke="#737373" stroke-width="1.5"/><text class="t mid" x="105" y="73">a town council</text>
+                  <path d="M194 68 H246" stroke="#737373" stroke-width="1.6" marker-end="url(#arr)"/>
+                  <rect x="252" y="46" width="136" height="44" rx="22" fill="#171717"/><text class="t mid tw" x="320" y="73">adopts</text>
+                  <path d="M392 68 H444" stroke="#737373" stroke-width="1.6" marker-end="url(#arr)"/>
+                  <rect x="450" y="44" width="170" height="48" rx="10" fill="#fff" stroke="#737373" stroke-width="1.5"/><text class="t mid" x="535" y="73">a tax rate</text>
+                </g>
+                <g class="fx" data-frag="1">
+                  <rect x="20" y="154" width="170" height="48" rx="10" fill="#fff" stroke="#737373" stroke-width="1.5"/><text class="t mid" x="105" y="183">the town</text>
+                  <path d="M194 178 H246" stroke="#737373" stroke-width="1.6" marker-end="url(#arr)"/>
+                  <rect x="252" y="156" width="136" height="44" rx="22" fill="#171717"/><text class="t mid tw" x="320" y="183">registers</text>
+                  <path d="M392 178 H444" stroke="#737373" stroke-width="1.6" marker-end="url(#arr)"/>
+                  <rect x="450" y="154" width="170" height="48" rx="10" fill="#fff" stroke="#737373" stroke-width="1.5"/><text class="t mid" x="535" y="183">a new resident</text>
+                  <text class="ts mid" x="320" y="226">… and tells the national statistics office</text>
+                </g>
+                <g class="fx" data-frag="2">
+                  <rect x="20" y="264" width="170" height="48" rx="10" fill="#fff" stroke="rgb(107, 163, 163)" stroke-width="2.2"/><text class="t mid tt" x="105" y="293">the State</text>
+                  <path d="M194 288 H246" stroke="rgb(47, 95, 95)" stroke-width="1.6" marker-end="url(#arrt)"/>
+                  <rect x="252" y="266" width="136" height="44" rx="22" fill="rgb(47, 95, 95)"/><text class="t mid tw" x="320" y="293">sets a rule for</text>
+                  <path d="M392 288 H444" stroke="rgb(47, 95, 95)" stroke-width="1.6" marker-end="url(#arrt)"/>
+                  <rect x="450" y="264" width="170" height="48" rx="10" fill="#fff" stroke="rgb(107, 163, 163)" stroke-width="2.2"/><text class="t mid tt" x="535" y="293">every town</text>
+                  <text class="ts mid tt" x="320" y="336" style="font-weight:650">the act crosses a boundary</text>
+                </g>
+              </svg>
+            </div>
+            <ul class="pts">
+              <li class="wc-frag teal" data-frag="0"><span class="wc-label">Every community runs on acts</span><span class="wc-note">A club, a cooperative, a town, a state: who may act, how, and with what effect.</span></li>
+              <li class="wc-frag" data-frag="1"><span class="wc-label">Many acts involve another body</span><span class="wc-note">A registration is reported, a payment is owed, a decision is appealed.</span></li>
+              <li class="wc-frag" data-frag="2"><span class="wc-label">So one body's acts must be readable by others</span><span class="wc-note">Above it, below it and beside it.</span></li>
+            </ul>
+          </div>
+        </section>
+      </div>
+
+      <div class="page" data-slide="2">
+        <section class="sl">
+          <header class="box-header"><div class="kicker">Why</div><h2>Cooperation does not scale today</h2></header>
+          <p class="lead">Each body runs its own systems. Between them, much of the work is still carried by hand.</p>
+          <div class="body">
+            <div class="art">
+              <svg viewBox="0 0 640 400" aria-label="Separate systems, rules rewritten by each town, data carried by hand">
+                <g class="fx" data-frag="0">
+                  <rect x="20" y="20" width="160" height="84" rx="10" fill="#fff" stroke="#737373" stroke-width="1.5"/><text class="t" x="34" y="44">the State</text>
+                  <g fill="#d4d4d4"><rect x="34" y="56" width="16" height="16"/><rect x="54" y="56" width="16" height="16"/><rect x="74" y="56" width="16" height="16"/><rect x="34" y="76" width="16" height="16"/><rect x="54" y="76" width="16" height="16"/></g>
+                  <rect x="240" y="20" width="160" height="84" rx="10" fill="#fff" stroke="#737373" stroke-width="1.5"/><text class="t" x="254" y="44">statistics office</text>
+                  <g fill="#d4d4d4"><circle cx="266" cy="72" r="12"/><circle cx="296" cy="72" r="12"/><circle cx="326" cy="72" r="12"/></g>
+                  <rect x="460" y="20" width="160" height="84" rx="10" fill="#fff" stroke="#737373" stroke-width="1.5"/><text class="t" x="474" y="44">the region</text>
+                  <g fill="#d4d4d4"><path d="M476 92 l12 -24 l12 24z"/><path d="M506 92 l12 -24 l12 24z"/><path d="M536 92 l12 -24 l12 24z"/></g>
+                  <rect x="90" y="270" width="160" height="84" rx="10" fill="#fff" stroke="#737373" stroke-width="1.5"/><text class="t" x="104" y="294">town A</text>
+                  <g fill="#d4d4d4"><rect x="104" y="306" width="60" height="8"/><rect x="104" y="318" width="44" height="8"/><rect x="104" y="330" width="70" height="8"/></g>
+                  <rect x="390" y="270" width="160" height="84" rx="10" fill="#fff" stroke="#737373" stroke-width="1.5"/><text class="t" x="404" y="294">town B</text>
+                  <g fill="#d4d4d4"><path d="M414 310 l10 -6 l10 6 v12 l-10 6 l-10 -6z"/><path d="M440 310 l10 -6 l10 6 v12 l-10 6 l-10 -6z"/><path d="M466 310 l10 -6 l10 6 v12 l-10 6 l-10 -6z"/></g>
+                  <text class="ts mid" x="320" y="388">each with its own data model</text>
+                </g>
+                <g class="fx" data-frag="1">
+                  <use href="#doc" x="88" y="118" width="26" height="34"/>
+                  <path d="M100 156 C 100 200, 150 220, 166 262" fill="none" stroke="#a3a3a3" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#arr)"/>
+                  <path d="M114 140 C 260 160, 420 200, 464 262" fill="none" stroke="#a3a3a3" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#arr)"/>
+                  <path d="M196 342 l14 -14 4 4 -14 14 -6 2z" fill="#fff" stroke="#262626" stroke-width="1.4"/>
+                  <path d="M496 342 l14 -14 4 4 -14 14 -6 2z" fill="#fff" stroke="#262626" stroke-width="1.4"/>
+                  <text class="ts" x="160" y="196">a rule from above,</text>
+                  <text class="ts" x="160" y="210">rewritten by every town</text>
+                </g>
+                <g class="fx" data-frag="2">
+                  <path d="M250 312 H390" stroke="#a3a3a3" stroke-width="1.5" stroke-dasharray="4 4"/>
+                  <use href="#mail" x="306" y="303" width="26" height="18"/>
+                  <path d="M470 270 C 440 200, 360 150, 330 108" fill="none" stroke="#a3a3a3" stroke-width="1.5" stroke-dasharray="4 4"/>
+                  <use href="#mail" x="380" y="176" width="26" height="18"/>
+                  <path d="M540 104 V150 C 540 200, 520 230, 510 266" fill="none" stroke="#a3a3a3" stroke-width="1.5" stroke-dasharray="4 4"/>
+                  <use href="#mail" x="527" y="160" width="26" height="18"/>
+                  <text class="ts mid" x="320" y="250">exports, letters, re-typing</text>
+                </g>
+              </svg>
+            </div>
+            <ul class="pts">
+              <li class="wc-frag" data-frag="0"><span class="wc-label">Every body, its own system</span><span class="wc-note">Built or bought one at a time, each with its own data model.</span></li>
+              <li class="wc-frag" data-frag="1"><span class="wc-label">Rules from above are rewritten below</span><span class="wc-note">Spain has about 8,100 municipalities. A change of State legislation is re-implemented in each of their systems.</span></li>
+              <li class="wc-frag red" data-frag="2"><span class="wc-label">Between bodies, people carry the data</span><span class="wc-note">Slow, costly and hard to audit. It grows with every new body that has to cooperate.</span></li>
+            </ul>
+          </div>
+        </section>
+      </div>
+
+      <div class="page" data-slide="3">
+        <section class="sl">
+          <header class="box-header"><div class="kicker">Why</div><h2>Governance systems need a shared standard</h2></header>
+          <p class="lead">Software can run a community's acts: a Governance Operating System (GOS). A standard lets every GOS, and every tool, work with the others.</p>
+          <div class="body">
+            <div class="art">
+              <svg viewBox="0 0 640 380" aria-label="Without a standard, tools are rebuilt for each system; with one, they connect once">
+                <g class="fx" data-frag="1">
+                  <text class="ts" x="20" y="22" style="font-weight:650">without a standard</text>
+                  <g>
+                    <rect x="20" y="40" width="110" height="64" rx="9" fill="#fff" stroke="#737373" stroke-width="1.5"/><text class="t mid" x="75" y="77">GOS 1</text>
+                    <rect x="20" y="150" width="110" height="64" rx="9" fill="#fff" stroke="#737373" stroke-width="1.5"/><text class="t mid" x="75" y="187">GOS 2</text>
+                    <rect x="20" y="260" width="110" height="64" rx="9" fill="#fff" stroke="#737373" stroke-width="1.5"/><text class="t mid" x="75" y="297">GOS 3</text>
+                  </g>
+                  <g class="ts">
+                    <rect x="160" y="36" width="80" height="22" rx="11" fill="#fafafa" stroke="#d4d4d4"/><text x="200" y="51" text-anchor="middle">wallet</text>
+                    <rect x="160" y="62" width="80" height="22" rx="11" fill="#fafafa" stroke="#d4d4d4"/><text x="200" y="77" text-anchor="middle">audit</text>
+                    <rect x="160" y="88" width="80" height="22" rx="11" fill="#fafafa" stroke="#d4d4d4"/><text x="200" y="103" text-anchor="middle">assistant</text>
+                    <rect x="160" y="146" width="80" height="22" rx="11" fill="#fafafa" stroke="#d4d4d4"/><text x="200" y="161" text-anchor="middle">wallet</text>
+                    <rect x="160" y="172" width="80" height="22" rx="11" fill="#fafafa" stroke="#d4d4d4"/><text x="200" y="187" text-anchor="middle">audit</text>
+                    <rect x="160" y="198" width="80" height="22" rx="11" fill="#fafafa" stroke="#d4d4d4"/><text x="200" y="213" text-anchor="middle">assistant</text>
+                    <rect x="160" y="256" width="80" height="22" rx="11" fill="#fafafa" stroke="#d4d4d4"/><text x="200" y="271" text-anchor="middle">wallet</text>
+                    <rect x="160" y="282" width="80" height="22" rx="11" fill="#fafafa" stroke="#d4d4d4"/><text x="200" y="297" text-anchor="middle">audit</text>
+                    <rect x="160" y="308" width="80" height="22" rx="11" fill="#fafafa" stroke="#d4d4d4"/><text x="200" y="323" text-anchor="middle">assistant</text>
+                  </g>
+                  <path d="M130 72 H156M130 182 H156M130 292 H156" stroke="#a3a3a3" stroke-width="1.5"/>
+                  <text class="ts tr" x="20" y="360">every tool, rebuilt for every system</text>
+                </g>
+                <g class="fx" data-frag="2">
+                  <path d="M300 20 V350" stroke="#e5e5e5" stroke-width="1.5"/>
+                  <text class="ts tt" x="340" y="22" style="font-weight:650">with GGG</text>
+                  <rect x="340" y="40" width="100" height="64" rx="9" fill="#fff" stroke="#737373" stroke-width="1.5"/><text class="t mid" x="390" y="77">GOS 1</text>
+                  <rect x="340" y="150" width="100" height="64" rx="9" fill="#fff" stroke="#737373" stroke-width="1.5"/><text class="t mid" x="390" y="187">GOS 2</text>
+                  <rect x="340" y="260" width="100" height="64" rx="9" fill="#fff" stroke="#737373" stroke-width="1.5"/><text class="t mid" x="390" y="297">GOS 3</text>
+                  <path d="M440 72 H470M440 182 H470M440 292 H470" stroke="rgb(107, 163, 163)" stroke-width="2"/>
+                  <rect x="470" y="36" width="36" height="292" rx="8" fill="rgb(107, 163, 163)"/>
+                  <text x="494" y="182" transform="rotate(-90 494 182)" text-anchor="middle" style="font-size:15px;font-weight:800;fill:#fff;letter-spacing:0.1em">GGG</text>
+                  <path d="M506 72 H530M506 142 H530M506 212 H530M506 282 H530" stroke="rgb(107, 163, 163)" stroke-width="2"/>
+                  <g class="ts">
+                    <rect x="530" y="60" width="96" height="24" rx="12" fill="#fff" stroke="rgb(107, 163, 163)"/><text x="578" y="76" text-anchor="middle">wallets</text>
+                    <rect x="530" y="130" width="96" height="24" rx="12" fill="#fff" stroke="rgb(107, 163, 163)"/><text x="578" y="146" text-anchor="middle">audits</text>
+                    <rect x="530" y="200" width="96" height="24" rx="12" fill="#fff" stroke="rgb(107, 163, 163)"/><text x="578" y="216" text-anchor="middle">assistants</text>
+                    <rect x="530" y="270" width="96" height="24" rx="12" fill="#fff" stroke="rgb(107, 163, 163)"/><text x="578" y="286" text-anchor="middle">other realms</text>
+                  </g>
+                  <text class="ts tt" x="340" y="360">each tool, written once</text>
+                </g>
+              </svg>
+            </div>
+            <ul class="pts">
+              <li class="wc-frag teal" data-frag="0"><span class="wc-label">A GOS runs a realm's acts as software</span><span class="wc-note">Members, departments, votes, budgets, rules. A community that governs itself on one is a realm.</span></li>
+              <li class="wc-frag red" data-frag="1"><span class="wc-label">Without a standard, each GOS is a new silo</span><span class="wc-note">Tools, audits and other realms would have to learn each one.</span></li>
+              <li class="wc-frag" data-frag="2"><span class="wc-label">With one, work is done once</span><span class="wc-note">Wallets, audits, AI assistants and other realms work with every compliant GOS.</span></li>
+            </ul>
+          </div>
+        </section>
+      </div>
+
+      <!-- ======================================================================================
+           Part 2: the standard
+           ====================================================================================== -->
+      <div class="page" data-slide="4">
+        <section class="sl">
+          <header class="box-header"><div class="kicker">The standard <span class="layer std">GGG</span></div><h2>What a good standard is like</h2></header>
+          <p class="lead">Six design principles. Each one keeps the standard useful to every community, and owned by none.</p>
+          <div class="body one">
+            <div class="cards">
+              <div class="card wc-frag" data-frag="0"><h3><svg viewBox="0 0 24 24" fill="none" stroke="rgb(47, 95, 95)" stroke-width="2" stroke-linecap="round"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/></svg>Behaviour, not code</h3><div class="sub">It says what a realm does, not how. Any language, any GOS, any way of storing data, as long as what it shows matches the model.</div></div>
+              <div class="card wc-frag" data-frag="0"><h3><svg viewBox="0 0 24 24" fill="none" stroke="rgb(47, 95, 95)" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h10M4 18h6"/></svg>The model comes first</h3><div class="sub">The model changes first and implementations follow. A conformance suite checks them against it.</div></div>
+              <div class="card wc-frag" data-frag="1"><h3><svg viewBox="0 0 24 24" fill="none" stroke="rgb(47, 95, 95)" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 12h6" stroke-linecap="round"/></svg>Complete, yet optional</h3><div class="sub">Every operation answers. A realm with nothing in a domain is still valid: it answers with an empty list, <code>NotFound</code> or <code>Forbidden</code>.</div></div>
+              <div class="card wc-frag" data-frag="1"><h3><svg viewBox="0 0 24 24" fill="none" stroke="rgb(47, 95, 95)" stroke-width="2" stroke-linecap="round"><circle cx="7" cy="12" r="3"/><circle cx="17" cy="12" r="3"/><path d="M10 12h4"/></svg>Only what others must read</h3><div class="sub">It is not a general data store. It holds what another realm, a tool or the standard itself needs; the rest stays with the realm.</div></div>
+              <div class="card wc-frag" data-frag="2"><h3><svg viewBox="0 0 24 24" fill="none" stroke="rgb(47, 95, 95)" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9M12 3c-2.5 2.6-3.8 5.6-3.8 9s1.3 6.4 3.8 9"/></svg>The world's nouns</h3><div class="sub">Departments, courts, funds, licences, tenders: concepts most governments share. Each country's names and numbers stay in its own legislation.</div></div>
+              <div class="card wc-frag" data-frag="2"><h3><svg viewBox="0 0 24 24" fill="none" stroke="rgb(47, 95, 95)" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M5 7h14M5 7l-3 6h6zM19 7l-3 6h6z"/></svg>No political choice</h3><div class="sub">It records who decided what, by which rule. Which rule is right is each realm's own decision.</div></div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="page" data-slide="5">
+        <section class="sl">
+          <header class="box-header"><div class="kicker">The standard <span class="layer std">GGG</span></div><h2>The ontology: what a realm is made of</h2></header>
+          <p class="lead">One vocabulary of governance, in twelve domains, defined in five ways.</p>
+          <div class="body">
+            <div class="art">
+              <svg viewBox="0 0 640 330" aria-label="A realm and its twelve domains">
+                <g class="fx" data-frag="0">
+                  <rect x="6" y="6" width="628" height="318" rx="20" fill="#fafafa" stroke="#262626" stroke-width="2"/>
+                  <text class="tb" x="28" y="40">A realm</text>
+                  <g class="t">
+                    <rect x="28" y="62" width="135" height="58" rx="9" fill="#fff" stroke="#a3a3a3"/><text x="95" y="96" text-anchor="middle" style="font-size:13px">Membership</text>
+                    <rect x="179" y="62" width="135" height="58" rx="9" fill="#fff" stroke="#a3a3a3"/><text x="246" y="96" text-anchor="middle" style="font-size:13px">Departments</text>
+                    <rect x="330" y="62" width="135" height="58" rx="9" fill="#fff" stroke="#a3a3a3"/><text x="397" y="96" text-anchor="middle" style="font-size:13px">Governance</text>
+                    <rect x="481" y="62" width="135" height="58" rx="9" fill="#fff" stroke="#a3a3a3"/><text x="548" y="96" text-anchor="middle" style="font-size:13px">Finance</text>
+                    <rect x="28" y="136" width="135" height="58" rx="9" fill="#fff" stroke="#a3a3a3"/><text x="95" y="170" text-anchor="middle" style="font-size:13px">Land and NFTs</text>
+                    <rect x="179" y="136" width="135" height="58" rx="9" fill="#fff" stroke="#a3a3a3"/><text x="246" y="170" text-anchor="middle" style="font-size:13px">Licensing</text>
+                    <rect x="330" y="136" width="135" height="58" rx="9" fill="#fff" stroke="#a3a3a3"/><text x="397" y="170" text-anchor="middle" style="font-size:13px">Justice</text>
+                    <rect x="481" y="136" width="135" height="58" rx="9" fill="#fff" stroke="#a3a3a3"/><text x="548" y="170" text-anchor="middle" style="font-size:13px">Procurement</text>
+                    <rect x="28" y="210" width="135" height="58" rx="9" fill="rgba(107,163,163,0.12)" stroke="rgb(107, 163, 163)"/><text x="95" y="236" text-anchor="middle" style="font-size:13px">Quarters and</text><text x="95" y="254" text-anchor="middle" style="font-size:13px">federation</text>
+                    <rect x="179" y="210" width="135" height="58" rx="9" fill="#fff" stroke="#a3a3a3"/><text x="246" y="236" text-anchor="middle" style="font-size:13px">Codex, notices</text><text x="246" y="254" text-anchor="middle" style="font-size:13px">and audit</text>
+                    <rect x="330" y="210" width="135" height="58" rx="9" fill="#fff" stroke="#a3a3a3"/><text x="397" y="236" text-anchor="middle" style="font-size:13px">Setup and</text><text x="397" y="254" text-anchor="middle" style="font-size:13px">administration</text>
+                    <rect x="481" y="210" width="135" height="58" rx="9" fill="#fff" stroke="#a3a3a3"/><text x="548" y="244" text-anchor="middle" style="font-size:13px">Private content</text>
+                  </g>
+                  <text class="ts" x="28" y="300">and across them all: permissions, and invariants that always hold</text>
+                </g>
+              </svg>
+            </div>
+            <ul class="pts">
+              <li class="wc-frag teal" data-frag="0"><span class="wc-label">Entities: what a realm stores</span><span class="wc-note">A member, a department, a proposal, a fund, a court case.</span></li>
+              <li class="wc-frag" data-frag="1"><span class="wc-label">Operations: what changes them</span><span class="wc-note">Join, propose, vote, transfer, appeal. Each one is an act.</span></li>
+              <li class="wc-frag" data-frag="2"><span class="wc-label">Lifecycles: the statuses each follows</span><span class="wc-note">A proposal is voted on, then accepted or rejected.</span></li>
+              <li class="wc-frag" data-frag="3"><span class="wc-label">Invariants: what must always hold</span><span class="wc-note">A member belongs to exactly one home quarter.</span></li>
+              <li class="wc-frag" data-frag="4"><span class="wc-label">Permissions: who may call what</span><span class="wc-note">Every operation names the permission it needs.</span></li>
+            </ul>
+          </div>
+        </section>
+      </div>
+
+      <div class="page" data-slide="6">
+        <section class="sl">
+          <header class="box-header"><div class="kicker">The standard <span class="layer std">GGG</span></div><h2>One act, in GGG terms</h2></header>
+          <p class="lead">Every act becomes an operation that is checked, then recorded as an event that anyone entitled can read.</p>
+          <div class="body">
+            <div class="art">
+              <svg viewBox="0 0 640 400" aria-label="A council proposes a tax policy; the operation is checked and recorded as an event read by tools">
+                <g class="fx" data-frag="0">
+                  <rect x="10" y="10" width="140" height="44" rx="10" fill="#fff" stroke="#737373" stroke-width="1.5"/><text class="t mid" x="80" y="37">the council</text>
+                  <path d="M152 32 H176" stroke="#737373" stroke-width="1.6" marker-end="url(#arr)"/>
+                  <rect x="180" y="12" width="110" height="40" rx="20" fill="#171717"/><text class="t mid tw" x="235" y="37">proposes</text>
+                  <path d="M292 32 H316" stroke="#737373" stroke-width="1.6" marker-end="url(#arr)"/>
+                  <rect x="320" y="10" width="190" height="44" rx="10" fill="#fff" stroke="#737373" stroke-width="1.5"/><text class="t mid" x="415" y="37">the 2027 tax policy</text>
+                </g>
+                <g class="fx" data-frag="1">
+                  <path d="M250 58 V96" stroke="#737373" stroke-width="1.6" marker-end="url(#arr)"/>
+                  <rect x="110" y="100" width="280" height="62" rx="10" fill="#fff" stroke="#262626" stroke-width="1.8"/>
+                  <text class="tm" x="126" y="124" style="font-size:13px">operation: tax_policy_propose</text>
+                  <text class="ts" x="126" y="146">does this caller hold the permission?</text>
+                  <use href="#check" x="358" y="122" width="22" height="22"/>
+                </g>
+                <g class="fx" data-frag="2">
+                  <path d="M250 166 V196" stroke="#737373" stroke-width="1.6" marker-end="url(#arr)"/>
+                  <rect x="70" y="200" width="360" height="186" rx="10" fill="#171717"/>
+                  <text class="tm" x="88" y="226" style="fill:#a3a3a3;font-size:12px">Event {</text>
+                  <text class="tm" x="104" y="248" style="fill:#e5e5e5;font-size:12px">op:     "tax_policy_propose",</text>
+                  <text class="tm" x="104" y="270" style="fill:#e5e5e5;font-size:12px">user:   the council member,</text>
+                  <text class="tm" x="104" y="292" style="fill:#e5e5e5;font-size:12px">args:   { policy: "policy-2027" },</text>
+                  <text class="tm" x="104" y="314" style="fill:#e5e5e5;font-size:12px">result: { Proposed: "P-114" },</text>
+                  <text class="tm" x="104" y="336" style="fill:#e5e5e5;font-size:12px">at:     20 Nov 2026, 09:45</text>
+                  <text class="tm" x="88" y="360" style="fill:#a3a3a3;font-size:12px">}</text>
+                </g>
+                <g class="fx" data-frag="3">
+                  <path d="M434 260 C 470 260, 470 214, 506 214M434 276 C 476 276, 476 262, 506 262M434 292 C 476 292, 476 310, 506 310M434 308 C 470 308, 470 358, 506 358" fill="none" stroke="rgb(107, 163, 163)" stroke-width="1.6"/>
+                  <g class="ts">
+                    <rect x="508" y="200" width="122" height="28" rx="14" fill="#fff" stroke="rgb(107, 163, 163)"/><text x="569" y="219" text-anchor="middle">an audit tool</text>
+                    <rect x="508" y="248" width="122" height="28" rx="14" fill="#fff" stroke="rgb(107, 163, 163)"/><text x="569" y="267" text-anchor="middle">a wallet</text>
+                    <rect x="508" y="296" width="122" height="28" rx="14" fill="#fff" stroke="rgb(107, 163, 163)"/><text x="569" y="315" text-anchor="middle">a parent realm</text>
+                    <rect x="508" y="344" width="122" height="28" rx="14" fill="#fff" stroke="rgb(107, 163, 163)"/><text x="569" y="363" text-anchor="middle">an AI assistant</text>
+                  </g>
+                </g>
+              </svg>
+            </div>
+            <ul class="pts">
+              <li class="wc-frag teal" data-frag="0"><span class="wc-label">Who does what to whom</span><span class="wc-note">The council proposes the realm's tax policy for 2027.</span></li>
+              <li class="wc-frag" data-frag="1"><span class="wc-label">An operation, checked first</span><span class="wc-note">The standard names it and the permission it needs. The realm's own rules can refuse it too.</span></li>
+              <li class="wc-frag" data-frag="2"><span class="wc-label">An event, recorded after</span><span class="wc-note">The same shape in every compliant GOS: what, by whom, with what, when.</span></li>
+              <li class="wc-frag" data-frag="3"><span class="wc-label">Readable by any tool</span><span class="wc-note">Written once, an audit tool or an assistant works with every realm.</span></li>
+            </ul>
+          </div>
+        </section>
+      </div>
+
+      <div class="page" data-slide="7">
+        <section class="sl">
+          <header class="box-header"><div class="kicker">The standard <span class="layer std">GGG</span></div><h2>Compliance can be checked</h2></header>
+          <p class="lead">GGG is a model, an interface and a test suite. A GOS either passes it or it does not.</p>
+          <div class="body">
+            <div class="art">
+              <svg viewBox="0 0 640 360" aria-label="Two GOS implement the ggg.did interface; a conformance suite checks them">
+                <g class="fx" data-frag="0">
+                  <rect x="40" y="150" width="560" height="48" rx="10" fill="rgb(107, 163, 163)"/>
+                  <text class="t mid tw" x="320" y="180">ggg.did: the interface, every entity and operation</text>
+                </g>
+                <g class="fx" data-frag="1">
+                  <rect x="80" y="30" width="210" height="72" rx="10" fill="#fff" stroke="#262626" stroke-width="1.8"/>
+                  <text class="t mid" x="185" y="62">Realms GOS</text><text class="ts mid" x="185" y="82">Python · the reference</text>
+                  <rect x="350" y="30" width="210" height="72" rx="10" fill="#fff" stroke="#737373" stroke-width="1.5"/>
+                  <text class="t mid" x="455" y="62">a minimal GOS</text><text class="ts mid" x="455" y="82">Motoko · a test fixture</text>
+                  <path d="M185 102 V148M455 102 V148" stroke="rgb(107, 163, 163)" stroke-width="3"/>
+                  <text class="ts mid" x="320" y="128">any other GOS, in any language</text>
+                </g>
+                <g class="fx" data-frag="2">
+                  <rect x="200" y="250" width="240" height="64" rx="10" fill="#fff" stroke="#262626" stroke-width="1.8"/>
+                  <text class="t mid" x="320" y="278">conformance suite</text>
+                  <text class="ts mid" x="320" y="298">on mainnet or a local replica</text>
+                  <path d="M320 248 V202" stroke="rgb(47, 95, 95)" stroke-width="1.8" marker-end="url(#arrt)"/>
+                  <use href="#check" x="450" y="268" width="26" height="26"/>
+                </g>
+              </svg>
+            </div>
+            <ul class="pts">
+              <li class="wc-frag teal" data-frag="0"><span class="wc-label">The interface</span><span class="wc-note"><code>ggg.did</code>, in Candid: a record for every entity, a method for every operation.</span></li>
+              <li class="wc-frag" data-frag="1"><span class="wc-label">Any GOS can implement it</span><span class="wc-note">It announces GGG among its supported standards (ICRC-10).</span></li>
+              <li class="wc-frag" data-frag="2"><span class="wc-label">The suite decides</span><span class="wc-note">A GOS is compliant when it passes. Version 0.1.0 today; until 1.0 anything may change.</span></li>
+            </ul>
+          </div>
+        </section>
+      </div>
+
+      <div class="page" data-slide="8">
+        <section class="divider">
+          <div class="kicker">From the standard to an implementation</div>
+          <h2>One GOS that follows it: Realms GOS</h2>
+          <p>GGG names the domains, the operations and the facts each operation carries. How legislation is written, stored and run is each GOS's own choice. The next slides show how Realms GOS does it.</p>
+          <div class="legend"><span><span class="layer std">GGG</span> the standard</span><span><span class="layer">Realms GOS</span> one implementation</span></div>
+        </section>
+      </div>
+
+      <!-- ======================================================================================
+           Part 3: legislation as code
+           ====================================================================================== -->
+      <div class="page" data-slide="9">
+        <section class="sl">
+          <header class="box-header"><div class="kicker">Legislation as code <span class="layer">Realms GOS</span></div><h2>Layers × domains = chapters</h2></header>
+          <p class="lead">Each body that legislates is a layer. Each subject is a domain, named by GGG. One layer's legislation in one domain is a chapter.</p>
+          <div class="body">
+            <div class="art">
+              <svg viewBox="0 0 680 400" aria-label="A grid of layers and domains for València">
+                <g class="fx" data-frag="0">
+                  <text class="ts mid" x="215" y="32" style="font-weight:650">tax</text>
+                  <text class="ts mid" x="310" y="32" style="font-weight:650">procedure</text>
+                  <text class="ts mid" x="405" y="32" style="font-weight:650">water</text>
+                  <text class="ts mid" x="500" y="20" style="font-weight:650">data</text>
+                  <text class="ts mid" x="500" y="34" style="font-weight:650">protection</text>
+                  <text class="ts mid" x="595" y="20" style="font-weight:650">local</text>
+                  <text class="ts mid" x="595" y="34" style="font-weight:650">regime</text>
+                  <text class="t" x="20" y="72">EU</text>
+                  <text class="t" x="20" y="134">Spain</text>
+                  <text class="t" x="20" y="196">Com. Valenciana</text>
+                  <text class="t" x="20" y="252">EMSHI</text><text class="ts" x="20" y="268">water only</text>
+                  <text class="t tt" x="20" y="320">València</text>
+                  <g fill="none" stroke="#e5e5e5" stroke-width="1.5" stroke-dasharray="4 4">
+                    <rect x="180" y="45" width="70" height="44" rx="7"/><rect x="560" y="45" width="70" height="44" rx="7"/>
+                    <rect x="180" y="169" width="70" height="44" rx="7"/><rect x="465" y="169" width="70" height="44" rx="7"/>
+                  </g>
+                  <g>
+                    <rect x="275" y="45" width="70" height="44" rx="7" fill="#fff" stroke="#737373" stroke-width="1.5"/><use href="#doc" x="302" y="54" width="16" height="22"/>
+                    <rect x="370" y="45" width="70" height="44" rx="7" fill="#fff" stroke="#737373" stroke-width="1.5"/><use href="#doc" x="397" y="54" width="16" height="22"/>
+                    <rect x="465" y="45" width="70" height="44" rx="7" fill="#fff" stroke="#737373" stroke-width="1.5"/><use href="#doc" x="492" y="54" width="16" height="22"/>
+                    <rect x="180" y="107" width="70" height="44" rx="7" fill="#fff" stroke="#737373" stroke-width="1.5"/><use href="#doc" x="207" y="116" width="16" height="22"/>
+                    <rect x="275" y="107" width="70" height="44" rx="7" fill="#fff" stroke="#737373" stroke-width="1.5"/><use href="#doc" x="302" y="116" width="16" height="22"/>
+                    <rect x="370" y="107" width="70" height="44" rx="7" fill="#fff" stroke="#737373" stroke-width="1.5"/><use href="#doc" x="397" y="116" width="16" height="22"/>
+                    <rect x="465" y="107" width="70" height="44" rx="7" fill="#fff" stroke="#737373" stroke-width="1.5"/><use href="#doc" x="492" y="116" width="16" height="22"/>
+                    <rect x="560" y="107" width="70" height="44" rx="7" fill="#fff" stroke="#737373" stroke-width="1.5"/><use href="#doc" x="587" y="116" width="16" height="22"/>
+                    <rect x="275" y="169" width="70" height="44" rx="7" fill="#fff" stroke="#737373" stroke-width="1.5"/><use href="#doc" x="302" y="178" width="16" height="22"/>
+                    <rect x="370" y="169" width="70" height="44" rx="7" fill="#fff" stroke="#737373" stroke-width="1.5"/><use href="#doc" x="397" y="178" width="16" height="22"/>
+                    <rect x="560" y="169" width="70" height="44" rx="7" fill="#fff" stroke="#737373" stroke-width="1.5"/><use href="#doc" x="587" y="178" width="16" height="22"/>
+                    <rect x="370" y="231" width="70" height="44" rx="7" fill="#fafafa" stroke="#737373" stroke-width="1.5" stroke-dasharray="5 4"/><use href="#doc" x="397" y="240" width="16" height="22"/>
+                    <rect x="180" y="297" width="70" height="44" rx="7" fill="#fff" stroke="#737373" stroke-width="1.5"/><use href="#doc" x="207" y="306" width="16" height="22"/>
+                    <rect x="275" y="297" width="70" height="44" rx="7" fill="#fff" stroke="#737373" stroke-width="1.5"/><use href="#doc" x="302" y="306" width="16" height="22"/>
+                    <rect x="370" y="297" width="70" height="44" rx="7" fill="#fff" stroke="#737373" stroke-width="1.5"/><use href="#doc" x="397" y="306" width="16" height="22"/>
+                    <rect x="465" y="297" width="70" height="44" rx="7" fill="#fff" stroke="#737373" stroke-width="1.5"/><use href="#doc" x="492" y="306" width="16" height="22"/>
+                    <rect x="560" y="297" width="70" height="44" rx="7" fill="#fff" stroke="#737373" stroke-width="1.5"/><use href="#doc" x="587" y="306" width="16" height="22"/>
+                  </g>
+                  <text class="tm" x="180" y="392">legislation/eu/es/tax.py · legislation/eu/es/vc/46250-valencia/tax.py</text>
+                </g>
+                <g class="fxu" data-until="2"><g class="fx" data-frag="1">
+                  <rect x="364" y="39" width="82" height="308" rx="11" fill="rgba(107,163,163,0.10)" stroke="rgb(107, 163, 163)" stroke-width="2"/>
+                  <path d="M454 60 V330" stroke="rgb(47, 95, 95)" stroke-width="2" marker-end="url(#arrt)"/>
+                  <text class="ts tt mid" x="405" y="366" style="font-weight:650">water: five layers</text>
+                </g></g>
+                <g class="fx" data-frag="2">
+                  <rect x="174" y="101" width="82" height="246" rx="11" fill="rgba(107,163,163,0.10)" stroke="rgb(107, 163, 163)" stroke-width="2"/>
+                  <path d="M262 130 V316" stroke="rgb(47, 95, 95)" stroke-width="2" marker-end="url(#arrt)"/>
+                  <text class="ts tt" x="174" y="366" style="font-weight:650">tax: Spain, then València</text>
+                </g>
+              </svg>
+            </div>
+            <ul class="pts">
+              <li class="wc-frag teal" data-frag="0"><span class="wc-label">A chapter is one Python file</span><span class="wc-note">Kept in a public repository, realms-codices. A missing file is an empty chapter.</span></li>
+              <li class="wc-frag" data-frag="1"><span class="wc-label">A layer path per domain</span><span class="wc-note">València's water runs through the EU, Spain, the Comunitat Valenciana, the water body EMSHI and València itself.</span></li>
+              <li class="wc-frag" data-frag="2"><span class="wc-label">Empty layers are skipped</span><span class="wc-note">València's tax is Spain's chapter, then València's own.</span></li>
+            </ul>
+          </div>
+        </section>
+      </div>
+
+      <div class="page" data-slide="10">
+        <section class="sl">
+          <header class="box-header"><div class="kicker">Legislation as code <span class="layer">Realms GOS</span></div><h2>Marks: what a lower layer may do</h2></header>
+          <p class="lead">The layer above marks each setting and method. The realm enforces the mark when it installs and when it runs.</p>
+          <div class="body one">
+            <div class="cards">
+              <div class="card wc-frag" data-frag="0">
+                <h3><svg viewBox="0 0 20 22"><use href="#lock"/></svg>fixed</h3>
+                <div class="who">Spain · register</div>
+                <div class="mini">authority = fixed(Ref("authority", "INE"),
+    legislation="Ley 7/1985 Art. 17.3")</div>
+                <div class="who">València · register</div>
+                <div class="mini">authority = Ref("authority", "Ajuntament")</div>
+                <div class="res no"><svg viewBox="0 0 20 20"><use href="#cross"/></svg>Refused: a lower layer may not redefine it</div>
+              </div>
+              <div class="card wc-frag" data-frag="1">
+                <h3><svg viewBox="0 0 24 24" fill="none" stroke="#262626" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h11M4 12h7M4 17h11"/><path d="M17 14l3 3-3 3"/></svg>overridable</h3>
+                <div class="who">Spain · procedure</div>
+                <div class="mini">decision_deadline_days = overridable(90,
+    legislation="Ley 39/2015 Art. 21.3")</div>
+                <div class="who">València · procedure</div>
+                <div class="mini">decision_deadline_days = 60</div>
+                <div class="res ok"><svg viewBox="0 0 20 20"><use href="#check"/></svg>The lowest value holds: València runs 60 days</div>
+              </div>
+              <div class="card wc-frag" data-frag="2">
+                <h3><svg viewBox="0 0 24 24" fill="none" stroke="#262626" stroke-width="2.2" stroke-linecap="round"><path d="M5 4v16M12 8v12M19 12v8"/></svg>extension</h3>
+                <div class="who">Spain, then CV, then València · local regime</div>
+                <div class="mini">@extension(legislation="Ley 7/1985 Art. 70.2")
+def on_codex_install(self, event):
+    ...</div>
+                <div class="sub">Spain tells the State and the region; CV records missing languages; València tells every resident.</div>
+                <div class="res ok"><svg viewBox="0 0 20 20"><use href="#check"/></svg>Every layer's definition runs, top to bottom</div>
+              </div>
+              <div class="card wide wc-frag" data-frag="3">
+                <h3><svg viewBox="0 0 24 24" fill="none" stroke="#b94a48" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M6 18L18 6"/></svg>forbid</h3>
+                <div><div class="who">Spain · procedure</div><div class="mini">over_six_months = forbid(
+    "procedure.set",
+    F.decision_deadline_days &gt; 183)</div></div>
+                <div><div class="who">València proposes</div><div class="mini">decision_deadline_days = 200</div></div>
+                <div class="res no"><svg viewBox="0 0 20 20"><use href="#cross"/></svg>Refused. Forbids are never overridden or removed: every layer's forbids apply.</div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="page" data-slide="11">
+        <section class="sl">
+          <header class="box-header"><div class="kicker">Legislation as code <span class="layer">Realms GOS</span></div><h2>A chapter is a Python class</h2></header>
+          <p class="lead">Short, readable, and citing its legislation line by line. Most towns write almost nothing: they inherit.</p>
+          <div class="body">
+            <div class="codes">
+              <div class="wc-frag" data-frag="0">
+                <div class="codehead">Spain · legislation/eu/es/procedure.py</div>
+<div class="code"><span class="k">class</span> <span class="h">Procedure</span>(above(<span class="s">"procedure"</span>)):
+    decision_deadline_days = overridable(<span class="n">90</span>,
+        legislation=<span class="s">"Ley 39/2015 Art. 21.3"</span>)
+
+    over_six_months = forbid(<span class="s">"procedure.set"</span>,
+        F.decision_deadline_days &gt; <span class="n">183</span>,
+        legislation=<span class="s">"Ley 39/2015 Art. 21.2"</span>)
+
+    <span class="k">def</span> <span class="h">on_license_apply</span>(self, event):
+        <span class="c"># runs after GGG's license_apply</span>
+        event.decision_due = self.days_after(
+            event.at, self.decision_deadline_days)</div>
+              </div>
+              <div class="wc-frag" data-frag="2">
+                <div class="codehead">València · legislation/eu/es/vc/46250-valencia/procedure.py</div>
+<div class="code"><span class="k">class</span> <span class="h">Procedure</span>(above(<span class="s">"procedure"</span>)):
+    decision_deadline_days = <span class="n">60</span></div>
+              </div>
+            </div>
+            <ul class="pts">
+              <li class="wc-frag teal" data-frag="0"><span class="wc-label">One class per chapter</span><span class="wc-note">It extends the same domain one layer up: <code>above("procedure")</code>.</span></li>
+              <li class="wc-frag" data-frag="1"><span class="wc-label">Method names are GGG's</span><span class="wc-note"><code>check_&lt;operation&gt;</code> runs before an operation and may refuse it. <code>on_&lt;operation&gt;</code> runs after it.</span></li>
+              <li class="wc-frag" data-frag="2"><span class="wc-label">A town changes one line</span><span class="wc-note">València keeps everything above and sets its own deadline.</span></li>
+              <li class="wc-frag" data-frag="3"><span class="wc-label">Every rule cites its source</span><span class="wc-note">The article it implements travels with it, into the realm and onto its public record.</span></li>
+            </ul>
+          </div>
+        </section>
+      </div>
+
+      <div class="page" data-slide="12">
+        <section class="sl">
+          <header class="box-header"><div class="kicker">Legislation as code <span class="layer">Realms GOS</span></div><h2>Cedar for rules, a sandbox for code</h2></header>
+          <p class="lead">Nobody writes Cedar by hand, and no chapter can reach outside its sandbox.</p>
+          <div class="body one">
+            <div class="cards two">
+              <div class="card wc-frag" data-frag="0">
+                <h3><svg viewBox="0 0 24 24" fill="none" stroke="#b94a48" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M6 18L18 6"/></svg>A forbid becomes Cedar</h3>
+                <div class="who">written in the chapter</div>
+                <div class="mini">F.decision_deadline_days &gt; 183</div>
+                <div class="who">generated when the realm installs it</div>
+                <div class="mini">forbid (principal,
+  action == Realm::Action::"procedure.set",
+  resource)
+when { context.facts.decision_deadline_days &gt; 183 };</div>
+                <div class="sub">Cedar is a policy language whose rules can be validated and analysed. Its validator runs at install; off-chain, its analysis shows what a change newly forbids or allows.</div>
+              </div>
+              <div class="card wc-frag" data-frag="1">
+                <h3><svg viewBox="0 0 24 24" fill="none" stroke="#262626" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 12h8M12 8v8" stroke-linecap="round"/></svg>Hooks and guards run in a sandbox</h3>
+                <ul>
+                  <li>Only the realm's SDK can be imported</li>
+                  <li>No files, no network, no <code>eval</code>, no reaching into Python's internals</li>
+                  <li>A chapter calls another domain through the realm, never directly</li>
+                  <li>A guard that fails refuses the operation; a hook that fails is reported to the realm's IT team</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- ======================================================================================
+           Part 4: realms and quarters
+           ====================================================================================== -->
+      <div class="page" data-slide="13">
+        <section class="sl">
+          <header class="box-header"><div class="kicker">Realms and quarters <span class="layer">Realms GOS</span></div><h2>What a canister is</h2></header>
+          <p class="lead">Realms GOS runs on the Internet Computer. Each piece of a realm is a canister.</p>
+          <div class="body">
+            <div class="art">
+              <svg viewBox="0 0 640 400" aria-label="A canister holds code and data, runs on every node of a subnet, pays in cycles and sends messages">
+                <g class="fx" data-frag="0">
+                  <polygon points="140,90 180,50 420,50 380,90" fill="#fafafa" stroke="#737373" stroke-width="1.8" stroke-linejoin="round"/>
+                  <rect x="140" y="90" width="240" height="190" rx="4" fill="#fff" stroke="#737373" stroke-width="1.8"/>
+                  <polygon points="380,90 420,50 420,240 380,280" fill="#ececec" stroke="#737373" stroke-width="1.8" stroke-linejoin="round"/>
+                  <rect x="160" y="110" width="200" height="66" rx="6" fill="#171717"/>
+                  <text class="t mid tw" x="260" y="140">code</text><text class="ts mid" x="260" y="160" style="fill:#d4d4d4">WebAssembly</text>
+                  <rect x="160" y="190" width="200" height="72" rx="6" fill="rgba(107,163,163,0.12)" stroke="rgb(107, 163, 163)"/>
+                  <text class="t mid tt" x="260" y="222">data</text><text class="ts mid tt" x="260" y="242">its own memory</text>
+                  <text class="t mid" x="260" y="304">a canister</text>
+                </g>
+                <g class="fx" data-frag="1">
+                  <g fill="#fff" stroke="#a3a3a3" stroke-width="1.3">
+                    <rect x="64" y="350" width="26" height="22" rx="3"/><rect x="104" y="350" width="26" height="22" rx="3"/><rect x="144" y="350" width="26" height="22" rx="3"/><rect x="184" y="350" width="26" height="22" rx="3"/><rect x="224" y="350" width="26" height="22" rx="3"/><rect x="264" y="350" width="26" height="22" rx="3"/><rect x="304" y="350" width="26" height="22" rx="3"/><rect x="344" y="350" width="26" height="22" rx="3"/><rect x="384" y="350" width="26" height="22" rx="3"/><rect x="424" y="350" width="26" height="22" rx="3"/>
+                  </g>
+                  <path d="M260 312 L77 348M260 312 L437 348M260 312 V348" stroke="#d4d4d4" stroke-width="1.3" fill="none"/>
+                  <text class="ts" x="64" y="392">a subnet: every node runs the same canister and agrees on each step</text>
+                </g>
+                <g class="fx" data-frag="2">
+                  <rect x="470" y="60" width="64" height="30" rx="5" fill="#fff" stroke="#262626" stroke-width="1.8"/>
+                  <rect x="534" y="68" width="6" height="14" rx="1.5" fill="#262626"/>
+                  <rect x="475" y="65" width="40" height="20" rx="2" fill="rgb(107, 163, 163)"/>
+                  <text class="ts" x="470" y="110">cycles: it pays</text>
+                  <text class="ts" x="470" y="125">for its own computing</text>
+                </g>
+                <g class="fx" data-frag="3">
+                  <use href="#can" x="520" y="200" width="56" height="47"/>
+                  <use href="#can" x="520" y="270" width="56" height="47"/>
+                  <path class="flow" d="M424 200 C 470 200, 480 222, 516 222M424 230 C 470 240, 480 290, 516 292" fill="none" stroke="rgb(107, 163, 163)" stroke-width="2"/>
+                  <text class="ts" x="470" y="186">messages to other canisters</text>
+                </g>
+              </svg>
+            </div>
+            <ul class="pts">
+              <li class="wc-frag teal" data-frag="0"><span class="wc-label">A program with its own memory</span><span class="wc-note">Code and data together, upgraded in place: new code, same data.</span></li>
+              <li class="wc-frag" data-frag="1"><span class="wc-label">Run by a whole subnet</span><span class="wc-note">Many independent nodes run it and must agree. No single operator can change it alone.</span></li>
+              <li class="wc-frag" data-frag="2"><span class="wc-label">It pays its own way</span><span class="wc-note">In cycles, topped up like a prepaid meter.</span></li>
+              <li class="wc-frag" data-frag="3"><span class="wc-label">It talks by messages</span><span class="wc-note">That is how a realm's canisters, and realms themselves, work together.</span></li>
+            </ul>
+          </div>
+        </section>
+      </div>
+
+      <div class="page" data-slide="14">
+        <section class="sl">
+          <header class="box-header"><div class="kicker">Realms and quarters <span class="layer std">GGG</span></div><h2>A realm is one codex, split by people</h2></header>
+          <p class="lead">Every canister of a realm runs the very same codex. A realm grows by adding quarters, each holding part of its members.</p>
+          <div class="body">
+            <div class="art">
+              <svg viewBox="0 0 640 500" aria-label="Not split by function; a capital quarter and quarters, each holding members, all with the same codex">
+                <g class="fx" data-frag="3">
+                  <text class="ts" x="20" y="22" style="font-weight:650">not split by function</text>
+                  <g class="ts">
+                    <rect x="20" y="32" width="96" height="30" rx="8" fill="#fff" stroke="#d4d4d4"/><text x="68" y="52" text-anchor="middle">tax canister</text>
+                    <rect x="126" y="32" width="120" height="30" rx="8" fill="#fff" stroke="#d4d4d4"/><text x="186" y="52" text-anchor="middle">register canister</text>
+                    <rect x="256" y="32" width="104" height="30" rx="8" fill="#fff" stroke="#d4d4d4"/><text x="308" y="52" text-anchor="middle">votes canister</text>
+                  </g>
+                  <path d="M14 70 L366 26" stroke="#b94a48" stroke-width="2.4"/>
+                  <text class="ts tr" x="380" y="52">every act would cross canisters</text>
+                </g>
+                <g transform="translate(0 80)">
+                  <g class="fx" data-frag="0">
+                    <rect x="20" y="10" width="600" height="400" rx="22" fill="none" stroke="#a3a3a3" stroke-width="1.5" stroke-dasharray="7 6"/>
+                    <text class="t" x="44" y="42">València · one realm</text>
+                    <use href="#can" x="288" y="76" width="64" height="54"/><use href="#flag" x="301" y="52" width="20" height="24"/>
+                    <rect x="362" y="84" width="86" height="22" rx="11" fill="rgba(107,163,163,0.12)" stroke="rgb(107, 163, 163)" stroke-width="1.3"/>
+                    <text class="tm mid tt" x="405" y="99">codex 9f3c</text>
+                    <text class="t mid" x="320" y="152">capital quarter</text>
+                    <text class="ts mid" x="320" y="169">directory · realm-wide votes · door to other realms</text>
+                  </g>
+                  <g class="fx" data-frag="1">
+                    <path d="M300 178 L132 232M320 178 V232M340 178 L508 232" stroke="#d4d4d4" stroke-width="1.6" fill="none"/>
+                    <path class="flow" d="M300 178 L132 232M320 178 V232M340 178 L508 232" stroke="rgb(107, 163, 163)" stroke-width="1.6" fill="none"/>
+                    <use href="#can" x="100" y="234" width="64" height="54"/>
+                    <use href="#can" x="288" y="234" width="64" height="54"/>
+                    <use href="#can" x="476" y="234" width="64" height="54"/>
+                    <text class="tb mid" x="414" y="268" style="fill:#a3a3a3">· · ·</text>
+                    <text class="ts mid" x="132" y="304">quarter 1</text>
+                    <text class="ts mid" x="320" y="304">quarter 2</text>
+                    <text class="ts mid" x="508" y="304">quarter 404</text>
+                    <rect x="94" y="312" width="76" height="20" rx="10" fill="rgba(107,163,163,0.12)" stroke="rgb(107, 163, 163)" stroke-width="1.2"/><text class="tm mid tt" x="132" y="326">codex 9f3c</text>
+                    <rect x="282" y="312" width="76" height="20" rx="10" fill="rgba(107,163,163,0.12)" stroke="rgb(107, 163, 163)" stroke-width="1.2"/><text class="tm mid tt" x="320" y="326">codex 9f3c</text>
+                    <rect x="470" y="312" width="76" height="20" rx="10" fill="rgba(107,163,163,0.12)" stroke="rgb(107, 163, 163)" stroke-width="1.2"/><text class="tm mid tt" x="508" y="326">codex 9f3c</text>
+                  </g>
+                  <g class="fx" data-frag="2">
+                    <g fill="#a3a3a3">
+                      <use href="#person" x="102" y="342" width="11" height="16"/><use href="#person" x="118" y="342" width="11" height="16"/><use href="#person" x="134" y="342" width="11" height="16"/><use href="#person" x="150" y="342" width="11" height="16"/>
+                      <use href="#person" x="290" y="342" width="11" height="16"/><use href="#person" x="306" y="342" width="11" height="16"/><use href="#person" x="322" y="342" width="11" height="16"/><use href="#person" x="338" y="342" width="11" height="16"/>
+                      <use href="#person" x="478" y="342" width="11" height="16"/><use href="#person" x="494" y="342" width="11" height="16"/><use href="#person" x="510" y="342" width="11" height="16"/><use href="#person" x="526" y="342" width="11" height="16"/>
+                    </g>
+                    <text class="ts mid" x="320" y="388">about 808,000 residents ÷ 2,000 members per quarter ≈ 404 quarters</text>
+                  </g>
+                </g>
+              </svg>
+            </div>
+            <ul class="pts">
+              <li class="wc-frag teal" data-frag="0"><span class="wc-label">The capital quarter</span><span class="wc-note">It holds the directory of quarters, runs realm-wide votes, and is the realm's only door to other realms.</span></li>
+              <li class="wc-frag" data-frag="1"><span class="wc-label">Quarters: same codex, more room</span><span class="wc-note">A quarter that runs another codex is flagged as drifting.</span></li>
+              <li class="wc-frag" data-frag="2"><span class="wc-label">Each quarter is complete for its members</span><span class="wc-note">A member has exactly one home quarter, with everything that member needs.</span></li>
+              <li class="wc-frag" data-frag="3"><span class="wc-label">Split by people, not by function</span><span class="wc-note">Most acts then stay inside one canister.</span></li>
+            </ul>
+          </div>
+        </section>
+      </div>
+
+      <div class="page" data-slide="15">
+        <section class="sl">
+          <header class="box-header"><div class="kicker">Realms and quarters <span class="layer std">GGG</span></div><h2>From countries and cities to realms, zones and quarters</h2></header>
+          <p class="lead">One rule decides: a body that makes its own legislation is a realm. Everything else is a zone inside it, or capacity.</p>
+          <div class="body">
+            <div class="art">
+              <svg viewBox="0 0 640 420" aria-label="Bodies that legislate are realms, areas are zones, quarters are capacity">
+                <g class="fx" data-frag="0">
+                  <rect x="10" y="10" width="620" height="130" rx="14" fill="#fff" stroke="#262626" stroke-width="1.8"/>
+                  <text class="t" x="28" y="38">makes its own legislation</text>
+                  <text class="ts tt" x="28" y="56" style="font-weight:650">→ a realm</text>
+                  <g class="ts">
+                    <rect x="28" y="72" width="88" height="50" rx="9" fill="#fafafa" stroke="#a3a3a3"/><text x="72" y="102" text-anchor="middle">a State</text>
+                    <rect x="124" y="72" width="104" height="50" rx="9" fill="#fafafa" stroke="#a3a3a3"/><text x="176" y="94" text-anchor="middle">an autonomous</text><text x="176" y="109" text-anchor="middle">community</text>
+                    <rect x="236" y="72" width="96" height="50" rx="9" fill="#fafafa" stroke="#a3a3a3"/><text x="284" y="94" text-anchor="middle">a foral</text><text x="284" y="109" text-anchor="middle">province</text>
+                    <rect x="340" y="72" width="96" height="50" rx="9" fill="#fafafa" stroke="#a3a3a3"/><text x="388" y="102" text-anchor="middle">a municipality</text>
+                    <rect x="444" y="72" width="168" height="50" rx="9" fill="#fafafa" stroke="#a3a3a3" stroke-dasharray="5 4"/><text x="528" y="94" text-anchor="middle">a body of several towns</text><text x="528" y="109" text-anchor="middle">(water, waste)</text>
+                  </g>
+                </g>
+                <g class="fx" data-frag="1">
+                  <rect x="10" y="156" width="620" height="110" rx="14" fill="#fff" stroke="#737373" stroke-width="1.5"/>
+                  <text class="t" x="28" y="184">administers an area</text>
+                  <text class="ts tt" x="28" y="202" style="font-weight:650">→ a zone inside a realm</text>
+                  <path d="M300 178 l60 -10 l40 30 l-20 44 l-60 6 l-30 -36z" fill="rgba(107,163,163,0.15)" stroke="rgb(107, 163, 163)" stroke-width="1.6"/>
+                  <path d="M400 198 l70 -14 l40 40 l-40 26 l-50 -8z" fill="#fafafa" stroke="#a3a3a3" stroke-width="1.4"/>
+                  <text class="ts" x="520" y="196">a district,</text><text class="ts" x="520" y="212">a neighbourhood</text>
+                  <text class="ts" x="28" y="232">Madrid's 21 districts:</text>
+                  <text class="ts" x="28" y="248">about 160,000 residents each</text>
+                </g>
+                <g class="fx" data-frag="2">
+                  <rect x="10" y="282" width="620" height="110" rx="14" fill="#fff" stroke="#737373" stroke-width="1.5"/>
+                  <text class="t" x="28" y="310">holds members, for capacity</text>
+                  <text class="ts tt" x="28" y="328" style="font-weight:650">→ a quarter, with no territory</text>
+                  <use href="#can" x="300" y="304" width="44" height="37"/><use href="#can" x="352" y="304" width="44" height="37"/><use href="#can" x="404" y="304" width="44" height="37"/>
+                  <text class="tb" x="460" y="330" style="fill:#a3a3a3">· · ·</text>
+                  <use href="#can" x="500" y="304" width="44" height="37"/>
+                  <text class="ts" x="300" y="366">2,000 members each, wherever they live</text>
+                </g>
+                <g class="fx" data-frag="3">
+                  <text class="ts" x="10" y="414">Provinces without legislation of their own, and comarcas, are left out for now.</text>
+                </g>
+              </svg>
+            </div>
+            <ul class="pts">
+              <li class="wc-frag teal" data-frag="0"><span class="wc-label">Legislates: a realm</span><span class="wc-note">Each realm has at most one parent: València's is the Comunitat Valenciana, whose parent is Spain.</span></li>
+              <li class="wc-frag" data-frag="1"><span class="wc-label">Administers: a zone</span><span class="wc-note">A district is an area of the city, far larger than one quarter. A district board is a department of the realm.</span></li>
+              <li class="wc-frag" data-frag="2"><span class="wc-label">Capacity: a quarter</span><span class="wc-note">Members fill quarters by capacity. A realm may keep neighbours together, but never has to.</span></li>
+              <li class="wc-frag" data-frag="3"><span class="wc-label">A parent is not every source</span><span class="wc-note">A water body or the EU can be a layer of a realm's codex without being its parent.</span></li>
+            </ul>
+          </div>
+        </section>
+      </div>
+
+      <div class="page" data-slide="16">
+        <section class="sl">
+          <header class="box-header"><div class="kicker">Realms and quarters</div><h2>Splitting by people: what it costs and what it buys</h2></header>
+          <p class="lead">Quarters make a realm grow without limit, at the price of more coordination.</p>
+          <div class="body one">
+            <div class="cards two">
+              <div class="card pro wc-frag" data-frag="0">
+                <h3>What it buys</h3>
+                <ul>
+                  <li>A realm scales out: one more quarter for every 2,000 members</li>
+                  <li>Each quarter is complete, so a failure stays in one quarter</li>
+                  <li>Members' acts mostly stay inside their own canister</li>
+                  <li>One codex and one program everywhere: one audit covers all</li>
+                  <li>Splitting, merging or leaving is a single act</li>
+                </ul>
+              </div>
+              <div class="card con wc-frag" data-frag="1">
+                <h3>What it costs</h3>
+                <ul>
+                  <li>A realm-wide vote needs one leg in every quarter</li>
+                  <li>No central list of who lives where: a member's quarter is found by a pointer or a search</li>
+                  <li>A member who moves leaves a signed forward behind</li>
+                  <li>Every quarter pays for its own computing</li>
+                  <li>During a codex switch, quarters briefly run different codices</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="page" data-slide="17">
+        <section class="sl">
+          <header class="box-header"><div class="kicker">Realms and quarters <span class="layer std">GGG</span></div><h2>Realms find each other, capital to capital</h2></header>
+          <p class="lead">A realm says how outsiders name it, and its parent confirms it. Only capitals talk to other realms.</p>
+          <div class="body">
+            <div class="art">
+              <svg viewBox="0 0 640 430" aria-label="Spain, the Comunitat Valenciana and València linked capital to capital; a stranger's claim is refused">
+                <g class="fx" data-frag="0">
+                  <use href="#can" x="80" y="30" width="56" height="47"/><use href="#flag" x="91" y="10" width="18" height="21"/>
+                  <text class="t" x="150" y="52">Spain</text>
+                  <rect x="150" y="60" width="96" height="20" rx="10" fill="rgba(107,163,163,0.12)" stroke="rgb(107, 163, 163)"/><text class="tm mid tt" x="198" y="74">iso: ES</text>
+                  <use href="#can" x="80" y="160" width="56" height="47"/><use href="#flag" x="91" y="140" width="18" height="21"/>
+                  <text class="t" x="150" y="182">Com. Valenciana</text>
+                  <rect x="150" y="190" width="112" height="20" rx="10" fill="rgba(107,163,163,0.12)" stroke="rgb(107, 163, 163)"/><text class="tm mid tt" x="206" y="204">iso: ES-VC</text>
+                  <use href="#can" x="80" y="290" width="56" height="47"/><use href="#flag" x="91" y="270" width="18" height="21"/>
+                  <text class="t tt" x="150" y="312">València</text>
+                  <rect x="150" y="320" width="112" height="20" rx="10" fill="rgba(107,163,163,0.12)" stroke="rgb(107, 163, 163)"/><text class="tm mid tt" x="206" y="334">es:ine 46250</text>
+                </g>
+                <g class="fx" data-frag="1">
+                  <path d="M108 80 V156M108 210 V286" stroke="rgb(47, 95, 95)" stroke-width="3"/>
+                  <use href="#check" x="74" y="108" width="22" height="22"/>
+                  <use href="#check" x="74" y="238" width="22" height="22"/>
+                  <text class="ts tt end" x="68" y="124" style="font-weight:650">confirmed</text>
+                  <text class="ts tt end" x="68" y="254" style="font-weight:650">confirmed</text>
+                </g>
+                <g class="fx" data-frag="2">
+                  <use href="#can" x="300" y="370" width="40" height="34"/><use href="#can" x="360" y="370" width="40" height="34"/><use href="#can" x="420" y="370" width="40" height="34"/>
+                  <path d="M108 340 C 120 380, 280 370, 318 380M108 340 C 130 390, 340 384, 378 384M108 340 C 140 400, 400 392, 438 386" fill="none" stroke="#d4d4d4" stroke-width="1.5"/>
+                  <text class="ts" x="470" y="392">València's quarters talk</text>
+                  <text class="ts" x="470" y="406">only to its capital</text>
+                </g>
+                <g class="fx" data-frag="3">
+                  <use href="#can" x="470" y="160" width="56" height="47"/>
+                  <text class="t" x="440" y="232">a stranger's canister</text>
+                  <text class="tm tr" x="452" y="250">"es:ine 46250"</text>
+                  <path d="M466 184 C 400 190, 330 196, 270 200" fill="none" stroke="#b94a48" stroke-width="1.8" stroke-dasharray="5 5" marker-end="url(#arrr)"/>
+                  <use href="#cross" x="340" y="180" width="24" height="24"/>
+                  <text class="ts tr" x="300" y="216" style="font-weight:650">not registered: no link</text>
+                </g>
+              </svg>
+            </div>
+            <ul class="pts">
+              <li class="wc-frag teal" data-frag="0"><span class="wc-label">Identifiers that outsiders use</span><span class="wc-note">An ISO code, a national statistics code: whatever others already call the body.</span></li>
+              <li class="wc-frag" data-frag="1"><span class="wc-label">Both sides must agree</span><span class="wc-note">The parent registers the member by its own vote and checks the code; the member joins by its own vote.</span></li>
+              <li class="wc-frag" data-frag="2"><span class="wc-label">Capitals are the doors</span><span class="wc-note">Quarters talk only to their own capital. Outsiders never see them.</span></li>
+              <li class="wc-frag red" data-frag="3"><span class="wc-label">A claim alone confirms nothing</span><span class="wc-note">A registry may cache who is who; the tree of confirmed links is the authority.</span></li>
+            </ul>
+          </div>
+        </section>
+      </div>
+
+      <div class="page" data-slide="18">
+        <section class="sl">
+          <header class="box-header"><div class="kicker">Realms and quarters <span class="layer">Realms GOS</span></div><h2>How the codex travels</h2></header>
+          <p class="lead">Between realms, from capital to capital. Inside a realm, from the capital to its quarters. Always pinned by checksum.</p>
+          <div class="body">
+            <div class="art">
+              <svg viewBox="0 0 640 430" aria-label="Spain's chapter reaches València through its parent or directly, checked against Spain's record, then goes to the quarters">
+                <g class="fx" data-frag="0">
+                  <use href="#can" x="60" y="40" width="64" height="54"/><use href="#flag" x="73" y="16" width="20" height="24"/>
+                  <text class="t mid" x="92" y="114">Spain</text>
+                  <rect x="160" y="30" width="222" height="70" rx="9" fill="#fff" stroke="#262626" stroke-width="1.8"/>
+                  <text class="ts" x="174" y="50" style="font-weight:650">Spain's published record</text>
+                  <text class="tm" x="174" y="70">release 2.4.0 · tax.py</text>
+                  <text class="tm tt" x="174" y="88">sha256 4be1… · from 1 Jan 2027</text>
+                  <use href="#can" x="470" y="150" width="64" height="54"/><use href="#flag" x="483" y="126" width="20" height="24"/>
+                  <text class="t mid" x="502" y="224">Com. Valenciana</text>
+                  <use href="#can" x="60" y="270" width="64" height="54"/><use href="#flag" x="73" y="246" width="20" height="24"/>
+                  <text class="t mid tt" x="92" y="344">València</text>
+                </g>
+                <g class="fx" data-frag="1">
+                  <path class="flow" d="M126 84 C 250 150, 420 120, 478 146" fill="none" stroke="rgb(107, 163, 163)" stroke-width="2.2"/>
+                  <path d="M470 200 C 380 270, 220 290, 132 292" fill="none" stroke="rgb(107, 163, 163)" stroke-width="2.2" stroke-dasharray="5 7" class="flow" marker-end="url(#arrt)"/>
+                  <text class="ts tt" x="300" y="236" style="font-weight:650">through the parent</text>
+                  <path class="flow" d="M92 120 V240" stroke="#737373" stroke-width="2" marker-end="url(#arr)"/>
+                  <text class="ts" x="104" y="190" style="font-weight:650">or from the source</text>
+                </g>
+                <g class="fx" data-frag="2">
+                  <use href="#check" x="136" y="300" width="24" height="24"/>
+                  <text class="ts tt" x="166" y="310" style="font-weight:650">sha256 matches Spain's record</text>
+                  <text class="ts tt" x="166" y="324">a parent can relay, never alter</text>
+                </g>
+                <g class="fx" data-frag="3">
+                  <use href="#can" x="250" y="370" width="40" height="34"/><use href="#can" x="320" y="370" width="40" height="34"/><use href="#can" x="390" y="370" width="40" height="34"/>
+                  <text class="tb" x="444" y="394" style="fill:#a3a3a3">· · ·</text>
+                  <path class="flow" d="M112 340 C 200 370, 240 380, 252 384M112 344 C 240 380, 300 384, 322 386M112 348 C 260 390, 370 390, 392 388" fill="none" stroke="rgb(107, 163, 163)" stroke-width="1.6"/>
+                  <text class="ts" x="490" y="384">quarters fetch from</text>
+                  <text class="ts" x="490" y="398">their own capital</text>
+                </g>
+              </svg>
+            </div>
+            <ul class="pts">
+              <li class="wc-frag teal" data-frag="0"><span class="wc-label">The source's record is the authority</span><span class="wc-note">Which version is in force, its checksum and its date come from the body that adopted it.</span></li>
+              <li class="wc-frag" data-frag="1"><span class="wc-label">Two routes for the bytes</span><span class="wc-note">Through the parent's capital, or straight from the source. Canister to canister, no web request is needed.</span></li>
+              <li class="wc-frag" data-frag="2"><span class="wc-label">Checked on arrival</span><span class="wc-note">A copy that does not match the source's checksum is refused.</span></li>
+              <li class="wc-frag" data-frag="3"><span class="wc-label">Then down to the quarters</span><span class="wc-note">Each quarter stages the new codex, and all switch at a set time.</span></li>
+            </ul>
+          </div>
+        </section>
+      </div>
+
+      <div class="page" data-slide="19">
+        <section class="sl">
+          <header class="box-header"><div class="kicker">Realms and quarters <span class="layer">Realms GOS</span></div><h2>Casals runs the canisters</h2></header>
+          <p class="lead">Casals is an open-source orchestrator for fleets of canisters. Realms GOS uses it to create, upgrade and grow realms.</p>
+          <div class="body">
+            <div class="art">
+              <svg viewBox="0 0 640 360" aria-label="The Casals conductor creates, upgrades and tops up each realm's canisters; each realm approves its upgrades">
+                <g class="fx" data-frag="0">
+                  <use href="#can" x="40" y="140" width="96" height="81"/>
+                  <text class="t mid" x="88" y="246">Casals</text><text class="ts mid" x="88" y="264">conductor</text>
+                  <g>
+                    <rect x="260" y="20" width="350" height="90" rx="12" fill="#fff" stroke="#737373" stroke-width="1.5"/>
+                    <text class="t" x="276" y="44">València</text>
+                    <use href="#can" x="276" y="54" width="40" height="34"/><use href="#can" x="326" y="54" width="40" height="34"/><use href="#can" x="376" y="54" width="40" height="34"/><text class="ts" x="426" y="78">backend, frontend, quarters</text>
+                    <rect x="260" y="135" width="350" height="90" rx="12" fill="#fff" stroke="#737373" stroke-width="1.5"/>
+                    <text class="t" x="276" y="159">Com. Valenciana</text>
+                    <use href="#can" x="276" y="169" width="40" height="34"/><use href="#can" x="326" y="169" width="40" height="34"/>
+                    <rect x="260" y="250" width="350" height="90" rx="12" fill="#fff" stroke="#737373" stroke-width="1.5"/>
+                    <text class="t" x="276" y="274">Spain</text>
+                    <use href="#can" x="276" y="284" width="40" height="34"/><use href="#can" x="326" y="284" width="40" height="34"/>
+                  </g>
+                </g>
+                <g class="fx" data-frag="1">
+                  <path d="M140 170 C 200 120, 220 70, 256 66M140 180 H256M140 190 C 200 240, 220 290, 256 296" fill="none" stroke="rgb(107, 163, 163)" stroke-width="2" marker-end="url(#arrt)"/>
+                  <text class="ts tt" x="150" y="330" style="font-weight:650">create · upgrade · snapshot · roll back · top up</text>
+                </g>
+                <g class="fx" data-frag="2">
+                  <use href="#check" x="578" y="30" width="22" height="22"/>
+                  <use href="#check" x="578" y="145" width="22" height="22"/>
+                  <use href="#check" x="578" y="260" width="22" height="22"/>
+                  <text class="ts tt end" x="600" y="128">each realm approves its own upgrades</text>
+                </g>
+              </svg>
+            </div>
+            <ul class="pts">
+              <li class="wc-frag teal" data-frag="0"><span class="wc-label">One stand per realm</span><span class="wc-note">Its backend, its frontend and its quarters, upgraded and rolled back as one unit.</span></li>
+              <li class="wc-frag" data-frag="1"><span class="wc-label">The whole lifecycle</span><span class="wc-note">It creates canisters, upgrades them, snapshots and rolls them back, and keeps their cycles topped up.</span></li>
+              <li class="wc-frag" data-frag="2"><span class="wc-label">The realm stays in charge</span><span class="wc-note">Each realm approves its own upgrades. When it grows, new quarters are added to its stand.</span></li>
+            </ul>
+          </div>
+        </section>
+      </div>
+
+      <!-- ======================================================================================
+           Part 5: the whole example
+           ====================================================================================== -->
+      <div class="page" data-slide="20">
+        <section class="sl">
+          <header class="box-header"><div class="kicker">All together: one change, through time</div><h2>The bodies, the realms, the layers</h2></header>
+          <p class="lead">Real bodies and real legislation, with one hypothetical change: Spain publishes release 2.4.0 of its tax chapter, in force from 1 January 2027.</p>
+          <div class="body">
+            <div class="art">
+              <svg viewBox="0 0 640 420" aria-label="The EU, Spain, the Comunitat Valenciana, EMSHI, València and a second town">
+                <g class="fx" data-frag="0">
+                  <rect x="200" y="6" width="150" height="44" rx="11" fill="#fff" stroke="#a3a3a3" stroke-width="1.5" stroke-dasharray="6 5"/><text class="t mid" x="275" y="26">EU</text><text class="ts mid" x="275" y="42">a source, no realm</text>
+                  <rect x="200" y="86" width="150" height="44" rx="11" fill="#fff" stroke="#262626" stroke-width="2"/><use href="#can" x="212" y="96" width="28" height="24"/><text class="t" x="252" y="114">Spain</text>
+                  <rect x="200" y="176" width="150" height="44" rx="11" fill="#fff" stroke="#262626" stroke-width="2"/><use href="#can" x="212" y="186" width="28" height="24"/><text class="t" x="252" y="204">Com. Val.</text>
+                  <path d="M275 130 V176" stroke="#737373" stroke-width="2.4"/>
+                  <path d="M275 50 V84" stroke="#a3a3a3" stroke-width="1.5" stroke-dasharray="4 4"/>
+                  <rect x="80" y="290" width="170" height="80" rx="11" fill="#fff" stroke="rgb(107, 163, 163)" stroke-width="2.4"/><use href="#can" x="92" y="302" width="28" height="24"/><text class="t tt" x="130" y="320">València</text>
+                  <g fill="#a3a3a3"><use href="#can" x="96" y="338" width="20" height="17"/><use href="#can" x="120" y="338" width="20" height="17"/><use href="#can" x="144" y="338" width="20" height="17"/></g><text class="ts" x="170" y="352">404 quarters</text>
+                  <rect x="300" y="290" width="150" height="80" rx="11" fill="#fff" stroke="#737373" stroke-width="1.5"/><use href="#can" x="312" y="302" width="28" height="24"/><text class="t" x="350" y="320">Town B</text><text class="ts" x="312" y="352">2 quarters</text>
+                  <path d="M275 220 V256 M165 256 H375 M165 256 V290 M375 256 V290" stroke="#737373" stroke-width="2.4" fill="none"/>
+                </g>
+                <g class="fx" data-frag="1">
+                  <rect x="470" y="200" width="150" height="44" rx="11" fill="#fff" stroke="#737373" stroke-width="1.5" stroke-dasharray="6 5"/><text class="t mid" x="545" y="220">EMSHI</text><text class="ts mid" x="545" y="236">water body of 51 towns</text>
+                  <path d="M470 236 C 420 270, 300 280, 252 300" fill="none" stroke="#a3a3a3" stroke-width="1.5" stroke-dasharray="5 5" marker-end="url(#arr)"/>
+                  <text class="ts" x="420" y="404">solid: parent links · dashed: layers that are not parents</text>
+                </g>
+              </svg>
+            </div>
+            <ul class="pts">
+              <li class="wc-frag teal" data-frag="0"><span class="wc-label">A tree of realms</span><span class="wc-note">Spain, the Comunitat Valenciana, València with 404 quarters, and a smaller Town B.</span></li>
+              <li class="wc-frag" data-frag="1"><span class="wc-label">More sources than parents</span><span class="wc-note">The EU and the water body EMSHI are layers of València's codex, without being its parent.</span></li>
+              <li class="wc-frag" data-frag="2"><span class="wc-label">The change is hypothetical</span><span class="wc-note">The bodies and the structure of their legislation are real; release 2.4.0 is invented for the example.</span></li>
+            </ul>
+          </div>
+        </section>
+      </div>
+
+      <div class="page" data-slide="21">
+        <section class="sl">
+          <header class="box-header"><div class="kicker">All together: one change, through time</div><h2>Six weeks, one timeline</h2></header>
+          <p class="lead">From Spain's vote to the last town installing, every step is an act on a public record.</p>
+          <div class="body one">
+            <div class="art">
+              <svg viewBox="0 0 1000 320" aria-label="A timeline from 1 December to 15 January">
+                <path d="M30 260 H970" stroke="#737373" stroke-width="1.6" marker-end="url(#arr)"/>
+                <path d="M690 30 V266" stroke="rgb(107, 163, 163)" stroke-width="2" stroke-dasharray="6 5"/>
+                <text class="ts tt mid" x="690" y="290" style="font-weight:650">1 January 2027: in force</text>
+                <g class="fx" data-frag="0">
+                  <path d="M70 254 V60" stroke="#262626" stroke-width="1.5"/><circle cx="70" cy="260" r="6" fill="#262626"/>
+                  <text class="t" x="80" y="58">1 Dec · Spain adopts 2.4.0</text>
+                  <text class="ts" x="80" y="76">and publishes it in its record</text>
+                  <text class="ts mid" x="70" y="290">1 Dec</text>
+                </g>
+                <g class="fx" data-frag="1">
+                  <path d="M160 254 V140" stroke="#737373" stroke-width="1.5"/><circle cx="160" cy="260" r="6" fill="#737373"/>
+                  <text class="t" x="170" y="138">2 Dec · daily checks find it</text>
+                  <text class="ts" x="170" y="156">CV, València and Town B</text>
+                  <text class="ts mid" x="160" y="290">2 Dec</text>
+                </g>
+                <g class="fx" data-frag="2">
+                  <path d="M330 254 V60" stroke="#737373" stroke-width="1.5"/><circle cx="330" cy="260" r="6" fill="#737373"/>
+                  <text class="t" x="340" y="58">10 Dec · València votes</text>
+                  <text class="ts" x="340" y="76">install it, switch on 20 December</text>
+                  <text class="ts mid" x="330" y="290">10 Dec</text>
+                </g>
+                <g class="fx" data-frag="3">
+                  <path d="M480 254 V140" stroke="rgb(47, 95, 95)" stroke-width="1.5"/><circle cx="480" cy="260" r="6" fill="rgb(47, 95, 95)"/>
+                  <text class="t tt" x="490" y="138">20 Dec · 404 quarters switch</text>
+                  <text class="ts" x="490" y="156">quarter 17 is late, then catches up</text>
+                  <text class="ts mid" x="480" y="290">20 Dec</text>
+                </g>
+                <g class="fx" data-frag="4">
+                  <path d="M700 254 V200" stroke="#b94a48" stroke-width="1.5"/><circle cx="700" cy="260" r="6" fill="#b94a48"/>
+                  <use href="#flagr" x="704" y="176" width="18" height="22"/>
+                  <text class="t tr" x="728" y="190">Town B has not installed</text>
+                  <text class="ts" x="728" y="208">non-compliant since 1 January</text>
+                </g>
+                <g class="fx" data-frag="5">
+                  <path d="M900 254 V60" stroke="rgb(47, 95, 95)" stroke-width="1.5"/><circle cx="900" cy="260" r="6" fill="rgb(47, 95, 95)"/>
+                  <text class="t tt end" x="890" y="58">15 Jan · Town B installs</text>
+                  <text class="ts end" x="890" y="76">the flag clears at once</text>
+                  <text class="ts mid" x="900" y="290">15 Jan</text>
+                </g>
+              </svg>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="page" data-slide="22">
+        <section class="sl">
+          <header class="box-header"><div class="kicker">All together: one change, through time</div><h2>Inside València: 404 quarters switch together</h2></header>
+          <p class="lead">One realm-wide vote on 10 December sets the switch for 20 December. Each quarter gets ready at its own pace.</p>
+          <div class="body">
+            <div class="art">
+              <svg viewBox="0 0 680 390" aria-label="Quarters stage a new codex and switch at a set time; one is late">
+                <g class="fx" data-frag="0">
+                  <use href="#ballot" x="20" y="14" width="34" height="34"/>
+                  <text class="t" x="64" y="30">Realm-wide vote, 10 December</text>
+                  <text class="ts" x="64" y="46">adopt codex b71e, switch on 20 December</text>
+                  <path d="M470 64 V350" stroke="rgb(107, 163, 163)" stroke-width="2" stroke-dasharray="6 5"/>
+                  <text class="ts mid tt" x="470" y="372" style="font-weight:650">20 December: switch</text>
+                  <text class="ts" x="20" y="104">capital</text><text class="ts" x="20" y="158">quarter 1</text><text class="ts" x="20" y="212">quarter 2</text><text class="ts" x="20" y="266">quarter 17</text><text class="ts" x="20" y="320">quarter 404</text>
+                  <g stroke="#e5e5e5" stroke-width="10" stroke-linecap="round"><path d="M100 100 H470M100 154 H470M100 208 H470M100 262 H470M100 316 H470"/></g>
+                </g>
+                <g class="fx" data-frag="1">
+                  <g stroke="#a3a3a3" stroke-width="10" stroke-linecap="round">
+                    <path d="M130 100 H230"/><path d="M180 154 H330"/><path d="M150 208 H300"/><path d="M300 262 H470"/><path d="M260 316 H440"/>
+                  </g>
+                  <text class="ts" x="132" y="86">staging: download from the capital, check every byte</text>
+                </g>
+                <g class="fx" data-frag="2">
+                  <g stroke="rgb(107, 163, 163)" stroke-width="10" stroke-linecap="round"><path d="M478 100 H650M478 154 H650M478 208 H650M478 316 H650"/></g>
+                  <text class="tm tt" x="560" y="86">codex b71e</text>
+                </g>
+                <g class="fx" data-frag="3">
+                  <path d="M470 262 H540" stroke="#b94a48" stroke-width="10" stroke-linecap="round"/>
+                  <use href="#flagr" x="476" y="232" width="16" height="20"/>
+                  <path d="M560 262 H650" stroke="rgb(107, 163, 163)" stroke-width="10" stroke-linecap="round"/>
+                  <text class="ts tr" x="496" y="246" style="font-weight:650">late: flagged</text>
+                  <text class="ts tt" x="560" y="290">caught up</text>
+                </g>
+              </svg>
+            </div>
+            <ul class="pts">
+              <li class="wc-frag teal" data-frag="0"><span class="wc-label">One vote, one switch time</span><span class="wc-note">The members vote once, in all quarters, through the capital.</span></li>
+              <li class="wc-frag" data-frag="1"><span class="wc-label">Each quarter stages at its own pace</span><span class="wc-note">Nothing changes while it stages; the old codex keeps running.</span></li>
+              <li class="wc-frag teal" data-frag="2"><span class="wc-label">On the day, each switches by itself</span><span class="wc-note">From a schedule that survives canister upgrades. Calls between quarters carry the sender's codex checksum.</span></li>
+              <li class="wc-frag red" data-frag="3"><span class="wc-label">A late quarter is flagged</span><span class="wc-note">The same mechanism as a late member realm, one level down.</span></li>
+            </ul>
+          </div>
+        </section>
+      </div>
+
+      <div class="page" data-slide="23">
+        <section class="sl">
+          <header class="box-header"><div class="kicker">All together: one change, through time</div><h2>If a member does not comply</h2></header>
+          <p class="lead">A member votes on when to install legislation from above, never on whether it applies.</p>
+          <div class="body">
+            <div class="art">
+              <svg viewBox="0 0 680 400" aria-label="València installs in time; Town B is late and flagged until it installs">
+                <g class="fx" data-frag="0">
+                  <rect x="20" y="16" width="250" height="50" rx="9" fill="#fff" stroke="#262626" stroke-width="1.8"/>
+                  <use href="#doc" x="32" y="24" width="24" height="32"/>
+                  <text class="t" x="66" y="38">Spain · release 2.4.0</text>
+                  <text class="ts" x="66" y="56">published 1 December 2026</text>
+                  <path d="M40 350 H650" stroke="#737373" stroke-width="1.5" marker-end="url(#arr)"/>
+                  <path d="M440 70 V356" stroke="rgb(107, 163, 163)" stroke-width="2" stroke-dasharray="6 5"/>
+                  <text class="ts mid tt" x="440" y="374" style="font-weight:650">1 Jan 2027: in force</text>
+                  <text class="t" x="20" y="128">València</text>
+                  <path d="M110 124 H372" stroke="#d4d4d4" stroke-width="2"/>
+                  <use href="#ballot" x="216" y="110" width="28" height="28"/><text class="ts mid" x="230" y="150">vote: install</text>
+                  <use href="#check" x="358" y="112" width="24" height="24"/><text class="ts mid tt" x="370" y="150">installed</text>
+                  <path d="M384 124 H650" stroke="rgb(107, 163, 163)" stroke-width="5" stroke-linecap="round"/>
+                  <text class="ts tt" x="456" y="114">compliant</text>
+                </g>
+                <g class="fx" data-frag="1">
+                  <text class="t" x="20" y="238">Town B</text>
+                  <path d="M110 234 H440" stroke="#d4d4d4" stroke-width="2"/>
+                  <use href="#ballot" x="216" y="220" width="28" height="28"/><text class="ts mid" x="230" y="260">vote: not yet</text>
+                  <path d="M440 234 H570" stroke="#b94a48" stroke-width="5" stroke-linecap="round"/>
+                  <use href="#flagr" x="444" y="200" width="20" height="24"/>
+                  <text class="ts tr" x="470" y="214" style="font-weight:650">non-compliant</text>
+                </g>
+                <g class="fx" data-frag="2">
+                  <rect x="100" y="276" width="320" height="54" rx="8" fill="#fff" stroke="#b94a48" stroke-width="1.3"/>
+                  <text class="ts" x="114" y="297">Spain's legislation decides what follows:</text>
+                  <text class="ts" x="114" y="315">a formal request, then court; transfers held back</text>
+                </g>
+                <g class="fx" data-frag="3">
+                  <use href="#check" x="570" y="222" width="24" height="24"/>
+                  <path d="M596 234 H650" stroke="rgb(107, 163, 163)" stroke-width="5" stroke-linecap="round"/>
+                  <text class="ts tt mid" x="610" y="196">installed,</text>
+                  <text class="ts tt mid" x="610" y="210">flag cleared</text>
+                </g>
+              </svg>
+            </div>
+            <ul class="pts">
+              <li class="wc-frag teal" data-frag="0"><span class="wc-label">The member chooses when</span><span class="wc-note">València installs through its own vote, before the date.</span></li>
+              <li class="wc-frag red" data-frag="1"><span class="wc-label">Late means non-compliant</span><span class="wc-note">Town B keeps its old codex, flagged on its public record. It cannot vote its way out.</span></li>
+              <li class="wc-frag" data-frag="2"><span class="wc-label">The parent's legislation decides</span><span class="wc-note">Never the platform. A challenge to the legislation itself goes to a justice case.</span></li>
+              <li class="wc-frag teal" data-frag="3"><span class="wc-label">Installing clears the flag</span><span class="wc-note">And if a new codex misbehaves, a revert is always possible: no legislation can block it.</span></li>
+            </ul>
+          </div>
+        </section>
+      </div>
+
+      <div class="page" data-slide="24">
+        <section class="sl">
+          <header class="box-header"><div class="kicker">All together: one change, through time</div><h2>Splitting and merging</h2></header>
+          <p class="lead">Quarters split and merge for capacity today. Realms merging or leaving a parent is possible in principle, but not designed yet.</p>
+          <div class="body">
+            <div class="art">
+              <svg viewBox="0 0 640 400" aria-label="A full quarter splits, two small quarters merge; two towns merging and a part leaving are shown dashed">
+                <g class="fx" data-frag="0">
+                  <text class="ts tt" x="20" y="22" style="font-weight:650">quarters · in GGG today</text>
+                  <use href="#can" x="30" y="40" width="64" height="54"/><text class="ts mid" x="62" y="112">quarter 404</text><text class="ts mid" x="62" y="126">full</text>
+                  <path d="M100 60 L170 40M100 76 L170 96" stroke="rgb(47, 95, 95)" stroke-width="1.8" marker-end="url(#arrt)"/>
+                  <use href="#can" x="176" y="14" width="48" height="40"/><use href="#can" x="176" y="74" width="48" height="40"/>
+                  <text class="ts" x="232" y="38">404</text><text class="ts" x="232" y="98">405</text>
+                  <text class="ts" x="20" y="150">split: members move to a new quarter</text>
+                </g>
+                <g class="fx" data-frag="1">
+                  <use href="#can" x="30" y="190" width="48" height="40"/><use href="#can" x="30" y="250" width="48" height="40"/>
+                  <path d="M84 212 L160 236M84 268 L160 246" stroke="rgb(47, 95, 95)" stroke-width="1.8" marker-end="url(#arrt)"/>
+                  <use href="#can" x="166" y="214" width="64" height="54"/>
+                  <text class="ts" x="20" y="320">merge: two quiet quarters become one</text>
+                </g>
+                <g class="fx" data-frag="2">
+                  <path d="M330 10 V390" stroke="#e5e5e5" stroke-width="1.5"/>
+                  <text class="ts" x="350" y="22" style="font-weight:650">realms · not designed yet</text>
+                  <rect x="350" y="40" width="100" height="50" rx="10" fill="#fff" stroke="#a3a3a3" stroke-dasharray="5 4"/><text class="t mid" x="400" y="70">town C</text>
+                  <rect x="350" y="104" width="100" height="50" rx="10" fill="#fff" stroke="#a3a3a3" stroke-dasharray="5 4"/><text class="t mid" x="400" y="134">town D</text>
+                  <path d="M454 66 L516 90M454 128 L516 104" stroke="#a3a3a3" stroke-width="1.6" stroke-dasharray="4 4" marker-end="url(#arr)"/>
+                  <rect x="520" y="72" width="110" height="50" rx="10" fill="#fff" stroke="#a3a3a3" stroke-dasharray="5 4"/><text class="t mid" x="575" y="102">one town</text>
+                  <text class="ts" x="350" y="176">two municipalities merge: two codices become one</text>
+                  <rect x="350" y="214" width="280" height="110" rx="12" fill="#fff" stroke="#a3a3a3" stroke-dasharray="5 4"/>
+                  <text class="t" x="366" y="240">a parent</text>
+                  <rect x="372" y="256" width="110" height="50" rx="9" fill="#fafafa" stroke="#a3a3a3" stroke-dasharray="5 4"/><text class="ts mid" x="427" y="286">a member</text>
+                  <path d="M486 280 C 560 280, 600 300, 640 340" fill="none" stroke="#a3a3a3" stroke-width="1.6" stroke-dasharray="4 4" marker-end="url(#arr)"/>
+                  <text class="ts" x="350" y="352">a member leaves its parent:</text>
+                  <text class="ts" x="350" y="368">governed on both sides</text>
+                </g>
+              </svg>
+            </div>
+            <ul class="pts">
+              <li class="wc-frag teal" data-frag="0"><span class="wc-label">A full quarter splits</span><span class="wc-note">Members keep their identity; a signed forward points to their new quarter.</span></li>
+              <li class="wc-frag teal" data-frag="1"><span class="wc-label">Small quarters merge</span><span class="wc-note">Capacity only: the realm, its codex and its votes do not change.</span></li>
+              <li class="wc-frag" data-frag="2"><span class="wc-label">Realms: later <span class="tag">not designed yet</span></span><span class="wc-note">A merger of municipalities, or a member leaving its parent, needs both sides' legislation. It is technically possible, and not decided.</span></li>
+            </ul>
+          </div>
+        </section>
+      </div>
+
+      <!-- ======================================================================================
+           Close
+           ====================================================================================== -->
+      <div class="page" data-slide="25">
+        <section class="title">
+          <div>
+            <div class="kicker">In one sentence</div>
+            <h1>One standard, many systems, many realms <span>so that cooperation scales with the number of communities, not against it</span></h1>
+            <ul class="links">
+              <li><a href="https://github.com/smart-social-contracts/ggg" target="_blank" rel="noopener noreferrer">GGG</a><span>the model, the interface and the conformance suite</span></li>
+              <li><a href="https://github.com/smart-social-contracts/realms-gos" target="_blank" rel="noopener noreferrer">Realms GOS</a><span>the reference implementation</span></li>
+              <li><a href="https://github.com/smart-social-contracts/realms-codices" target="_blank" rel="noopener noreferrer">realms-codices</a><span>legislation as code, in the open</span></li>
+              <li><a href="https://github.com/smart-social-contracts/Casals" target="_blank" rel="noopener noreferrer">Casals</a><span>the canister orchestrator</span></li>
+            </ul>
+          </div>
+          <div class="art"><svg viewBox="0 0 520 440" aria-label="One standard at the centre, linking realms of every kind"><use href="#hub"/></svg></div>
+        </section>
+      </div>
+
+    </div>
+    <footer>
+      <span class="site">gos.earth</span>
+      <a class="all" href="../presentations/index.html">All presentations</a>
+    </footer>
+    <nav class="dots" id="dots" aria-label="Slide navigation"></nav>
+  </article>
+
+  <script>
+(function () {
+  const pages = Array.from(document.querySelectorAll('.page'));
+  const dotsEl = document.getElementById('dots');
+  const sceneMap = [];
+  const pageStart = [];
+  let sceneIndex = 0;
+
+  pages.forEach((page, pageIdx) => {
+    const frags = Array.from(page.querySelectorAll('[data-frag]'), (f) => parseInt(f.dataset.frag, 10));
+    const steps = Math.max(parseInt(page.dataset.steps || '1', 10), 1 + Math.max(0, ...frags));
+    pageStart.push(sceneMap.length);
+    for (let s = 0; s < steps; s++) sceneMap.push({ pageIdx, stepIdx: s });
+  });
+
+  function renderDots(activePage) {
+    dotsEl.innerHTML = '';
+    pages.forEach((_, i) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'dot' + (i === activePage ? ' active' : '');
+      btn.setAttribute('aria-label', 'Slide ' + (i + 1));
+      btn.addEventListener('click', () => window.__goToScene(pageStart[i] + 1));
+      dotsEl.appendChild(btn);
+    });
+  }
+
+  function applyScene(idx) {
+    sceneIndex = Math.max(0, Math.min(idx, sceneMap.length - 1));
+    const { pageIdx, stepIdx } = sceneMap[sceneIndex];
+    pages.forEach((page, pi) => {
+      const active = pi === pageIdx;
+      page.classList.toggle('active', active);
+      page.querySelectorAll('[data-frag]').forEach((f) => {
+        f.classList.toggle('shown', active && parseInt(f.dataset.frag, 10) <= stepIdx);
+      });
+      page.querySelectorAll('[data-until]').forEach((f) => {
+        f.classList.toggle('shown', active && stepIdx < parseInt(f.dataset.until, 10));
+      });
+    });
+    renderDots(pageIdx);
+    const hash = '#' + (sceneIndex + 1);
+    if (location.hash !== hash) history.replaceState(null, '', hash);
+    return sceneIndex + 1;
+  }
+
+  window.__goToScene = function (n) {
+    const target = Math.max(1, Math.min(parseInt(n, 10) || 1, sceneMap.length));
+    return applyScene(target - 1);
+  };
+
+  function sceneFromHash() {
+    const m = /^#(\d+)$/.exec(location.hash);
+    return m ? parseInt(m[1], 10) : 1;
+  }
+
+  applyScene(sceneFromHash() - 1);
+  window.addEventListener('hashchange', () => applyScene(sceneFromHash() - 1));
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ' || e.key === 'PageDown') {
+      e.preventDefault();
+      window.__goToScene(sceneIndex + 2);
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'PageUp') {
+      e.preventDefault();
+      window.__goToScene(sceneIndex);
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      window.__goToScene(1);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      window.__goToScene(sceneMap.length);
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (e.button !== 0 || e.target.closest('a, button, .dots')) return;
+    if (String(window.getSelection())) return;
+    window.__goToScene(sceneIndex + 2);
+  });
+
+  let touch = null;
+  document.addEventListener('touchstart', (e) => {
+    touch = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+  }, { passive: true });
+  document.addEventListener('touchend', (e) => {
+    if (!touch) return;
+    const dx = e.changedTouches[0].clientX - touch.x;
+    const dy = e.changedTouches[0].clientY - touch.y;
+    touch = null;
+    if (Math.abs(dx) < 40 || Math.abs(dx) < 1.5 * Math.abs(dy)) return;
+    window.__goToScene(dx < 0 ? sceneIndex + 2 : sceneIndex);
+  });
+})();
+  </script>
+</body>
+</html>
