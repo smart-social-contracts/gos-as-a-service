@@ -7,10 +7,10 @@
 ## world-computer
 
 - :hardware: Natural resources — land, energy, water, materials <=> Hardware — land, energy, water, materials
-- :os: Institutions — governments, laws, regulations <=> Operating system — institutions: governments, laws, regulations
+- :os: Institutions — governments, legislation, regulations <=> Operating system — institutions: governments, legislation, regulations
 - :apps: Services — public services and companies <=> Applications — public services and companies
 - :users: Citizens — people like you and me <=> Users — people like you and me
-- :upgrade: Upgrades — democracy: elections, referendums, new laws
+- :upgrade: Upgrades — democracy: elections, referendums, new legislation
 - :detour:
 - :hack: Hacks — power gets captured
 - :checks: Checks & balances — try to undo the hack, but power stays captured

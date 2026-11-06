@@ -30,9 +30,9 @@ translations. To bring one back, move it into steps.md. -->
 
 ## law-as-code
 
-- title: Law as code — Rules must be machine-checkable, so that acts can be validated
+- title: Legislation as code — Rules must be machine-checkable, so that acts can be validated
 - stack: The best design is layered
-- :code: Code — for execution — law’s deterministic core
+- :code: Code — for execution — legislation’s deterministic core
 - :intent: Natural language — for intent
 - :ai: AI — for interpretation — open-textured standards, like “reasonable”
 - caveat: One caveat: tamper-proof records can’t guarantee truthful inputs
