@@ -160,7 +160,10 @@ def parse_args(argv):
         action="store_true",
         help="print the email and the proposal (placeholder code); create and send nothing",
     )
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if not args.portal.startswith("https://"):
+        parser.error("--portal must start with https://")
+    return args
 
 
 def main(argv=None) -> None:
@@ -191,7 +194,8 @@ def main(argv=None) -> None:
         except (OSError, smtplib.SMTPException) as error:
             # The code already exists on-chain; losing it would waste an invitation.
             print(
-                f"Email failed ({error}). Send {code} to {args.email} by hand.",
+                f"Email failed ({error}). Send {code} to {args.email} by hand; "
+                "do not rerun, it would create a second code.",
                 file=sys.stderr,
             )
             raise SystemExit(1)
