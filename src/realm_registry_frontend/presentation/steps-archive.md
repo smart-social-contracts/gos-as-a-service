@@ -25,3 +25,14 @@ translations. To bring one back, move it into steps.md. -->
 - legend: realms — [Realms GOS](https://realmsgos.org)
 - legend: other — Other? — Many more to come. Anyone can build one on the open standard.
 - link: https://gos.earth
+
+# GOS — single slide
+
+## law-as-code
+
+- title: Legislation as code — Rules must be machine-checkable, so that acts can be validated
+- stack: The best design is layered
+- :code: Code — for execution — legislation’s deterministic core
+- :intent: Natural language — for intent
+- :ai: AI — for interpretation — open-textured standards, like “reasonable”
+- caveat: One caveat: tamper-proof records can’t guarantee truthful inputs
