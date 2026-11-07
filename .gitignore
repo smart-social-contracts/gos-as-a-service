@@ -25,3 +25,7 @@ src/file_registry_frontend/dist/version
 
 # tests/e2e/local_sheet.py output
 casals.local-*.json
+
+# src/realm_registry_frontend/presentation/export_slides.py output
+/src/realm_registry_frontend/presentation/slides/
+*_slide_[0-9]*.png
