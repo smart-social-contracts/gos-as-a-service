@@ -10,14 +10,18 @@
 - :os: Institutions — governments, legislation, regulations <=> Operating system — institutions: governments, legislation, regulations
 - :apps: Services — public services and companies <=> Applications — public services and companies
 - :users: Citizens — people like you and me <=> Users — people like you and me
-- :upgrade: Upgrades — democracy: elections, referendums, new legislation
-- :detour:
-- :hack: Hacks — power gets captured
-- :checks: Checks & balances — try to undo the hack, but power stays captured
+- :upgrade: Change — how the rules evolve: elections, referendums, new legislation
+- :hack: Capture — when power ends up serving a few
+- :checks: Checks & balances — try to undo the capture, but power stays captured
 - :bureaucracy: Bureaucracy — red tape, too many layers, nothing gets done
 - :decay: hardware
 - :decay: apps
 - :decay: users
+- :detour:
+- :rename: hardware
+- :rename: os
+- :rename: apps
+- :rename: users
 - :gos:
 - :gos-head: New Governance Stack
     - :gos-os: Governance Operating System (GOS) — Built on top of decentralized cloud tech {ic} — *Actually* secure, transparent and efficient
@@ -28,16 +32,24 @@
 
 ## acts
 
-- title: Governance is a stream of acts — Each one has the form “A does B to C”. For example, a public entity pays a company for a service:
-- :a: A — entity — picks the company in exchange for a bribe
-- :c: C — entity — pays the bribe, or overcharges
-- :b: B — operation — the payment goes unrecorded, or the invoice is altered
-- :rule: §
+- title: Governance is a stream of acts
+- intro: a — **A**
+- intro: b — **A** does **B**
+- intro: c — **A** does **B** to **C**
+- intro: d — **A** does **B** to **C**, watched by **D**
+- intro: e — **A** does **B** to **C**, watched by **D**, affecting **E**.
 - gauge: Defection cost
-- cost: 10% — One official decides — defecting is cheap
-- cost: 30% — Checks & balances — a bit costlier: auditors and courts must be fooled too
-- {monkeys}
-- cost: 96% — Decentralized compute — defecting means corrupting many independent machines at once {network}
+- :a: A — who acts — picks the company in exchange for a bribe
+- :c: C — who it affects — pays the bribe, or overcharges
+- :b: B — the act — the payment goes unrecorded, or the invoice is altered
+- :d: D — observer: who watches
+- :e: E — public: everyone it affects
+- :rule: §
+- cost: 10% — One official decides
+- cost: 30% — Checks & balances {monkeys}
+- cost: 60% — Community checks & balances {protest}
+- cost: 35% — Impractical, not sustainable
+- cost: 96% — Decentralized digital checks & balances {servers}
 - Integrity no longer depends on trusted intermediaries
 
 # GOS — single slide

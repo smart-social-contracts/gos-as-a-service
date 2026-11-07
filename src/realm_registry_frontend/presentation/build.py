@@ -3,6 +3,10 @@
 
 python3 build.py           # write index.html
 python3 build.py --check   # fail when index.html is not what steps.md builds
+python3 build.py --draft   # while drafting: a missing translation shows the English, with a warning
+
+Without --draft, a text missing from translations.json, or one it has but nothing uses, fails the
+build. A draft build is not for shipping.
 
 Slides in steps-archive.md are not built, but they are still checked, and their translations
 kept, so one can be moved back into steps.md as it is.
@@ -17,7 +21,6 @@ import math
 import random
 import re
 import sys
-import urllib.parse
 from pathlib import Path
 
 DIR = Path(__file__).resolve().parent
@@ -38,7 +41,7 @@ LOCALES = [
 ]
 START_HINT = "Click or press → to start"
 START_HINT_TOUCH = "Tap to start"
-LINK_CTA = "Find a realm, or start your own"
+LINK_CTA = "A Governance Operating System global registry"
 IC_LOGO_HTML = (
     '<a class="gos-ic" href="https://internetcomputer.org" target="_blank" '
     'rel="noopener noreferrer" title="Internet Computer">'
@@ -271,6 +274,10 @@ def tr(text: str) -> str:
     return f'<span data-i18n="{UNITS.index(text)}">{render_inline(text)}</span>'
 
 
+# Set by --draft: missing and unused translations warn instead of failing; English stands in.
+DRAFT = False
+
+
 def load_translations() -> dict[str, dict[str, str]]:
     """Translations of every UNITS entry, keyed by language then by the English text.
 
@@ -284,7 +291,12 @@ def load_translations() -> dict[str, dict[str, str]]:
         strings = data.get(lang, {})
         problems += [f"{lang}: missing {u!r}" for u in known if not strings.get(u)]
         problems += [f"{lang}: unused {k!r}" for k in strings if k not in known]
-    if problems:
+    if problems and DRAFT:
+        missing = sorted({u for u in known for lang, _ in LOCALES[1:] if not data.get(lang, {}).get(u)})
+        print(f"draft: {len(missing)} texts without every translation (English shown):", file=sys.stderr)
+        for u in missing:
+            print(f"  {u!r}", file=sys.stderr)
+    elif problems:
         raise ValueError(
             f"{TRANSLATIONS_PATH.name} is out of date:\n  " + "\n  ".join(problems)
         )
@@ -452,17 +464,27 @@ def _tree(x: float, y: float, top: float, s: float = 1.0) -> str:
     )
 
 
-def _turbine(x: float, y: float, top: float, phase: float) -> str:
+def _silo(x: float, y: float, top: float, h: float = 30.0, rx: float = 6.0) -> str:
+    """A farm's silo: an upright cylinder with a domed top and two hoops."""
     bx, by = iso(x, y, 0, top)
-    hx, hy = iso(x, y, 54, top)
-    blades = "".join(
-        f'<path d="M0 0-2.2-4 0-21 2.2-4z" transform="rotate({a})"/>' for a in (0, 120, 240)
+    _, ty = iso(x, y, h, top)
+    ry = rx * 0.5
+    hoops = "".join(
+        f'<path d="M{bx - rx:.1f} {by - (by - ty) * f:.1f}a{rx} {ry} 0 0 0 {2 * rx} 0" fill="none" stroke="#c4c4c4"/>'
+        for f in (0.35, 0.7)
     )
     return (
-        f'<path d="M{bx:.1f} {by:.1f}L{hx:.1f} {hy:.1f}" stroke="#a3a3a3" stroke-width="2.2"/>'
-        f'<g transform="translate({hx:.1f} {hy:.1f})"><g class="wcx-rotor" style="animation-delay:-{phase:.1f}s" '
-        f'fill="#dcdcdc" stroke="#a3a3a3" stroke-width="0.8">{blades}<circle r="2.6" fill="#a3a3a3"/></g></g>'
+        f'<ellipse cx="{bx:.1f}" cy="{by:.1f}" rx="{rx + 3:.1f}" ry="{ry + 1.5:.1f}" fill="#000" opacity="0.07"/>'
+        f'<path d="M{bx - rx:.1f} {by:.1f}V{ty:.1f}a{rx} {ry} 0 0 1 {2 * rx} 0V{by:.1f}a{rx} {ry} 0 0 1 {-2 * rx} 0z" '
+        f'fill="#ececec" stroke="#a3a3a3"/>{hoops}'
+        f'<path d="M{bx - rx:.1f} {ty:.1f}a{rx} {rx * 0.85:.1f} 0 0 1 {2 * rx} 0a{rx} {ry} 0 0 1 {-2 * rx} 0z" '
+        'fill="#f5f5f5" stroke="#a3a3a3"/>'
     )
+
+
+def _farm(x: float, y: float, top: float) -> str:
+    """A barn with a silo beside it."""
+    return _house(x, y, top, 18, 13, 11) + _silo(x + 24, y + 4, top)
 
 
 def _smoke(x: float, y: float, z: float, top: float) -> str:
@@ -575,10 +597,11 @@ def ground_svg() -> str:
     ]
     sides = [(X, Y, lambda x, y: _tree(x, y, top, 0.85 + 0.3 * rnd.random())) for X, Y in side_trees]
     sides += [
-        (40, 548, lambda x, y: _turbine(x, y, top, 0.0)),
-        (88, 530, lambda x, y: _turbine(x, y, top, 2.1)),
-        (1188, 582, lambda x, y: _turbine(x, y, top, 1.2)),
-        (1240, 572, lambda x, y: _turbine(x, y, top, 3.0)),
+        # A farm by the fields, and two blocks of flats at the edge of town.
+        (40, 548, lambda x, y: _farm(x - 9, y - 6, top)),
+        (88, 530, lambda x, y: _house(x - 5, y - 5, top, 12, 11, 9)),
+        (1188, 582, lambda x, y: _box(x - 8, y - 8, 16, 16, 26, top, floors=5)),
+        (1240, 572, lambda x, y: _box(x - 9, y - 8, 18, 16, 34, top, floors=7)),
         (1010, 604, lambda x, y: _solar(x - 23, y - 20, top)),
         (1100, 628, lambda x, y: _box(x - 25, y - 15, 50, 30, 18, top)
             + _box(x + 2, y - 11, 6, 6, 24, top, z0=18) + _box(x + 14, y - 11, 7, 7, 36, top, z0=18)
@@ -624,11 +647,11 @@ def _connectors(upper: str, lower: str) -> str:
 # edges (0.64 * max(x, y) > its height + 67), or the applications' slab above hides its top.
 OS_HUB = (196, 196)  # the capitol, where power sits
 OS_SCALES = (78, 236)
-OS_LAW = (236, 78)
+OS_MONEY = (236, 78)
 # The people running the institutions: (where they stand, delay before they are bribed in a hack).
 OS_OFFICIALS = [((40, 250), 0.1), ((110, 170), 0.3), ((150, 248), 0.2), ((248, 150), 0.25), ((170, 110), 0.35), ((250, 40), 0.15)]
 # Wiring as (path, delay before a hack's red runs along it). The officials' wires run in to the
-# capitol, then the capitol's run out to the courts and the law.
+# capitol, then the capitol's run out to the courts and the treasury.
 OS_WIRES = [
     ("M40 250V170H196V196", 0.45),
     ("M250 40H170V196H196", 0.5),
@@ -641,7 +664,7 @@ OS_WIRES = [
 ]
 OS_NODES = [(40, 60), (60, 40)] + [xy for xy, _ in OS_OFFICIALS]
 HACK_CAPITOL_AT = 1.7  # the officials' red reaches the capitol
-HACK_ICONS_AT = 3.0  # and from there the courts and the law
+HACK_ICONS_AT = 3.0  # and from there the courts and the treasury
 HACK_PALE = "#f6dfde"
 HACK_PALER = "#fdf3f3"
 # Once the hack holds, the damage spreads through the other layers; the Governance Operating
@@ -653,6 +676,12 @@ HEAL_SOON = 0.4
 # and a point that comes with the heading follows it after GOS_AFTER_HEAD.
 GOS_WAIT = 1.3
 GOS_AFTER_HEAD = 0.8
+# At :gos:, once the picture has moved, the layers take their computer names one by one, from the
+# bottom up: each name shows beside the world name, then takes its place.
+RENAME_ORDER = ["hardware", "os", "apps", "users"]
+WCX_RENAME_AT = 1.5  # seconds after the click, the first one
+WCX_RENAME_STEP = 2.2  # seconds between one and the next
+WCX_RENAME_CLICK = 0.2  # seconds after its own :rename: click, a layer's computer name shows
 DECAY_SPEED = 360  # how fast the red spreads over the land, in box units per second
 
 
@@ -684,16 +713,22 @@ def scales_svg(hacked: bool = False) -> str:
     )
 
 
-def law_doc_svg(hacked: bool = False) -> str:
-    line, paper, fold, text = (
-        (HACK_RED, HACK_PALER, HACK_PALE, "#e0a09f") if hacked else ("#9a9a9a", "#fff", ART_FILL, "#c4c4c4")
-    )
-    return (
-        '<g stroke-linejoin="round">'
-        f'<path d="M-12-2V-34H5l7 7V-2z" fill="{paper}" stroke="{line}" stroke-width="1.2"/>'
-        f'<path d="M5-34v7h7" fill="{fold}" stroke="{line}" stroke-width="1.2"/>'
-        f'<path d="M-7-24H4M-7-19H7M-7-14H7M-7-9H2" stroke="{text}" stroke-width="1.5" stroke-linecap="round"/></g>'
-    )
+def money_svg(hacked: bool = False) -> str:
+    """The treasury: two stacks of coins, the taller behind."""
+    line, face, rim = (HACK_RED, HACK_PALER, "#e0a09f") if hacked else ("#9a9a9a", "#fff", "#c4c4c4")
+
+    def stack(x: float, n: int) -> str:
+        coins = []
+        for i in range(n):
+            y = -2 - i * 3.4
+            coins.append(
+                f'<path d="M{x - 7} {y - 3}v3a7 2.6 0 0 0 14 0v-3" fill="{face}" stroke="{line}" stroke-width="1.1"/>'
+                f'<ellipse cx="{x}" cy="{y - 3}" rx="7" ry="2.6" fill="{face}" stroke="{line}" stroke-width="1.1"/>'
+            )
+        top = -2 - (n - 1) * 3.4 - 3
+        return "".join(coins) + f'<ellipse cx="{x}" cy="{top}" rx="4.2" ry="1.5" fill="none" stroke="{rim}" stroke-width="1"/>'
+
+    return f'<g stroke-linejoin="round">{stack(-5, 7)}{stack(6, 4)}</g>'
 
 
 def official_svg(hacked: bool = False) -> str:
@@ -716,7 +751,7 @@ def os_svg(officials=lambda inner: inner) -> str:
         f'<g class="wcx-pulses" fill="none" stroke="#7a7a7a" stroke-width="2" stroke-linecap="round">{pulses}</g>'
     )
     icons = [
-        _pop(_billboard("os", *OS_LAW, law_doc_svg()), 0.55),
+        _pop(_billboard("os", *OS_MONEY, money_svg()), 0.55),
         _pop(_billboard("os", *OS_HUB, capitol_svg()), 0.4),
         _pop(_billboard("os", *OS_SCALES, scales_svg()), 0.7),
     ] + [officials(_pop(_billboard("os", x, y, official_svg()), 0.5 + i * 0.07)) for i, ((x, y), _) in enumerate(OS_OFFICIALS)]
@@ -827,19 +862,6 @@ def users_svg(sick=_no_mood, happy=_no_mood) -> str:
     return _connectors("users", "apps") + _slab("users", "#fff", 0.9) + sick(_sick_face("users"), 0.2) + people
 
 
-def evil_svg() -> str:
-    """A horned, grinning face: whoever captured power."""
-    dark = "#4a1716"
-    return (
-        f'<g stroke="#7d2f2e" stroke-width="1" stroke-linejoin="round" fill="{HACK_RED}">'
-        '<path d="M-7.6-17.4-10.5-25-2.8-20.2z"/><path d="M7.6-17.4 10.5-25 2.8-20.2z"/>'
-        '<circle cy="-10.5" r="10.5"/></g>'
-        f'<g fill="none" stroke="{dark}" stroke-width="1.8" stroke-linecap="round">'
-        '<path d="M-7-15.2-2.2-12.6M7-15.2 2.2-12.6"/><path d="M-6.4-6.6Q0-0.6 6.4-6.6"/></g>'
-        f'<g fill="{dark}"><circle cx="-3.6" cy="-10.6" r="1.5"/><circle cx="3.6" cy="-10.6" r="1.5"/></g>'
-    )
-
-
 def shield_svg() -> str:
     return (
         f'<path d="M0-26 14-20.5V-10C14-1 7 4 0 7-7 4-14-1-14-10V-20.5z" fill="{TEAL}" '
@@ -873,7 +895,7 @@ def gos_layer_svg(key: str) -> str:
 
 def hack_svg() -> str:
     """Power gets captured: the officials are bribed and turn red, the red runs along their wires
-    to the capitol, and from there to the courts and the law."""
+    to the capitol, and from there to the courts and the treasury."""
     top, _ = WCX_LAYERS["os"]
     paths = "".join(
         f'<path class="wcx-capture" d="{d}" pathLength="100" style="--d:{delay:.2f}s"/>' for d, delay in OS_WIRES
@@ -890,7 +912,7 @@ def hack_svg() -> str:
     red = (
         [taint(xy, official_svg(True), delay) for xy, delay in OS_OFFICIALS]
         + [taint(OS_HUB, capitol_svg(True), HACK_CAPITOL_AT)]
-        + [taint(xy, art, HACK_ICONS_AT) for xy, art in ((OS_SCALES, scales_svg(True)), (OS_LAW, law_doc_svg(True)))]
+        + [taint(xy, art, HACK_ICONS_AT) for xy, art in ((OS_SCALES, scales_svg(True)), (OS_MONEY, money_svg(True)))]
     )
     return (
         _plane(top, flat, clip=True)
@@ -990,7 +1012,6 @@ def request_svg() -> str:
 
 # Badges sit on the capitol's roof but are drawn over the whole stack so the upper slabs never hide them.
 WCX_BADGES = {
-    "hack": lambda: _pop(_billboard("os", *OS_HUB, f'<g class="wcx-evil">{evil_svg()}</g>', lift=47), HACK_CAPITOL_AT),
     "checks": lambda: _pop(_billboard("os", *OS_HUB, broken_shield_svg(), lift=46), 0.25),
     "bureaucracy": lambda: request_svg(),
 }
@@ -1012,7 +1033,6 @@ WCX_STACK = ["hardware", "os", "upgrade", "hack", "checks", "bureaucracy", "apps
 CALLOUT_ICONS = {
     "upgrade": f'<svg viewBox="0 0 24 24" fill="none" stroke="{TEAL_DARK}" stroke-width="2" stroke-linecap="round" '
     'stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v4h-4"/></svg>',
-    "hack": '<svg viewBox="-14 -26 28 27" aria-hidden="true">' + evil_svg() + "</svg>",
     "checks": '<svg viewBox="-16 -28 32 37" aria-hidden="true">' + shield_svg() + "</svg>",
     "bureaucracy": '<svg viewBox="-11 -11 22 22" aria-hidden="true">' + HOURGLASS_SVG + "</svg>",
 }
@@ -1512,6 +1532,63 @@ WCX_FIT_JS = """
   window.addEventListener('resize', fit);
   if (document.fonts) document.fonts.ready.then(() => window.dispatchEvent(new Event('resize')));
 })();
+
+(function () {
+  // A layer's computer name first shows beside its world name: --shift is the world name's width
+  // in its own ems, so it holds as the labels shrink when the picture moves, and in any language.
+  function measure() {
+    document.querySelectorAll('.wcx-swap[data-frag]').forEach((computer) => {
+      const world = computer.parentElement.querySelector('.wcx-swap[data-until] .wc-label');
+      if (!world) return;
+      const text = world.querySelector('[data-i18n]') || world;
+      const em = parseFloat(getComputedStyle(world).fontSize);
+      if (em && text.offsetWidth) computer.style.setProperty('--shift', (text.offsetWidth / em).toFixed(3));
+    });
+  }
+  measure();
+  window.addEventListener('resize', measure);
+  window.addEventListener('deck:scene', measure);
+})();
+
+(function () {
+  // The servers come in where D stands, in a row, then go to their places in the crowd: --fx
+  // and --fy, in the crowd's own units, take each from its place (data-x, data-y) to its spot
+  // in the row.
+  function aim() {
+    document.querySelectorAll('.ax-crowd svg').forEach((svg) => {
+      const slot = svg.closest('.ax-body')?.querySelector('.ax-d .ax-token');
+      const vb = svg.viewBox.baseVal;
+      if (!slot || !vb || !vb.width) return;
+      const r = svg.getBoundingClientRect(), d = slot.getBoundingClientRect();
+      if (!r.width || !d.height) return;
+      const s = Math.min(r.width / vb.width, r.height / vb.height);
+      const ox = r.left + (r.width - vb.width * s) / 2, oy = r.top + (r.height - vb.height * s) / 2;
+      const ux = (d.left + d.width / 2 - ox) / s, uy = (d.top + d.height * 0.32 - oy) / s;
+      const servers = svg.querySelectorAll('.ax-srv');
+      servers.forEach((g, i) => {
+        const cx = ux + (i - (servers.length - 1) / 2) * 22, cy = uy;
+        g.style.setProperty('--fx', (cx - g.dataset.x).toFixed(1));
+        g.style.setProperty('--fy', (cy - g.dataset.y).toFixed(1));
+      });
+    });
+  }
+  aim();
+  window.addEventListener('resize', aim);
+  window.addEventListener('deck:scene', aim);
+})();
+
+(function () {
+  // Eyes (.ax-eyes) blink at random times, each pair on its own.
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  document.querySelectorAll('.ax-eyes').forEach((eyes) => {
+    const blink = () => {
+      eyes.classList.add('ax-blink');
+      setTimeout(() => eyes.classList.remove('ax-blink'), 130);
+      setTimeout(blink, 1500 + Math.random() * 5000);
+    };
+    setTimeout(blink, Math.random() * 5000);
+  });
+})();
 """
 
 GLOBE_JS = """
@@ -1630,12 +1707,11 @@ GLOBE_JS = """
     ctx.beginPath(); ctx.arc(x, y + 4.5 * k, 5 * k, Math.PI, 2 * Math.PI); ctx.fill();
   }
 
-  // Devils: where no GOS runs yet, power stays captured. At first only one realm runs a GOS and a
-  // devil sits where each other realm will be; one by one they turn into realms (those facing us
-  // first), until only the strays are left.
-  const DEVILS = __DEVILS__;
-  const devil = new Image();
-  devil.src = DEVILS.sprite;
+  // Red patches: where no GOS runs yet, power stays captured. At first only one realm runs a GOS
+  // and a red patch lies where each other realm will be; one by one they turn into realms (those
+  // facing us first), until only the strays are left.
+  const CAPTURED = __CAPTURED__;
+  const patch = d3.geoCircle();
   const CONVERT = { first: 1800, last: 15000, take: 1600, firstRealm: 0 };
   const born = DATA.realms.map(() => -1e9);
   let bornFor = null;
@@ -1650,14 +1726,12 @@ GLOBE_JS = """
       born[best] = t;
     });
   }
-  // How far realm i is into its birth: below 0 it is still a devil, from 1 on it is a realm.
+  // How far realm i is into its birth: below 0 it is still red, from 1 on it is a realm.
   const age = (i, now) => (still ? 1e9 : now - layerStart - born[i]);
   const birth = (i, now) => clamp01(age(i, now) / CONVERT.take);
 
-  function drawDevils(now, k, facing) {
-    if (!devil.complete || !devil.naturalWidth) return;
-    const h = 28 * k, w = h * devil.naturalWidth / devil.naturalHeight;
-    const spots = DEVILS.spots.map((p) => [p, 0]).concat(
+  function drawCaptured(now, k, facing) {
+    const spots = CAPTURED.spots.map((p) => [p, 0]).concat(
       DATA.realms.map((r, i) => [r.center, age(i, now) / CONVERT.take]).filter(([, b]) => b < 1)
     );
     // They turn away with the globe: kept inside its outline, and fading towards the edge.
@@ -1668,7 +1742,7 @@ GLOBE_JS = """
       if (c < 0.15) return;
       const [x, y] = projection(p);
       const edge = Math.min(1, (c - 0.15) * 4);
-      // Converting: a teal ring bursts out while the devil swells and fades.
+      // Converting: a teal ring bursts out while the red swells and fades.
       const gone = clamp01(b * 1.8);
       if (b > 0) {
         ctx.globalAlpha = layerAlpha * edge * (1 - b);
@@ -1677,10 +1751,17 @@ GLOBE_JS = """
         ctx.beginPath(); ctx.arc(x, y, (8 + 34 * ease(b)) * k, 0, 2 * Math.PI); ctx.stroke();
       }
       if (gone >= 1) return;
-      const bob = still ? 0 : Math.sin(now / 700 + i * 1.9) * 1.5 * k;
-      const s = 1 + 0.35 * gone;
+      // A patch on the surface, red at its heart and fading out, that breathes slowly.
+      const pulse = still ? 1 : 1 + 0.08 * Math.sin(now / 700 + i * 1.9);
+      const deg = CAPTURED.radius * (1 + 0.35 * gone) * pulse;
+      const r = (projection.scale() * deg * Math.PI) / 180;
+      const fill = ctx.createRadialGradient(x, y, 0, x, y, r);
+      fill.addColorStop(0, `rgba(${CAPTURED.red}, 0.75)`);
+      fill.addColorStop(0.55, `rgba(${CAPTURED.red}, 0.4)`);
+      fill.addColorStop(1, `rgba(${CAPTURED.red}, 0)`);
       ctx.globalAlpha = layerAlpha * edge * (1 - gone);
-      ctx.drawImage(devil, x - (w * s) / 2, y - h * s * 0.62 + bob, w * s, h * s);
+      ctx.fillStyle = fill;
+      ctx.beginPath(); path(patch.center(p).radius(deg)()); ctx.fill();
     });
     ctx.restore();
     ctx.globalAlpha = layerAlpha;
@@ -1901,7 +1982,7 @@ GLOBE_JS = """
       }
     });
 
-    drawDevils(now, k, facing);
+    drawCaptured(now, k, facing);
 
     pos.forEach((p, n) => {
       const c = facing(p);
@@ -2339,18 +2420,21 @@ GLOBE_JS = """
 })();
 """
 
-# [lon, lat] on land, far from every realm (make-realms.cjs): devils that stay, where no GOS runs
-# yet. GLOBE_JS also puts a devil on every realm but the first, until that realm is born.
-GLOBE_DEVILS = [(10, 22), (45, 50), (-63, -10), (90, 62), (125, -24)]
-
-
-def devil_sprite() -> str:
-    svg = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="-12 -26 24 27" width="96" height="108">{evil_svg()}</svg>'
-    return "data:image/svg+xml," + urllib.parse.quote(svg)
+# [lon, lat] on land, far from every realm (make-realms.cjs): red patches that stay, where no GOS
+# runs yet. GLOBE_JS also puts one on every realm but the first, until that realm is born.
+GLOBE_CAPTURED = [(10, 22), (45, 50), (-63, -10), (90, 62), (125, -24)]
+GLOBE_CAPTURED_RADIUS = 6  # degrees
 
 
 GLOBE_JS = GLOBE_JS.replace(
-    "__DEVILS__", json.dumps({"sprite": devil_sprite(), "spots": GLOBE_DEVILS})
+    "__CAPTURED__",
+    json.dumps(
+        {
+            "red": ", ".join(str(int(HACK_RED[i : i + 2], 16)) for i in (1, 3, 5)),
+            "radius": GLOBE_CAPTURED_RADIUS,
+            "spots": GLOBE_CAPTURED,
+        }
+    ),
 ).replace(
     "__DECAY__",
     json.dumps(
@@ -2378,7 +2462,7 @@ def ground_decay_css() -> str:
         f".wcx-ground :is([fill], [stroke]) {{ transition: --sick 1.2s ease {HEAL_DELAY}s; }}",
         f"{on} :is([fill], [stroke]) {{ --sick: 1; transition: --sick 0.8s ease "
         f"calc((var(--d, 0.2s) - 0.2s) * {900 / DECAY_SPEED} + 0.2s); }}",
-        f"{on} :is(.wcx-rotor, .wcx-car-x, .wcx-car-xr, .wcx-car-y) {{ animation-play-state: paused; }}",
+        f"{on} :is(.wcx-car-x, .wcx-car-xr, .wcx-car-y) {{ animation-play-state: paused; }}",
     ]
     mixes = []
     for attr, color in sorted(set(re.findall(r'\b(fill|stroke)="(#[0-9a-f]{3}|#[0-9a-f]{6})"', ground_svg()))):
@@ -2825,6 +2909,7 @@ CSS = (
     .wcx-label .wc-label { display: block; font-size: 1.85cqw; white-space: normal; line-height: 1.2; }
     .wcx-label .wc-note { display: block; font-size: 1.35cqw; line-height: 1.35; margin-top: 0.2em; }
     .wcx-label .wc-label svg { display: inline-block; height: 1.05em; width: auto; margin-right: 0.4em; vertical-align: -0.15em; }
+    .wcx-hack-label .wc-label { color: #b94a48; }
 
     .wcx-step, .wcx-fade { opacity: 0; transition: opacity 0.4s ease, transform 0.4s ease; }
     .wcx-step { transform: translateY(-22px); }
@@ -2840,10 +2925,19 @@ CSS = (
     .wcx-label .wc-frag:has(.wcx-swap) { display: grid; }
     .wcx-swap { grid-area: 1 / 1; opacity: 0; transition: opacity 0.35s ease; }
     .wcx-swap.shown { opacity: 1; transition: opacity 0.6s ease 0.3s; }
-    /* The layers take their computer names, with a teal glow, once the picture has moved. */
-    .wcx-swap[data-until]:not(.shown) { transition: opacity 0.35s ease 1.3s; }
-    .wcx-swap[data-frag].shown { transition: opacity 0.5s ease 1.5s; }
-    .wcx-swap[data-frag].shown .wc-label { animation: wcx-name-glow 2.6s ease-in-out 1.6s both; }
+    /* Once the picture has moved, the layers take their computer names one by one (--rn): each
+       shows, glowing teal, beside the world name (--shift: its width in its own ems, set by
+       DECK_JS), then slides into its place as the world name leaves. */
+    .wcx-swap[data-frag] .wc-label { transform: translateX(calc(var(--shift, 0) * 1em + 0.45em)); }
+    .wcx-swap[data-frag] .wc-note { opacity: 0; }
+    .wcx-swap[data-frag].shown { transition: opacity 0.6s ease var(--rn); }
+    .wcx-swap[data-frag].shown .wc-label {
+      transform: none;
+      transition: transform 0.9s cubic-bezier(0.45, 0, 0.2, 1) calc(var(--rn) + 1.2s);
+      animation: wcx-name-glow 2.6s ease-in-out calc(var(--rn) + 0.2s) both;
+    }
+    .wcx-swap[data-frag].shown .wc-note { opacity: 1; transition: opacity 0.6s ease calc(var(--rn) + 1.4s); }
+    .wcx-swap[data-until]:not(.shown) { transition: opacity 0.5s ease calc(var(--rn) + 1.2s); }
 
     /* The Governance Operating System comes in: the picture moves right by WCX_SHIFT, the
        callouts leave and its points take the left (WCX_GOS_X), one beside each layer. */
@@ -2861,8 +2955,6 @@ CSS = (
     .wcx-gos .wc-label:has(.wcx-gos-abbr) { font-weight: 800; }
     .wcx-gos .wc-note .gos-ic { margin-left: 0.3em; }
     .wcx-nowrap { white-space: nowrap; }
-    /* Before the switch, each layer's computer name waits beside its world name, small and gray. */
-    .wcx-label .wcx-hint { font-size: 0.68em; font-weight: 500; color: #8a8a8a; margin-left: 0.25em; white-space: nowrap; }
     /* The Governance Operating System point comes in boxed, to stress it. */
     .wcx-gos-os .wc-frag { position: relative; isolation: isolate; width: fit-content; margin-left: auto; }
     .wcx-gos-box {
@@ -2927,7 +3019,6 @@ CSS = (
     .wcx-car-x { animation: wcx-drive-x 9s linear infinite; }
     .wcx-car-xr { animation: wcx-drive-xr 11s linear infinite; }
     .wcx-car-y { animation: wcx-drive-y 10s linear infinite; }
-    .wcx-rotor { animation: wcx-spin 4.5s linear infinite; }
     .wcx-smoke { transform-box: fill-box; transform-origin: center; animation: wcx-smoke 3.6s ease-out infinite; opacity: 0; }
     .wcx-pulses path { stroke-dasharray: 6 94; animation: wcx-pulse 4.8s linear infinite; }
     .wcx-flow { stroke: #8a8a8a; stroke-dasharray: 5 95; animation: wcx-flow 2.7s linear infinite; }
@@ -2946,7 +3037,7 @@ CSS = (
     .wcx-checks.shown .wcx-ring { animation: wcx-ring 1.4s ease-out 0.2s 2 both; }
     .wcx-checks-edge { opacity: 0; }
     .wcx-checks.shown .wcx-checks-edge { animation: wcx-checks-edge 3.4s ease forwards; }
-    .wcx-fail, .wcx-evil { transform-box: fill-box; transform-origin: 50% 100%; }
+    .wcx-fail { transform-box: fill-box; transform-origin: 50% 100%; }
     .wcx-crack { opacity: 0; }
     .wcx-checks.shown .wcx-fail { animation: wcx-fail 3.4s ease-in forwards; }
     .wcx-checks.shown .wcx-crack { animation: wcx-crack 3.4s steps(1) forwards; }
@@ -2955,7 +3046,6 @@ CSS = (
       stroke-dashoffset: 0;
       animation: wcx-resist 3.4s ease-in-out forwards;
     }
-    .wcx svg:has(.wcx-checks.shown) .wcx-evil { animation: wcx-evil 3.4s ease-out forwards; }
     /* The damage spreads (.wcx-sick), and the Governance Operating System mends it (.wcx-heal,
        after --out) with one teal sweep (.wcx-mend). Sad people stop bobbing. */
     .wcx-heal:not(.shown) { transition: opacity 1.2s ease var(--out, 0.3s); }
@@ -2967,7 +3057,6 @@ CSS = (
     @keyframes wcx-drive-x { to { transform: translateX(285px); } }
     @keyframes wcx-drive-xr { to { transform: translateX(-285px); } }
     @keyframes wcx-drive-y { to { transform: translateY(285px); } }
-    @keyframes wcx-spin { to { transform: rotate(360deg); } }
     @keyframes wcx-smoke {
       0% { opacity: 0; transform: scale(0.5); }
       20% { opacity: 0.85; }
@@ -2980,7 +3069,7 @@ CSS = (
     @keyframes wcx-glow { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
     @keyframes wcx-capture { to { stroke-dashoffset: 0; } }
     @keyframes wcx-taint { to { opacity: 1; } }
-    @keyframes wcx-glitch { 0%, 100% { opacity: 0.06; } 20% { opacity: 0.16; } 24% { opacity: 0.04; } 58% { opacity: 0.13; } 62% { opacity: 0.07; } }
+    @keyframes wcx-glitch { 0%, 100% { opacity: 0.14; } 20% { opacity: 0.3; } 24% { opacity: 0.1; } 58% { opacity: 0.26; } 62% { opacity: 0.16; } }
     @keyframes wcx-glitch-edge { 0%, 100% { opacity: 1; } 20% { opacity: 0.3; } 24% { opacity: 1; } 58% { opacity: 0.5; } }
     @keyframes wcx-ring { from { opacity: 0.9; transform: scale(0.12); } to { opacity: 0; transform: scale(1); } }
     @keyframes wcx-checks-edge { 0% { opacity: 0; } 10%, 55% { opacity: 1; } 80%, 100% { opacity: 0; } }
@@ -3004,19 +3093,14 @@ CSS = (
     }
     @keyframes wcx-mend { 0%, 85% { opacity: 1; } 0% { transform: none; } 100% { opacity: 0; transform: translateX(340px); } }
     @keyframes wcx-mend-edge { 0%, 100% { opacity: 0; } 30% { opacity: 1; } }
-    @keyframes wcx-evil {
-      0% { opacity: 1; transform: none; }
-      8%, 72% { opacity: 0; transform: scale(0.5); }
-      86% { opacity: 1; transform: scale(1.2); }
-      100% { opacity: 1; transform: none; }
-    }
 
     @media (prefers-reduced-motion: reduce) {
       .wcx * { animation: none !important; transition: none !important; }
       .wcx-capture { stroke-dashoffset: 0; }
+      .wcx-swap[data-frag] .wc-label { transform: none; }
       .wcx-taint { opacity: 1; }
       .wcx-checks .wcx-fail { opacity: 0; }
-      .wcx-hack .wcx-glitch { opacity: 0.08; }
+      .wcx-hack .wcx-glitch { opacity: 0.18; }
       .wcx-pulses, .wcx-flow, .wcx-sweep, .wcx-ring, .wcx-smoke, .wcx-mend { display: none; }
       .wf-item, .page.active .wc-title { transition: none; transform: none; }
       .globe-canvas, .wf-art * { animation: none !important; }
@@ -3077,6 +3161,8 @@ CSS = (
       .wcx-gos { width: auto !important; transform: none; grid-column: 1 / -1; }
       /* Room for the Governance Operating System's points: the layers keep just their names. */
       .wcx-inner[data-shift].shown .wcx-right .wc-note { display: none; }
+      /* Two labels to a row leave no room beside a name: the names swap in place, one by one. */
+      .wcx-swap[data-frag] .wc-label { transform: none; }
       .wcx-gos-head { grid-column: 1 / -1; }
       .wcx-gos-title { font-size: 1.15rem; }
       .wcx-gos-users .wc-frag { display: block; }
@@ -3146,6 +3232,25 @@ CSS = (
       gap: 1.6rem;
     }
     .dt-lead { font-size: 1.35rem; color: var(--gray-600); line-height: 1.35; margin-top: -0.6rem; }
+    /* The act's sentence, as it grows: a quote to remember, centred between big quotation marks. */
+    .dt-lead.ax-quote {
+      margin: 0.3rem 0 1rem;
+      text-align: center;
+      font-size: 2rem;
+      font-weight: 500;
+      line-height: 1.3;
+      letter-spacing: -0.01em;
+      color: var(--gray-800);
+    }
+    .ax-quote::before, .ax-quote::after {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 2.4em;
+      line-height: 0;
+      vertical-align: -0.4em;
+      color: rgb(107, 163, 163);
+    }
+    .ax-quote::before { content: "“"; margin-right: 0.12em; }
+    .ax-quote::after { content: "”"; margin-left: 0.08em; }
 
     /* An acts slide played over the world computer (its :detour: click): an opaque sheet the
        picture waits under, the planet (drawn full-window, under the page) included. */
@@ -3165,8 +3270,13 @@ CSS = (
       transition: opacity 0.5s ease !important;
     }
 
-    .ax-act { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr) minmax(0, 1fr); align-items: start; }
-    .ax-act.shown { transition-delay: 0.35s; }
+    .ax-act { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) minmax(0, 1fr); align-items: start; row-gap: 0.4rem; }
+    .ax-act.shown, .ax-gauge.shown { transition-delay: 0.35s; }
+    /* D watches the act from over it. */
+    .ax-d { grid-area: 1 / 2; margin-bottom: 0.6rem; }
+    .ax-a { grid-area: 2 / 1; }
+    .ax-b { grid-area: 2 / 2; }
+    .ax-c { grid-area: 2 / 3; }
     .ax-part {
       --tone: var(--gray-700);
       display: flex;
@@ -3177,7 +3287,8 @@ CSS = (
       color: var(--tone);
       transition: color 0.5s ease;
     }
-    .ax-part:has(.ax-gone.shown .ax-fail.shown) { --tone: #b94a48; }
+    .ax-part:has(.ax-gone.shown :is(.ax-fail, .ax-mark).shown) { --tone: #b94a48; }
+    .ax-gone.ax-d-mark { display: none; }
     .ax-act:has(.ax-secured.shown) .ax-part { --tone: rgb(47, 95, 95); }
     .ax-token {
       position: relative;
@@ -3193,9 +3304,9 @@ CSS = (
     .ax-who > svg { height: 4.6rem; width: auto; }
     .ax-name { font-size: 2.1rem; font-weight: 800; line-height: 1; }
     .ax-role { font-size: 1.05rem; color: var(--gray-500); }
-    .ax-gone { display: block; transition: opacity 0.4s ease; }
+    .ax-gone { display: block; max-height: 10em; transition: opacity 0.4s ease, max-height 0.6s ease; }
     /* Once the defects leave, so does the space they held. */
-    .ax-gone:not(.shown) { display: none; }
+    .ax-gone:not(.shown) { max-height: 0; opacity: 0; overflow: hidden; }
     .ax-fail { display: block; max-width: 15rem; font-size: 1.15rem; font-weight: 650; line-height: 1.25; color: #b94a48; }
     .ax-role, .ax-fail { overflow-wrap: anywhere; hyphens: auto; }
 
@@ -3237,29 +3348,101 @@ CSS = (
       line-height: 1.3;
     }
 
-    .ax-scene { display: grid; height: 9rem; }
     .ax-layer { grid-area: 1 / 1; display: grid; transition: opacity 0.4s ease; }
     .ax-layer[data-until]:not(.shown) { opacity: 0; }
-    .ax-monkeys { display: flex; justify-content: center; }
-    /* Its white background melts into the panel. */
-    .ax-monkeys video { display: block; height: 9rem; max-width: 100%; object-fit: contain; mix-blend-mode: multiply; }
-    .ax-network { align-self: center; }
-    .ax-network svg { display: block; width: 100%; max-height: 9rem; }
-    .ax-net-narrow { display: none !important; }
-    .ax-edges { stroke: rgb(107, 163, 163); stroke-width: 1.2; stroke-opacity: 0.55; }
-    .ax-node { fill: rgb(47, 95, 95); opacity: 0; transition: opacity 0.4s ease; }
-    .ax-network.shown .ax-node { opacity: 1; transition-delay: calc(0.2s + var(--i) * 0.06s); }
-    .ax-network:not(.shown) .ax-msg { display: none; }
+    /* Who watches, in D's place: one person, then the three monkeys. */
+    .ax-watch { display: grid; place-items: end center; width: 100%; }
+    .ax-three { display: block; height: 4.6rem; width: auto; max-width: 100%; }
+    .ax-hands { opacity: 0; transform: translateY(3px); transition: opacity 0.4s ease, transform 0.5s ease; }
+    .ax-monkeys.shown .ax-hands { opacity: 1; transform: none; transition-delay: 0.7s; }
+    /* While the crowd protests, D sweats and plays innocent: yellow, hands down, then red again. */
+    .ax-sweat { display: none; }
+    .ax-part.ax-d:has(.ax-sweat.shown .ax-sweat-mark.shown) { --tone: #d4a72c; transition: color 1.2s ease 0.4s; }
+    .ax-d:has(.ax-sweat.shown .ax-sweat-mark.shown) .ax-hands { opacity: 0; transform: translateY(4px); transition-delay: 0.5s; }
+    .ax-drop { opacity: 0; transition: opacity 0.4s ease; }
+    .ax-d:has(.ax-sweat.shown .ax-sweat-mark.shown) .ax-drop { animation: ax-drip 1.5s ease-in calc(0.8s + var(--dd)) infinite; }
+    @keyframes ax-drip { 0% { opacity: 0; transform: translateY(-1px); } 25% { opacity: 1; } 100% { opacity: 0; transform: translateY(5px); } }
+    .ax-protest-on { opacity: 0; transition: opacity 0.6s ease; color: #555; }
+    .ax-protest.shown .ax-protest-on.shown { opacity: 1; }
+    .ax-pump { animation: ax-pump 0.8s ease-in-out var(--pd) infinite alternate; }
+    @keyframes ax-pump { from { transform: translateY(1.8px); } to { transform: translateY(-1.2px); } }
+    /* Once servers watch among the crowd, D's place goes and the crowd is named "D & E". */
+    .ax-d-in { display: contents; }
+    .ax-part.ax-d {
+      max-height: 12rem;
+      transition: color 0.5s ease, opacity 0.5s ease, transform 0.6s ease, max-height 0.8s ease, margin 0.8s ease;
+    }
+    .ax-d:has(> .ax-d-in[data-until]:not(.shown)) { max-height: 0; margin-bottom: 0; opacity: 0; overflow: hidden; }
+    .ax-watch-at { width: 100%; transition: opacity 0.5s ease; }
+    .ax-watch-at[data-until]:not(.shown) { opacity: 0; }
+    /* The parts come in one by one (intro: bullets), as the lead grows. */
+    .ax-intro { opacity: 0; transform: translateY(0.6rem); transition: color 0.5s ease, opacity 0.5s ease, transform 0.6s ease; }
+    .ax-intro.shown { opacity: 1; transform: none; }
+    .ax-say[data-until]:not(.shown), .ax-say:has(> :not(.shown)) { display: none; }
+
+    /* Eyes: the pupils glance on a loop (--look), and DECK_JS blinks them at random. */
+    .ax-eye { transform-box: fill-box; transform-origin: center; transition: transform 0.06s ease; }
+    .ax-blink .ax-eye { transform: scaleY(0.1); }
+    .ax-pupil { animation: var(--look) var(--t) ease-in-out var(--dl) infinite; }
+    /* D looks down at A (to the left), B and C (to the right). */
+    @keyframes ax-look-act {
+      0%, 22%, 100% { transform: translate(-0.7px, 0.4px); }
+      30%, 52%, 90% { transform: translate(0, 0.65px); }
+      60%, 82% { transform: translate(0.7px, 0.4px); }
+    }
+    /* A server looks at its neighbours, one way and the other. */
+    @keyframes ax-look-peers {
+      0%, 35%, 100% { transform: translateX(-0.5px); }
+      50%, 85% { transform: translateX(0.5px); }
+    }
+
+    .ax-crowd { grid-area: crowd; margin-bottom: 0.9rem; color: #9a9a9a; }
+    /* Visible overflow: the servers come in from D's place, outside the crowd. */
+    .ax-crowd svg { display: block; width: 100%; max-height: 9rem; overflow: visible; }
+    .ax-crowd-labels { display: grid; justify-items: center; margin-top: 0.4rem; }
+    .ax-crowd-e, .ax-crowd-de {
+      grid-area: 1 / 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.3rem;
+      color: var(--gray-700);
+      text-align: center;
+      transition: opacity 0.6s ease;
+    }
+    .ax-crowd-de { color: rgb(47, 95, 95); }
+    .ax-crowd-e[data-until]:not(.shown) { opacity: 0; }
+    .ax-crowd-de:not(.shown) { opacity: 0; }
+    .ax-crowd-de.shown { transition-delay: 0.4s; }
+    /* For the servers, the crowd spreads apart (--ex), then they come in among it. */
+    .ax-person { transition: transform 0.8s cubic-bezier(0.45, 0, 0.2, 1); }
+    .ax-crowd:has(.ax-spread.shown) .ax-person {
+      transform: translateX(calc(var(--ex) * 1px));
+      transition: transform 1.2s cubic-bezier(0.45, 0, 0.2, 1);
+    }
+    .ax-srv {
+      transform-box: fill-box;
+      transform-origin: center;
+      transform: translate(calc(var(--fx, 0) * 1px), calc(var(--fy, 0) * 1px));
+      opacity: 0;
+      transition: opacity 0.6s ease;
+    }
+    .ax-servers.shown .ax-srv { opacity: 1; }
+    .ax-crowd:has(.ax-spread.shown) .ax-srv {
+      transform: none;
+      opacity: var(--o);
+      transition: transform 1.4s cubic-bezier(0.45, 0, 0.2, 1) 0.4s, opacity 1s ease 0.8s;
+    }
+    .ax-led { animation: ax-led var(--lt) steps(1) var(--ld) infinite; }
+    @keyframes ax-led { 0%, 100% { opacity: 1; } 35% { opacity: 0.25; } 50% { opacity: 1; } 70% { opacity: 0.45; } }
 
     .ax-body {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 12rem;
-      grid-template-areas: "act gauge" "scene gauge";
-      column-gap: 2.5rem;
-      row-gap: 1.6rem;
+      grid-template-columns: minmax(0, 1fr) 16.5rem;
+      grid-template-areas: "crowd gauge" "act gauge";
+      column-gap: 2rem;
     }
     .ax-act { grid-area: act; }
-    .ax-scene { grid-area: scene; }
     .ax-gauge {
       grid-area: gauge;
       display: grid;
@@ -3268,19 +3451,31 @@ CSS = (
       column-gap: 0.9rem;
       row-gap: 0.7rem;
     }
-    .ax-gauge-name { grid-column: 1 / -1; font-size: 0.85rem; font-weight: 650; letter-spacing: 0.16em; text-transform: uppercase; color: var(--gray-500); }
+    .ax-gauge-name { grid-column: 1 / -1; font-size: 0.85rem; font-weight: 650; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gray-500); }
+    /* The level, beside the meter's name: low, medium, high, very high. */
+    .ax-gauge-words { font-weight: 800; }
+    /* Only the current word takes room, so that it fits beside the name. */
+    .ax-gauge-word[data-until]:not(.shown), .ax-gauge-word:has(> .wc-frag:not(.shown)) { display: none; }
+    .ax-gauge-word > span { color: var(--tone); white-space: nowrap; }
     .ax-gauge-track { position: relative; border-radius: 999px; background: var(--gray-100); overflow: hidden; }
+    .ax-gauge-at[data-until]:not(.shown) { display: none; }
     .ax-gauge-fill {
       position: absolute;
       inset: auto 0 0 0;
-      height: var(--level);
+      height: calc(var(--level) * 1%);
       border-radius: inherit;
       background: var(--tone);
       transform: scaleY(0);
       transform-origin: bottom;
     }
-    /* It rises as a cost comes in, and drops at once on the way back. */
-    .ax-gauge-fill.shown { transform: none; transition: transform 1s cubic-bezier(0.2, 0.7, 0.2, 1) 0.2s; }
+    /* Each level sweeps the meter from the one before it, up or down (at once on the way back). */
+    .ax-gauge-fill.shown { transform: none; animation: ax-gauge-y 1s cubic-bezier(0.2, 0.7, 0.2, 1) 0.2s both; }
+    @keyframes ax-gauge-y {
+      from { transform: scaleY(calc(var(--from) / var(--level))); background: var(--from-tone); }
+    }
+    @keyframes ax-gauge-x {
+      from { transform: scaleX(calc(var(--from) / var(--level))); background: var(--from-tone); }
+    }
     .ax-gauge-says { display: grid; align-self: center; font-size: 1.15rem; line-height: 1.35; }
     .ax-gauge-say { grid-area: 1 / 1; transition: opacity 0.3s ease; }
     .ax-gauge-say[data-until]:not(.shown) { opacity: 0; }
@@ -3328,21 +3523,20 @@ CSS = (
       .dt-content { gap: 0.9rem; }
       .dt-lead { font-size: 1.15rem; }
       .ax-act { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr); column-gap: 0.4rem; }
-      .ax-scene { height: 5.8rem; }
-      .ax-monkeys video { height: 5.8rem; }
-      .ax-net-wide { display: none !important; }
-      .ax-net-narrow { display: block !important; }
+      .ax-three { height: 3rem; }
+      .ax-crowd { margin-bottom: 0.5rem; }
       .ax-role { font-size: 0.95rem; }
       .ax-token { height: 6rem; }
       .ax-who > svg { height: 3.6rem; }
       .ax-name { font-size: 1.7rem; }
       .ax-fail { font-size: 0.92rem; }
       .ax-point { font-size: 1.15rem; }
-      .ax-body { grid-template-columns: minmax(0, 1fr); grid-template-areas: "act" "scene" "gauge"; row-gap: 0.9rem; }
+      .ax-body { grid-template-columns: minmax(0, 1fr); grid-template-areas: "crowd" "act" "gauge"; }
+      .ax-gauge { margin-top: 0.9rem; }
       .ax-gauge { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; row-gap: 0.45rem; }
       .ax-gauge-track { height: 0.75rem; }
-      .ax-gauge-fill { inset: 0 auto 0 0; width: var(--level); height: auto; transform: scaleX(0); transform-origin: left; }
-      .ax-gauge-fill.shown { transform: none; }
+      .ax-gauge-fill { inset: 0 auto 0 0; width: calc(var(--level) * 1%); height: auto; transform: scaleX(0); transform-origin: left; }
+      .ax-gauge-fill.shown { transform: none; animation-name: ax-gauge-x; }
       .ax-gauge-says { align-self: start; }
       .ax-gauge-name { font-size: 0.7rem; }
       .ax-gauge-says { font-size: 0.95rem; }
@@ -3357,8 +3551,7 @@ CSS = (
     @media (max-height: 500px) {
       .dt-content { gap: 0.8rem; }
       .ax-token { height: 5rem; }
-      .ax-scene { height: 5rem; }
-      .ax-monkeys video { height: 5rem; }
+      .ax-three { height: 3rem; }
       .ax-who > svg { height: 3rem; }
       .lx-stack { gap: 0.4rem; }
       .lx-layer { padding: 0.5rem 1rem; }
@@ -3366,7 +3559,6 @@ CSS = (
 
     @media (prefers-reduced-motion: reduce) {
       .dt-slide * { transition: none !important; animation: none !important; }
-      .ax-msg { display: none; }
     }
 """
     + "\n    "
@@ -3386,14 +3578,15 @@ class WorldComputerSlide(Slide):
     Bullets are ":key: Label — note", one per click; keys are those of WCX_ART. A layer can be
     named for the world first and for the computer later: ":key: World — note <=> Computer — note".
     ":decay: layer" (hardware, apps or users) is the click the hack's damage reaches that layer.
-    ":gos:" is the click where the new governance stack comes in: the picture moves right, the
-    callouts on the left leave, and the layers take their computer names (the part after "<=>").
+    ":rename: layer" is a click where that layer takes its computer name (the part after "<=>"):
+    it shows beside the world name, then takes its place. ":gos:" is the click where the new
+    governance stack comes in: the picture moves right, the callouts on the left leave, and any
+    layer left without a ":rename:" takes its computer name then, one after another.
     ":gos-head: Title" is its heading. Its points are ":gos-os:", ":gos-apps:" and ":gos-users:"
     bullets: lines "A — note — note + B", where notes are optional, "{ic}" ends a line or note
     with the Internet Computer logo, and a line "Title (Abbr)" sets the abbreviation apart. Each point
     mends its layer. A nested bullet comes with the click of the bullet above it. The ":gos-os:"
-    point comes in boxed, to stress it. Until the switch, a layer's world name carries its computer
-    name as a small gray hint.
+    point comes in boxed, to stress it.
 
     ":detour:" is the click where the next slide of steps.md (an acts slide, see parse_steps) plays
     over the picture, which waits underneath as it is; one click after that slide's last, the
@@ -3422,12 +3615,18 @@ class WorldComputerSlide(Slide):
         callout_clicks = {
             k: c for c, (_, t) in zip(clicks, self.bullets) for k in WCX_CALLOUTS if t.strip().startswith(f":{k}:")
         }
+        swaps = {m[1] for _, t in self.bullets if (m := re.match(r"^:([\w-]+):.*<=>", t.strip()))}
+        renames = {}
+        for c, (_, t) in zip(clicks, self.bullets):
+            if m := re.match(r"^:rename:\s*([\w-]+)$", t.strip()):
+                if m[1] not in swaps:
+                    raise ValueError(f"world-computer: :rename: takes a layer with a computer name ({sorted(swaps)}), not {m[1]!r}")
+                renames[m[1]] = c
 
-        def text_html(text: str, hint: str = "") -> str:
+        def text_html(text: str) -> str:
             label, _, note = text.strip().partition(" — ")
             note_html = f'<span class="wc-note">{tr(note)}</span>' if note else ""
-            hint_html = f' <span class="wcx-hint">{tr(hint)}</span>' if hint else ""
-            return f'<span class="wc-label">{CALLOUT_ICONS.get(key, "")}{tr(label)}{hint_html}</span>{note_html}'
+            return f'<span class="wc-label">{CALLOUT_ICONS.get(key, "")}{tr(label)}</span>{note_html}'
 
         def titled(text: str) -> str:
             title, abbr = re.match(r"^(.*?)(?:\s*\(([^()]+)\))?$", text).groups()
@@ -3471,12 +3670,12 @@ class WorldComputerSlide(Slide):
 
         for click, (_, text) in zip(clicks, self.bullets):
             m = re.match(r"^:([\w-]+):\s*(.*)$", text)
-            if not m or m.group(1) not in {*WCX_ART, *GOS_POINTS, "gos", "gos-head", "decay", "detour"}:
+            if not m or m.group(1) not in {*WCX_ART, *GOS_POINTS, "gos", "gos-head", "decay", "detour", "rename"}:
                 raise ValueError(
-                    f"world-computer: expected :gos:, :gos-head:, :decay:, :detour:, one of {sorted(GOS_POINTS)} or one of {sorted(WCX_ART)} in {text!r}"
+                    f"world-computer: expected :gos:, :gos-head:, :decay:, :detour:, :rename:, one of {sorted(GOS_POINTS)} or one of {sorted(WCX_ART)} in {text!r}"
                 )
             key, rest = m.groups()
-            if key == "detour":
+            if key in ("detour", "rename"):
                 continue
             if key == "decay":
                 if rest not in ("hardware", "apps", "users"):
@@ -3503,10 +3702,17 @@ class WorldComputerSlide(Slide):
             if swap and gos is None:
                 raise ValueError(f"world-computer: {text!r} has a computer name but no :gos: click")
             if swap:
-                # Both names share one grid cell, so swapping them does not move anything.
+                # Both names share one grid cell. A layer swaps them at its own :rename: click,
+                # or else at :gos:, after the picture has moved, from the bottom up (--rn: when).
+                at = renames.get(key, gos)
+                rn = (
+                    WCX_RENAME_CLICK
+                    if key in renames
+                    else WCX_RENAME_AT + WCX_RENAME_STEP * [k for k in RENAME_ORDER if k in swaps - renames.keys()].index(key)
+                )
                 body = (
-                    f'<span class="wcx-name wcx-swap" data-until="{gos}">{text_html(world, computer.partition(" — ")[0].strip())}</span>'
-                    f'<span class="wcx-name wcx-swap" data-frag="{gos}">{text_html(computer)}</span>'
+                    f'<span class="wcx-name wcx-swap" data-until="{at}" style="--rn:{rn:.1f}s">{text_html(world)}</span>'
+                    f'<span class="wcx-name wcx-swap" data-frag="{at}" style="--rn:{rn:.1f}s">{text_html(computer)}</span>'
                 )
             else:
                 body = text_html(world)
@@ -3727,60 +3933,272 @@ def _icon(paths: str) -> str:
 
 
 COST_AMBER = "#c98a2e"
+# Half way from COST_AMBER to TEAL_DARK, in OKLCH.
+COST_MID = "#60824a"
+# A defection cost's colour and its word, by level: below 25%, below 50%, below 80%, and above.
+COST_LEVELS = [(25, HACK_RED, "Low"), (50, COST_AMBER, "Medium"), (80, COST_MID, "High"), (101, TEAL_DARK, "Very high")]
+
+
+def cost_level(level: int) -> tuple[str, str]:
+    return next((tone, word) for top, tone, word in COST_LEVELS if level < top)
+
+
+GAUGE_DEMO_S = 6.0
+
+
+def gauge_demo_css(samples: int = 80) -> str:
+    """When the meter comes in, it shows how it reads: up and down twice through every level in
+    GAUGE_DEMO_S seconds, its colour and word (COST_LEVELS) changing with it; then it is empty."""
+
+    def level(i: int) -> float:
+        u = (2 * i / samples) % 1
+        return 0.0 if i == samples else 100 * (1 - abs(2 * u - 1))
+
+    def band(lv: float) -> int:
+        return next(b for b, (top, *_) in enumerate(COST_LEVELS) if lv < top)
+
+    def sweep(axis: str) -> str:
+        frames = " ".join(
+            f"{100 * i / samples:.2f}% {{ transform: scale{axis}({level(i) / 100:.3f}); background: {cost_level(level(i))[0]}; }}"
+            for i in range(samples + 1)
+        )
+        return f"@keyframes ax-gauge-demo-{axis.lower()} {{ {frames} }}"
+
+    words = []
+    for b in range(len(COST_LEVELS)):
+        frames, before = [], None
+        for i in range(samples + 1):
+            on = int(i < samples and band(level(i)) == b)
+            t = 100 * i / samples
+            if before is None:
+                frames.append(f"0% {{ opacity: {on}; }}")
+            elif on != before:
+                frames.append(f"{t - 0.3:.2f}% {{ opacity: {before}; }} {t:.2f}% {{ opacity: {on}; }}")
+            before = on
+        frames.append("100% { opacity: 0; }")
+        words.append(f"@keyframes ax-demo-w{b} {{ {' '.join(frames)} }}")
+    return "\n    ".join(
+        [
+            ".ax-gauge-demo { position: absolute; inset: 0; border-radius: inherit; transform: scaleY(0); transform-origin: bottom; }",
+            f".ax-gauge.shown .ax-gauge-demo {{ animation: ax-gauge-demo-y {GAUGE_DEMO_S}s linear 0.6s both; }}",
+            ".ax-demo-words { display: inline-grid; font-weight: 800; }",
+            ".ax-demo-words > span { grid-area: 1 / 1; opacity: 0; white-space: nowrap; }",
+            f".ax-gauge.shown .ax-demo-words > span {{ animation: var(--w) {GAUGE_DEMO_S}s linear 0.6s both; }}",
+            ".ax-gauge:has(.ax-gauge-word > .wc-frag.shown) .ax-demo-words { display: none; }",
+            "@media (max-aspect-ratio: 1/1) { .ax-gauge-demo { transform: scaleX(0); transform-origin: left; }"
+            " .ax-gauge.shown .ax-gauge-demo { animation-name: ax-gauge-demo-x; } }",
+            sweep("Y"),
+            sweep("X"),
+            *words,
+        ]
+    )
+
+
+CSS += "\n    " + gauge_demo_css() + "\n"
+
+
 CAVEAT_SVG = _icon('<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.4v.1"/>')
 AGENT_SVG = (
     '<span class="ax-who"><svg viewBox="-9.5 -20.5 19 20" aria-hidden="true">'
     f'{person_svg("currentColor")}</svg></span>'
 )
-ACT_PARTS = {"a": AGENT_SVG, "b": '<span class="ax-arrow"></span>', "c": AGENT_SVG}
 
 
-# A signed message: a small badge with a check.
-SIGNED_MESSAGE = (
-    f'<circle r="5" fill="#fff" stroke="{TEAL_DARK}" stroke-width="1.4"/>'
-    f'<path d="M-2.2 0-.6 1.6 2.4-1.5" fill="none" stroke="{TEAL_DARK}" stroke-width="1.4" '
-    'stroke-linecap="round" stroke-linejoin="round"/>'
+def eyes_svg(x: float, y: float, gap: float, r: float, look: str, period: float, delay: float) -> str:
+    """Two eyes centred on (x, y). The pupils glance on a loop (look: an @keyframes, over period
+    seconds, delay into it) and DECK_JS makes the eyes blink at random (.ax-blink)."""
+    eyes = "".join(
+        f'<g class="ax-eye"><circle cx="{x + s * gap:.2f}" cy="{y:.2f}" r="{r:.2f}" fill="#fff"/>'
+        f'<circle class="ax-pupil" cx="{x + s * gap:.2f}" cy="{y:.2f}" r="{r * 0.55:.2f}" fill="#262626"/></g>'
+        for s in (-1, 1)
+    )
+    return f'<g class="ax-eyes" style="--look:{look};--t:{period:.1f}s;--dl:-{delay:.1f}s">{eyes}</g>'
+
+
+# D, who watches: a person whose eyes go from A to B to C (they stand above, to the left, over
+# and to the right).
+WATCHER_SVG = (
+    '<span class="ax-who"><svg viewBox="-9.5 -21 19 20.5" aria-hidden="true">'
+    '<g fill="currentColor"><circle cy="-15" r="5.2"/><path d="M-8.5-1a8.5 8.5 0 0 1 17 0z"/></g>'
+    f'{eyes_svg(0, -15.4, 2.3, 1.9, "ax-look-act", 5.2, 0)}</svg></span>'
 )
+ACT_PARTS = {"a": AGENT_SVG, "b": '<span class="ax-arrow"></span>', "c": AGENT_SVG, "d": WATCHER_SVG}
 
 
-def _network(n: int, step: int) -> str:
-    """n canisters in a zig-zag, each linked to the next two, passing signed messages on a loop."""
-    nodes = [(24 + step * i, 62 if i % 2 else 18) for i in range(n)]
-    edges = [(nodes[i], nodes[j]) for i in range(n) for j in (i + 1, i + 2) if j < n]
-    lines = "".join(f'<line x1="{a[0]}" y1="{a[1]}" x2="{b[0]}" y2="{b[1]}"/>' for a, b in edges)
+def digital_eyes_svg(x: float, y: float, gap: float, w: float, h: float, period: float, delay: float) -> str:
+    """Two glowing pixel eyes on a screen, centred on (x, y): they look from one neighbour to the
+    other and blink, like eyes_svg."""
+    eyes = "".join(
+        f'<g class="ax-eye"><rect class="ax-pupil" x="{x + s * gap - w / 2:.2f}" y="{y - h / 2:.2f}" '
+        f'width="{w:.2f}" height="{h:.2f}" rx="{w * 0.3:.2f}" fill="#9ff5e4"/></g>'
+        for s in (-1, 1)
+    )
+    return f'<g class="ax-eyes" style="--look:ax-look-peers;--t:{period:.1f}s;--dl:-{delay:.1f}s">{eyes}</g>'
 
-    def message(k: int, a: tuple[int, int], b: tuple[int, int]) -> str:
-        # Every other link carries one, both ways; negative begins spread them out.
-        if k % 2:
-            a, b = b, a
-        timing = f'dur="{2.6 + (k % 3) * 0.5}s" begin="-{k * 0.61:.2f}s" repeatCount="indefinite"'
-        return (
-            f'<g class="ax-msg" opacity="0">{SIGNED_MESSAGE}'
-            f'<animateMotion {timing} path="M{a[0]} {a[1]}L{b[0]} {b[1]}"/>'
-            f'<animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.2;.8;1" {timing}/></g>'
-        )
 
-    messages = "".join(message(k, a, b) for k, (a, b) in enumerate(edges[::2]))
-    canisters = "".join(
-        f'<rect class="ax-node" x="{x - 8}" y="{y - 8}" width="16" height="16" rx="4" style="--i:{i}"/>'
-        for i, (x, y) in enumerate(nodes)
+def digital_server_svg(x: float, bottom: float, period: float, delay: float, rnd: random.Random, w: float = 13) -> str:
+    """A server standing on (x, bottom), about a person's size: a screen with pixel eyes over two
+    units with flickering lights."""
+    k = w / 10.5
+    h = 13.5 * k
+    left, top = x - w / 2, bottom - h
+    units = "".join(
+        f'<path d="M{left + 1.5 * k:.2f} {top + h * f:.2f}h{w * 0.45:.2f}" stroke="#fff" stroke-width="{0.7 * k:.2f}" '
+        f'stroke-linecap="round" opacity="0.4"/>'
+        f'<circle class="ax-led" cx="{left + w - 2.2 * k:.2f}" cy="{top + h * f:.2f}" r="{0.65 * k:.2f}" fill="#7cf0ad" '
+        f'style="--lt:{rnd.uniform(0.9, 2.2):.2f}s;--ld:-{rnd.uniform(0, 2):.2f}s"/>'
+        for f in (0.66, 0.84)
     )
     return (
-        f'<svg viewBox="0 0 {nodes[-1][0] + 24} 80" aria-hidden="true">'
-        f'<g class="ax-edges">{lines}</g>{canisters}{messages}</svg>'
+        f'<rect x="{left:.2f}" y="{top:.2f}" width="{w}" height="{h:.2f}" rx="{1.8 * k:.2f}" fill="{TEAL_DARK}"/>'
+        f'<rect x="{left + 1.2 * k:.2f}" y="{top + 1.2 * k:.2f}" width="{w - 2.4 * k:.2f}" height="{5.6 * k:.2f}" '
+        f'rx="{1.1 * k:.2f}" fill="#123332"/>'
+        + digital_eyes_svg(x, top + 4 * k, 1.75 * k, 1.9 * k, 2.3 * k, period, delay)
+        + units
     )
 
 
-# What stands in the way of a defection, shown under the act: "{monkeys}" or "{network}" ends a cost.
-ACT_SCENES = {
-    # The three wise monkeys, with banknotes over their eyes, ears and mouth: watchers can be bought.
-    "monkeys": '<video src="assets/3monkeys.mp4" data-play muted loop playsinline preload="auto"></video>',
-    # Fewer canisters on a phone, so the messages stay legible.
-    "network": _network(7, step=100).replace(
-        "<svg", '<svg class="ax-net-wide"', 1
-    )
-    + _network(5, step=70).replace("<svg", '<svg class="ax-net-narrow"', 1),
+# The three wise monkeys, as people: (hands, arms from the shoulders), mirrored left and right.
+NO_EVIL_POSES = {
+    "hear": (((-5.7, -15), 1.8, 2.6), (-7.4, -4.5)),
+    "see": (((-2.3, -16), 2.6, 1.9), (-6, -5)),
+    "speak": (((-1.3, -12.1), 2.3, 1.7), (-6, -5)),
 }
+
+
+def _no_evil(pose: str, dx: float, period: float, delay: float) -> str:
+    """A person with a face and moving eyes, hands over their ears, eyes or mouth; the hands come
+    up (.ax-hands)."""
+    ((hx, hy), rx, ry), (sx, sy) = NO_EVIL_POSES[pose]
+    face = (
+        f'<g transform="translate({dx} 0)"><g fill="currentColor"><circle cy="-15" r="5.2"/>'
+        '<path d="M-8.5-1a8.5 8.5 0 0 1 17 0z"/></g>'
+        + eyes_svg(0, -15.8, 2.05, 1.5, "ax-look-act", period, delay)
+        + '<path d="M-1.8-11.9H1.8" stroke="#fff" stroke-width="0.9" stroke-linecap="round"/>'
+    )
+    arms = "".join(f"M{s * sx} {sy}L{s * hx} {hy}" for s in (1, -1))
+    hands = "".join(
+        f'<ellipse cx="{s * hx}" cy="{hy}" rx="{rx}" ry="{ry}"/>' for s in (1, -1)
+    )
+    drops = "".join(
+        f'<path class="ax-drop" style="--dd:-{d:.1f}s" d="M{x} {y}q-1.4 2.1-1.4 3a1.4 1.4 0 0 0 2.8 0q0-.9-1.4-3z" '
+        'fill="#8fd0f0" stroke="#fff" stroke-width="0.4"/>'
+        for x, y, d in ((5.4, -22, 0.0), (-6.4, -20, 0.7))
+    )
+    return (
+        face
+        + f'<g class="ax-hands"><path d="{arms}" fill="none" stroke="#fff" stroke-width="3.8" stroke-linecap="round"/>'
+        f'<path d="{arms}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+        f'<g fill="currentColor" stroke="#fff" stroke-width="0.8">{hands}</g></g>{drops}</g>'
+    )
+
+
+THREE_VIEWBOX = "-30 -21.5 60 21"
+
+
+def _three_monkeys() -> str:
+    """Hear no evil, see no evil, speak no evil."""
+    people = "".join(
+        _no_evil(pose, dx, period, delay)
+        for pose, dx, period, delay in zip(NO_EVIL_POSES, (-20, 0, 20), (4.6, 5.3, 5.9), (0.8, 2.6, 4.1))
+    )
+    return f'<svg class="ax-three" viewBox="{THREE_VIEWBOX}" aria-hidden="true">{people}</svg>'
+
+
+def protester_svg(placard: bool, delay: float) -> str:
+    """A person of the crowd, in its own units (person_svg), raising a fist or a placard that
+    pumps up and down (.ax-pump)."""
+    if placard:
+        raised = (
+            '<path d="M5.5-6V-24" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>'
+            '<rect x="-1.5" y="-33" width="14" height="9.5" rx="1.2" fill="#fff" stroke="currentColor" stroke-width="1.5"/>'
+            '<path d="M1.5-29.5h8M1.5-26.5h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>'
+        )
+    else:
+        raised = (
+            '<path d="M5.5-6 8-20" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/>'
+            '<circle cx="8.3" cy="-21.5" r="2.4" fill="currentColor"/>'
+        )
+    return f'{person_svg("currentColor")}<g class="ax-pump" style="--pd:-{delay:.2f}s">{raised}</g>'
+
+
+# Who protests in the crowd, at "{protest}": (row, person), and whether they hold a placard.
+CROWD_PROTEST = {(2, 1): False, (2, 6): True, (2, 10): False, (1, 3): True, (1, 8): False}
+
+# In each row of the crowd, the people after whom a server comes in.
+CROWD_SERVERS = {0: (2, 7), 1: (1, 4, 7, 9), 2: (2, 5, 8)}
+CROWD_STEP = 16  # between two people in a row, and the room a server takes
+CROWD_ROW = 11  # between two rows
+
+
+def _crowd(
+    servers_at: int | None,
+    spread_at: int | None = None,
+    protest: tuple[int, int] | None = None,
+    rows: int = 3,
+    cols: int = 12,
+) -> str:
+    """Small people, rows deep and loosely packed, the back rows paler and drawn first. From
+    servers_at, servers stand where D does (.ax-srv: DECK_JS aims each from there; data-x and data-y
+    are its place in the crowd, --o how pale it is there); from spread_at (.ax-spread), the people
+    move apart (.ax-person, --ex) and the servers go to their places among them (CROWD_SERVERS).
+    protest: (from, until), the clicks some of them protest (CROWD_PROTEST), drawn darker over
+    themselves."""
+    rnd = random.Random(7)
+    spread = max(len(v) for v in CROWD_SERVERS.values()) * CROWD_STEP / 2
+    layers = []
+    for r in range(rows):
+        after = CROWD_SERVERS.get(r, ()) if servers_at is not None else ()
+        people, spots, protesters = [], [], []
+        for c in range(cols - r % 2):
+            x = spread + 10 + c * CROWD_STEP + CROWD_STEP / 2 * (r % 2) + rnd.uniform(-3, 3)
+            y = 19 + r * CROWD_ROW + rnd.uniform(-1.5, 1.5)
+            k = rnd.uniform(0.74, 0.86)
+            shade = 0.45 + 0.55 * r / (rows - 1) - rnd.uniform(0, 0.12)
+            ex = CROWD_STEP * (sum(1 for a in after if a < c) - len(after) / 2)
+            people.append(
+                f'<g class="ax-person" style="--ex:{ex:.1f}"><g transform="translate({x:.1f} {y:.1f}) scale({k:.2f})" '
+                f'opacity="{shade:.2f}">{person_svg("currentColor")}</g></g>'
+            )
+            spots.append((x + ex, y, shade))
+            if protest and (r, c) in CROWD_PROTEST:
+                protesters.append(
+                    f'<g transform="translate({x:.1f} {y:.1f}) scale({k:.2f})">'
+                    f"{protester_svg(CROWD_PROTEST[(r, c)], rnd.uniform(0, 1))}</g>"
+                )
+        servers = []
+        for a in after:
+            x, y = (spots[a][0] + spots[a + 1][0]) / 2, spots[a][1] + 0.5
+            servers.append(
+                f'<g class="ax-srv" data-x="{x:.1f}" data-y="{y - 8.5:.1f}" style="--o:{spots[a][2]:.2f}">'
+                + digital_server_svg(x, y, rnd.uniform(2.6, 4.4), rnd.uniform(0, 4), rnd)
+                + "</g>"
+            )
+        servers = "".join(servers)
+        layers.append("".join(people))
+        if protesters:
+            layers.append(
+                f'<g class="ax-protest" data-until="{protest[1]}"><g class="ax-protest-on" data-frag="{protest[0]}">'
+                f'{"".join(protesters)}</g></g>'
+            )
+        if servers:
+            layers.append(f'<g class="ax-servers" data-frag="{servers_at}">{servers}</g>')
+    if spread_at is not None:
+        layers.append(f'<g class="ax-spread" data-frag="{spread_at}"></g>')
+    width, height = 2 * spread + 20 + (cols - 1) * CROWD_STEP, 19 + (rows - 1) * CROWD_ROW + 3
+    return f'<svg viewBox="0 0 {width:.0f} {height}" aria-hidden="true">{"".join(layers)}</svg>'
+
+
+# What watches, as a picture comes in (it ends a cost, or stands on its own as a click of its own).
+# "{monkeys}": the three wise monkeys take D's place, watchers who can be bought. "{servers}":
+# servers come in among the crowd and watch each other; D's place goes, the crowd is "D & E".
+ACT_SCENES = {"monkeys": _three_monkeys(), "servers": None, "protest": None}
+# "{protest}": some of the crowd protest until the next cost; D sweats and plays innocent: it
+# turns yellow and its hands come down, then it is red again.
+# A cost ending in "{servers}" takes clicks of its own before it moves the meter: its own click
+# brings its caption, D's figure goes and the servers come in where it stood; the next, the crowd
+# spreads and they go to it; the next, D's place folds and E becomes "D & E"; the last, the meter.
+SERVERS_CLICKS = 3
 # Top to bottom.
 LAW_LAYERS = {
     "intent": _icon('<path d="M4 5h16v11H10l-5 4v-4H4z"/><path d="M8 9.5h8M8 12.5h5"/>'),
@@ -3820,19 +4238,28 @@ def detour_page(cls: str, inner: str) -> str:
 class ActsSlide(Slide):
     """Governance as a stream of acts, "A does B to C", away from the globe.
 
-    "title: Title — lead". ":a: A — what A is — defect" (and :b:, :c:): a part of the act, what
-    it stands for in the example, and how it can make the act defective. The parts stand in a, b,
-    c order; their defects come one per click, in the order of the bullets. ":rule: §" is the rule
-    the act falls under. Any other bullet is a point, one per click.
+    "title: Title — lead". ":a: A — what A is — defect" (and :b:, :c:, :d:): a part of the act,
+    what it stands for, and how it can make the act defective. A, B and C stand in a row, in that
+    order, and D (who watches) over B; defects come one per click, in the order of the bullets.
+    ":e: E — what E is" names the crowd over them all. ":rule: §" is the rule the act falls under.
+    Any other bullet is a point, one per click.
 
-    "gauge: Name" is a meter that "cost: 10% — Label — note" bullets fill, one per click: each
-    sweeps it to its level (red, then amber, then teal as it rises) and swaps its caption. A cost
+    "intro: a — sentence" (and b, c, d, e) builds the act up: the first comes with the slide, each
+    next one a click later; it brings in its part and puts its sentence (what the act is so far)
+    in place of the lead. Without them, every part is there from the start.
+
+    "gauge: Name" is a meter that "cost: 10% — Label" bullets fill, one per click (a note after
+    another " — " shows beside the label): each sweeps it from the level before to its own, up or
+    down, names the level beside the meter's name (COST_LEVELS) and swaps the caption. A cost
     nested under a bullet comes with that bullet's click. The last cost secures the act: the
-    defects leave, the parts turn teal and the rule tags the act's arrow. The gauge stands to
-    the right of the act, as tall as the act and its picture.
+    defects leave, the parts turn teal and the rule tags the act's arrow. The gauge stands to the
+    right of the act, as tall as the crowd and the act: from the slide's first click, or, after
+    intros, from a click of its own (the gauge: bullet's), when it shows how it reads.
 
-    A picture shows under the act until the next one does: "{monkeys}" on its own is a click
-    of its own, and a cost ending in "{network}" brings it with that cost.
+    D, whoever watches, is a person whose eyes go from A to B to C, red from the first cost
+    (watchers can be bought) until the act is secured. E, the crowd, stands over them all. A picture changes who watches
+    (ACT_SCENES), from its click until the next one's: it ends a cost, or stands on its own as a
+    click of its own.
 
     A world-computer slide's ":detour:" plays it over the picture: body(offset) moves every click
     by offset, and clicks() is its last.
@@ -3840,16 +4267,27 @@ class ActsSlide(Slide):
 
     def _parse(self) -> dict:
         p = {
-            "title": "", "parts": {}, "rule": "", "points": [], "gauge": "", "costs": [], "scenes": [],
+            "title": "", "parts": {}, "rule": "", "points": [], "gauge": "", "gauge_at": 0, "costs": [], "scenes": [],
+            "intros": [],
         }
         frag = 0
         for depth, text in self.bullets:
-            m = re.match(r"^(?:(title|gauge|cost):|:([\w-]+):)\s*(.*)$", text)
+            m = re.match(r"^(?:(title|gauge|cost|intro):|:([\w-]+):)\s*(.*)$", text)
             kind, key, rest = m.groups() if m else (None, None, text)
             if kind == "title":
                 p["title"] = rest
             elif kind == "gauge":
                 p["gauge"] = rest
+                if p["intros"]:
+                    # After the intros, the meter comes in with a click of its own.
+                    frag += 1
+                    p["gauge_at"] = frag
+            elif kind == "intro":
+                key, _, sentence = rest.partition(" — ")
+                if key not in (*ACT_PARTS, "e") or not sentence:
+                    raise ValueError(f"acts: intro: takes a part ({[*ACT_PARTS, 'e']}) and a sentence, not {rest!r}")
+                frag += bool(p["intros"])
+                p["intros"].append((key, sentence, frag))
             elif kind == "cost":
                 level, _, rest = rest.partition(" — ")
                 if not re.fullmatch(r"\d{1,3}%", level):
@@ -3857,13 +4295,17 @@ class ActsSlide(Slide):
                 if not depth:
                     frag += 1
                 scene = re.search(r"\s*\{([\w-]+)\}$", rest)
+                says_at = frag
                 if scene:
                     if scene[1] not in ACT_SCENES:
                         raise ValueError(f"acts: cost: draws one of {[*ACT_SCENES]}, not {{{scene[1]}}}")
                     p["scenes"].append((scene[1], frag))
+                    if scene[1] == "servers":
+                        # Its caption comes now; the servers take their clicks; then the meter.
+                        frag += SERVERS_CLICKS
                     rest = rest[: scene.start()]
                 label, _, note = rest.partition(" — ")
-                p["costs"].append((int(level[:-1]), label, note, frag))
+                p["costs"].append((int(level[:-1]), label, note, says_at, frag))
             elif m := re.fullmatch(r"\{([\w-]+)\}", text):
                 if m[1] not in ACT_SCENES:
                     raise ValueError(f"acts: draws one of {[*ACT_SCENES]}, not {{{m[1]}}}")
@@ -3871,14 +4313,14 @@ class ActsSlide(Slide):
                 p["scenes"].append((m[1], frag))
             elif key == "rule":
                 p["rule"] = rest
-            elif key in ACT_PARTS:
+            elif key in (*ACT_PARTS, "e"):
                 token, _, rest = rest.partition(" — ")
                 role, _, defect = rest.partition(" — ")
                 if defect:
                     frag += 1
                 p["parts"][key] = (token, role, defect, frag)
             elif key:
-                raise ValueError(f"acts: unknown part :{key}:; expected one of {[*ACT_PARTS, 'rule']}")
+                raise ValueError(f"acts: unknown part :{key}:; expected one of {[*ACT_PARTS, 'e', 'rule']}")
             else:
                 frag += 1
                 p["points"].append((rest, frag))
@@ -3900,6 +4342,22 @@ class ActsSlide(Slide):
         rule = html.escape(p["rule"])
         rule_tag = f'<span class="ax-rule"><span class="ax-rule-tag wc-frag" data-frag="{secured_at}">{rule}</span></span>'
 
+        servers_at = next((at + offset for key, at in p["scenes"] if key == "servers"), None)
+        protest = next(
+            (
+                (at + offset, next((c[-1] + offset for c in p["costs"] if c[-1] > at), secured_at))
+                for key, at in p["scenes"]
+                if key == "protest"
+            ),
+            None,
+        )
+        # The servers' clicks: they come in where D stands, go to the crowd, then D & E merge.
+        spread_at = merge_at = None
+        if servers_at is not None:
+            spread_at, merge_at = servers_at + 1, servers_at + 2
+        # When each part comes in: with the slide, or with its intro.
+        comes = {key: at + offset for key, _, at in p["intros"]}
+
         def part(key: str) -> str:
             token, role, defect, at = parts[key]
             defect_html = (
@@ -3908,12 +4366,34 @@ class ActsSlide(Slide):
                 if defect
                 else ""
             )
-            return (
-                f'<div class="ax-part ax-{key}"><div class="ax-token">{ACT_PARTS[key]}'
-                f'{rule_tag if key == "b" else ""}'
+            if key == "d":
+                figure = self._watchers(p, offset)
+                if protest:
+                    # Hidden: while the crowd protests, D sweats and plays innocent.
+                    defect_html += (
+                        f'<span class="ax-sweat" data-until="{protest[1]}">'
+                        f'<span class="ax-sweat-mark" data-frag="{protest[0]}"></span></span>'
+                    )
+                if servers_at is not None:
+                    # D's figure goes as the servers come in where it stands.
+                    figure = f'<div class="ax-watch-at" data-until="{servers_at}">{figure}</div>'
+                # Hidden: it turns D red from the first cost until the act is secured.
+                defect_html += (
+                    f'<span class="ax-gone ax-d-mark" data-until="{secured_at}">'
+                    f'<span class="ax-mark" data-frag="{p["costs"][0][-1] + offset}"></span></span>'
+                )
+            else:
+                figure = ACT_PARTS[key]
+            intro = f' ax-intro" data-frag="{comes[key]}' if key in comes else ""
+            inner = (
+                f'<div class="ax-token">{figure}{rule_tag if key == "b" else ""}'
                 f'<span class="ax-name">{html.escape(token)}</span></div>'
-                f'<span class="ax-role">{tr(role)}</span>{defect_html}</div>'
+                f'<span class="ax-role">{tr(role)}</span>{defect_html}'
             )
+            if key == "d" and merge_at is not None:
+                # Once the servers watch among the crowd, D's place folds: the crowd is D & E.
+                inner = f'<div class="ax-d-in" data-until="{merge_at}">{inner}</div>'
+            return f'<div class="ax-part ax-{key}{intro}">{inner}</div>'
 
         act = (
             f'<div class="ax-act wc-frag" data-frag="{offset}">'
@@ -3921,51 +4401,109 @@ class ActsSlide(Slide):
             + "".join(part(k) for k in ACT_PARTS)
             + "</div>"
         )
+        e_label = ""
+        if "e" in parts:
+            token, role, *_ = parts["e"]
+            leaves = f' data-until="{merge_at}"' if merge_at is not None else ""
+            e_label = (
+                f'<div class="ax-crowd-e"{leaves}><span class="ax-name">{html.escape(token)}</span>'
+                f'<span class="ax-role">{tr(role)}</span></div>'
+            )
+            if merge_at is not None:
+                # With the servers, D and E are one: the crowd watches, and is named for both.
+                d_token, d_role, *_ = parts["d"]
+                e_label += (
+                    f'<div class="ax-crowd-de" data-frag="{merge_at}">'
+                    f'<span class="ax-name">{html.escape(d_token)} &amp; {html.escape(token)}</span>'
+                    f'<span class="ax-role">{tr(d_role)} · {tr(role)}</span></div>'
+                )
+            e_label = f'<div class="ax-crowd-labels">{e_label}</div>'
+        crowd = (
+            f'<div class="ax-crowd wc-frag" data-frag="{comes.get("e", offset)}">'
+            f'<div aria-hidden="true">{_crowd(servers_at, spread_at, protest)}</div>{e_label}</div>'
+        )
         shield = f'<svg viewBox="-16 -28 32 37" aria-hidden="true">{shield_svg()}</svg>'
         points_html = "".join(
             f'<p class="ax-point wc-frag" data-frag="{at + offset}">{shield}<span>{tr(text)}</span></p>'
             for text, at in p["points"]
         )
+        header = detour_header(p["title"])
+        if p["intros"]:
+            # The lead grows with the act: each intro's sentence replaces the one before.
+            intros = p["intros"]
+            says = "".join(
+                f'<span class="ax-say"'
+                + (f' data-until="{intros[i + 1][2] + offset}"' if i + 1 < len(intros) else "")
+                + f'><span data-frag="{at + offset}">{tr(sentence)}</span></span>'
+                for i, (_, sentence, at) in enumerate(intros)
+            )
+            header += f'<p class="dt-lead wc-title ax-quote">{says}</p>'
         return detour_section(
             "ax-slide",
-            detour_header(p["title"])
-            + f'<div class="ax-body">{act}{self._scene(p, offset)}{self._gauge(p, offset)}</div>'
+            header
+            + f'<div class="ax-body">{crowd}{act}{self._gauge(p, offset)}</div>'
             + points_html,
         )
 
     @staticmethod
-    def _scene(p: dict, offset: int) -> str:
-        scenes = p["scenes"]
-        if not scenes:
-            return ""
+    def _layers(pictures: list[tuple[str, str, int]], offset: int) -> str:
+        """Pictures stacked in one place: each leaves as the next comes in; the last stays."""
         layers = []
-        for i, (key, at) in enumerate(scenes):
-            # Each picture leaves as the next comes in; the last stays.
-            until = f' data-until="{scenes[i + 1][1] + offset}"' if i + 1 < len(scenes) else ""
+        for i, (key, picture, at) in enumerate(pictures):
+            until = f' data-until="{pictures[i + 1][2] + offset}"' if i + 1 < len(pictures) else ""
             layers.append(
                 f'<div class="ax-layer"{until}><div class="ax-{key} wc-frag" data-frag="{at + offset}">'
-                f"{ACT_SCENES[key]}</div></div>"
+                f"{picture}</div></div>"
             )
-        return f'<div class="ax-scene" aria-hidden="true">{"".join(layers)}</div>'
+        return "".join(layers)
+
+    @classmethod
+    def _watchers(cls, p: dict, offset: int) -> str:
+        """D's figure: one person, until a picture puts others in its place."""
+        pictures = [("one", WATCHER_SVG, -offset)] + [
+            (key, ACT_SCENES[key], at) for key, at in p["scenes"] if ACT_SCENES[key]
+        ]
+        return f'<div class="ax-watch">{cls._layers(pictures, offset)}</div>'
 
     @staticmethod
     def _gauge(p: dict, offset: int) -> str:
-        ats = [at + offset for *_, at in p["costs"]]
-        fills, says = [], []
-        for i, (level, label, note, _) in enumerate(p["costs"]):
-            tone = HACK_RED if level < 25 else COST_AMBER if level < 60 else TEAL_DARK
-            fills.append(f'<span class="ax-gauge-fill" data-frag="{ats[i]}" style="--level:{level}%;--tone:{tone}"></span>')
-            # Each caption leaves as the next comes in; the last stays.
-            until = f' data-until="{ats[i + 1]}"' if i + 1 < len(ats) else ""
+        costs = p["costs"]
+        ats = [at + offset for *_, at in costs]
+        says_ats = [says_at + offset for *_, says_at, _ in costs]
+
+        def until(i: int, at: list[int]) -> str:
+            # Each level, word and caption leaves as the next comes in; the last stays.
+            return f' data-until="{at[i + 1]}"' if i + 1 < len(at) else ""
+
+        fills, words, says = [], [], []
+        for i, (level, label, note, _, _) in enumerate(costs):
+            tone, word = cost_level(level)
+            before = costs[i - 1][0] if i else 0
+            before_tone = cost_level(before)[0] if i else tone
+            fills.append(
+                f'<span class="ax-gauge-at"{until(i, ats)}><span class="ax-gauge-fill" data-frag="{ats[i]}" '
+                f'style="--level:{level};--from:{before};--tone:{tone};--from-tone:{before_tone}"></span></span>'
+            )
+            words.append(
+                f'<span class="ax-gauge-word"{until(i, ats)}><span class="wc-frag" data-frag="{ats[i]}" '
+                f'style="--tone:{tone}">{tr(word)}</span></span>'
+            )
             note_html = f' <span class="ax-gauge-note">{tr(note)}</span>' if note else ""
             says.append(
-                f'<span class="ax-gauge-say"{until}><span class="wc-frag" data-frag="{ats[i]}" style="--tone:{tone}">'
+                f'<span class="ax-gauge-say"{until(i, says_ats)}><span class="wc-frag" data-frag="{says_ats[i]}" style="--tone:{tone}">'
                 f"<strong>{tr(label)}</strong>{note_html}</span></span>"
             )
+        comes = p["gauge_at"] + offset
+        # When it comes in, the meter shows how it reads (gauge_demo_css).
+        demo_words = "".join(
+            f'<span style="color:{tone};--w:ax-demo-w{b}">{tr(word)}</span>'
+            for b, (_, tone, word) in enumerate(COST_LEVELS)
+        )
         return (
-            f'<div class="ax-gauge wc-frag" data-frag="{ats[0]}">'
-            f'<div class="ax-gauge-name">{tr(p["gauge"])}</div>'
-            f'<div class="ax-gauge-track">{"".join(fills)}</div>'
+            f'<div class="ax-gauge wc-frag" data-frag="{comes}">'
+            f'<div class="ax-gauge-name">{tr(p["gauge"])} <span class="ax-gauge-words">{"".join(words)}</span>'
+            f'<span class="ax-demo-words" aria-hidden="true">{demo_words}</span></div>'
+            f'<div class="ax-gauge-track"><span class="ax-gauge-demo"></span>{"".join(fills)}</div>'
             f'<div class="ax-gauge-says">{"".join(says)}</div></div>'
         )
 
@@ -4162,6 +4700,8 @@ def build_html(slides: list[Slide], archived: list[Slide] = ()) -> str:
 
 
 def main(argv: list[str]) -> int:
+    global DRAFT
+    DRAFT = "--draft" in argv
     try:
         archived = parse_steps(ARCHIVE_PATH.read_text(encoding="utf-8")) if ARCHIVE_PATH.exists() else []
         page = build_html(parse_steps(MD_PATH.read_text(encoding="utf-8")), archived)
