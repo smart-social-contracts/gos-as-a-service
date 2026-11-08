@@ -28,10 +28,12 @@
   import {
     formDataFromSpec,
     isExpired,
+    matchDeployVersion,
     parseAssistantRequestParam,
     specFromFormData,
     specHash,
   } from '$lib/assistant-deploy-request.js';
+  import { rememberAttempt, resumeClaimedRequest } from '$lib/assistant-deploy-resume.js';
   import { getAuthenticatedRegistryActor } from '$lib/canisters.js';
   import { deploymentJobUrl } from '$lib/deployment-url.js';
   import { friendlyNetworkError, retryOnTransientNetworkError } from '$lib/network-retry.js';
@@ -72,10 +74,9 @@
   // (ggg-mcp request_realm_deployment). The assistant only filled in the form; the user's own
   // session signs the deployment.
   const assistantClient = createAssistantDeployClient({ origin: MCP_ORIGIN });
-  const defaultDeployVersion = CONFIG.default_deploy_version || 'main';
   let assistantMode = false;
   let assistantRequestId = '';
-  /** sign_in | loading | unavailable | error | cancelled | used | wizard */
+  /** sign_in | loading | unavailable | error | cancelled | used | claimed | wizard */
   let assistantPhase = 'loading';
   /** Which `assistantDeploy.*` message the unavailable and error views show. */
   let assistantFailure = '';
@@ -382,11 +383,17 @@
     assistantPhase = 'loading';
     try {
       const request = await assistantClient.load(await currentIdentity(), assistantRequestId);
-      if (request.status === 'deployed') {
-        assistantRequest = request;
-        assistantPhase = 'used';
-      } else {
+      const outcome =
+        request.status === 'pending'
+          ? { phase: 'wizard' }
+          : request.status === 'deployed'
+            ? { phase: 'used', jobId: request.jobId }
+            : await resumeClaimed(request);
+      if (outcome.phase === 'wizard') {
         await applyAssistantRequest(request);
+      } else {
+        assistantRequest = { ...request, jobId: outcome.jobId || '' };
+        assistantPhase = outcome.phase;
       }
     } catch (err) {
       console.error('Could not open the assistant request:', err?.message || err);
@@ -398,6 +405,17 @@
         showAssistantFailure('error', 'load_error');
       }
     }
+  }
+
+  /** The user already clicked Launch on this request: find the job it started instead of offering a second one. */
+  function resumeClaimed(request) {
+    return resumeClaimedRequest({
+      request,
+      principalText: userPrincipal.toText(),
+      storage: sessionStorage,
+      findJob: (query) => findRecentDeploymentJob({ ...query, maxAttempts: 1 }),
+      report: (jobId, finalSpecHash) => reportAssistantJob(jobId, finalSpecHash),
+    });
   }
 
   /** The first step whose answers the wizard would refuse, or -1. Leaves that step's errors showing. */
@@ -414,7 +432,9 @@
     deployVersionOptions = await fetchDeployVersionOptions();
     loadingDeployVersions = false;
 
-    formData = { ...formData, ...formDataFromSpec(request.spec, defaultDeployVersion) };
+    formData = { ...formData, ...formDataFromSpec(request.spec) };
+    // The catalog's spelling of the version the assistant asked for ("" when it is not offered).
+    formData.deploy_version = matchDeployVersion(deployVersionOptions, formData.deploy_version);
     // A slug the assistant chose must not be rewritten when the name is edited.
     slugTouched = formData.slug !== slugify(formData.name);
     if (formData.subnet_choice === 'other') {
@@ -564,11 +584,14 @@
       }
       const manifestJson = JSON.stringify(manifest);
 
-      // The hash says what the user is about to deploy, with their changes.
-      const finalSpecHash = assistantRequest
-        ? await specHash(specFromFormData(formData, assistantRequest.spec, defaultDeployVersion))
-        : '';
-      if (assistantRequest) await claimAssistantRequest();
+      // The hash says what the user is about to deploy, with their changes. Keep it with the name, to find
+      // the job again if this page is reloaded before it reports.
+      const finalSpec = assistantRequest ? specFromFormData(formData, assistantRequest.spec) : null;
+      const finalSpecHash = finalSpec ? await specHash(finalSpec) : '';
+      if (assistantRequest) {
+        rememberAttempt(sessionStorage, assistantRequest.id, { name: finalSpec.name, specHash: finalSpecHash });
+        await claimAssistantRequest();
+      }
 
       setDeployStep('submit');
 
@@ -715,7 +738,7 @@
         errors.gos_implementation = 'Please select a platform';
       } else {
         const impl = getGosImplementation(formData.gos_implementation);
-        if (impl && !impl.available) {
+        if (!impl?.available) {
           errors.gos_implementation = 'This platform is not yet available';
         }
       }
@@ -868,6 +891,10 @@
         <h2>{$_('assistantDeploy.used_title')}</h2>
         <p class="invitation-desc">{$_('assistantDeploy.used_body')}</p>
         <a class="btn btn-primary" href={deploymentJobUrl(assistantRequest?.jobId)}>{$_('assistantDeploy.view_deployment')}</a>
+      {:else if assistantPhase === 'claimed'}
+        <h2>{$_('assistantDeploy.claimed_title')}</h2>
+        <p class="invitation-desc">{$_('assistantDeploy.claimed_body')}</p>
+        <a class="btn btn-primary" href={deploymentJobUrl('')}>{$_('assistantDeploy.dashboard_link')}</a>
       {/if}
     </div>
   </div>

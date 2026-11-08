@@ -6,7 +6,8 @@
  * functions turn that spec into form data and back, and nothing else: whatever else a reply
  * carries is dropped here, so only the six fields below ever reach the form.
  */
-import { normalizeDeployVersion, realmTexts, slugify } from './deployment-manifest-core.js';
+import { realmTexts, slugify } from './deployment-manifest-core.js';
+import { getGosImplementation } from './gos-implementations.js';
 
 export const ASSISTANT_REQUEST_PARAM = 'assistant_request';
 
@@ -15,9 +16,15 @@ const REQUEST_ID = /^[A-Za-z0-9_-]{32}$/;
 const SUBNET_CHOICES = ['automatic', 'european', 'other'];
 const STATUSES = ['pending', 'claimed', 'deployed'];
 
-// The assistant picks its own name and note, so what the page shows of them is capped.
+// The assistant picks its own name and note, so what the page shows of them is capped, and stripped of
+// the characters that could reorder or hide what the user reads next to them: control characters, the
+// bidirectional and zero-width "format" characters, line and paragraph separators.
 const MAX_CLIENT_NAME = 64;
 const MAX_NOTE = 500;
+const INVISIBLE = /[\p{Cc}\p{Cf}\u2028\u2029]/gu;
+const INVISIBLE_BUT_NEWLINES = /[\p{Cf}\u2028\u2029]|(?![\n\t])\p{Cc}/gu;
+// A principal is lowercase letters, digits and dashes.
+const PRINCIPAL = /^[a-z0-9-]{1,100}$/;
 
 /**
  * @param {URLSearchParams} searchParams
@@ -35,10 +42,16 @@ function isText(value) {
   return typeof value === 'string';
 }
 
+/** At most `max` characters of `text` without the invisible ones. */
+function shown(text, pattern, max) {
+  return Array.from(text.replace(pattern, '').trim()).slice(0, max).join('');
+}
+
 function readSpec(raw) {
   const { name, slug, platform, subnet, manifesto, welcome_message } = raw || {};
   const valid =
     [name, slug, manifesto, welcome_message, platform?.gos, platform?.version].every(isText) &&
+    getGosImplementation(platform.gos)?.available === true &&
     SUBNET_CHOICES.includes(subnet?.choice) &&
     (subnet.choice !== 'other' || isText(subnet.subnet_id));
   if (!valid) throw new Error('The assistant request is malformed.');
@@ -63,10 +76,12 @@ export function readAssistantRequest(raw) {
   return {
     id: raw.id,
     status: raw.status,
-    clientName: (isText(raw.client_name) ? raw.client_name : '').slice(0, MAX_CLIENT_NAME),
-    delegatePrincipal: isText(raw.delegate_principal) ? raw.delegate_principal : '',
-    note: isText(raw.note) && raw.note ? raw.note.slice(0, MAX_NOTE) : '',
+    clientName: shown(isText(raw.client_name) ? raw.client_name : '', INVISIBLE, MAX_CLIENT_NAME),
+    delegatePrincipal: isText(raw.delegate_principal) && PRINCIPAL.test(raw.delegate_principal) ? raw.delegate_principal : '',
+    note: shown(isText(raw.note) ? raw.note : '', INVISIBLE_BUT_NEWLINES, MAX_NOTE),
     expiresAt: raw.expires_at,
+    // While another page (or an earlier click) holds a claimed request; 0 when ggg-mcp did not say.
+    leaseExpiresAt: Number.isFinite(raw.lease_expires_at) ? raw.lease_expires_at : 0,
     specHash: isText(raw.spec_hash) ? raw.spec_hash : '',
     jobId: isText(raw.job_id) ? raw.job_id : '',
     spec: readSpec(raw.spec),
@@ -78,25 +93,29 @@ export function isExpired(expiresAt, nowMs = Date.now()) {
   return nowMs >= expiresAt * 1000;
 }
 
+const withoutV = (version) => version.trim().replace(/^v/, '');
+
 /**
- * The wizard has no "latest release" choice: its software-version default is what a person who
- * does not touch the picker gets, so "latest" means that default.
+ * The catalog option for `version`, however either side spells it ("0.8.0" or "v0.8.0"); "" when there
+ * is none. ggg-mcp turns "latest" into a concrete version when it files the request, so a literal
+ * "latest" matches nothing and the user is sent to pick a version.
+ * @param {Array<{ value: string }>} options the wizard's version options
  */
-function formVersion(specVersion, defaultVersion) {
-  const version = specVersion.trim();
-  return !version || version === 'latest' ? defaultVersion : normalizeDeployVersion(version);
+export function matchDeployVersion(options, version) {
+  return options.find((option) => withoutV(option.value) === withoutV(version))?.value ?? '';
 }
 
 /**
+ * The form as the spec asks for it. `deploy_version` is the spec's spelling: the page swaps it for the
+ * catalog option that matches (matchDeployVersion).
  * @param {ReturnType<typeof readAssistantRequest>['spec']} spec
- * @param {string} defaultVersion the wizard's default `deploy_version`
  */
-export function formDataFromSpec(spec, defaultVersion) {
+export function formDataFromSpec(spec) {
   return {
     gos_implementation: spec.platform.gos,
     name: spec.name,
     slug: spec.slug,
-    deploy_version: formVersion(spec.platform.version, defaultVersion),
+    deploy_version: spec.platform.version,
     subnet_choice: spec.subnet.choice,
     subnet_id: spec.subnet.choice === 'other' ? spec.subnet.subnet_id : '',
     manifesto: spec.manifesto,
@@ -106,12 +125,12 @@ export function formDataFromSpec(spec, defaultVersion) {
 
 /**
  * What the form will deploy, in the spec's shape. A version the user did not change keeps the
- * spelling the assistant used ("latest"), so an untouched form has the original's hash.
+ * spelling the assistant used, so an untouched form has the original's hash.
  */
-export function specFromFormData(formData, original, defaultVersion) {
+export function specFromFormData(formData, original) {
   const name = (formData.name || '').trim();
   const version =
-    formData.deploy_version === formVersion(original.platform.version, defaultVersion)
+    withoutV(formData.deploy_version) === withoutV(original.platform.version)
       ? original.platform.version
       : formData.deploy_version;
   const choice = formData.subnet_choice;
