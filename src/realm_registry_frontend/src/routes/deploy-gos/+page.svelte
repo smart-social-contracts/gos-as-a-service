@@ -5,6 +5,11 @@
   import { _, locale } from 'svelte-i18n';
   import { CONFIG } from '$lib/config.js';
   import { buildRealmDeploymentManifest, portalUrlForSlug, slugify } from '$lib/deployment-manifest.js';
+  import {
+    MAX_MANIFEST_ESCAPED_CHARS,
+    buildRealmDeploymentManifest as buildManifestSync,
+    escapedManifestSize,
+  } from '$lib/deployment-manifest-core.js';
   import AuthControls from '$lib/components/AuthControls.svelte';
   import {
     GOS_IMPLEMENTATIONS,
@@ -17,6 +22,18 @@
     visibleWizardSteps,
   } from '$lib/gos-implementations.js';
   import SubnetPicker from '$lib/components/SubnetPicker.svelte';
+  import AssistantRequestCard from '$lib/components/AssistantRequestCard.svelte';
+  import { MCP_ORIGIN } from '$lib/geister/constants.js';
+  import { AssistantRequestError, createAssistantDeployClient } from '$lib/assistant-deploy-client.js';
+  import {
+    formDataFromSpec,
+    isExpired,
+    matchDeployVersion,
+    parseAssistantRequestParam,
+    specFromFormData,
+    specHash,
+  } from '$lib/assistant-deploy-request.js';
+  import { rememberFinalSpecHash, resumeClaimedRequest } from '$lib/assistant-deploy-resume.js';
   import { getAuthenticatedRegistryActor } from '$lib/canisters.js';
   import { deploymentJobUrl } from '$lib/deployment-url.js';
   import { friendlyNetworkError, retryOnTransientNetworkError } from '$lib/network-retry.js';
@@ -24,6 +41,7 @@
   import RequestInvitationButton from '$lib/components/RequestInvitationButton.svelte';
   import { loadInvitationState, normalizeInvitationCode } from '$lib/invitation-state.js';
   import {
+    fetchDeploymentJobsFromInstaller,
     findRecentDeploymentJob,
     isAmbiguousDeploymentRequestError,
   } from '$lib/installer-queue.js';
@@ -52,6 +70,32 @@
   // Automatic deployment state
   let isDeploying = false;
   let deployError = null;
+
+  // Assistant mode: ?assistant_request=<id> opens a realm an AI assistant prepared for this user
+  // (ggg-mcp request_realm_deployment). The assistant only filled in the form; the user's own
+  // session signs the deployment.
+  const assistantClient = createAssistantDeployClient({ origin: MCP_ORIGIN });
+  let assistantMode = false;
+  let assistantRequestId = '';
+  /** sign_in | loading | unavailable | error | cancelled | used | claimed | wizard */
+  let assistantPhase = 'loading';
+  /** Which `assistantDeploy.*` message the unavailable and error views show. */
+  let assistantFailure = '';
+  let assistantRequest = null;
+  let assistantNeedsFix = false;
+  let assistantCancelling = false;
+  let assistantNowMs = Date.now();
+  let assistantClock = null;
+
+  $: assistantExpired = assistantRequest ? isExpired(assistantRequest.expiresAt, assistantNowMs) : false;
+  // What the manifest records of the request, so the owner can see who prepared the realm.
+  $: assistantStamp = assistantRequest
+    ? {
+        id: assistantRequest.id,
+        client_name: assistantRequest.clientName,
+        delegate: assistantRequest.delegatePrincipal,
+      }
+    : undefined;
 
   // Wizard draft persistence
   let draftId = null;
@@ -214,6 +258,7 @@
 
   onMount(async () => {
     if (browser) {
+      ({ active: assistantMode, id: assistantRequestId } = parseAssistantRequestParam($page.url.searchParams));
       try {
         const { isAuthenticated, getPrincipal, ensureTestAuth } = await import("$lib/auth.js");
         const { getTestModeIIBypass } = await import("$lib/config.js");
@@ -251,7 +296,9 @@
       }
       checkingActivation = false;
 
-      if (isLoggedIn && userPrincipal) {
+      if (assistantMode) {
+        await openAssistantRequest();
+      } else if (isLoggedIn && userPrincipal) {
         await initWizardDraft();
       } else {
         draftInitialized = true;
@@ -277,13 +324,19 @@
       isLoggedIn = true;
       userPrincipal = result.principal;
       await loadUserCredits();
-      if (!draftInitialized) await initWizardDraft();
+      if (assistantMode) await openAssistantRequest();
+      else if (!draftInitialized) await initWizardDraft();
     }
   }
 
   async function handleLogout() {
     const { logout } = await import("$lib/auth");
     await logout();
+    // The prepared realm belongs to the user who signed out: start again from the link.
+    if (assistantMode) {
+      window.location.reload();
+      return;
+    }
     isLoggedIn = false;
     userPrincipal = null;
     userCredits = 0;
@@ -308,6 +361,165 @@
     } finally {
       invitationLoading = false;
     }
+  }
+
+  async function currentIdentity() {
+    const { getIdentity } = await import('$lib/auth.js');
+    const identity = await getIdentity();
+    if (!identity) throw new AssistantRequestError(401, 'not signed in');
+    return identity;
+  }
+
+  function showAssistantFailure(phase, failure) {
+    assistantPhase = phase;
+    assistantFailure = failure;
+  }
+
+  async function openAssistantRequest() {
+    if (!assistantRequestId) return showAssistantFailure('unavailable', 'invalid_link');
+    if (!isLoggedIn) {
+      assistantPhase = 'sign_in';
+      return;
+    }
+    assistantPhase = 'loading';
+    try {
+      const request = await assistantClient.load(await currentIdentity(), assistantRequestId);
+      const outcome =
+        request.status === 'pending'
+          ? { phase: 'wizard' }
+          : request.status === 'deployed'
+            ? { phase: 'used', jobId: request.jobId }
+            : await resumeClaimed(request);
+      if (outcome.phase === 'wizard') {
+        await applyAssistantRequest(request);
+      } else {
+        assistantRequest = { ...request, jobId: outcome.jobId || '' };
+        assistantPhase = outcome.phase;
+      }
+    } catch (err) {
+      console.error('Could not open the assistant request:', err?.message || err);
+      if (err instanceof AssistantRequestError && err.status === 404) {
+        showAssistantFailure('unavailable', 'unavailable_body');
+      } else if (err instanceof AssistantRequestError && err.status === 401) {
+        showAssistantFailure('error', 'proof_failed');
+      } else {
+        showAssistantFailure('error', 'load_error');
+      }
+    }
+  }
+
+  /** The user already clicked Launch on this request: find the job it started instead of offering a second one. */
+  function resumeClaimed(request) {
+    return resumeClaimedRequest({
+      request,
+      principalText: userPrincipal.toText(),
+      storage: sessionStorage,
+      listJobs: () => fetchDeploymentJobsFromInstaller({ strict: true }),
+      report: (jobId, finalSpecHash) => reportAssistantJob(jobId, finalSpecHash),
+    });
+  }
+
+  /** The first step whose answers the wizard would refuse, or -1. Leaves that step's errors showing. */
+  function firstInvalidStep() {
+    for (let step = 0; step < visibleSteps.length - 1; step++) {
+      if (!validateStep(step)) return step;
+    }
+    return -1;
+  }
+
+  /** Fill the form from the request and open the wizard at Review, or at the first step to fix. */
+  async function applyAssistantRequest(request) {
+    const { fetchDeployVersionOptions } = await import('$lib/wizard-drafts.js');
+    deployVersionOptions = await fetchDeployVersionOptions();
+    loadingDeployVersions = false;
+
+    formData = { ...formData, ...formDataFromSpec(request.spec) };
+    // The catalog's spelling of the version the assistant asked for ("" when it is not offered).
+    formData.deploy_version = matchDeployVersion(deployVersionOptions, formData.deploy_version);
+    // A slug the assistant chose must not be rewritten when the name is edited.
+    slugTouched = formData.slug !== slugify(formData.name);
+    if (formData.subnet_choice === 'other') {
+      await loadSubnetOptions();
+      if (!subnetOptions.includes(formData.subnet_id)) formData.subnet_id = '';
+    }
+
+    assistantRequest = request;
+    const invalid = firstInvalidStep();
+    assistantNeedsFix = invalid !== -1;
+    currentStep = invalid === -1 ? visibleSteps.length - 1 : invalid;
+
+    assistantNowMs = Date.now();
+    assistantClock = setInterval(() => (assistantNowMs = Date.now()), 15_000);
+    assistantPhase = 'wizard';
+  }
+
+  async function cancelAssistantRequest() {
+    if (assistantCancelling) return;
+    assistantCancelling = true;
+    deployError = null;
+    try {
+      await assistantClient.cancel(await currentIdentity(), assistantRequestId);
+      assistantPhase = 'cancelled';
+    } catch (err) {
+      console.error('Could not cancel the assistant request:', err?.message || err);
+      deployError = $_(`assistantDeploy.${assistantFailureKey(err, 'action_error')}`);
+    } finally {
+      assistantCancelling = false;
+    }
+  }
+
+  function assistantFailureKey(err, fallback) {
+    if (!(err instanceof AssistantRequestError)) return fallback;
+    if (err.status === 401) return 'proof_failed';
+    if (err.status === 404) return 'claim_gone';
+    if (err.status === 409) return err.body?.status === 'claimed' ? 'claim_busy' : 'claim_gone';
+    return fallback;
+  }
+
+  /** An assistant's request is deployed only while it is live and every step is valid. */
+  function assistantMayDeploy() {
+    if (isExpired(assistantRequest.expiresAt)) {
+      deployError = $_('assistantDeploy.request_expired');
+      return false;
+    }
+    const invalid = firstInvalidStep();
+    if (invalid === -1) return true;
+    assistantNeedsFix = true;
+    currentStep = invalid;
+    return false;
+  }
+
+  /** Take the request, so a second tab cannot deploy it too. Throws the message to show. */
+  async function claimAssistantRequest() {
+    try {
+      await assistantClient.claim(await currentIdentity(), assistantRequestId);
+    } catch (err) {
+      const key = assistantFailureKey(err, '');
+      if (!key) throw err;
+      throw new Error($_(`assistantDeploy.${key}`));
+    }
+  }
+
+  /** Tell the assistant which job the user started. The deployment has happened, so a failure is only logged. */
+  async function reportAssistantJob(jobId, finalSpecHash) {
+    try {
+      await withTimeout(
+        assistantClient.report(await currentIdentity(), assistantRequestId, { jobId, specHash: finalSpecHash }),
+        15000,
+        'The assistant did not answer.',
+      );
+    } catch (err) {
+      console.warn('Could not tell the assistant about the job:', err?.message || err);
+    }
+  }
+
+  function manifestOptions(form, principal, stamp) {
+    return {
+      deployVersion: form.deploy_version,
+      useCasals: true,
+      founder: principal?.toText?.() || '',
+      assistantRequest: stamp,
+    };
   }
 
   function closeDeployModal() {
@@ -347,26 +559,43 @@
 
   async function handleAutomaticDeploy() {
     if (!userPrincipal || userCredits < REQUIRED_CREDITS) return;
+    deployError = null;
+    if (assistantRequest && !assistantMayDeploy()) return;
 
     isDeploying = true;
     draftLockedForDeploy = true;
-    deployError = null;
 
     try {
       openDeployProgress();
       setDeployStep('prepare');
 
-      setDeployStep('submit');
       const manifest = await buildRealmDeploymentManifest(
         formData,
         CONFIG.default_deploy_queue_network,
-        {
-          deployVersion: formData.deploy_version,
-          useCasals: true,
-          founder: userPrincipal?.toText?.() || '',
-        },
+        manifestOptions(formData, userPrincipal, assistantStamp),
       );
+      const manifestSize = escapedManifestSize(manifest);
+      if (manifestSize > MAX_MANIFEST_ESCAPED_CHARS) {
+        failAutomaticDeploy(
+          $_('assistantDeploy.texts_too_long', {
+            values: { size: manifestSize, max: MAX_MANIFEST_ESCAPED_CHARS },
+          }),
+        );
+        return;
+      }
       const manifestJson = JSON.stringify(manifest);
+
+      // The hash says what the user is about to deploy, with their changes. Keep it, to report it
+      // if this page is reloaded before it does.
+      const finalSpecHash = assistantRequest
+        ? await specHash(specFromFormData(formData, assistantRequest.spec))
+        : '';
+      if (assistantRequest) {
+        rememberFinalSpecHash(sessionStorage, assistantRequest.id, finalSpecHash);
+        await claimAssistantRequest();
+      }
+
+      setDeployStep('submit');
 
       const registry = await getAuthenticatedRegistryActor();
       let result;
@@ -397,6 +626,8 @@
         failAutomaticDeploy(result?.error || 'Deployment request failed');
         return;
       }
+
+      if (assistantRequest) await reportAssistantJob(result.job_id, finalSpecHash);
 
       setDeployStep('redirect');
       draftLockedForDeploy = true;
@@ -452,6 +683,9 @@
     deploy_version: CONFIG.default_deploy_version || 'main',
     subnet_choice: 'automatic',
     subnet_id: '',
+    // Empty: the manifest uses "Welcome to <name>." (an assistant's request fills them in).
+    manifesto: '',
+    welcome_message: '',
   };
 
   let slugTouched = false;
@@ -464,7 +698,21 @@
     ? portalUrlForSlug(formData.slug, CONFIG.deploy_queue_network, CONFIG)
     : '';
 
+  // The texts of an assistant's request are long enough to matter: check them as they are edited.
+  $: manifestSize = assistantStamp
+    ? escapedManifestSize(
+        buildManifestSync(
+          formData,
+          CONFIG.default_deploy_queue_network,
+          CONFIG,
+          manifestOptions(formData, userPrincipal, assistantStamp),
+        ),
+      )
+    : 0;
+  $: textsTooLong = manifestSize > MAX_MANIFEST_ESCAPED_CHARS;
+
   onDestroy(() => {
+    clearInterval(assistantClock);
     closeDeployProgress();
     isDeploying = false;
     draftLockedForDeploy = false;
@@ -492,7 +740,7 @@
         errors.gos_implementation = 'Please select a platform';
       } else {
         const impl = getGosImplementation(formData.gos_implementation);
-        if (impl && !impl.available) {
+        if (!impl?.available) {
           errors.gos_implementation = 'This platform is not yet available';
         }
       }
@@ -558,11 +806,11 @@
   }
 
   function generateManifest() {
-    return buildRealmDeploymentManifest(formData, CONFIG.default_deploy_queue_network, {
-      deployVersion: formData.deploy_version,
-      useCasals: true,
-      founder: userPrincipal?.toText?.() || '',
-    });
+    return buildRealmDeploymentManifest(
+      formData,
+      CONFIG.default_deploy_queue_network,
+      manifestOptions(formData, userPrincipal, assistantStamp),
+    );
   }
 
   async function handleSubmit() {
@@ -617,6 +865,39 @@
   <div class="wizard-container">
     <div class="invitation-gate">
       <p>Loading...</p>
+    </div>
+  </div>
+{:else if assistantMode && assistantPhase !== 'wizard'}
+  <div class="wizard-container">
+    <div class="invitation-gate" data-testid="assistant-{assistantPhase}">
+      {#if assistantPhase === 'loading'}
+        <p>{$_('assistantDeploy.loading')}</p>
+      {:else if assistantPhase === 'sign_in'}
+        <h2>{$_('assistantDeploy.sign_in_title')}</h2>
+        <p class="invitation-desc">{$_('assistantDeploy.sign_in_body')}</p>
+        <button class="btn btn-primary" on:click={handleLogin}>{$_('auth.sign_in_ii')}</button>
+      {:else if assistantPhase === 'unavailable'}
+        <h2>{$_('assistantDeploy.unavailable_title')}</h2>
+        <p class="invitation-desc">
+          {$_(`assistantDeploy.${assistantFailure}`, { values: { principal: userPrincipal?.toText?.() || '' } })}
+        </p>
+        <a class="btn btn-secondary" href="/deploy-gos">{$_('assistantDeploy.start_own')}</a>
+      {:else if assistantPhase === 'error'}
+        <p class="invitation-desc">{$_(`assistantDeploy.${assistantFailure}`)}</p>
+        <button class="btn btn-primary" on:click={openAssistantRequest}>{$_('assistantDeploy.try_again')}</button>
+      {:else if assistantPhase === 'cancelled'}
+        <h2>{$_('assistantDeploy.cancelled_title')}</h2>
+        <p class="invitation-desc">{$_('assistantDeploy.cancelled_body')}</p>
+        <a class="btn btn-secondary" href="/deploy-gos">{$_('assistantDeploy.start_own')}</a>
+      {:else if assistantPhase === 'used'}
+        <h2>{$_('assistantDeploy.used_title')}</h2>
+        <p class="invitation-desc">{$_('assistantDeploy.used_body')}</p>
+        <a class="btn btn-primary" href={deploymentJobUrl(assistantRequest?.jobId)}>{$_('assistantDeploy.view_deployment')}</a>
+      {:else if assistantPhase === 'claimed'}
+        <h2>{$_('assistantDeploy.claimed_title')}</h2>
+        <p class="invitation-desc">{$_('assistantDeploy.claimed_body')}</p>
+        <a class="btn btn-primary" href={deploymentJobUrl('')}>{$_('assistantDeploy.dashboard_link')}</a>
+      {/if}
     </div>
   </div>
 {:else if invitationMode && isLoggedIn && !principalActivated}
@@ -738,6 +1019,15 @@
 
   <!-- Form Content -->
   <div class="form-container">
+    {#if assistantRequest && currentStepId !== 'deploy'}
+      <p class="assistant-banner">
+        {assistantNeedsFix
+          ? $_('assistantDeploy.fix_step')
+          : $_('assistantDeploy.banner', {
+              values: { name: assistantRequest.clientName || $_('assistantDeploy.unnamed_assistant') },
+            })}
+      </p>
+    {/if}
     {#if currentStepId === 'basics'}
       <!-- Basics -->
       <div class="form-step">
@@ -970,6 +1260,19 @@
         <h2>Review & Deploy</h2>
         <p class="step-description">Confirm these settings, then launch your realm.</p>
 
+        {#if assistantRequest}
+          <AssistantRequestCard
+            clientName={assistantRequest.clientName}
+            delegatePrincipal={assistantRequest.delegatePrincipal}
+            note={assistantRequest.note}
+            principal={userPrincipal?.toText?.() || ''}
+            expiresAt={assistantRequest.expiresAt}
+            expired={assistantExpired}
+            cost={REQUIRED_CREDITS}
+            balance={userCredits}
+          />
+        {/if}
+
         <div class="codex-manifest-details review-summary">
           <div class="codex-detail-row">
             <span class="codex-detail-label">Realm</span>
@@ -999,6 +1302,26 @@
           </div>
           <p class="codex-details-note">After launch you will finish codex, token, and branding setup inside the realm.</p>
         </div>
+
+        {#if assistantRequest}
+          <h3 class="review-deploy-heading">{$_('assistantDeploy.texts_title')}</h3>
+          <p class="field-hint assistant-texts-hint">{$_('assistantDeploy.texts_hint')}</p>
+          <div class="form-group">
+            <label for="manifesto">{$_('assistantDeploy.manifesto_label')}</label>
+            <textarea id="manifesto" rows="5" maxlength="2000" bind:value={formData.manifesto}></textarea>
+          </div>
+          <div class="form-group">
+            <label for="welcome-message">{$_('assistantDeploy.welcome_label')}</label>
+            <textarea id="welcome-message" rows="2" maxlength="500" bind:value={formData.welcome_message}></textarea>
+          </div>
+          {#if textsTooLong}
+            <span class="error-message" data-testid="assistant-texts-too-long">
+              {$_('assistantDeploy.texts_too_long', {
+                values: { size: manifestSize, max: MAX_MANIFEST_ESCAPED_CHARS },
+              })}
+            </span>
+          {/if}
+        {/if}
 
         <h3 class="review-deploy-heading">Launch</h3>
         <p class="step-description">We'll create this realm for you on the Internet Computer.</p>
@@ -1058,7 +1381,7 @@
                     type="button" 
                     class="btn btn-primary btn-deploy" 
                     on:click={onDeployClick}
-                    disabled={isDeploying}
+                    disabled={isDeploying || assistantExpired || textsTooLong}
                   >
                     {#if isDeploying}
                       <span class="spinner-small"></span>
@@ -1077,6 +1400,20 @@
             {/if}
           </div>
         </div>
+
+        {#if assistantRequest}
+          <div class="assistant-cancel">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              data-testid="assistant-cancel"
+              on:click={cancelAssistantRequest}
+              disabled={isDeploying || assistantCancelling}
+            >
+              {assistantCancelling ? $_('assistantDeploy.cancelling') : $_('assistantDeploy.cancel_request')}
+            </button>
+          </div>
+        {/if}
 
         <div class="download-config-inline">
           <div class="download-config-text">
@@ -1116,6 +1453,32 @@
 </div>
 
 <style>
+  .assistant-banner {
+    margin: 0 0 1.25rem;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid #6366f1;
+    background: #f5f4ff;
+    border-radius: 0.6rem;
+    font-size: 0.88rem;
+    color: #404040;
+  }
+
+  .assistant-cancel {
+    margin: 1rem 0 0;
+  }
+
+  .field-hint.assistant-texts-hint {
+    margin: 0 0 0.75rem;
+  }
+
+  .form-group textarea {
+    box-sizing: border-box;
+  }
+
+  .invitation-gate a.btn {
+    text-decoration: none;
+  }
+
   .page-shell {
     min-height: 100vh;
     background: #FAFAFA;

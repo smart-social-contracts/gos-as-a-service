@@ -21,7 +21,6 @@
     "tutorial": "Tutorial",
     "about": "About"
   },
-
   "modal": {
     "title": "Create a Realm",
     "subtitle": "Deploy your own governance system in minutes",
@@ -301,5 +300,52 @@
       "label": "Archived",
       "help": "Closed. Its records are kept for reference."
     }
+  },
+  "assistantDeploy": {
+    "unnamed_assistant": "An assistant",
+    "lead": "prepared this realm for you.",
+    "unverified": "The assistant chose its own name; it has not been verified.",
+    "note_label": "The assistant's own words",
+    "requested_by": "Requested by",
+    "signed_in_as": "Signed in as",
+    "expires": "This request expires",
+    "expired": "Expired",
+    "cost_label": "Cost",
+    "cost": "{cost} credits. You have {balance}.",
+    "only_you": "Requests expire after an hour and can only be opened by the person they were prepared for. Nothing is created until you launch the realm.",
+    "banner": "{name} prepared this realm. Change what you need, then go on to Review & Deploy.",
+    "fix_step": "One of the answers needs a change before this realm can be launched.",
+    "sign_in_title": "Sign in to open this request",
+    "sign_in_body": "An assistant prepared a realm for you. Sign in with Internet Identity to see it. Only the person it was prepared for can open it.",
+    "loading": "Loading the request…",
+    "unavailable_title": "Request not available",
+    "unavailable_body": "This request has expired, was cancelled or already used, or was prepared for someone else. You are signed in as {principal}. Ask the assistant for a new one.",
+    "invalid_link": "This link does not point to a request. Ask the assistant for a new one.",
+    "load_error": "Could not load the request. Please try again.",
+    "try_again": "Try again",
+    "cancelled_title": "Request cancelled",
+    "cancelled_body": "You declined this realm. Nothing was created and you were not charged.",
+    "start_own": "Create a realm yourself",
+    "used_title": "Request already used",
+    "used_body": "This realm has already been launched.",
+    "view_deployment": "View the deployment",
+    "claimed_title": "You already launched this request",
+    "claimed_body": "You already clicked Launch on this request, so your realm may be on its way. Check your dashboard before you launch again, so you are not charged twice.",
+    "dashboard_link": "Go to your dashboard",
+    "texts_title": "Texts",
+    "manifesto_label": "Manifesto",
+    "welcome_label": "Welcome message",
+    "texts_hint": "Plain text. The assistant wrote both; you can also edit them in the realm's setup.",
+    "texts_too_long": "These texts are too long to deploy: {size} of {max} characters, where each letter outside plain English counts as six. Shorten the manifesto or the welcome message.",
+    "cancel_request": "Cancel request",
+    "cancelling": "Cancelling…",
+    "request_expired": "This request has expired. Ask the assistant for a new one.",
+    "claim_busy": "This request is already in use, perhaps in another tab. Wait a few minutes and try again, or ask the assistant for a new one.",
+    "claim_gone": "This request can no longer be used. It expired, was cancelled or was already launched.",
+    "proof_failed": "Could not confirm who you are. Sign in again and retry.",
+    "action_error": "Something went wrong. Please try again."
+  },
+  "mcpConsent": {
+    "prepare_desc": "It can also prepare a new realm for you to approve and pay for."
   }
 }
