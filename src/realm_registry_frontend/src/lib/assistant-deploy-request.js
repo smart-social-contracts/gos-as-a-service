@@ -80,7 +80,8 @@ export function readAssistantRequest(raw) {
     delegatePrincipal: isText(raw.delegate_principal) && PRINCIPAL.test(raw.delegate_principal) ? raw.delegate_principal : '',
     note: shown(isText(raw.note) ? raw.note : '', INVISIBLE_BUT_NEWLINES, MAX_NOTE),
     expiresAt: raw.expires_at,
-    // While another page (or an earlier click) holds a claimed request; 0 when ggg-mcp did not say.
+    // When the user's Launch took the request, and until when that claim holds; 0 when ggg-mcp did not say.
+    claimedAt: Number.isFinite(raw.claimed_at) ? raw.claimed_at : 0,
     leaseExpiresAt: Number.isFinite(raw.lease_expires_at) ? raw.lease_expires_at : 0,
     specHash: isText(raw.spec_hash) ? raw.spec_hash : '',
     jobId: isText(raw.job_id) ? raw.job_id : '',

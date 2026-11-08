@@ -141,8 +141,12 @@ export function dedupeDeploymentRows(rows) {
   return deduped;
 }
 
-/** Fetch every deployment job page for the authenticated caller. */
-export async function fetchDeploymentJobsFromInstaller() {
+/**
+ * Fetch every deployment job page for the authenticated caller. When the installer does not answer
+ * with a list, the jobs fetched so far are returned, or with `strict` an error is thrown: a caller
+ * that must not mistake "could not ask" for "no jobs" asks strictly.
+ */
+export async function fetchDeploymentJobsFromInstaller({ strict = false } = {}) {
   if (buildingOrTesting || !browser) return [];
   const actor = await createAuthenticatedInstallerActor();
   const pageSize = LIST_JOBS_PAGE_SIZE;
@@ -152,10 +156,11 @@ export async function fetchDeploymentJobsFromInstaller() {
   for (;;) {
     const offsetArg = offset > 0 ? [offset] : [];
     const raw = await actor.list_deployment_jobs(offsetArg, [pageSize]);
-    if (raw == null) break;
-    if (typeof raw === 'object' && 'Err' in raw) break;
-    const ok = resultOk(raw);
-    if (!ok) break;
+    const ok = raw != null && !(typeof raw === 'object' && 'Err' in raw) ? resultOk(raw) : null;
+    if (!ok) {
+      if (strict) throw new Error('The installer could not list the deployment jobs.');
+      break;
+    }
 
     const jobs = ok.jobs || [];
     all.push(...jobs);

@@ -20,6 +20,7 @@ function rawRequest(overrides = {}) {
     delegate_principal: 'aaaaa-aa',
     note: 'You asked for a European realm.',
     expires_at: 1_900_000_000,
+    claimed_at: 1_899_998_820,
     lease_expires_at: 1_899_999_000,
     cost_credits: 5,
     spec_hash: 'ab'.repeat(32),
@@ -62,6 +63,7 @@ test('readAssistantRequest keeps the fields the page uses', () => {
   assert.equal(request.delegatePrincipal, 'aaaaa-aa');
   assert.equal(request.note, 'You asked for a European realm.');
   assert.equal(request.expiresAt, 1_900_000_000);
+  assert.equal(request.claimedAt, 1_899_998_820);
   assert.equal(request.leaseExpiresAt, 1_899_999_000);
   assert.equal(request.specHash, 'ab'.repeat(32));
   assert.deepEqual(request.spec.subnet, { choice: 'european' });
@@ -126,8 +128,11 @@ test('readAssistantRequest shows a delegate only if it is a principal', () => {
   assert.equal(readAssistantRequest(rawRequest({ delegate_principal: 'abc12-xyz34-q' })).delegatePrincipal, 'abc12-xyz34-q');
 });
 
-test('readAssistantRequest has no lease unless ggg-mcp sent one', () => {
-  assert.equal(readAssistantRequest(rawRequest({ lease_expires_at: undefined })).leaseExpiresAt, 0);
+test('readAssistantRequest has no claim time or lease unless ggg-mcp sent them', () => {
+  const request = readAssistantRequest(rawRequest({ claimed_at: undefined, lease_expires_at: undefined }));
+
+  assert.equal(request.claimedAt, 0);
+  assert.equal(request.leaseExpiresAt, 0);
 });
 
 test('readAssistantRequest has no note when the assistant sent none', () => {

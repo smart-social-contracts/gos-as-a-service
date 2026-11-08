@@ -33,7 +33,7 @@
     specFromFormData,
     specHash,
   } from '$lib/assistant-deploy-request.js';
-  import { rememberAttempt, resumeClaimedRequest } from '$lib/assistant-deploy-resume.js';
+  import { rememberFinalSpecHash, resumeClaimedRequest } from '$lib/assistant-deploy-resume.js';
   import { getAuthenticatedRegistryActor } from '$lib/canisters.js';
   import { deploymentJobUrl } from '$lib/deployment-url.js';
   import { friendlyNetworkError, retryOnTransientNetworkError } from '$lib/network-retry.js';
@@ -41,6 +41,7 @@
   import RequestInvitationButton from '$lib/components/RequestInvitationButton.svelte';
   import { loadInvitationState, normalizeInvitationCode } from '$lib/invitation-state.js';
   import {
+    fetchDeploymentJobsFromInstaller,
     findRecentDeploymentJob,
     isAmbiguousDeploymentRequestError,
   } from '$lib/installer-queue.js';
@@ -413,7 +414,7 @@
       request,
       principalText: userPrincipal.toText(),
       storage: sessionStorage,
-      findJob: (query) => findRecentDeploymentJob({ ...query, maxAttempts: 1 }),
+      listJobs: () => fetchDeploymentJobsFromInstaller({ strict: true }),
       report: (jobId, finalSpecHash) => reportAssistantJob(jobId, finalSpecHash),
     });
   }
@@ -584,12 +585,13 @@
       }
       const manifestJson = JSON.stringify(manifest);
 
-      // The hash says what the user is about to deploy, with their changes. Keep it with the name, to find
-      // the job again if this page is reloaded before it reports.
-      const finalSpec = assistantRequest ? specFromFormData(formData, assistantRequest.spec) : null;
-      const finalSpecHash = finalSpec ? await specHash(finalSpec) : '';
+      // The hash says what the user is about to deploy, with their changes. Keep it, to report it
+      // if this page is reloaded before it does.
+      const finalSpecHash = assistantRequest
+        ? await specHash(specFromFormData(formData, assistantRequest.spec))
+        : '';
       if (assistantRequest) {
-        rememberAttempt(sessionStorage, assistantRequest.id, { name: finalSpec.name, specHash: finalSpecHash });
+        rememberFinalSpecHash(sessionStorage, assistantRequest.id, finalSpecHash);
         await claimAssistantRequest();
       }
 
