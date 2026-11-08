@@ -1465,7 +1465,7 @@
     margin: 1rem 0 0;
   }
 
-  .assistant-texts-hint {
+  .field-hint.assistant-texts-hint {
     margin: 0 0 0.75rem;
   }
 
