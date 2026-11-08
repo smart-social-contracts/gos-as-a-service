@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  MAX_MANIFEST_ESCAPED_CHARS,
   buildRealmDeploymentManifest,
+  escapedManifestSize,
   networkInfra,
   realmsReleaseAssetName,
   slugify,
@@ -243,4 +245,65 @@ test('buildRealmDeploymentManifest omits founder when blank', () => {
     { useCasals: false, founder: '' },
   );
   assert.equal(manifest.founder, undefined);
+});
+
+test('the manifest carries the default manifesto and welcome when the form has none', () => {
+  const manifest = buildRealmDeploymentManifest({ name: 'Plain Realm' }, 'staging', TEST_CONFIG);
+
+  assert.equal(manifest.realm.manifesto, 'Welcome to Plain Realm.');
+  assert.equal(manifest.realm.welcome_message, 'Welcome to Plain Realm!');
+});
+
+test('the manifest takes the manifesto and welcome message from the form', () => {
+  const manifest = buildRealmDeploymentManifest(
+    { name: 'River', manifesto: 'We share the river.', welcome_message: 'Hello, neighbour!' },
+    'staging',
+    TEST_CONFIG,
+  );
+
+  assert.equal(manifest.realm.manifesto, 'We share the river.');
+  assert.equal(manifest.realm.welcome_message, 'Hello, neighbour!');
+});
+
+test('a blank manifesto or welcome message falls back to the default', () => {
+  const manifest = buildRealmDeploymentManifest(
+    { name: 'River', manifesto: '  \n ', welcome_message: '' },
+    'staging',
+    TEST_CONFIG,
+  );
+
+  assert.equal(manifest.realm.manifesto, 'Welcome to River.');
+  assert.equal(manifest.realm.welcome_message, 'Welcome to River!');
+});
+
+test('the manifest records the assistant that prepared the realm, and only when there is one', () => {
+  const stamp = { id: 'req1', client_name: 'Claude', delegate: 'aaaaa-aa' };
+
+  const prepared = buildRealmDeploymentManifest({ name: 'River' }, 'staging', TEST_CONFIG, {
+    assistantRequest: stamp,
+  });
+  const ordinary = buildRealmDeploymentManifest({ name: 'River' }, 'staging', TEST_CONFIG);
+
+  assert.deepEqual(prepared.assistant_request, stamp);
+  assert.equal('assistant_request' in ordinary, false);
+});
+
+test('escapedManifestSize counts ASCII as it is', () => {
+  const manifest = { name: 'abc', n: ['x'] };
+
+  assert.equal(escapedManifestSize(manifest), JSON.stringify(manifest).length);
+});
+
+// Python: len(json.dumps(m, separators=(",", ":"))) == 71 for this manifest, with every non-ASCII
+// character (and DEL) as \uXXXX and an astral character as two surrogate escapes.
+test('escapedManifestSize counts a non-ASCII character as Python escapes it', () => {
+  assert.equal(escapedManifestSize({ name: 'Ñandú 河 😀', a: ['x\u007f', 'é'] }), 71);
+});
+
+test('a long manifesto in a non-Latin script goes over the cap, in Latin script it does not', () => {
+  const chinese = buildRealmDeploymentManifest({ name: 'River', manifesto: '河'.repeat(2000) }, 'staging', TEST_CONFIG);
+  const english = buildRealmDeploymentManifest({ name: 'River', manifesto: 'a'.repeat(2000) }, 'staging', TEST_CONFIG);
+
+  assert.ok(escapedManifestSize(chinese) > MAX_MANIFEST_ESCAPED_CHARS);
+  assert.ok(escapedManifestSize(english) < MAX_MANIFEST_ESCAPED_CHARS);
 });

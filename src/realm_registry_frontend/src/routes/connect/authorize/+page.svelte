@@ -170,6 +170,9 @@
           <small>{$_('mcpConsent.readonly_desc', {
             default: 'It can view realms, proposals, credits and balances. It cannot vote, submit proposals, deploy or move funds.',
           })}</small>
+          <small>{$_('mcpConsent.prepare_desc', {
+            default: 'It can also prepare a new realm for you to approve and pay for.',
+          })}</small>
           <small>{$_('mcpConsent.poa_desc', {
             default: 'If you later want it to act for you in a realm, grant it power of attorney there (menu → Power of attorney): you choose the permissions and how long it lasts, and you can revoke it any time.',
           })}</small>

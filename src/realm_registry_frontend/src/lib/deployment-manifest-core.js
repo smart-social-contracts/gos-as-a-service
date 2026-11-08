@@ -77,9 +77,41 @@ function buildCasalsBlock(realmName, config, formData = {}) {
 }
 
 /**
+ * The manifesto and welcome message a form deploys: the user's text, or the
+ * default when that box is empty.
+ */
+export function realmTexts(formData) {
+  const name = (formData.name || '').trim();
+  const manifesto = formData.manifesto || '';
+  const welcome = formData.welcome_message || '';
+  return {
+    manifesto: manifesto.trim() ? manifesto : `Welcome to ${name}.`,
+    welcome_message: welcome.trim() ? welcome : `Welcome to ${name}!`,
+  };
+}
+
+/**
+ * The installer keeps only the first 8,190 characters of the manifest the registry
+ * re-encodes with Python's `json.dumps`, which writes every non-ASCII character as a
+ * six-character `\uXXXX` escape. A longer manifest is cut mid-JSON and the deployment
+ * fails after its stand is built. The cap leaves room under 8,190 for the fields the
+ * registry adds and for the spaces Python puts after `,` and `:`.
+ */
+export const MAX_MANIFEST_ESCAPED_CHARS = 7000;
+
+/** Length of the manifest as Python's `json.dumps` (ensure_ascii) will write it, less its spaces. */
+export function escapedManifestSize(manifest) {
+  return JSON.stringify(manifest).replace(/[^\x20-\x7e]/g, (c) =>
+    `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  ).length;
+}
+
+/**
  * Build deployment manifest JSON (config-injected for unit tests).
  *
  * Codex, token, and branding are configured in-realm after deploy (issue #8).
+ * `options.assistantRequest` ({ id, client_name, delegate }) records which assistant
+ * prepared the realm; the registry and installer keep it in the job and ignore it.
  */
 export function buildRealmDeploymentManifest(formData, network, config = {}, options = {}) {
   const name = (formData.name || '').trim();
@@ -90,8 +122,7 @@ export function buildRealmDeploymentManifest(formData, network, config = {}, opt
   const realm = {
     name,
     display_name: name,
-    manifesto: `Welcome to ${name}.`,
-    welcome_message: `Welcome to ${name}!`,
+    ...realmTexts(formData),
     open_registration: false,
     extensions: [],
   };
@@ -138,6 +169,10 @@ export function buildRealmDeploymentManifest(formData, network, config = {}, opt
   const founder = ((formData.founder || options.founder || '')).trim();
   if (founder) {
     manifest.founder = founder;
+  }
+
+  if (options.assistantRequest) {
+    manifest.assistant_request = options.assistantRequest;
   }
 
   return manifest;
