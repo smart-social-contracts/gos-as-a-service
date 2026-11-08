@@ -1303,7 +1303,7 @@
 
         {#if assistantRequest}
           <h3 class="review-deploy-heading">{$_('assistantDeploy.texts_title')}</h3>
-          <p class="field-hint">{$_('assistantDeploy.texts_hint')}</p>
+          <p class="field-hint assistant-texts-hint">{$_('assistantDeploy.texts_hint')}</p>
           <div class="form-group">
             <label for="manifesto">{$_('assistantDeploy.manifesto_label')}</label>
             <textarea id="manifesto" rows="5" maxlength="2000" bind:value={formData.manifesto}></textarea>
@@ -1463,6 +1463,18 @@
 
   .assistant-cancel {
     margin: 1rem 0 0;
+  }
+
+  .assistant-texts-hint {
+    margin: 0 0 0.75rem;
+  }
+
+  .form-group textarea {
+    box-sizing: border-box;
+  }
+
+  .invitation-gate a.btn {
+    text-decoration: none;
   }
 
   .page-shell {
