@@ -176,6 +176,9 @@
           <small>{$_('mcpConsent.poa_desc', {
             default: 'If you later want it to act for you in a realm, grant it power of attorney there (menu → Power of attorney): you choose the permissions and how long it lasts, and you can revoke it any time.',
           })}</small>
+          <small>{$_('mcpConsent.approvals_desc', {
+            default: 'Some acts it prepares wait for your tap in the realm.',
+          })}</small>
         </div>
       {/if}
 
