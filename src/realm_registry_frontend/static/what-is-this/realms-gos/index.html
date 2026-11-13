@@ -360,14 +360,42 @@
     .code .o { border-radius: 3px; padding: 0 0.1em; transition: background 0.45s ease, color 0.45s ease; }
     .page:has(.ovr-low.shown) .code .o { background: rgba(107, 163, 163, 0.38); color: #fff; }
 
-    /* the class model */
-    .cls .b { fill: #fff; stroke: #a3a3a3; stroke-width: 1.3; }
-    .cls.hub .b { stroke: rgb(107, 163, 163); stroke-width: 2; }
-    .cls .sep { stroke: #e5e5e5; stroke-width: 1; }
-    .cls .n { fill: var(--gray-900); font-size: 13.5px; font-weight: 700; }
-    .cls .f { fill: var(--gray-600); font-size: 10.5px; font-family: var(--mono); }
-    .cls .f tspan { fill: var(--teal-d); }
     .colhead { fill: var(--gray-500); font-size: 11px; font-weight: 700; letter-spacing: 0.12em; }
+
+    /* the wheel: GGG's areas, their entities, and one decision's references */
+    .wheel .wband { font-size: 12px; font-weight: 700; fill: var(--gray-700); text-anchor: middle; }
+    .wheel .whub { fill: #fff; stroke: #a3a3a3; stroke-width: 1.5; }
+    .wheel .whub.on { stroke: rgb(47, 95, 95); stroke-width: 2.2; }
+    .wp rect { fill: #fff; stroke: #a3a3a3; stroke-width: 1.2; }
+    .wp text { font-size: 12px; font-weight: 600; fill: var(--gray-800); text-anchor: middle; }
+    .wp.on rect { fill: #e4efef; stroke: rgb(47, 95, 95); stroke-width: 1.8; }
+    .wp.on text { fill: var(--teal-d); }
+    .wl { fill: none; stroke: rgb(47, 95, 95); stroke-width: 1.8; }
+    /* the newest step is at full strength, the ones before it step back; the last step shows them all */
+    .wheel .wstep.shown:has(~ .wstep.shown) { opacity: 0.32; }
+    .wheel:has(.wall.shown) .wstep.shown { opacity: 1; }
+    /* the caption: one beat at a time, stacked in one cell so the column never grows */
+    .wcap { display: grid; align-content: center; }
+    .wnote { grid-area: 1 / 1; padding-left: 1rem; border-left: 3px solid var(--gray-200); }
+    .wnote.teal { border-left-color: var(--teal); }
+    .wnote .wc-note { font-size: 1.1rem; margin-top: 0.4rem; }
+    .wnote .wc-note b { font-weight: 650; color: var(--gray-700); }
+    .wnote.shown:has(~ .wnote.shown) { opacity: 0; }
+
+    /* the marketplace: a mock shop window */
+    .mkwin { fill: #fff; stroke: #262626; stroke-width: 1.8; }
+    .mkbar { stroke: #e5e5e5; stroke-width: 1.2; }
+    .mkurl { fill: #f5f5f5; stroke: #e5e5e5; stroke-width: 1; }
+    .mkchip { fill: #fff; stroke: #d4d4d4; stroke-width: 1.2; }
+    .mkchip.on { fill: rgba(107, 163, 163, 0.14); stroke: rgb(107, 163, 163); }
+    .mkchiptext { fill: var(--gray-500); font-size: 11px; font-weight: 600; text-anchor: middle; }
+    .mkchiptext.on { fill: var(--teal-d); }
+    .mk { fill: #fff; stroke: #d4d4d4; stroke-width: 1.3; }
+    .mkicon { fill: rgba(107, 163, 163, 0.18); stroke: rgb(107, 163, 163); stroke-width: 1.2; }
+    .mkkind { fill: var(--gray-400); font-size: 9px; font-weight: 700; letter-spacing: 0.1em; }
+    .mkrealm { fill: #fafafa; stroke: #a3a3a3; stroke-width: 1.3; }
+    .mkflow { fill: none; stroke: #737373; stroke-width: 1.6; }
+    .mkpay { fill: none; stroke: rgb(47, 95, 95); stroke-width: 2.2; }
 
     /* an act, row by row */
     .op .b { fill: #fff; stroke: #262626; stroke-width: 1.6; }
@@ -658,54 +686,199 @@
            ====================================================================================== -->
       <div class="page" data-slide="4">
         <section class="sl">
-          <header class="box-header"><div class="kicker">The standard <span class="layer std">GGG</span></div><h2>The ontology: the main classes and how they link</h2></header>
-          <p class="lead">GGG defines 60 entities in twelve domains. These 22 are the ones most acts touch. A field marked → refers to another class.</p>
-          <div class="body one">
-            <div class="art">
-              <svg viewBox="0 0 870 476" aria-label="A class diagram of GGG: realm, members, departments, governance, finance, land, licensing, justice and procurement, and the Event every operation leaves">
+          <header class="box-header"><div class="kicker">The standard <span class="layer std">GGG</span></div><h2>What a realm keeps: nine areas, one foundation</h2></header>
+          <p class="lead">GGG names the records a government keeps, 60 kinds in all, grouped in nine areas. Follow one decision around the wheel: a bike lane in a city.</p>
+          <div class="body">
+            <div class="art art-tall">
+              <svg class="wheel" viewBox="0 0 720 720" aria-label="A wheel of GGG's nine areas with their main entities, and the references one decision follows from a vote to a contract, a payment and a court case">
+                <defs>
+                  <path id="wb0" d="M252.4 64.5 A314.5 314.5 0 0 1 467.6 64.5"/>
+                  <path id="wb1" d="M467.6 64.5 A314.5 314.5 0 0 1 632.4 202.8"/>
+                  <path id="wb2" d="M632.4 202.8 A314.5 314.5 0 0 1 669.7 414.6"/>
+                  <path id="wb3" d="M567.9 607.8 A323.5 323.5 0 0 0 678.6 416.2"/>
+                  <path id="wb4" d="M360.0 683.5 A323.5 323.5 0 0 0 567.9 607.8"/>
+                  <path id="wb5" d="M152.1 607.8 A323.5 323.5 0 0 0 360.0 683.5"/>
+                  <path id="wb6" d="M41.4 416.2 A323.5 323.5 0 0 0 152.1 607.8"/>
+                  <path id="wb7" d="M50.3 414.6 A314.5 314.5 0 0 1 87.6 202.7"/>
+                  <path id="wb8" d="M87.6 202.7 A314.5 314.5 0 0 1 252.4 64.5"/>
+                </defs>
                 <g class="fx" data-frag="0">
-                  <text class="colhead" x="2" y="14">REALM</text>
-                  <text class="colhead" x="178" y="14">MEMBERS</text>
-                  <g class="cls hub"><rect class="b" x="0" y="26" width="166" height="56" rx="7"/><path class="sep" d="M0 48h166"/><text class="n" x="9" y="42">Realm</text><text class="f" x="9" y="63">name · status</text><text class="f" x="9" y="76">treasury → <tspan>Treasury</tspan></text></g>
-                  <g class="cls"><rect class="b" x="0" y="92" width="166" height="56" rx="7"/><path class="sep" d="M0 114h166"/><text class="n" x="9" y="108">Quarter</text><text class="f" x="9" y="129">population</text><text class="f" x="9" y="142">codex_version</text></g>
-                  <g class="cls"><rect class="b" x="0" y="158" width="166" height="56" rx="7"/><path class="sep" d="M0 180h166"/><text class="n" x="9" y="174">Codex</text><text class="f" x="9" y="195">version</text><text class="f" x="9" y="208">checksum</text></g>
-                  <g class="cls hub"><rect class="b" x="176" y="26" width="166" height="56" rx="7"/><path class="sep" d="M176 48h166"/><text class="n" x="185" y="42">User</text><text class="f" x="185" y="63">nickname</text><text class="f" x="185" y="76">home_quarter</text></g>
-                  <g class="cls"><rect class="b" x="176" y="92" width="166" height="56" rx="7"/><path class="sep" d="M176 114h166"/><text class="n" x="185" y="108">Member</text><text class="f" x="185" y="129">user → <tspan>User</tspan></text><text class="f" x="185" y="142">status · joined_at</text></g>
-                  <g class="cls"><rect class="b" x="176" y="158" width="166" height="56" rx="7"/><path class="sep" d="M176 180h166"/><text class="n" x="185" y="174">Human</text><text class="f" x="185" y="195">user → <tspan>User</tspan></text><text class="f" x="185" y="208">date_of_birth</text></g>
+                  <circle cx="360" cy="360" r="340" fill="#f5f5f5" stroke="#a3a3a3" stroke-width="1.5"/>
+                  <circle cx="360" cy="360" r="298" fill="#fff" stroke="#d4d4d4" stroke-width="1.2"/>
+                  <path d="M331.3 281.1L243.7 40.5M388.7 281.1L476.3 40.5M432.7 318.0L654.4 190.0M442.7 374.6L694.8 419.0M414.0 424.3L578.5 620.5M360.0 444.0L360.0 700.0M306.0 424.3L141.5 620.5M277.3 374.6L25.2 419.0M287.3 318.0L65.6 190.0" stroke="#d4d4d4" stroke-width="1.2" fill="none"/>
+                  <text class="wband"><textPath href="#wb0" startOffset="50%">Decisions</textPath></text>
+                  <text class="wband"><textPath href="#wb1" startOffset="50%">Departments and organizations</textPath></text>
+                  <text class="wband"><textPath href="#wb2" startOffset="50%">Procurement</textPath></text>
+                  <text class="wband"><textPath href="#wb3" startOffset="50%">Finance</textPath></text>
+                  <text class="wband"><textPath href="#wb4" startOffset="50%">Licensing</textPath></text>
+                  <text class="wband"><textPath href="#wb5" startOffset="50%">Land and property</textPath></text>
+                  <text class="wband"><textPath href="#wb6" startOffset="50%">Realm and federation</textPath></text>
+                  <text class="wband"><textPath href="#wb7" startOffset="50%">Identity and membership</textPath></text>
+                  <text class="wband"><textPath href="#wb8" startOffset="50%">Justice</textPath></text>
+                  <circle class="whub" cx="360" cy="360" r="84"/>
+                  <text class="colhead mid" x="360" y="334">FOUNDATION</text>
+                </g>
+                <g class="wlinks">
+                  <g class="wstep fx" data-frag="2">
+                    <path class="wl" d="M169.0 319.5 Q155.4 321.7 133.7 325.2" marker-end="url(#arrt)"/>
+                    <path class="wl" d="M107.4 318.2 Q111.6 307.6 114.6 299.9" marker-end="url(#arrt)"/>
+                    <path class="wl" d="M128.3 296.9 Q190.4 392.6 177.2 501.5" marker-end="url(#arrt)"/>
+                  </g>
+                  <g class="wstep fx" data-frag="3">
+                    <path class="wl" d="M318.5 584.5 Q317.7 568.6 317.0 555.8" marker-end="url(#arrt)"/>
+                    <path class="wl" d="M310.2 528.8 Q246.7 402.3 136.6 299.9" marker-end="url(#arrt)"/>
+                  </g>
+                  <g class="wstep fx" data-frag="4">
+                    <path class="wl" d="M316.0 108.7 Q322.9 123.0 328.4 134.4" marker-end="url(#arrt)"/>
+                    <path class="wl" d="M304.1 108.7 Q244.3 224.6 148.0 271.5" marker-end="url(#arrt)"/>
+                  </g>
+                  <g class="wstep fx" data-frag="5">
+                    <path class="wl" d="M386.8 117.1 Q370.7 127.2 359.4 134.4" marker-end="url(#arrt)"/>
+                    <path class="wl" d="M407.6 117.1 Q421.6 210.9 445.7 227.0" marker-end="url(#arrt)"/>
+                  </g>
+                  <g class="wstep fx" data-frag="6">
+                    <path class="wl" d="M512.3 339.7 Q470.8 309.5 468.7 257.0" marker-end="url(#arrt)"/>
+                    <path class="wl" d="M592.9 362.0 Q571.4 358.5 563.3 357.2" marker-end="url(#arrt)"/>
+                    <path class="wl" d="M598.2 353.3 Q530.1 301.3 531.1 223.0" marker-end="url(#arrt)"/>
+                  </g>
+                  <g class="wstep fx" data-frag="7">
+                    <path class="wl" d="M460.3 534.0 Q468.4 373.6 525.6 223.0" marker-end="url(#arrt)"/>
+                    <path class="wl" d="M458.5 534.0 Q443.1 387.2 465.5 257.0" marker-end="url(#arrt)"/>
+                  </g>
+                  <g class="wstep fx" data-frag="8">
+                    <path class="wl" d="M509.0 339.7 Q430.9 292.4 378.5 214.2" marker-end="url(#arrt)"/>
+                    <path class="wl" d="M373.2 187.2 Q387.1 152.2 399.9 120.1" marker-end="url(#arrt)"/>
+                  </g>
+                  <g class="wstep fx" data-frag="9">
+                    <path class="wl" d="M571.1 468.3 Q452.4 343.8 377.1 214.2" marker-end="url(#arrt)"/>
+                    <path class="wl" d="M515.5 428.8 Q541.2 448.6 563.0 465.3" marker-end="url(#arrt)"/>
+                    <path class="wl" d="M546.0 523.7 Q479.9 383.1 469.4 257.0" marker-end="url(#arrt)"/>
+                  </g>
+                  <g class="wstep fx" data-frag="10">
+                    <path class="wl" d="M305.0 243.9 Q327.4 247.2 355.6 214.2" marker-end="url(#arrt)"/>
+                    <path class="wl" d="M191.6 188.7 Q221.4 207.7 246.5 223.8" marker-end="url(#arrt)"/>
+                    <path class="wl" d="M173.5 188.7 Q174.0 197.4 174.3 203.2" marker-end="url(#arrt)"/>
+                    <path class="wl" d="M215.4 144.8 Q202.1 154.8 192.9 161.7" marker-end="url(#arrt)"/>
+                    <path class="wl" d="M241.9 164.6 Q238.7 154.7 236.4 147.8" marker-end="url(#arrt)"/>
+                  </g>
                 </g>
                 <g class="fx" data-frag="1">
-                  <text class="colhead" x="354" y="14">DEPARTMENTS</text>
-                  <g class="cls"><rect class="b" x="352" y="26" width="166" height="56" rx="7"/><path class="sep" d="M352 48h166"/><text class="n" x="361" y="42">Department</text><text class="f" x="361" y="63">parent → <tspan>Department</tspan></text><text class="f" x="361" y="76">head → <tspan>User</tspan></text></g>
-                  <g class="cls"><rect class="b" x="352" y="92" width="166" height="56" rx="7"/><path class="sep" d="M352 114h166"/><text class="n" x="361" y="108">Position</text><text class="f" x="361" y="129">department → <tspan>Department</tspan></text><text class="f" x="361" y="142">profile → <tspan>UserProfile</tspan></text></g>
-                  <g class="cls"><rect class="b" x="352" y="158" width="166" height="56" rx="7"/><path class="sep" d="M352 180h166"/><text class="n" x="361" y="174">Organization</text><text class="f" x="361" y="195">status</text><text class="f" x="361" y="208">admins → <tspan>User*</tspan></text></g>
+                  <g class="wp"><rect x="297.6" y="138.4" width="76" height="22" rx="11.0"/><text x="335.6" y="153.6">Proposal</text></g>
+                  <g class="wp"><rect x="286.7" y="85.7" width="47" height="22" rx="11.0"/><text x="310.2" y="100.9">Vote</text></g>
+                  <g class="wp"><rect x="371.9" y="94.1" width="68" height="22" rx="11.0"/><text x="405.9" y="109.3">Mandate</text></g>
+                  <g class="wp"><rect x="330.4" y="188.2" width="76" height="22" rx="11.0"/><text x="368.4" y="203.4">Contract</text></g>
+                  <g class="wp"><rect x="423.1" y="231.0" width="90" height="22" rx="11.0"/><text x="468.1" y="246.2">Department</text></g>
+                  <g class="wp"><rect x="479.2" y="197.0" width="104" height="22" rx="11.0"/><text x="531.2" y="212.2">Organization</text></g>
+                  <g class="wp"><rect x="453.2" y="128.0" width="76" height="22" rx="11.0"/><text x="491.2" y="143.2">Position</text></g>
+                  <g class="wp"><rect x="457.1" y="163.3" width="97" height="22" rx="11.0"/><text x="505.6" y="178.5">Appointment</text></g>
+                  <g class="wp"><rect x="498.3" y="340.7" width="61" height="22" rx="11.0"/><text x="528.8" y="355.9">Tender</text></g>
+                  <g class="wp"><rect x="593.9" y="354.3" width="40" height="22" rx="11.0"/><text x="613.9" y="369.5">Bid</text></g>
+                  <g class="wp"><rect x="554.8" y="260.6" width="76" height="22" rx="11.0"/><text x="592.8" y="275.8">BidScore</text></g>
+                  <g class="wp"><rect x="548.6" y="469.3" width="68" height="22" rx="11.0"/><text x="582.6" y="484.5">Invoice</text></g>
+                  <g class="wp"><rect x="461.9" y="405.8" width="76" height="22" rx="11.0"/><text x="499.9" y="421.0">Transfer</text></g>
+                  <g class="wp"><rect x="528.2" y="524.7" width="47" height="22" rx="11.0"/><text x="551.7" y="539.9">Fund</text></g>
+                  <g class="wp"><rect x="478.0" y="467.5" width="61" height="22" rx="11.0"/><text x="508.5" y="482.7">Budget</text></g>
+                  <g class="wp"><rect x="554.0" y="416.5" width="83" height="22" rx="11.0"/><text x="595.5" y="431.7">TaxPolicy</text></g>
+                  <g class="wp"><rect x="425.7" y="535.0" width="68" height="22" rx="11.0"/><text x="459.7" y="550.2">License</text></g>
+                  <g class="wp"><rect x="292.8" y="529.8" width="47" height="22" rx="11.0"/><text x="316.3" y="545.0">Land</text></g>
+                  <g class="wp"><rect x="295.6" y="585.5" width="47" height="22" rx="11.0"/><text x="319.1" y="600.7">Zone</text></g>
+                  <g class="wp"><rect x="199.6" y="452.8" width="54" height="22" rx="11.0"/><text x="226.6" y="468.0">Realm</text></g>
+                  <g class="wp"><rect x="141.4" y="505.5" width="68" height="22" rx="11.0"/><text x="175.4" y="520.7">Quarter</text></g>
+                  <g class="wp"><rect x="90.4" y="443.1" width="76" height="22" rx="11.0"/><text x="128.4" y="458.3">Registry</text></g>
+                  <g class="wp"><rect x="123.0" y="409.5" width="97" height="22" rx="11.0"/><text x="171.5" y="424.7">FederalVote</text></g>
+                  <g class="wp"><rect x="97.0" y="273.9" width="47" height="22" rx="11.0"/><text x="120.5" y="289.1">User</text></g>
+                  <g class="wp"><rect x="74.3" y="369.5" width="61" height="22" rx="11.0"/><text x="104.8" y="384.7">Member</text></g>
+                  <g class="wp"><rect x="75.7" y="319.2" width="54" height="22" rx="11.0"/><text x="102.7" y="334.4">Human</text></g>
+                  <g class="wp"><rect x="170.0" y="302.2" width="76" height="22" rx="11.0"/><text x="208.0" y="317.4">Identity</text></g>
+                  <g class="wp"><rect x="165.2" y="341.1" width="90" height="22" rx="11.0"/><text x="210.2" y="356.3">Delegation</text></g>
+                  <g class="wp"><rect x="236.0" y="227.8" width="68" height="22" rx="11.0"/><text x="270.0" y="243.0">Dispute</text></g>
+                  <g class="wp"><rect x="149.3" y="165.7" width="47" height="22" rx="11.0"/><text x="172.8" y="180.9">Case</text></g>
+                  <g class="wp"><rect x="148.1" y="207.2" width="54" height="22" rx="11.0"/><text x="175.1" y="222.4">Court</text></g>
+                  <g class="wp"><rect x="197.5" y="121.8" width="68" height="22" rx="11.0"/><text x="231.5" y="137.0">Verdict</text></g>
+                  <g class="wp"><rect x="211.9" y="165.6" width="68" height="22" rx="11.0"/><text x="245.9" y="180.8">Penalty</text></g>
+                  <g class="wp"><rect x="300.0" y="347.0" width="54" height="22" rx="11.0"/><text x="327.0" y="362.2">Codex</text></g><g class="wp"><rect x="366.0" y="347.0" width="54" height="22" rx="11.0"/><text x="393.0" y="362.2">Event</text></g>
+                  <text class="ts mid" x="360" y="390">notifications</text>
+                  <text class="ts mid" x="360" y="406">private documents</text>
                 </g>
-                <g class="fx" data-frag="2">
-                  <text class="colhead" x="530" y="14">GOVERNANCE</text>
-                  <text class="colhead" x="706" y="14">FINANCE</text>
-                  <g class="cls"><rect class="b" x="528" y="26" width="166" height="56" rx="7"/><path class="sep" d="M528 48h166"/><text class="n" x="537" y="42">Proposal</text><text class="f" x="537" y="63">proposer → <tspan>User</tspan></text><text class="f" x="537" y="76">action · deadline</text></g>
-                  <g class="cls"><rect class="b" x="528" y="92" width="166" height="56" rx="7"/><path class="sep" d="M528 114h166"/><text class="n" x="537" y="108">Vote</text><text class="f" x="537" y="129">proposal → <tspan>Proposal</tspan></text><text class="f" x="537" y="142">voter → <tspan>User</tspan> · choice</text></g>
-                  <g class="cls"><rect class="b" x="528" y="158" width="166" height="56" rx="7"/><path class="sep" d="M528 180h166"/><text class="n" x="537" y="174">Contract</text><text class="f" x="537" y="195">parties · value</text><text class="f" x="537" y="208">mandate → <tspan>Mandate</tspan></text></g>
-                  <g class="cls"><rect class="b" x="704" y="26" width="166" height="56" rx="7"/><path class="sep" d="M704 48h166"/><text class="n" x="713" y="42">Fund</text><text class="f" x="713" y="63">department → <tspan>Department</tspan></text><text class="f" x="713" y="76">balances</text></g>
-                  <g class="cls"><rect class="b" x="704" y="92" width="166" height="56" rx="7"/><path class="sep" d="M704 114h166"/><text class="n" x="713" y="108">TaxPolicy</text><text class="f" x="713" y="129">proposal → <tspan>Proposal</tspan></text><text class="f" x="713" y="142">document</text></g>
-                  <g class="cls"><rect class="b" x="704" y="158" width="166" height="56" rx="7"/><path class="sep" d="M704 180h166"/><text class="n" x="713" y="174">Invoice</text><text class="f" x="713" y="195">payer · amount</text><text class="f" x="713" y="208">due_at · status</text></g>
-                  <g class="cls"><rect class="b" x="704" y="224" width="166" height="56" rx="7"/><path class="sep" d="M704 246h166"/><text class="n" x="713" y="240">Transfer</text><text class="f" x="713" y="261">invoice → <tspan>Invoice</tspan></text><text class="f" x="713" y="274">to · amount</text></g>
-                </g>
-                <g class="fx" data-frag="3">
-                  <text class="colhead" x="2" y="318">LAND · LICENSING · JUSTICE · PROCUREMENT</text>
-                  <g class="cls"><rect class="b" x="0" y="330" width="166" height="56" rx="7"/><path class="sep" d="M0 352h166"/><text class="n" x="9" y="346">Land</text><text class="f" x="9" y="367">owner · kind</text><text class="f" x="9" y="380">x · y · width · height</text></g>
-                  <g class="cls"><rect class="b" x="176" y="330" width="166" height="56" rx="7"/><path class="sep" d="M176 352h166"/><text class="n" x="185" y="346">License</text><text class="f" x="185" y="367">holder · kind</text><text class="f" x="185" y="380">issued_by → <tspan>Department</tspan></text></g>
-                  <g class="cls"><rect class="b" x="352" y="330" width="166" height="56" rx="7"/><path class="sep" d="M352 352h166"/><text class="n" x="361" y="346">Case</text><text class="f" x="361" y="367">court → <tspan>Court</tspan></text><text class="f" x="361" y="380">plaintiff · defendant</text></g>
-                  <g class="cls"><rect class="b" x="528" y="330" width="166" height="56" rx="7"/><path class="sep" d="M528 352h166"/><text class="n" x="537" y="346">Tender</text><text class="f" x="537" y="367">requester → <tspan>Department</tspan></text><text class="f" x="537" y="380">winner → <tspan>Bid</tspan></text></g>
-                  <g class="cls"><rect class="b" x="704" y="330" width="166" height="56" rx="7"/><path class="sep" d="M704 352h166"/><text class="n" x="713" y="346">Bid</text><text class="f" x="713" y="367">tender → <tspan>Tender</tspan></text><text class="f" x="713" y="380">vendor → <tspan>Organization</tspan></text></g>
-                </g>
-                <g class="fx" data-frag="4">
-                  <path d="M83 390 V416M259 390 V416M435 390 V416M611 390 V416M787 390 V416" stroke="rgb(107, 163, 163)" stroke-width="1.8" class="flow" fill="none"/>
-                  <rect x="0" y="418" width="870" height="50" rx="10" fill="#171717"/>
-                  <text class="t tw" x="18" y="448" style="font-size:16px">Event</text>
-                  <text class="tm" x="82" y="448" style="fill:#d4d4d4;font-size:12px">op · user · by · args · result · at</text>
-                  <text class="ts end" x="852" y="448" style="fill:#a3a3a3">one for every operation: the audit log</text>
+                <g class="whl">
+                  <g class="wstep fx" data-frag="2">
+                    <g class="wp on"><rect x="170.0" y="302.2" width="76" height="22" rx="11.0"/><text x="208.0" y="317.4">Identity</text></g>
+                    <g class="wp on"><rect x="75.7" y="319.2" width="54" height="22" rx="11.0"/><text x="102.7" y="334.4">Human</text></g>
+                    <g class="wp on"><rect x="97.0" y="273.9" width="47" height="22" rx="11.0"/><text x="120.5" y="289.1">User</text></g>
+                    <g class="wp on"><rect x="141.4" y="505.5" width="68" height="22" rx="11.0"/><text x="175.4" y="520.7">Quarter</text></g>
+                    <g class="wp on"><rect x="74.3" y="369.5" width="61" height="22" rx="11.0"/><text x="104.8" y="384.7">Member</text></g>
+                    <g class="wp on"><rect x="199.6" y="452.8" width="54" height="22" rx="11.0"/><text x="226.6" y="468.0">Realm</text></g>
+                  </g>
+                  <g class="wstep fx" data-frag="3">
+                    <g class="wp on"><rect x="295.6" y="585.5" width="47" height="22" rx="11.0"/><text x="319.1" y="600.7">Zone</text></g>
+                    <g class="wp on"><rect x="292.8" y="529.8" width="47" height="22" rx="11.0"/><text x="316.3" y="545.0">Land</text></g>
+                    <g class="wp on"><rect x="97.0" y="273.9" width="47" height="22" rx="11.0"/><text x="120.5" y="289.1">User</text></g>
+                  </g>
+                  <g class="wstep fx" data-frag="4">
+                    <g class="wp on"><rect x="286.7" y="85.7" width="47" height="22" rx="11.0"/><text x="310.2" y="100.9">Vote</text></g>
+                    <g class="wp on"><rect x="297.6" y="138.4" width="76" height="22" rx="11.0"/><text x="335.6" y="153.6">Proposal</text></g>
+                    <g class="wp on"><rect x="97.0" y="273.9" width="47" height="22" rx="11.0"/><text x="120.5" y="289.1">User</text></g>
+                  </g>
+                  <g class="wstep fx" data-frag="5">
+                    <g class="wp on"><rect x="371.9" y="94.1" width="68" height="22" rx="11.0"/><text x="405.9" y="109.3">Mandate</text></g>
+                    <g class="wp on"><rect x="297.6" y="138.4" width="76" height="22" rx="11.0"/><text x="335.6" y="153.6">Proposal</text></g>
+                    <g class="wp on"><rect x="423.1" y="231.0" width="90" height="22" rx="11.0"/><text x="468.1" y="246.2">Department</text></g>
+                  </g>
+                  <g class="wstep fx" data-frag="6">
+                    <g class="wp on"><rect x="498.3" y="340.7" width="61" height="22" rx="11.0"/><text x="528.8" y="355.9">Tender</text></g>
+                    <g class="wp on"><rect x="423.1" y="231.0" width="90" height="22" rx="11.0"/><text x="468.1" y="246.2">Department</text></g>
+                    <g class="wp on"><rect x="593.9" y="354.3" width="40" height="22" rx="11.0"/><text x="613.9" y="369.5">Bid</text></g>
+                    <g class="wp on"><rect x="479.2" y="197.0" width="104" height="22" rx="11.0"/><text x="531.2" y="212.2">Organization</text></g>
+                  </g>
+                  <g class="wstep fx" data-frag="7">
+                    <g class="wp on"><rect x="425.7" y="535.0" width="68" height="22" rx="11.0"/><text x="459.7" y="550.2">License</text></g>
+                    <g class="wp on"><rect x="479.2" y="197.0" width="104" height="22" rx="11.0"/><text x="531.2" y="212.2">Organization</text></g>
+                    <g class="wp on"><rect x="423.1" y="231.0" width="90" height="22" rx="11.0"/><text x="468.1" y="246.2">Department</text></g>
+                  </g>
+                  <g class="wstep fx" data-frag="8">
+                    <g class="wp on"><rect x="498.3" y="340.7" width="61" height="22" rx="11.0"/><text x="528.8" y="355.9">Tender</text></g>
+                    <g class="wp on"><rect x="330.4" y="188.2" width="76" height="22" rx="11.0"/><text x="368.4" y="203.4">Contract</text></g>
+                    <g class="wp on"><rect x="371.9" y="94.1" width="68" height="22" rx="11.0"/><text x="405.9" y="109.3">Mandate</text></g>
+                  </g>
+                  <g class="wstep fx" data-frag="9">
+                    <g class="wp on"><rect x="548.6" y="469.3" width="68" height="22" rx="11.0"/><text x="582.6" y="484.5">Invoice</text></g>
+                    <g class="wp on"><rect x="330.4" y="188.2" width="76" height="22" rx="11.0"/><text x="368.4" y="203.4">Contract</text></g>
+                    <g class="wp on"><rect x="461.9" y="405.8" width="76" height="22" rx="11.0"/><text x="499.9" y="421.0">Transfer</text></g>
+                    <g class="wp on"><rect x="528.2" y="524.7" width="47" height="22" rx="11.0"/><text x="551.7" y="539.9">Fund</text></g>
+                    <g class="wp on"><rect x="423.1" y="231.0" width="90" height="22" rx="11.0"/><text x="468.1" y="246.2">Department</text></g>
+                    <g class="wp on"><rect x="478.0" y="467.5" width="61" height="22" rx="11.0"/><text x="508.5" y="482.7">Budget</text></g>
+                  </g>
+                  <g class="wstep fx" data-frag="10">
+                    <g class="wp on"><rect x="236.0" y="227.8" width="68" height="22" rx="11.0"/><text x="270.0" y="243.0">Dispute</text></g>
+                    <g class="wp on"><rect x="330.4" y="188.2" width="76" height="22" rx="11.0"/><text x="368.4" y="203.4">Contract</text></g>
+                    <g class="wp on"><rect x="149.3" y="165.7" width="47" height="22" rx="11.0"/><text x="172.8" y="180.9">Case</text></g>
+                    <g class="wp on"><rect x="148.1" y="207.2" width="54" height="22" rx="11.0"/><text x="175.1" y="222.4">Court</text></g>
+                    <g class="wp on"><rect x="197.5" y="121.8" width="68" height="22" rx="11.0"/><text x="231.5" y="137.0">Verdict</text></g>
+                    <g class="wp on"><rect x="211.9" y="165.6" width="68" height="22" rx="11.0"/><text x="245.9" y="180.8">Penalty</text></g>
+                  </g>
+                  <g class="wstep wall fx" data-frag="11">
+                    <circle class="whub on" cx="360" cy="360" r="84"/>
+                    <text class="colhead mid" x="360" y="334" style="fill:rgb(47, 95, 95)">FOUNDATION</text>
+                    <g class="wp on"><rect x="300.0" y="347.0" width="54" height="22" rx="11.0"/><text x="327.0" y="362.2">Codex</text></g><g class="wp on"><rect x="366.0" y="347.0" width="54" height="22" rx="11.0"/><text x="393.0" y="362.2">Event</text></g>
+                    <text class="ts mid" x="360" y="390">notifications</text>
+                    <text class="ts mid" x="360" y="406">private documents</text>
+                  </g>
                 </g>
               </svg>
+            </div>
+            <div class="wcap">
+              <div class="wc-frag wnote teal" data-frag="0"><span class="wc-label">Nine areas of government</span><span class="wc-note">From who the members are to how disputes end. They share one foundation: the rules every act is checked against, and the record it leaves.</span></div>
+              <div class="wc-frag wnote" data-frag="1"><span class="wc-label">Each area keeps its own records</span><span class="wc-note">A proposal, a fund, a licence, a court case. These are the main ones. Any GOS that follows GGG keeps them the same way.</span></div>
+              <div class="wc-frag wnote teal" data-frag="2"><span class="wc-label">Someone who lives here</span><span class="wc-note">Alba lives in one district of the city. She joins, and proves once that she is a real person who lives there.</span></div>
+              <div class="wc-frag wnote" data-frag="3"><span class="wc-label">A street, and who owns what</span><span class="wc-note">Main Street runs past plots the city already keeps track of: who owns each one, and what may be built on it.</span></div>
+              <div class="wc-frag wnote" data-frag="4"><span class="wc-label">The city decides</span><span class="wc-note">A bike lane is put to the neighbourhood. Everyone affected can vote, and the count is public.</span></div>
+              <div class="wc-frag wnote" data-frag="5"><span class="wc-label">A yes becomes permission to act</span><span class="wc-note">The roads department may now go ahead, up to an amount the vote set, and no further.</span></div>
+              <div class="wc-frag wnote" data-frag="6"><span class="wc-label">Companies compete for the work</span><span class="wc-note">The department publishes what it needs. Builders put in offers, sealed until the day they are opened.</span></div>
+              <div class="wc-frag wnote" data-frag="7"><span class="wc-label">Only a licensed builder may do it</span><span class="wc-note">The city issues the licences, so it can check on the spot that the winner is allowed to lay a road.</span></div>
+              <div class="wc-frag wnote" data-frag="8"><span class="wc-label">The winner signs</span><span class="wc-note">The best offer becomes an agreement, inside the limits the vote set. Both sides are bound by it.</span></div>
+              <div class="wc-frag wnote" data-frag="9"><span class="wc-label">The work is paid for</span><span class="wc-note">The builder bills the city, and the money leaves the roads budget. Anyone can see where it went.</span></div>
+              <div class="wc-frag wnote" data-frag="10"><span class="wc-label">If something goes wrong</span><span class="wc-note">A neighbour challenges the work. A court hears it, decides, and can order the builder to pay.</span></div>
+              <div class="wc-frag wnote" data-frag="11"><span class="wc-label">Every step leaves a record</span><span class="wc-note">Whatever the area, each act is checked against the city's own legislation, and written down for good.</span></div>
             </div>
           </div>
         </section>
@@ -914,63 +1087,98 @@
            ====================================================================================== -->
       <div class="page" data-slide="8">
         <section class="sl">
-          <header class="box-header"><div class="kicker">The marketplace <span class="layer">Realms GOS</span></div><h2>How codices and extensions reach a realm</h2></header>
-          <p class="lead">Anyone can publish. A realm installs only what a reviewer approved, or what it pinned itself, and only by its own vote.</p>
-          <div class="body">
-            <div class="art">
-              <svg viewBox="0 0 680 410" aria-label="A developer lists a package on the marketplace and uploads its files to the file registry; a reviewer approves it; a realm votes, checks it and installs it">
+          <header class="box-header"><div class="kicker">The marketplace <span class="layer">Realms GOS</span></div><h2>A shop for governance, and who pays whom</h2></header>
+          <p class="lead">Anyone can build something a realm can use. Anyone can browse. A realm takes nothing it has not voted for.</p>
+          <div class="body art-wide">
+            <div class="art art-tall">
+              <svg viewBox="0 0 700 496" aria-label="A mock marketplace page listing extensions, codices and assistants, with realms installing by vote, paying the developer, and the developer paying a yearly licence">
                 <g class="fx" data-frag="0">
-                  <rect x="200" y="14" width="260" height="120" rx="12" fill="#fff" stroke="#262626" stroke-width="1.8"/>
-                  <text class="t" x="220" y="42">marketplace</text>
-                  <g fill="rgba(107,163,163,0.12)" stroke="rgb(107, 163, 163)" stroke-width="1.2">
-                    <rect x="218" y="56" width="74" height="26" rx="13"/><rect x="298" y="56" width="62" height="26" rx="13"/><rect x="366" y="56" width="76" height="26" rx="13"/>
-                  </g>
-                  <text class="ts mid tt" x="255" y="74">extensions</text><text class="ts mid tt" x="329" y="74">codices</text><text class="ts mid tt" x="404" y="74">assistants</text>
-                  <text class="ts" x="220" y="114">listings · licences · reviews · rankings</text>
+                  <rect class="mkwin" x="0" y="0" width="700" height="310" rx="14"/>
+                  <path class="mkbar" d="M0 42 H700"/>
+                  <rect class="mkurl" x="16" y="12" width="222" height="20" rx="10"/>
+                  <text class="tm" x="28" y="26" style="font-size:11px">realmsgos.org/marketplace</text>
+                  <rect class="mkurl" x="510" y="12" width="174" height="20" rx="10"/>
+                  <text class="ts" x="524" y="26" style="font-size:11px">Search the marketplace</text>
+                  <rect class="mkchip on" x="16" y="54" width="88" height="24" rx="12"/>
+                  <text class="mkchiptext on" x="60" y="70">Extensions</text>
+                  <rect class="mkchip" x="113" y="54" width="69" height="24" rx="12"/>
+                  <text class="mkchiptext" x="148" y="70">Codices</text>
+                  <rect class="mkchip" x="191" y="54" width="88" height="24" rx="12"/>
+                  <text class="mkchiptext" x="235" y="70">Assistants</text>
+                  <rect class="mkchip" x="288" y="54" width="107" height="24" rx="12"/>
+                  <text class="mkchiptext" x="342" y="70">Verified only</text>
+                  <rect class="mk" x="16" y="92" width="212" height="96" rx="10"/>
+                  <rect class="mkicon" x="30" y="108" width="32" height="32" rx="8"/>
+                  <text class="t" x="72" y="124" style="font-size:14px">Voting</text>
+                  <text class="mkkind" x="72" y="139">EXTENSION</text>
+                  <text class="ts" x="30" y="162" style="font-size:12px">Proposals, ballots and results</text>
+                  <use href="#check" x="30" y="170" width="14" height="14"/><text class="ts tt" x="49" y="181" style="font-size:11px;font-weight:650">Verified</text>
+                  <rect class="mk" x="243" y="92" width="212" height="96" rx="10"/>
+                  <rect class="mkicon" x="257" y="108" width="32" height="32" rx="8"/>
+                  <text class="t" x="299" y="124" style="font-size:14px">Journal</text>
+                  <text class="mkkind" x="299" y="139">EXTENSION</text>
+                  <text class="ts" x="257" y="162" style="font-size:12px">A signed record of each day</text>
+                  <use href="#check" x="257" y="170" width="14" height="14"/><text class="ts tt" x="276" y="181" style="font-size:11px;font-weight:650">Verified</text>
+                  <rect class="mk" x="470" y="92" width="212" height="96" rx="10"/>
+                  <rect class="mkicon" x="484" y="108" width="32" height="32" rx="8"/>
+                  <text class="t" x="526" y="124" style="font-size:14px">Budget</text>
+                  <text class="mkkind" x="526" y="139">EXTENSION</text>
+                  <text class="ts" x="484" y="162" style="font-size:12px">Funds, budgets and spending</text>
+                  <rect class="mk" x="16" y="200" width="212" height="96" rx="10"/>
+                  <rect class="mkicon" x="30" y="216" width="32" height="32" rx="8"/>
+                  <text class="t" x="72" y="232" style="font-size:14px">Spain · tax</text>
+                  <text class="mkkind" x="72" y="247">CODEX</text>
+                  <text class="ts" x="30" y="270" style="font-size:12px">A country's tax legislation</text>
+                  <use href="#check" x="30" y="278" width="14" height="14"/><text class="ts tt" x="49" y="289" style="font-size:11px;font-weight:650">Verified</text>
+                  <rect class="mk" x="243" y="200" width="212" height="96" rx="10"/>
+                  <rect class="mkicon" x="257" y="216" width="32" height="32" rx="8"/>
+                  <text class="t" x="299" y="232" style="font-size:14px">Data protection</text>
+                  <text class="mkkind" x="299" y="247">CODEX</text>
+                  <text class="ts" x="257" y="270" style="font-size:12px">The EU directive, as code</text>
+                  <use href="#check" x="257" y="278" width="14" height="14"/><text class="ts tt" x="276" y="289" style="font-size:11px;font-weight:650">Verified</text>
+                  <rect class="mk" x="470" y="200" width="212" height="96" rx="10"/>
+                  <rect class="mkicon" x="484" y="216" width="32" height="32" rx="8"/>
+                  <text class="t" x="526" y="232" style="font-size:14px">Clerk</text>
+                  <text class="mkkind" x="526" y="247">ASSISTANT</text>
+                  <text class="ts" x="484" y="270" style="font-size:12px">Answers members' questions</text>
                 </g>
                 <g class="fx" data-frag="1">
-                  <use href="#person" x="40" y="146" width="22" height="33" fill="#737373"/>
-                  <text class="t mid" x="51" y="204">developer</text>
-                  <path d="M70 152 C 120 120, 150 80, 196 74" fill="none" stroke="#737373" stroke-width="1.6" marker-end="url(#arr)"/>
-                  <path d="M70 176 C 120 210, 150 290, 196 296" fill="none" stroke="#737373" stroke-width="1.6" marker-end="url(#arr)"/>
-                  <text class="ts" x="96" y="104">a listing</text>
-                  <text class="ts" x="104" y="262">the files</text>
-                  <rect x="200" y="240" width="260" height="120" rx="12" fill="#fff" stroke="#262626" stroke-width="1.8"/>
-                  <text class="t" x="220" y="268">file registry</text>
-                  <text class="tm" x="220" y="294" style="font-size:12px">ext/hello/1.0.0/</text>
-                  <text class="ts" x="220" y="316">manifest.json · backend/ · frontend/</text>
-                  <text class="ts" x="220" y="336">one folder per version</text>
+                  <path class="mkflow" d="M120 316 V372" marker-end="url(#arr)"/>
+                  <text class="ts" x="132" y="350">installs</text>
+                  <rect class="mkrealm" x="10" y="380" width="72" height="62" rx="10"/>
+                  <use href="#flag" x="23" y="394" width="14" height="16"/>
+                  <text class="ts" x="42" y="407" style="font-size:12px">realm</text>
+                  <use href="#ballot" x="35" y="412" width="22" height="22"/>
+                  <rect class="mkrealm" x="88" y="380" width="72" height="62" rx="10"/>
+                  <use href="#flag" x="101" y="394" width="14" height="16"/>
+                  <text class="ts" x="120" y="407" style="font-size:12px">realm</text>
+                  <use href="#ballot" x="113" y="412" width="22" height="22"/>
+                  <rect class="mkrealm" x="166" y="380" width="72" height="62" rx="10"/>
+                  <use href="#flag" x="179" y="394" width="14" height="16"/>
+                  <text class="ts" x="198" y="407" style="font-size:12px">realm</text>
+                  <use href="#ballot" x="191" y="412" width="22" height="22"/>
+                  <text class="ts mid" x="124" y="462">each one by its own vote</text>
                 </g>
                 <g class="fx" data-frag="2">
-                  <use href="#person" x="600" y="22" width="22" height="33" fill="#737373"/>
-                  <text class="t mid" x="611" y="80">reviewer</text>
-                  <path d="M592 44 H464" stroke="rgb(47, 95, 95)" stroke-width="1.8" marker-end="url(#arrt)"/>
-                  <text class="ts tt" x="480" y="36" style="font-weight:650">approves</text>
-                  <path d="M330 136 V236" stroke="rgb(47, 95, 95)" stroke-width="1.8" marker-end="url(#arrt)"/>
-                  <text class="ts tt" x="340" y="182" style="font-weight:650">stamps the approval</text>
-                  <text class="ts tt" x="340" y="198" style="font-weight:650">onto the files</text>
-                  <use href="#check" x="430" y="250" width="20" height="20"/>
+                  <path class="mkpay" d="M250 412 H568" marker-end="url(#arrt)"/>
+                  <text class="ts tt mid" x="408" y="400" style="font-weight:650;font-size:13px">pays to install</text>
+                  <use href="#person" x="586" y="382" width="22" height="33" fill="#525252"/>
+                  <text class="t mid" x="597" y="440">the developer</text>
+                  <text class="ts mid" x="597" y="458">who built it</text>
                 </g>
                 <g class="fx" data-frag="3">
-                  <path d="M462 300 H496" stroke="#737373" stroke-width="1.6" marker-end="url(#arr)"/>
-                  <text class="ts" x="464" y="292">fetch</text>
-                  <rect x="500" y="196" width="178" height="206" rx="12" fill="#fff" stroke="#262626" stroke-width="1.8"/>
-                  <use href="#flag" x="516" y="208" width="14" height="16"/><text class="t" x="536" y="222">a realm</text>
-                  <use href="#ballot" x="514" y="238" width="22" height="22"/>
-                  <text class="ts" x="544" y="248">votes to install</text>
-                  <text class="tm" x="544" y="264" style="font-size:10.5px">codex_install</text>
-                  <text class="ts" x="516" y="296">computes the checksum,</text>
-                  <text class="ts" x="516" y="312">checks the approval</text>
-                  <text class="ts" x="516" y="328">or its own pin</text>
-                  <use href="#check" x="516" y="352" width="22" height="22"/><text class="t" x="546" y="368">installed</text>
+                  <path class="mkpay" d="M596 376 C 566 334, 480 326, 424 316" marker-end="url(#arrt)"/>
+                  <text class="ts tt" x="296" y="352" style="font-weight:650;font-size:13px">a monthly licence</text>
+                  <text class="ts" x="296" y="370">pays for the review behind the mark</text>
+                  <text class="ts mid" x="350" y="486" style="font-size:11px;fill:#a3a3a3">Paid listings are not switched on yet: today the marketplace shows the price, and nothing changes hands.</text>
                 </g>
               </svg>
             </div>
             <ul class="pts">
-              <li class="wc-frag teal" data-frag="0"><span class="wc-label">Three kinds of listing</span><span class="wc-note">Extensions add features, codices add legislation, and assistants are AI agents a realm can hire by a vote.</span></li>
-              <li class="wc-frag" data-frag="1"><span class="wc-label">A developer publishes</span><span class="wc-note">A listing on the marketplace, and the package's files in the file registry, one folder per version.</span></li>
-              <li class="wc-frag" data-frag="2"><span class="wc-label">A reviewer approves each version</span><span class="wc-note">The approval is stamped onto the files themselves. A new version needs its own.</span></li>
-              <li class="wc-frag" data-frag="3"><span class="wc-label">The realm installs by its own vote</span><span class="wc-note"><code>codex_install</code> or <code>extension_install</code>. It checks the package's checksum against the approval, or its own pin, before anything runs.</span></li>
+              <li class="wc-frag teal" data-frag="0"><span class="wc-label">Three kinds of thing to install</span><span class="wc-note">Features a realm can add, ready-made legislation, and AI assistants it can put to work. Reviewed ones carry a mark.</span></li>
+              <li class="wc-frag" data-frag="1"><span class="wc-label">Nothing arrives uninvited</span><span class="wc-note">No one can push anything into a realm. Its members vote, and the realm fetches it itself.</span></li>
+              <li class="wc-frag" data-frag="2"><span class="wc-label">Realms pay the people who build</span><span class="wc-note">Build it once, and every realm that adopts it pays you. A small town pays the same way a city does.</span></li>
+              <li class="wc-frag" data-frag="3"><span class="wc-label">Being trusted costs the builder, not the realm</span><span class="wc-note">A licence paid by the month pays for the audit behind the mark. Browsing, and publishing without it, stay free.</span></li>
             </ul>
           </div>
         </section>
