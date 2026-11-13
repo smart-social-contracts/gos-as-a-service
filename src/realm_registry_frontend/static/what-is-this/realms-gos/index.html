@@ -80,6 +80,21 @@
     }
     .dot.active { background: var(--gray-900); transform: scale(1.2); }
 
+    /* the page number, "N/M", above the dots; out of the flow, so the layout does not move */
+    .dots .pageno {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 100%;
+      margin-bottom: 0.1rem;
+      text-align: center;
+      font-size: 0.75rem;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+      color: var(--gray-500);
+      pointer-events: none;
+    }
+
     /* ---- a slide: heading, lead, then art beside its points ------------------------------- */
     .sl {
       position: absolute;
@@ -1045,6 +1060,10 @@
 
   function renderDots(activePage) {
     dotsEl.innerHTML = '';
+    const number = document.createElement('span');
+    number.className = 'pageno';
+    number.textContent = (activePage + 1) + '/' + pages.length;
+    dotsEl.appendChild(number);
     pages.forEach((_, i) => {
       const btn = document.createElement('button');
       btn.type = 'button';
