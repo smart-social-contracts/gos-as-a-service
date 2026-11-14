@@ -32,7 +32,7 @@
 
 ## acts
 
-- title: Governance is a stream of acts
+- title: Legacy System
 - intro: a — **A**
 - intro: b — **A** does **B**
 - intro: c — **A** does **B** to **C**
@@ -50,6 +50,7 @@
 - cost: 60% — Community checks & balances {protest}
 - cost: 35% — Impractical, not sustainable
 - cost: 96% — Decentralized digital checks & balances {servers}
+    - title: Governance Operating System
 - Integrity no longer depends on trusted intermediaries
 
 # GOS — single slide

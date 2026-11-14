@@ -3252,6 +3252,40 @@ CSS = (
     .ax-quote::before { content: "“"; margin-right: 0.12em; }
     .ax-quote::after { content: "”"; margin-left: 0.08em; }
 
+    /* The name of the world the act belongs to, and the click where it changes: the old name
+       shrinks and is struck out, the new one arrives beside it, in teal. */
+    .ax-head-stack { display: grid; }
+    .ax-head-title {
+      grid-area: 1 / 1;
+      justify-self: start;
+      display: flex;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 0.55rem;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+    .ax-head-title.shown { opacity: 1; }
+    .ax-head-swap.shown { transition: opacity 0.5s ease 0.1s; }
+    .ax-head-was {
+      font-size: 1.15rem;
+      font-weight: 600;
+      color: var(--gray-500);
+      text-decoration: line-through;
+      text-decoration-color: #b94a48;
+      text-decoration-thickness: 2px;
+    }
+    .ax-head-to::before { content: "→"; font-size: 1.35rem; color: var(--gray-400); }
+    .ax-head-now { color: rgb(47, 95, 95); }
+    .ax-head-swap.shown .ax-head-now { animation: ax-head-glow 2.4s ease-in-out 0.2s both; }
+    @keyframes ax-head-glow {
+      0%, 100% { text-shadow: none; }
+      18%, 55% {
+        text-shadow: 0 0 2px #fff, 0 0 10px rgba(107, 163, 163, 0.95),
+          0 0 22px rgba(107, 163, 163, 0.75), 0 0 36px rgba(107, 163, 163, 0.5);
+      }
+    }
+
     /* An acts slide played over the world computer (its :detour: click): an opaque sheet the
        picture waits under, the planet (drawn full-window, under the page) included. */
     .dt-over, .dt-over-in { position: absolute; inset: 0; }
@@ -4238,7 +4272,11 @@ def detour_page(cls: str, inner: str) -> str:
 class ActsSlide(Slide):
     """Governance as a stream of acts, "A does B to C", away from the globe.
 
-    "title: Title — lead". ":a: A — what A is — defect" (and :b:, :c:, :d:): a part of the act,
+    "title: Title — lead" names the slide. A later "title: Name", nested under a cost, renames it
+    at that cost's click: the old name stays beside the new one, struck out, so the change reads as
+    the point (at the top level it takes a click of its own).
+
+    ":a: A — what A is — defect" (and :b:, :c:, :d:): a part of the act,
     what it stands for, and how it can make the act defective. A, B and C stand in a row, in that
     order, and D (who watches) over B; defects come one per click, in the order of the bullets.
     ":e: E — what E is" names the crowd over them all. ":rule: §" is the rule the act falls under.
@@ -4267,15 +4305,27 @@ class ActsSlide(Slide):
 
     def _parse(self) -> dict:
         p = {
-            "title": "", "parts": {}, "rule": "", "points": [], "gauge": "", "gauge_at": 0, "costs": [], "scenes": [],
-            "intros": [],
+            "title": "", "titles": [], "parts": {}, "rule": "", "points": [], "gauge": "", "gauge_at": 0,
+            "costs": [], "scenes": [], "intros": [],
         }
         frag = 0
         for depth, text in self.bullets:
             m = re.match(r"^(?:(title|gauge|cost|intro):|:([\w-]+):)\s*(.*)$", text)
             kind, key, rest = m.groups() if m else (None, None, text)
             if kind == "title":
-                p["title"] = rest
+                if not p["titles"]:
+                    p["title"] = rest
+                    at = 0
+                elif depth:
+                    # A title under a cost renames the slide at that cost's own click (a scene
+                    # of its own takes its clicks after it, so the name changes as it comes in).
+                    if not p["costs"]:
+                        raise ValueError(f"acts: a nested title: needs a cost: before it, not {rest!r}")
+                    at = p["costs"][-1][3]
+                else:
+                    frag += 1
+                    at = frag
+                p["titles"].append((rest, at))
             elif kind == "gauge":
                 p["gauge"] = rest
                 if p["intros"]:
@@ -4427,7 +4477,7 @@ class ActsSlide(Slide):
             f'<p class="ax-point wc-frag" data-frag="{at + offset}">{shield}<span>{tr(text)}</span></p>'
             for text, at in p["points"]
         )
-        header = detour_header(p["title"])
+        header = self._header(p, offset)
         if p["intros"]:
             # The lead grows with the act: each intro's sentence replaces the one before.
             intros = p["intros"]
@@ -4444,6 +4494,28 @@ class ActsSlide(Slide):
             + f'<div class="ax-body">{crowd}{act}{self._gauge(p, offset)}</div>'
             + points_html,
         )
+
+    @staticmethod
+    def _header(p: dict, offset: int) -> str:
+        """The slide's name. A second "title:" renames it at its click: the old name stays beside
+        the new one, struck out, because the change is the point."""
+        titles = p["titles"] or [(p["title"], 0)]
+        if len(titles) == 1:
+            return detour_header(titles[0][0])
+        spans = []
+        for i, (text, at) in enumerate(titles):
+            if i + 1 < len(titles):
+                spans.append(
+                    f'<span class="ax-head-title" data-until="{titles[i + 1][1] + offset}">{tr(text)}</span>'
+                )
+            else:
+                spans.append(
+                    f'<span class="ax-head-title ax-head-swap" data-frag="{at + offset}">'
+                    f'<span class="ax-head-was">{tr(titles[i - 1][0])}</span>'
+                    f'<span class="ax-head-to" aria-hidden="true"></span>'
+                    f'<span class="ax-head-now">{tr(text)}</span></span>'
+                )
+        return f'<header class="box-header wc-title"><h2 class="ax-head-stack">{"".join(spans)}</h2></header>'
 
     @staticmethod
     def _layers(pictures: list[tuple[str, str, int]], offset: int) -> str:
