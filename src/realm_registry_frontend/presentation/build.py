@@ -3373,6 +3373,11 @@ CSS = (
       opacity: 0.55;
     }
     .ax-b:has(.ax-gone.shown .ax-fail.shown) .ax-name { border-style: dashed; }
+    /* A and C grin while their part of the act is defective; the grin goes when it is secured. */
+    .ax-sly { opacity: 0; transition: opacity 0.45s ease; }
+    .ax-part:has(.ax-gone.shown .ax-fail.shown) .ax-sly { opacity: 1; transition: opacity 0.6s ease 0.3s; }
+    /* C's face mirrors A's (the viewBox is centred on the head), so the two glance at each other. */
+    .ax-c .ax-sly { transform: scaleX(-1); }
     .ax-rule { position: absolute; top: 0.2rem; left: 0; right: 0; display: flex; justify-content: center; }
     .ax-rule-tag {
       padding: 0.1rem 0.6rem;
@@ -4034,9 +4039,20 @@ CSS += "\n    " + gauge_demo_css() + "\n"
 
 
 CAVEAT_SVG = _icon('<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.4v.1"/>')
+# Over a plain head: narrowed eyes, brows down and a one-sided grin. It fades in while the part
+# it belongs to is defective (.ax-sly), so A and C look pleased with what they are doing.
+SLY_SVG = (
+    '<g class="ax-sly">'
+    '<g fill="#fff"><ellipse cx="-1.7" cy="-15.7" rx="0.9" ry="0.6"/>'
+    '<ellipse cx="1.7" cy="-15.7" rx="0.9" ry="0.6"/></g>'
+    '<g fill="#262626"><circle cx="-1.35" cy="-15.7" r="0.4"/><circle cx="2.05" cy="-15.7" r="0.4"/></g>'
+    '<g fill="none" stroke="#fff" stroke-width="0.85" stroke-linecap="round">'
+    '<path d="M-3.2-17.9-0.7-17M3.2-17.9 0.7-17"/>'
+    '<path d="M-2.2-12.9Q0-11 2.3-13.7"/></g></g>'
+)
 AGENT_SVG = (
     '<span class="ax-who"><svg viewBox="-9.5 -20.5 19 20" aria-hidden="true">'
-    f'{person_svg("currentColor")}</svg></span>'
+    f'{person_svg("currentColor")}{SLY_SVG}</svg></span>'
 )
 
 
