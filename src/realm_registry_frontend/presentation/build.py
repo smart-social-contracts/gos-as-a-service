@@ -3525,6 +3525,9 @@ CSS = (
 
     .ax-point { display: flex; align-items: center; gap: 0.7rem; font-size: 1.6rem; font-weight: 700; letter-spacing: -0.01em; line-height: 1.25; }
     .ax-point > svg { flex: none; height: 2.2rem; width: auto; }
+    /* A point under another: what it leads to, lined up under the words above it. */
+    .ax-point.ax-then { margin-left: 2.9rem; color: rgb(47, 95, 95); }
+    .ax-point > svg.ax-then-mark { height: 1.05rem; }
 
     .lx-stack { display: flex; flex-direction: column; gap: 0.6rem; }
     .lx-stack-head { font-size: 0.85rem; font-weight: 650; letter-spacing: 0.16em; text-transform: uppercase; color: var(--gray-500); }
@@ -3572,6 +3575,7 @@ CSS = (
       .ax-name { font-size: 1.7rem; }
       .ax-fail { font-size: 0.92rem; }
       .ax-point { font-size: 1.15rem; }
+      .ax-point.ax-then { margin-left: 1.9rem; }
       .ax-body { grid-template-columns: minmax(0, 1fr); grid-template-areas: "crowd" "act" "gauge"; }
       .ax-gauge { margin-top: 0.9rem; }
       .ax-gauge { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; row-gap: 0.45rem; }
@@ -4298,7 +4302,8 @@ class ActsSlide(Slide):
     what it stands for, and how it can make the act defective. A, B and C stand in a row, in that
     order, and D (who watches) over B; defects come one per click, in the order of the bullets.
     ":e: E — what E is" names the crowd over them all. ":rule: §" is the rule the act falls under.
-    Any other bullet is a point, one per click.
+    Any other bullet is a point, one per click; a point nested under another is what that one
+    leads to, and shows as "⇒ …" under it.
 
     "intro: a — sentence" (and b, c, d, e) builds the act up: the first comes with the slide, each
     next one a click later; it brings in its part and puts its sentence (what the act is so far)
@@ -4394,7 +4399,8 @@ class ActsSlide(Slide):
                 raise ValueError(f"acts: unknown part :{key}:; expected one of {[*ACT_PARTS, 'e', 'rule']}")
             else:
                 frag += 1
-                p["points"].append((rest, frag))
+                # A point under another point is what that one leads to.
+                p["points"].append((rest, frag, bool(depth)))
         missing = [k for k in ACT_PARTS if k not in p["parts"]] + [
             f"{k}:" for k in ("rule", "gauge") if not p[k]
         ] + ["cost:"] * (not p["costs"])
@@ -4494,9 +4500,16 @@ class ActsSlide(Slide):
             f'<div aria-hidden="true">{_crowd(servers_at, spread_at, protest)}</div>{e_label}</div>'
         )
         shield = f'<svg viewBox="-16 -28 32 37" aria-hidden="true">{shield_svg()}</svg>'
+        # Drawn, not "\u21d2": the deck's font has no such glyph.
+        then = (
+            '<svg class="ax-then-mark" viewBox="0 0 24 16" aria-hidden="true">'
+            '<path d="M1.4 5.2H13.5M1.4 10.8H13.5" fill="none" stroke="currentColor" stroke-width="2.2" '
+            'stroke-linecap="round"/><path d="M12.4 1.4 22.2 8l-9.8 6.6z" fill="currentColor"/></svg>'
+        )
         points_html = "".join(
-            f'<p class="ax-point wc-frag" data-frag="{at + offset}">{shield}<span>{tr(text)}</span></p>'
-            for text, at in p["points"]
+            f'<p class="ax-point wc-frag{" ax-then" if leads else ""}" data-frag="{at + offset}">'
+            f'{then if leads else shield}<span>{tr(text)}</span></p>'
+            for text, at, leads in p["points"]
         )
         header = self._header(p, offset)
         if p["intros"]:

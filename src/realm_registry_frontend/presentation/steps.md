@@ -53,6 +53,7 @@
 - cost: 96% — Decentralized digital checks & balances {servers}
     - title: Governance Operating System
 - Integrity no longer depends on trusted intermediaries
+    - Cooperation is the most profitable behavior
 
 # GOS — single slide
 
