@@ -3242,15 +3242,17 @@ CSS = (
       letter-spacing: -0.01em;
       color: var(--gray-800);
     }
-    .ax-quote::before, .ax-quote::after {
+    .ax-said::before, .ax-said::after {
       font-family: Georgia, "Times New Roman", serif;
       font-size: 2.4em;
       line-height: 0;
       vertical-align: -0.4em;
       color: rgb(107, 163, 163);
     }
-    .ax-quote::before { content: "“"; margin-right: 0.12em; }
-    .ax-quote::after { content: "”"; margin-left: 0.08em; }
+    .ax-said::before { content: "“"; margin-right: 0.12em; }
+    .ax-said::after { content: "”"; margin-left: 0.08em; }
+    /* What the sentence is: it stands outside the quotation marks. */
+    .ax-quote-label { font-size: 0.85em; color: var(--gray-500); font-weight: 600; margin-right: 0.3em; }
 
     /* The name of the world the act belongs to, and the click where it changes: the old name
        shrinks and is struck out, the new one arrives beside it, in teal. */
@@ -4284,7 +4286,8 @@ class ActsSlide(Slide):
 
     "intro: a — sentence" (and b, c, d, e) builds the act up: the first comes with the slide, each
     next one a click later; it brings in its part and puts its sentence (what the act is so far)
-    in place of the lead. Without them, every part is there from the start.
+    in place of the lead. Without them, every part is there from the start. "quote: Act:" names
+    what that sentence is, outside its quotation marks.
 
     "gauge: Name" is a meter that "cost: 10% — Label" bullets fill, one per click (a note after
     another " — " shows beside the label): each sweeps it from the level before to its own, up or
@@ -4305,14 +4308,16 @@ class ActsSlide(Slide):
 
     def _parse(self) -> dict:
         p = {
-            "title": "", "titles": [], "parts": {}, "rule": "", "points": [], "gauge": "", "gauge_at": 0,
-            "costs": [], "scenes": [], "intros": [],
+            "title": "", "titles": [], "quote": "", "parts": {}, "rule": "", "points": [], "gauge": "",
+            "gauge_at": 0, "costs": [], "scenes": [], "intros": [],
         }
         frag = 0
         for depth, text in self.bullets:
-            m = re.match(r"^(?:(title|gauge|cost|intro):|:([\w-]+):)\s*(.*)$", text)
+            m = re.match(r"^(?:(title|quote|gauge|cost|intro):|:([\w-]+):)\s*(.*)$", text)
             kind, key, rest = m.groups() if m else (None, None, text)
-            if kind == "title":
+            if kind == "quote":
+                p["quote"] = rest
+            elif kind == "title":
                 if not p["titles"]:
                     p["title"] = rest
                     at = 0
@@ -4487,7 +4492,8 @@ class ActsSlide(Slide):
                 + f'><span data-frag="{at + offset}">{tr(sentence)}</span></span>'
                 for i, (_, sentence, at) in enumerate(intros)
             )
-            header += f'<p class="dt-lead wc-title ax-quote">{says}</p>'
+            label = f'<span class="ax-quote-label">{tr(p["quote"])}</span>' if p["quote"] else ""
+            header += f'<p class="dt-lead wc-title ax-quote">{label}<span class="ax-said">{says}</span></p>'
         return detour_section(
             "ax-slide",
             header

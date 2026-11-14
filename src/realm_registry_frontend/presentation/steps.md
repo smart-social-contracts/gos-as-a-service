@@ -33,6 +33,7 @@
 ## acts
 
 - title: Legacy System
+- quote: Act:
 - intro: a — **A**
 - intro: b — **A** does **B**
 - intro: c — **A** does **B** to **C**
