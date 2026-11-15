@@ -3399,11 +3399,22 @@ CSS = (
 
     .ax-act { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) minmax(0, 1fr); align-items: start; row-gap: 0.4rem; }
     .ax-act.shown, .ax-gauge.shown { transition-delay: 0.35s; }
-    /* D watches the act from over it. */
+    /* The case being told, over the act; D watches it from over that. */
+    .ax-case-label { grid-area: 2 / 1 / 3 / -1; display: grid; justify-items: center; margin-bottom: 0.45rem; }
+    .ax-case-label > .ax-case {
+      grid-area: 1 / 1;
+      font-size: 1rem;
+      font-weight: 650;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--gray-500);
+    }
+    /* Each case's lines take the place of the one before. */
+    .ax-case[data-until]:not(.shown), .ax-case:has(> :not(.shown)) { display: none; }
     .ax-d { grid-area: 1 / 2; margin-bottom: 0.6rem; }
-    .ax-a { grid-area: 2 / 1; }
-    .ax-b { grid-area: 2 / 2; }
-    .ax-c { grid-area: 2 / 3; }
+    .ax-a { grid-area: 3 / 1; }
+    .ax-b { grid-area: 3 / 2; }
+    .ax-c { grid-area: 3 / 3; }
     .ax-part {
       --tone: var(--gray-700);
       display: flex;
@@ -4492,6 +4503,10 @@ class ActsSlide(Slide):
     order, and D (who watches) over B; defects come one per click, in the order of the bullets.
     ":e: E — what E is" names the crowd over them all. ":rule: §", if there is one, tags the act's
     arrow with the rule it falls under once the act is secured.
+
+    "case: a river basin" is one act of this kind, named over the parts, with ":a:", ":b:" and
+    ":c:" lines under it saying what each part does in it. The first case comes a line at a time,
+    one per click; every case after it comes in a click of its own, replacing the one before.
     Any other bullet is a point, one per click; a point nested under another is what that one
     leads to, and shows as "⇒ …" under it.
 
@@ -4520,11 +4535,11 @@ class ActsSlide(Slide):
     def _parse(self) -> dict:
         p = {
             "title": "", "titles": [], "quote": "", "parts": {}, "rule": "", "points": [], "gauge": "",
-            "gauge_at": 0, "costs": [], "scenes": [], "intros": [],
+            "gauge_at": 0, "costs": [], "scenes": [], "intros": [], "cases": [],
         }
         frag = 0
         for depth, text in self.bullets:
-            m = re.match(r"^(?:(title|quote|gauge|cost|intro):|:([\w-]+):)\s*(.*)$", text)
+            m = re.match(r"^(?:(title|quote|gauge|cost|intro|case):|:([\w-]+):)\s*(.*)$", text)
             kind, key, rest = m.groups() if m else (None, None, text)
             if kind == "quote":
                 p["quote"] = rest
@@ -4554,6 +4569,18 @@ class ActsSlide(Slide):
                     raise ValueError(f"acts: intro: takes a part ({[*ACT_PARTS, 'e']}) and a sentence, not {rest!r}")
                 frag += bool(p["intros"])
                 p["intros"].append((key, sentence, frag))
+            elif kind == "case":
+                # A case is one act of the kind the slide is about. The first comes a line at a
+                # time, as the parts take their defects; every one after it comes in one click.
+                if p["cases"]:
+                    frag += 1
+                p["cases"].append({"label": rest, "at": None if not p["cases"] else frag, "lines": {}})
+            elif depth and key in ("a", "b", "c") and p["cases"]:
+                case = p["cases"][-1]
+                if len(p["cases"]) == 1:
+                    frag += 1
+                    case["at"] = case["at"] or frag
+                case["lines"][key] = (rest, frag if len(p["cases"]) == 1 else case["at"])
             elif kind == "cost":
                 level, _, rest = rest.partition(" — ")
                 if not re.fullmatch(r"\d{1,3}%", level):
@@ -4629,6 +4656,22 @@ class ActsSlide(Slide):
         # When each part comes in: with the slide, or with its intro.
         comes = {key: at + offset for key, _, at in p["intros"]}
 
+        def case_lines(key: str) -> str:
+            """What this part does in each case: one at a time, the next replacing the one before."""
+            spans = []
+            for i, case in enumerate(p["cases"]):
+                if key not in case["lines"]:
+                    continue
+                text, at = case["lines"][key]
+                until = (
+                    f' data-until="{p["cases"][i + 1]["at"] + offset}"' if i + 1 < len(p["cases"]) else ""
+                )
+                spans.append(
+                    f'<span class="ax-case"{until}>'
+                    f'<span class="ax-fail wc-frag" data-frag="{at + offset}">{tr(text)}</span></span>'
+                )
+            return "".join(spans)
+
         def part(key: str) -> str:
             token, role, defect, at = parts[key]
             # Once the act is secured it runs inside the block: A's line goes up into it, C's
@@ -4639,12 +4682,13 @@ class ActsSlide(Slide):
                 if key in ("a", "c") and merge_at is not None
                 else ""
             )
-            defect_html = (
-                f'<span class="ax-gone" data-until="{secured_at}">'
-                f'<span class="ax-fail wc-frag" data-frag="{at + offset}">{tr(defect)}</span></span>'
+            lines = (
+                f'<span class="ax-fail wc-frag" data-frag="{at + offset}">{tr(defect)}</span>'
                 if defect
-                else ""
+                else case_lines(key)
             )
+            defect_html = f'<span class="ax-gone" data-until="{secured_at}">{lines}</span>' if lines else ""
+
             if key == "d":
                 figure = self._watchers(p, offset)
                 if protest:
@@ -4674,9 +4718,21 @@ class ActsSlide(Slide):
                 inner = f'<div class="ax-d-in" data-until="{merge_at}">{inner}</div>'
             return f'<div class="ax-part ax-{key}{intro}">{inner}</div>'
 
+        case_label = ""
+        if p["cases"]:
+            labels = []
+            for i, case in enumerate(p["cases"]):
+                until = (
+                    f' data-until="{p["cases"][i + 1]["at"] + offset}"' if i + 1 < len(p["cases"]) else ""
+                )
+                labels.append(
+                    f'<span class="ax-case"{until}>'
+                    f'<span class="wc-frag" data-frag="{case["at"] + offset}">{tr(case["label"])}</span></span>'
+                )
+            case_label = f'<div class="ax-case-label">{"".join(labels)}</div>'
         act = (
             f'<div class="ax-act wc-frag" data-frag="{offset}">'
-            f'<span class="ax-secured" data-frag="{secured_at}" hidden></span>'
+            f'<span class="ax-secured" data-frag="{secured_at}" hidden></span>{case_label}'
             + "".join(part(k) for k in ACT_PARTS)
             + "</div>"
         )
