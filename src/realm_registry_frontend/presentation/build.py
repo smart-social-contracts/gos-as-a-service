@@ -3523,7 +3523,7 @@ CSS = (
     .ax-monkeys.shown .ax-hands { opacity: 1; transform: none; transition-delay: 0.7s; }
     /* While the crowd protests, D sweats and plays innocent: yellow, hands down, then red again. */
     .ax-sweat { display: none; }
-    .ax-part.ax-part.ax-part.ax-d:has(.ax-sweat.shown .ax-sweat-mark.shown) { --tone: #d4a72c; transition: color 1.2s ease 0.4s; }
+    .ax-part.ax-d:has(.ax-sweat.shown .ax-sweat-mark.shown) { --tone: #d4a72c; transition: color 1.2s ease 0.4s; }
     .ax-d:has(.ax-sweat.shown .ax-sweat-mark.shown) .ax-hands { opacity: 0; transform: translateY(4px); transition-delay: 0.5s; }
     .ax-drop { opacity: 0; transition: opacity 0.4s ease; }
     .ax-d:has(.ax-sweat.shown .ax-sweat-mark.shown) .ax-drop { animation: ax-drip 1.5s ease-in calc(0.8s + var(--dd)) infinite; }
@@ -4210,23 +4210,15 @@ def cost_level(level: int) -> tuple[str, str]:
     return next((tone, word) for top, tone, word in COST_LEVELS if level < top)
 
 
-def act_tone_css() -> str:
-    """A, B, C and D take the colour of the meter's current level, and move to it as it moves."""
-    return "\n    ".join(
-        f".ax-act:has(.ax-tone-at.shown > .ax-tone-{band}.shown) .ax-part.ax-part {{ --tone: {tone}; }}"
-        for band, (_, tone, _) in enumerate(COST_LEVELS)
-    )
-
-
-CSS += "\n    " + act_tone_css() + "\n"
-
 
 GAUGE_DEMO_S = 6.0
 
 
 def gauge_demo_css(samples: int = 80) -> str:
     """When the meter comes in, it shows how it reads: up and down twice through every level in
-    GAUGE_DEMO_S seconds, its colour and word (COST_LEVELS) changing with it; then it is empty."""
+    GAUGE_DEMO_S seconds, its colour and word (COST_LEVELS) changing with it; then it is empty.
+    A, B, C and D sweep with it, so the meter is read on the act itself; they are their own colour
+    again by the time the first real level arrives."""
 
     def level(i: int) -> float:
         u = (2 * i / samples) % 1
@@ -4255,6 +4247,13 @@ def gauge_demo_css(samples: int = 80) -> str:
             before = on
         frames.append("100% { opacity: 0; }")
         words.append(f"@keyframes ax-demo-w{b} {{ {' '.join(frames)} }}")
+    # The parts take the demo's colour as it sweeps, and their own back at the end of it.
+    tone = " ".join(
+        f"{100 * i / samples:.2f}% {{ color: "
+        + ("var(--tone)" if i == samples else cost_level(level(i))[0])
+        + "; }"
+        for i in range(samples + 1)
+    )
     return "\n    ".join(
         [
             ".ax-gauge-demo { position: absolute; inset: 0; border-radius: inherit; transform: scaleY(0); transform-origin: bottom; }",
@@ -4263,6 +4262,10 @@ def gauge_demo_css(samples: int = 80) -> str:
             ".ax-demo-words > span { grid-area: 1 / 1; opacity: 0; white-space: nowrap; }",
             f".ax-gauge.shown .ax-demo-words > span {{ animation: var(--w) {GAUGE_DEMO_S}s linear 0.6s both; }}",
             ".ax-gauge:has(.ax-gauge-word > .wc-frag.shown) .ax-demo-words { display: none; }",
+            # No fill: once the demo is over the parts are back to their own colour.
+            ".ax-body:has(.ax-gauge.shown):not(:has(.ax-gauge-word > .wc-frag.shown)) .ax-part"
+            f" {{ animation: ax-demo-tone {GAUGE_DEMO_S}s linear 0.6s; }}",
+            f"@keyframes ax-demo-tone {{ {tone} }}",
             "@media (max-aspect-ratio: 1/1) { .ax-gauge-demo { transform: scaleX(0); transform-origin: left; }"
             " .ax-gauge.shown .ax-gauge-demo { animation-name: ax-gauge-demo-x; } }",
             sweep("Y"),
@@ -4765,18 +4768,6 @@ class ActsSlide(Slide):
                 inner = f'<div class="ax-d-in" data-until="{merge_at}">{inner}</div>'
             return f'<div class="ax-part ax-{key}{intro}">{inner}</div>'
 
-        # The act is the colour of what defection costs right now: each level marks the act, and
-        # ACT_TONE_CSS turns that mark into the colour A, B, C and D take (they transition to it).
-        tones = []
-        for i, (level, *_rest) in enumerate(p["costs"]):
-            at = p["costs"][i][-1] + offset
-            until = f' data-until="{p["costs"][i + 1][-1] + offset}"' if i + 1 < len(p["costs"]) else ""
-            band = next(b for b, (top, _, _) in enumerate(COST_LEVELS) if level < top)
-            tones.append(
-                f'<span class="ax-tone-at"{until} hidden>'
-                f'<span class="ax-tone ax-tone-{band}" data-frag="{at}"></span></span>'
-            )
-        tone_marks = "".join(tones)
         case_label = ""
         if p["cases"]:
             labels = []
@@ -4791,7 +4782,7 @@ class ActsSlide(Slide):
             case_label = f'<div class="ax-case-label" data-until="{secured_at}">{"".join(labels)}</div>'
         act = (
             f'<div class="ax-act wc-frag" data-frag="{offset}">'
-            f'<span class="ax-secured" data-frag="{secured_at}" hidden></span>{tone_marks}{case_label}'
+            f'<span class="ax-secured" data-frag="{secured_at}" hidden></span>{case_label}'
             + "".join(part(k) for k in ACT_PARTS)
             + "</div>"
         )
