@@ -3523,7 +3523,7 @@ CSS = (
     .ax-monkeys.shown .ax-hands { opacity: 1; transform: none; transition-delay: 0.7s; }
     /* While the crowd protests, D sweats and plays innocent: yellow, hands down, then red again. */
     .ax-sweat { display: none; }
-    .ax-part.ax-d:has(.ax-sweat.shown .ax-sweat-mark.shown) { --tone: #d4a72c; transition: color 1.2s ease 0.4s; }
+    .ax-part.ax-part.ax-part.ax-d:has(.ax-sweat.shown .ax-sweat-mark.shown) { --tone: #d4a72c; transition: color 1.2s ease 0.4s; }
     .ax-d:has(.ax-sweat.shown .ax-sweat-mark.shown) .ax-hands { opacity: 0; transform: translateY(4px); transition-delay: 0.5s; }
     .ax-drop { opacity: 0; transition: opacity 0.4s ease; }
     .ax-d:has(.ax-sweat.shown .ax-sweat-mark.shown) .ax-drop { animation: ax-drip 1.5s ease-in calc(0.8s + var(--dd)) infinite; }
@@ -4210,6 +4210,17 @@ def cost_level(level: int) -> tuple[str, str]:
     return next((tone, word) for top, tone, word in COST_LEVELS if level < top)
 
 
+def act_tone_css() -> str:
+    """A, B, C and D take the colour of the meter's current level, and move to it as it moves."""
+    return "\n    ".join(
+        f".ax-act:has(.ax-tone-at.shown > .ax-tone-{band}.shown) .ax-part.ax-part {{ --tone: {tone}; }}"
+        for band, (_, tone, _) in enumerate(COST_LEVELS)
+    )
+
+
+CSS += "\n    " + act_tone_css() + "\n"
+
+
 GAUGE_DEMO_S = 6.0
 
 
@@ -4633,7 +4644,10 @@ class ActsSlide(Slide):
             elif key in (*ACT_PARTS, "e"):
                 token, _, rest = rest.partition(" — ")
                 role, _, example = rest.partition(" — ")
-                # What this part is in the plain example, shown as the part comes in.
+                # What this part is in the plain example: a click of its own, after the sentence
+                # at the top is whole, in the order the bullets are written.
+                if example:
+                    frag += 1
                 p["parts"][key] = (token, role, example, frag)
             elif key:
                 raise ValueError(f"acts: unknown part :{key}:; expected one of {[*ACT_PARTS, 'e', 'rule']}")
@@ -4690,7 +4704,7 @@ class ActsSlide(Slide):
             until = f' data-until="{p["cases"][0]["at"] + offset}"' if p["cases"] else ""
             return (
                 f'<span class="ax-ex"{until}><span class="wc-frag" '
-                f'data-frag="{comes.get(key, offset)}">{tr(example)}</span></span>'
+                f'data-frag="{parts[key][3] + offset}">{tr(example)}</span></span>'
             )
 
         def case_lines(key: str) -> str:
@@ -4751,6 +4765,18 @@ class ActsSlide(Slide):
                 inner = f'<div class="ax-d-in" data-until="{merge_at}">{inner}</div>'
             return f'<div class="ax-part ax-{key}{intro}">{inner}</div>'
 
+        # The act is the colour of what defection costs right now: each level marks the act, and
+        # ACT_TONE_CSS turns that mark into the colour A, B, C and D take (they transition to it).
+        tones = []
+        for i, (level, *_rest) in enumerate(p["costs"]):
+            at = p["costs"][i][-1] + offset
+            until = f' data-until="{p["costs"][i + 1][-1] + offset}"' if i + 1 < len(p["costs"]) else ""
+            band = next(b for b, (top, _, _) in enumerate(COST_LEVELS) if level < top)
+            tones.append(
+                f'<span class="ax-tone-at"{until} hidden>'
+                f'<span class="ax-tone ax-tone-{band}" data-frag="{at}"></span></span>'
+            )
+        tone_marks = "".join(tones)
         case_label = ""
         if p["cases"]:
             labels = []
@@ -4765,7 +4791,7 @@ class ActsSlide(Slide):
             case_label = f'<div class="ax-case-label" data-until="{secured_at}">{"".join(labels)}</div>'
         act = (
             f'<div class="ax-act wc-frag" data-frag="{offset}">'
-            f'<span class="ax-secured" data-frag="{secured_at}" hidden></span>{case_label}'
+            f'<span class="ax-secured" data-frag="{secured_at}" hidden></span>{tone_marks}{case_label}'
             + "".join(part(k) for k in ACT_PARTS)
             + "</div>"
         )

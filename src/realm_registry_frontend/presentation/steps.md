@@ -39,12 +39,12 @@
 - intro: c — **A** does **B** to **C**
 - intro: d — **A** does **B** to **C**, watched by **D**
 - intro: e — **A** does **B** to **C**, watched by **D**, affecting **E**.
-- gauge: Defection cost
 - :a: A — who acts — the public office
-- :c: C — who it affects — the company it pays
 - :b: B — the act — the payment for the service
+- :c: C — who it affects — the company it pays
 - :d: D — observer: who watches — an auditor, a court, a journalist
 - :e: E — public: everyone it affects — and whose money it is
+- gauge: Defection cost
 - case: a river basin
     - :a: votes through the exemption the lobby drafted
     - :c: gets the basin, and the water under it
