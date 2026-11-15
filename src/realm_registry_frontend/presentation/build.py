@@ -1589,6 +1589,86 @@ WCX_FIT_JS = """
     setTimeout(blink, Math.random() * 5000);
   });
 })();
+
+(function () {
+  // Every few seconds one server defects: it turns red and shakes, every other one sends an arc
+  // of its own, and as the arcs land it is itself again. Only where servers are on screen, and
+  // not at all for a reader who asked for less motion.
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const EVERY = 4500, BACK = 2000;
+  // Scattered, but always the same: never the same one twice over, never two neighbours in a row.
+  const ORDER = [4, 0, 7, 2, 8, 5, 1, 6, 3];
+  let turn = 0;
+  const svgNode = (name, attrs) => {
+    const el = document.createElementNS('http://www.w3.org/2000/svg', name);
+    for (const k in attrs) el.setAttribute(k, attrs[k]);
+    return el;
+  };
+  function layerOf(svg) {
+    let g = svg.querySelector('.ax-fx');
+    if (!g) {
+      g = svgNode('g', { class: 'ax-fx' });
+      svg.appendChild(g);
+    }
+    return g;
+  }
+  function clear() {
+    document.querySelectorAll('.ax-fx').forEach((g) => { g.textContent = ''; });
+    document.querySelectorAll('.ax-srv').forEach((g) => g.classList.remove('ax-rogue', 'ax-mend'));
+  }
+  function round() {
+    const crowds = document.querySelectorAll('.page.active .ax-crowd:has(.ax-servers.shown) svg');
+    if (!crowds.length) return;
+    crowds.forEach((svg) => {
+      const servers = [...svg.querySelectorAll('.ax-srv')];
+      const layer = layerOf(svg);
+      if (servers.length < 3 || !layer.getScreenCTM()) return;
+      layer.textContent = '';
+      servers.forEach((g) => g.classList.remove('ax-rogue', 'ax-mend'));
+      const i = ORDER[turn % ORDER.length] % servers.length;
+      const rogue = servers[i];
+      const inv = layer.getScreenCTM().inverse();
+      // Where a server's screen is now, in the drawing's own units: it moves with the clicks.
+      const at = (g) => {
+        const b = g.getBBox(), m = g.getScreenCTM();
+        if (!m) return null;
+        const pt = svg.createSVGPoint();
+        pt.x = b.x + b.width / 2;
+        pt.y = b.y + b.height * 0.25;
+        return pt.matrixTransform(m).matrixTransform(inv);
+      };
+      const r = at(rogue);
+      if (!r) return;
+      rogue.classList.add('ax-rogue');
+      servers.forEach((g, n) => {
+        if (g === rogue) return;
+        const s = at(g);
+        if (!s) return;
+        const up = Math.min(5 + Math.abs(s.x - r.x) * 0.3, 22);
+        const path = svgNode('path', {
+          class: 'ax-vote',
+          d: 'M' + s.x.toFixed(1) + ' ' + s.y.toFixed(1) +
+             ' Q' + ((s.x + r.x) / 2).toFixed(1) + ' ' + (Math.min(s.y, r.y) - up).toFixed(1) +
+             ' ' + r.x.toFixed(1) + ' ' + (r.y - 1).toFixed(1),
+        });
+        layer.appendChild(path);
+        const len = path.getTotalLength();
+        path.style.setProperty('--len', len.toFixed(1));
+        path.style.strokeDasharray = len.toFixed(1);
+        path.style.animationDelay = (0.5 + Math.abs(n - i) * 0.06).toFixed(2) + 's';
+      });
+      setTimeout(() => {
+        if (!rogue.classList.contains('ax-rogue')) return;
+        rogue.classList.remove('ax-rogue');
+        rogue.classList.add('ax-mend');
+        layer.textContent = '';
+      }, BACK);
+    });
+    turn++;
+  }
+  window.addEventListener('deck:scene', clear);
+  setInterval(round, EVERY);
+})();
 """
 
 GLOBE_JS = """
@@ -3263,13 +3343,23 @@ CSS = (
       display: flex;
       align-items: baseline;
       flex-wrap: wrap;
-      gap: 0.55rem;
       opacity: 0;
       transition: opacity 0.4s ease;
     }
     .ax-head-title.shown { opacity: 1; }
     .ax-head-swap.shown { transition: opacity 0.5s ease 0.1s; }
+    /* Once the act is secured the old name has had its say: it goes, and the new one takes its
+       place at the start of the line. */
+    .ax-head-old {
+      display: inline-flex;
+      align-items: baseline;
+      overflow: hidden;
+      max-width: 14rem;
+      transition: max-width 0.95s ease 0.25s, opacity 0.45s ease;
+    }
+    .ax-head-old[data-until]:not(.shown) { max-width: 0; opacity: 0; }
     .ax-head-was {
+      margin-right: 0.55rem;
       font-size: 1.15rem;
       font-weight: 600;
       color: var(--gray-500);
@@ -3277,6 +3367,7 @@ CSS = (
       text-decoration-color: #b94a48;
       text-decoration-thickness: 2px;
     }
+    .ax-head-to { margin-right: 0.55rem; }
     .ax-head-to::before { content: "→"; font-size: 1.35rem; color: var(--gray-400); }
     .ax-head-now { color: rgb(47, 95, 95); }
     .ax-head-swap.shown .ax-head-now { animation: ax-head-glow 2.4s ease-in-out 0.2s both; }
@@ -3475,6 +3566,30 @@ CSS = (
       transition: transform 1.4s cubic-bezier(0.45, 0, 0.2, 1) 0.4s, opacity 1s ease 0.8s;
     }
     .ax-led { animation: ax-led var(--lt) steps(1) var(--ld) infinite; }
+    /* Every few seconds one of them defects: it goes red and shakes, the others each send an arc
+       of their own, and when the arcs land it is itself again (ROGUE_JS). */
+    .ax-srv rect, .ax-srv .ax-pupil, .ax-srv .ax-led { transition: fill 0.5s ease; }
+    .ax-srv.ax-rogue rect:first-of-type { fill: #b94a48; }
+    .ax-srv.ax-rogue rect:nth-of-type(2) { fill: #3d1111; }
+    .ax-srv.ax-rogue .ax-pupil { fill: #ffc9c9; }
+    .ax-srv.ax-rogue .ax-led { fill: #ff8a8a; animation: none; opacity: 1; }
+    .ax-srv-in { transform-box: fill-box; transform-origin: center; }
+    .ax-srv.ax-rogue .ax-srv-in { animation: ax-rogue-shake 0.26s linear 6; }
+    @keyframes ax-rogue-shake { 0%, 100% { transform: translateX(-0.3px); } 50% { transform: translateX(0.3px); } }
+    .ax-srv.ax-mend rect:nth-of-type(2) { animation: ax-mend-flash 0.7s ease-out; }
+    @keyframes ax-mend-flash { 0% { fill: #fff; } 100% { fill: #123332; } }
+    .ax-vote {
+      fill: none;
+      stroke: rgb(107, 163, 163);
+      stroke-width: 0.55;
+      stroke-linecap: round;
+      animation: ax-vote-draw 0.6s ease-in-out both;
+    }
+    @keyframes ax-vote-draw {
+      0% { stroke-dashoffset: var(--len); opacity: 0.2; }
+      60% { opacity: 1; }
+      100% { stroke-dashoffset: 0; opacity: 0; }
+    }
     @keyframes ax-led { 0%, 100% { opacity: 1; } 35% { opacity: 0.25; } 50% { opacity: 1; } 70% { opacity: 0.45; } }
 
     .ax-body {
@@ -4227,8 +4342,9 @@ def _crowd(
             x, y = (spots[a][0] + spots[a + 1][0]) / 2, spots[a][1] + 0.5
             servers.append(
                 f'<g class="ax-srv" data-x="{x:.1f}" data-y="{y - 8.5:.1f}" style="--o:{spots[a][2]:.2f}">'
+                '<g class="ax-srv-in">'
                 + digital_server_svg(x, y, rnd.uniform(2.6, 4.4), rnd.uniform(0, 4), rnd)
-                + "</g>"
+                + "</g></g>"
             )
         servers = "".join(servers)
         layers.append("".join(people))
@@ -4301,7 +4417,8 @@ class ActsSlide(Slide):
     ":a: A — what A is — defect" (and :b:, :c:, :d:): a part of the act,
     what it stands for, and how it can make the act defective. A, B and C stand in a row, in that
     order, and D (who watches) over B; defects come one per click, in the order of the bullets.
-    ":e: E — what E is" names the crowd over them all. ":rule: §" is the rule the act falls under.
+    ":e: E — what E is" names the crowd over them all. ":rule: §", if there is one, tags the act's
+    arrow with the rule it falls under once the act is secured.
     Any other bullet is a point, one per click; a point nested under another is what that one
     leads to, and shows as "⇒ …" under it.
 
@@ -4402,8 +4519,8 @@ class ActsSlide(Slide):
                 # A point under another point is what that one leads to.
                 p["points"].append((rest, frag, bool(depth)))
         missing = [k for k in ACT_PARTS if k not in p["parts"]] + [
-            f"{k}:" for k in ("rule", "gauge") if not p[k]
-        ] + ["cost:"] * (not p["costs"])
+            "gauge:"
+        ] * (not p["gauge"]) + ["cost:"] * (not p["costs"])
         if missing:
             raise ValueError(f"acts: missing {missing}")
         p["clicks"] = frag
@@ -4417,7 +4534,11 @@ class ActsSlide(Slide):
         parts = p["parts"]
         secured_at = p["costs"][-1][-1] + offset
         rule = html.escape(p["rule"])
-        rule_tag = f'<span class="ax-rule"><span class="ax-rule-tag wc-frag" data-frag="{secured_at}">{rule}</span></span>'
+        rule_tag = (
+            f'<span class="ax-rule"><span class="ax-rule-tag wc-frag" data-frag="{secured_at}">{rule}</span></span>'
+            if rule
+            else ""
+        )
 
         servers_at = next((at + offset for key, at in p["scenes"] if key == "servers"), None)
         protest = next(
@@ -4511,7 +4632,7 @@ class ActsSlide(Slide):
             f'{then if leads else shield}<span>{tr(text)}</span></p>'
             for text, at, leads in p["points"]
         )
-        header = self._header(p, offset)
+        header = self._header(p, offset, secured_at)
         if p["intros"]:
             # The lead grows with the act: each intro's sentence replaces the one before.
             intros = p["intros"]
@@ -4531,9 +4652,10 @@ class ActsSlide(Slide):
         )
 
     @staticmethod
-    def _header(p: dict, offset: int) -> str:
+    def _header(p: dict, offset: int, drops_at: int | None = None) -> str:
         """The slide's name. A second "title:" renames it at its click: the old name stays beside
-        the new one, struck out, because the change is the point."""
+        the new one, struck out, because the change is the point; at drops_at (the click the act is
+        secured) the old name goes and the new one slides to the start of the line."""
         titles = p["titles"] or [(p["title"], 0)]
         if len(titles) == 1:
             return detour_header(titles[0][0])
@@ -4544,10 +4666,12 @@ class ActsSlide(Slide):
                     f'<span class="ax-head-title" data-until="{titles[i + 1][1] + offset}">{tr(text)}</span>'
                 )
             else:
+                drops = f' data-until="{drops_at}"' if drops_at is not None else ""
                 spans.append(
                     f'<span class="ax-head-title ax-head-swap" data-frag="{at + offset}">'
+                    f'<span class="ax-head-old"{drops}>'
                     f'<span class="ax-head-was">{tr(titles[i - 1][0])}</span>'
-                    f'<span class="ax-head-to" aria-hidden="true"></span>'
+                    f'<span class="ax-head-to" aria-hidden="true"></span></span>'
                     f'<span class="ax-head-now">{tr(text)}</span></span>'
                 )
         return f'<header class="box-header wc-title"><h2 class="ax-head-stack">{"".join(spans)}</h2></header>'

@@ -45,7 +45,6 @@
 - :b: B — the act — the payment goes unrecorded, or the invoice is altered
 - :d: D — observer: who watches
 - :e: E — public: everyone it affects
-- :rule: §
 - cost: 10% — One official decides
 - cost: 30% — Checks & balances {monkeys}
 - cost: 60% — Community checks & balances {protest}
