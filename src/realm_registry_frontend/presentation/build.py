@@ -3458,7 +3458,18 @@ CSS = (
     /* Once the defects leave, so does the space they held. */
     .ax-gone:not(.shown) { max-height: 0; opacity: 0; overflow: hidden; }
     .ax-fail { display: block; max-width: 15rem; font-size: 1.15rem; font-weight: 650; line-height: 1.25; color: #b94a48; }
-    .ax-role, .ax-fail { overflow-wrap: anywhere; hyphens: auto; }
+    /* What the part is in the plain example, before any case is told of it. */
+    .ax-ex[data-until]:not(.shown), .ax-ex:has(> :not(.shown)) { display: none; }
+    .ax-ex > span {
+      display: block;
+      max-width: 15rem;
+      font-size: 1.1rem;
+      font-weight: 600;
+      line-height: 1.3;
+      color: var(--gray-800);
+    }
+    .ax-crowd-e .ax-ex > span { max-width: none; }
+    .ax-role, .ax-fail, .ax-ex { overflow-wrap: anywhere; hyphens: auto; }
 
     .ax-b .ax-token { justify-content: center; }
     .ax-arrow {
@@ -4510,9 +4521,10 @@ class ActsSlide(Slide):
     at that cost's click: the old name stays beside the new one, struck out, so the change reads as
     the point (at the top level it takes a click of its own).
 
-    ":a: A — what A is — defect" (and :b:, :c:, :d:): a part of the act,
-    what it stands for, and how it can make the act defective. A, B and C stand in a row, in that
-    order, and D (who watches) over B; defects come one per click, in the order of the bullets.
+    ":a: A — what A is — what it is in the example" (and :b:, :c:, :d:): a part of the act, what
+    it stands for, and what it is in the plain example the slide opens with, which stands until the
+    first case speaks of that part. A, B and C stand in a row, in that order, and D (who watches)
+    over B.
     ":e: E — what E is" names the crowd over them all. ":rule: §", if there is one, tags the act's
     arrow with the rule it falls under once the act is secured.
 
@@ -4620,10 +4632,9 @@ class ActsSlide(Slide):
                 p["rule"] = rest
             elif key in (*ACT_PARTS, "e"):
                 token, _, rest = rest.partition(" — ")
-                role, _, defect = rest.partition(" — ")
-                if defect:
-                    frag += 1
-                p["parts"][key] = (token, role, defect, frag)
+                role, _, example = rest.partition(" — ")
+                # What this part is in the plain example, shown as the part comes in.
+                p["parts"][key] = (token, role, example, frag)
             elif key:
                 raise ValueError(f"acts: unknown part :{key}:; expected one of {[*ACT_PARTS, 'e', 'rule']}")
             else:
@@ -4668,6 +4679,20 @@ class ActsSlide(Slide):
         # When each part comes in: with the slide, or with its intro.
         comes = {key: at + offset for key, _, at in p["intros"]}
 
+        def example_line(key: str) -> str:
+            """What the part is in the plain example the slide opens with: it stands from the
+            part's own click until the first case takes the example's place."""
+            example = parts[key][2]
+            if not example:
+                return ""
+            # Every part's example goes at once, as the first case opens: no part is left saying
+            # what it was in an example the slide has moved on from.
+            until = f' data-until="{p["cases"][0]["at"] + offset}"' if p["cases"] else ""
+            return (
+                f'<span class="ax-ex"{until}><span class="wc-frag" '
+                f'data-frag="{comes.get(key, offset)}">{tr(example)}</span></span>'
+            )
+
         def case_lines(key: str) -> str:
             """What this part does in each case: one at a time, the next replacing the one before."""
             spans = []
@@ -4685,7 +4710,7 @@ class ActsSlide(Slide):
             return "".join(spans)
 
         def part(key: str) -> str:
-            token, role, defect, at = parts[key]
+            token, role, _example, at = parts[key]
             # Once the act is secured it runs inside the block: A's line goes up into it, C's
             # comes out of it, and nothing crosses between them any more.
             leg = (
@@ -4694,11 +4719,7 @@ class ActsSlide(Slide):
                 if key in ("a", "c") and merge_at is not None
                 else ""
             )
-            lines = (
-                f'<span class="ax-fail wc-frag" data-frag="{at + offset}">{tr(defect)}</span>'
-                if defect
-                else case_lines(key)
-            )
+            lines = example_line(key) + case_lines(key)
             defect_html = f'<span class="ax-gone" data-until="{secured_at}">{lines}</span>' if lines else ""
 
             if key == "d":
@@ -4754,7 +4775,7 @@ class ActsSlide(Slide):
             leaves = f' data-until="{merge_at}"' if merge_at is not None else ""
             e_label = (
                 f'<div class="ax-crowd-e"{leaves}><span class="ax-name">{html.escape(token)}</span>'
-                f'<span class="ax-role">{tr(role)}</span></div>'
+                f'<span class="ax-role">{tr(role)}</span>{example_line("e")}</div>'
             )
             if merge_at is not None:
                 # With the servers, D and E are one: the crowd watches, and is named for both.

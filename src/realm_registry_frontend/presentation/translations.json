@@ -110,7 +110,12 @@
     "redraws the districts from last election's data": "redibuja los distritos con los datos de las últimas elecciones",
     "keeps the majority with fewer votes": "conserva la mayoría con menos votos",
     "approved without a single hearing": "se aprueba sin una sola audiencia",
-    "Decided behind one door": "Se decide a puerta cerrada"
+    "Decided behind one door": "Se decide a puerta cerrada",
+    "the public office": "la oficina pública",
+    "the company it pays": "la empresa a la que paga",
+    "the payment for the service": "el pago por el servicio",
+    "an auditor, a court, a journalist": "un auditor, un tribunal, un periodista",
+    "and whose money it is": "y de quién es el dinero"
   },
   "de": {
     "Humanity's operating system needs an upgrade.": "Das Betriebssystem der Menschheit braucht ein Update.",
@@ -223,7 +228,12 @@
     "redraws the districts from last election's data": "zeichnet die Wahlkreise nach den Daten der letzten Wahl neu",
     "keeps the majority with fewer votes": "behält die Mehrheit mit weniger Stimmen",
     "approved without a single hearing": "beschlossen ohne eine einzige Anhörung",
-    "Decided behind one door": "Hinter einer Tür entschieden"
+    "Decided behind one door": "Hinter einer Tür entschieden",
+    "the public office": "die Behörde",
+    "the company it pays": "die Firma, die sie bezahlt",
+    "the payment for the service": "die Zahlung für die Leistung",
+    "an auditor, a court, a journalist": "eine Prüferin, ein Gericht, ein Journalist",
+    "and whose money it is": "und wessen Geld es ist"
   },
   "fr": {
     "Humanity's operating system needs an upgrade.": "Le système d'exploitation de l'humanité a besoin d'une mise à jour.",
@@ -336,7 +346,12 @@
     "redraws the districts from last election's data": "redessine les circonscriptions avec les données du dernier scrutin",
     "keeps the majority with fewer votes": "garde la majorité avec moins de voix",
     "approved without a single hearing": "adopté sans la moindre audition",
-    "Decided behind one door": "Décidé derrière une porte"
+    "Decided behind one door": "Décidé derrière une porte",
+    "the public office": "le service public",
+    "the company it pays": "l'entreprise qu'il paie",
+    "the payment for the service": "le paiement du service",
+    "an auditor, a court, a journalist": "un auditeur, un tribunal, un journaliste",
+    "and whose money it is": "et dont c'est l'argent"
   },
   "zh-CN": {
     "Humanity's operating system needs an upgrade.": "人类的操作系统需要升级。",
@@ -449,7 +464,12 @@
     "redraws the districts from last election's data": "用上次选举的数据重划选区",
     "keeps the majority with fewer votes": "用更少的选票保住多数席位",
     "approved without a single hearing": "没有举行任何听证就通过",
-    "Decided behind one door": "关起门来决定"
+    "Decided behind one door": "关起门来决定",
+    "the public office": "一个公共部门",
+    "the company it pays": "它所支付的那家公司",
+    "the payment for the service": "这笔服务款项",
+    "an auditor, a court, a journalist": "审计员、法院、记者",
+    "and whose money it is": "而且花的是他们的钱"
   },
   "it": {
     "Humanity's operating system needs an upgrade.": "Il sistema operativo dell'umanità ha bisogno di un aggiornamento.",
@@ -562,6 +582,11 @@
     "redraws the districts from last election's data": "ridisegna i collegi con i dati delle ultime elezioni",
     "keeps the majority with fewer votes": "mantiene la maggioranza con meno voti",
     "approved without a single hearing": "approvata senza una sola audizione",
-    "Decided behind one door": "Deciso a porte chiuse"
+    "Decided behind one door": "Deciso a porte chiuse",
+    "the public office": "l'ufficio pubblico",
+    "the company it pays": "l'azienda che paga",
+    "the payment for the service": "il pagamento del servizio",
+    "an auditor, a court, a journalist": "un revisore, un tribunale, un giornalista",
+    "and whose money it is": "e di chi sono i soldi"
   }
 }
