@@ -151,6 +151,30 @@
     }
     .tag.teal { border-color: var(--teal); background: var(--teal-bg); color: var(--teal-d); }
 
+
+    /* ---- the reminder board: four ideas from the first deck, each with a small drawing -- */
+    .lead a { color: var(--gray-700); font-weight: 650; text-decoration: none; border-bottom: 1.5px solid rgba(107, 163, 163, 0.6); transition: color 0.2s; }
+    .lead a:hover { color: var(--teal-d); }
+    .rem { align-self: center; gap: 1.15rem; }
+    .rem .card { gap: 0.6rem; }
+    .rem .card h3 { font-size: 1.2rem; }
+    .rem .sub { font-size: 0.98rem; }
+    .remart { display: block; width: 100%; height: auto; }
+    .rem-bar { fill: var(--gray-100); stroke: var(--gray-300); stroke-width: 1.2; }
+    .rem-bar.os { fill: var(--teal-bg); stroke: var(--teal); }
+    .rem-lbl { fill: var(--gray-600); font-size: 10px; font-weight: 600; }
+    .rem-lbl.os { fill: var(--teal-d); font-weight: 700; }
+    .rem-dot { fill: var(--gray-300); }
+    .rem-eye { fill: var(--gray-700); }
+    .rem-fig { fill: none; stroke: var(--gray-700); stroke-width: 1.6; }
+    .rem-line { stroke: var(--gray-700); stroke-width: 1.6; fill: none; }
+    .rem-cheap { fill: rgba(185, 74, 72, 0.13); stroke: var(--red); stroke-width: 1.2; }
+    .rem-costly { fill: var(--teal-bg); stroke: var(--teal); stroke-width: 1.2; }
+    .rem-red { fill: var(--red); font-size: 10px; font-weight: 650; }
+    .rem-teal { fill: var(--teal-d); font-size: 10px; font-weight: 650; }
+    .rem-block { fill: var(--teal-bg); stroke: var(--teal); stroke-width: 1.4; }
+    .rem-srv { fill: var(--teal-d); }
+
     /* ---- fragments: HTML and SVG pieces come in one click at a time -------------------- */
     .wc-frag { opacity: 0; transform: translateY(8px); transition: opacity 0.45s ease-out, transform 0.45s cubic-bezier(0.2, 0.7, 0.2, 1); }
     .wc-frag.shown { opacity: 1; transform: none; }
@@ -495,10 +519,99 @@
         </section>
       </div>
 
+
+      <!-- ======================================================================================
+           Reminder: the four ideas of "Think of our world as a computer"
+           ====================================================================================== -->
+      <div class="page" data-slide="1">
+        <section class="sl">
+          <header class="box-header"><div class="kicker">Think of our world as a computer</div><h2>Reminder</h2></header>
+          <p class="lead">The four ideas the rest of this deck stands on. <a href="../index.html">The long version &rarr;</a></p>
+          <div class="body one">
+            <div class="cards two rem">
+
+              <div class="card wc-frag" data-frag="0">
+                <h3>What the World Computer model is</h3>
+                <svg class="remart" viewBox="0 0 260 90" aria-label="Four layers: citizens are the users, services the applications, institutions the operating system, natural resources the hardware.">
+                  <rect class="rem-bar" x="1" y="1" width="258" height="19" rx="5"/>
+                  <text class="rem-lbl mid" x="130" y="14.5">citizens &middot; users</text>
+                  <rect class="rem-bar" x="1" y="23" width="258" height="19" rx="5"/>
+                  <text class="rem-lbl mid" x="130" y="36.5">services and companies &middot; applications</text>
+                  <rect class="rem-bar os" x="1" y="45" width="258" height="19" rx="5"/>
+                  <text class="rem-lbl os mid" x="130" y="58.5">institutions &middot; operating system</text>
+                  <rect class="rem-bar" x="1" y="67" width="258" height="19" rx="5"/>
+                  <text class="rem-lbl mid" x="130" y="80.5">natural resources &middot; hardware</text>
+                </svg>
+                <p class="sub">Natural resources are the hardware, institutions the operating system, public services and companies the applications &mdash; and we are the users.</p>
+              </div>
+
+              <div class="card wc-frag" data-frag="1">
+                <h3>What an act is</h3>
+                <svg class="remart" viewBox="0 0 260 90" aria-label="A does B to C, watched by D, affecting E.">
+                  <g class="rem-dot">
+                    <circle cx="92" cy="10" r="3.4"/><circle cx="104" cy="10" r="3.4"/><circle cx="116" cy="10" r="3.4"/>
+                    <circle cx="128" cy="10" r="3.4"/><circle cx="140" cy="10" r="3.4"/><circle cx="152" cy="10" r="3.4"/>
+                    <circle cx="164" cy="10" r="3.4"/><circle cx="98" cy="19" r="3.4"/><circle cx="110" cy="19" r="3.4"/>
+                    <circle cx="122" cy="19" r="3.4"/><circle cx="134" cy="19" r="3.4"/><circle cx="146" cy="19" r="3.4"/>
+                    <circle cx="158" cy="19" r="3.4"/>
+                  </g>
+                  <text class="rem-lbl" x="176" y="17">E</text>
+                  <g class="rem-eye"><circle cx="124" cy="40" r="7"/></g>
+                  <circle cx="121.5" cy="39" r="1.9" fill="#fff"/><circle cx="126.5" cy="39" r="1.9" fill="#fff"/>
+                  <text class="rem-lbl" x="136" y="44">D</text>
+                  <circle class="rem-fig" cx="24" cy="70" r="11"/>
+                  <text class="rem-lbl mid" x="24" y="74">A</text>
+                  <path class="rem-line" d="M39 70 H102 M158 70 H222" marker-end="url(#arr)"/>
+                  <rect x="104" y="60" width="52" height="20" rx="10" fill="#fff" stroke="var(--gray-700)" stroke-width="1.6"/>
+                  <text class="rem-lbl mid" x="130" y="74">B</text>
+                  <circle class="rem-fig" cx="238" cy="70" r="11"/>
+                  <text class="rem-lbl mid" x="238" y="74">C</text>
+                </svg>
+                <p class="sub">Everything a government does is a stream of acts: <strong>A</strong> does <strong>B</strong> to <strong>C</strong>, watched by <strong>D</strong>, affecting <strong>E</strong> &mdash; the public, whose money it is.</p>
+              </div>
+
+              <div class="card wc-frag" data-frag="2">
+                <h3>What defection and cooperation are</h3>
+                <svg class="remart" viewBox="0 0 260 90" aria-label="When defection is cheap, capture pays; when it is costly, cooperation pays.">
+                  <text class="rem-lbl mid" x="130" y="12">the cost of defecting</text>
+                  <rect class="rem-cheap" x="1" y="20" width="126" height="26" rx="6"/>
+                  <text class="rem-red mid" x="64" y="37">cheap</text>
+                  <rect class="rem-costly" x="133" y="20" width="126" height="26" rx="6"/>
+                  <text class="rem-teal mid" x="196" y="37">costly</text>
+                  <path class="rem-line" d="M64 52 V64" marker-end="url(#arrr)" stroke="var(--red)"/>
+                  <path class="rem-line" d="M196 52 V64" marker-end="url(#arrt)" stroke="var(--teal)"/>
+                  <text class="rem-red mid" x="64" y="80">capture pays</text>
+                  <text class="rem-teal mid" x="196" y="80">cooperation pays</text>
+                </svg>
+                <p class="sub">An act is defective when A and C gain and E pays. What decides it is the cost of defecting: cheap, and capture is the rational move; costly, and cooperation is the most profitable behaviour.</p>
+              </div>
+
+              <div class="card wc-frag" data-frag="3">
+                <h3>What a GOS is, and why it matters</h3>
+                <svg class="remart" viewBox="0 0 260 90" aria-label="The act runs inside a block of servers that everyone it affects can check.">
+                  <rect class="rem-block" x="1" y="8" width="258" height="64" rx="11"/>
+                  <g class="rem-srv">
+                    <rect x="22" y="20" width="14" height="19" rx="3"/><rect x="56" y="20" width="14" height="19" rx="3"/>
+                    <rect x="90" y="20" width="14" height="19" rx="3"/><rect x="124" y="20" width="14" height="19" rx="3"/>
+                    <rect x="158" y="20" width="14" height="19" rx="3"/><rect x="192" y="20" width="14" height="19" rx="3"/>
+                    <rect x="226" y="20" width="14" height="19" rx="3"/>
+                  </g>
+                  <path class="rem-line" d="M26 58 H214" stroke="var(--teal-d)" marker-end="url(#arrt)"/>
+                  <rect x="104" y="48" width="52" height="20" rx="10" fill="#fff" stroke="var(--teal-d)" stroke-width="1.6"/>
+                  <text class="rem-teal mid" x="130" y="62">act</text>
+                </svg>
+                <p class="sub">A Governance Operating System puts the rules in code and runs them where everyone they affect can check. Decentralized digital checks and balances make defection expensive, so integrity no longer depends on trusted intermediaries.</p>
+              </div>
+
+            </div>
+          </div>
+        </section>
+      </div>
+
       <!-- ======================================================================================
            An example: from the EU to a district of València (generated: presentation/ggg/zoom_map.py, splice_zoom.py)
            ====================================================================================== -->
-      <div class="page zoom-page" data-slide="1">
+      <div class="page zoom-page" data-slide="2">
         <div class="zmap">
           <svg viewBox="0 0 640 460" aria-label="A map that zooms from the European Union to Spain, the Comunitat Valenciana and the districts of València">
             <g class="zoom">
@@ -531,7 +644,7 @@
       <!-- ======================================================================================
            Legislation as code
            ====================================================================================== -->
-      <div class="page" data-slide="2">
+      <div class="page" data-slide="3">
         <section class="sl">
           <header class="box-header"><div class="kicker">Legislation as code <span class="layer">Realms GOS</span></div><h2>Layers × domains = chapters, in one repository</h2></header>
           <p class="lead">Legislation is arranged along two axes. Where a layer and a domain cross there is a chapter: one Python file.</p>
@@ -636,7 +749,7 @@
         </section>
       </div>
 
-      <div class="page" data-slide="3">
+      <div class="page" data-slide="4">
         <section class="sl">
           <header class="box-header"><div class="kicker">Legislation as code <span class="layer">Realms GOS</span></div><h2>A chapter overrides what the layer above allows</h2></header>
           <p class="lead">Spain's tax chapter marks what a town may change. València changes two settings and one method, and Spain's limits still apply.</p>
@@ -684,7 +797,7 @@
       <!-- ======================================================================================
            The standard
            ====================================================================================== -->
-      <div class="page" data-slide="4">
+      <div class="page" data-slide="5">
         <section class="sl">
           <header class="box-header"><div class="kicker">The standard <span class="layer std">GGG</span></div><h2>What a realm keeps: nine areas, one foundation</h2></header>
           <p class="lead">GGG names the records a government keeps, 60 kinds in all, grouped in nine areas. Follow one decision around the wheel: a bike lane in a city.</p>
@@ -884,7 +997,7 @@
         </section>
       </div>
 
-      <div class="page" data-slide="5">
+      <div class="page" data-slide="6">
         <section class="sl">
           <header class="box-header"><div class="kicker">The standard <span class="layer std">GGG</span></div><h2>Different GOS, one interface: ggg.did</h2></header>
           <p class="lead">A realm on Realms GOS and a realm on another GOS answer the same methods. Tools, and other realms, work with both unchanged.</p>
@@ -936,7 +1049,7 @@
       <!-- ======================================================================================
            One act, end to end
            ====================================================================================== -->
-      <div class="page" data-slide="6">
+      <div class="page" data-slide="7">
         <section class="sl">
           <header class="box-header"><div class="kicker">One act, end to end <span class="layer">Realms GOS</span></div><h2>València sets its tax for 2027</h2></header>
           <p class="lead">From the proposal to each owner's invoice, every step is a GGG operation: checked first, then recorded. The figures are a sample.</p>
@@ -1008,7 +1121,7 @@
       <!-- ======================================================================================
            One realm
            ====================================================================================== -->
-      <div class="page" data-slide="7">
+      <div class="page" data-slide="8">
         <section class="sl">
           <header class="box-header"><div class="kicker">One realm <span class="layer">Realms GOS</span></div><h2>A realm: quarters, a codex, extensions, and Casals</h2></header>
           <p class="lead">Every canister of a realm runs the same codex and the same extensions, each from a public repository and pinned by checksum. Casals runs the canisters.</p>
@@ -1085,7 +1198,7 @@
       <!-- ======================================================================================
            The marketplace
            ====================================================================================== -->
-      <div class="page" data-slide="8">
+      <div class="page" data-slide="9">
         <section class="sl">
           <header class="box-header"><div class="kicker">The marketplace <span class="layer">Realms GOS</span></div><h2>A shop for governance, and who pays whom</h2></header>
           <p class="lead">Anyone can build something a realm can use. Anyone can browse. A realm takes nothing it has not voted for.</p>
@@ -1184,7 +1297,7 @@
         </section>
       </div>
 
-      <div class="page" data-slide="9">
+      <div class="page" data-slide="10">
         <section class="sl">
           <header class="box-header"><div class="kicker">The marketplace <span class="layer">Realms GOS</span></div><h2>The marketplace's economics</h2></header>
           <p class="lead">Open to anyone who builds, trusted through review, and chosen by each realm.</p>
@@ -1232,7 +1345,7 @@
       <!-- ======================================================================================
            Closing
            ====================================================================================== -->
-      <div class="page" data-slide="10">
+      <div class="page" data-slide="11">
         <section class="title">
           <div>
             <div class="kicker">In one sentence</div>
