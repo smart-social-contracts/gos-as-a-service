@@ -3421,6 +3421,7 @@ CSS = (
       text-transform: uppercase;
       color: #b94a48;
     }
+    .ax-case-pre { font-weight: 600; opacity: 0.72; }
     /* Each case's lines take the place of the one before. */
     .ax-case[data-until]:not(.shown), .ax-case:has(> :not(.shown)) { display: none; }
     .ax-d { grid-area: 1 / 2; margin-bottom: 0.6rem; }
@@ -4263,7 +4264,8 @@ def gauge_demo_css(samples: int = 80) -> str:
             f".ax-gauge.shown .ax-demo-words > span {{ animation: var(--w) {GAUGE_DEMO_S}s linear 0.6s both; }}",
             ".ax-gauge:has(.ax-gauge-word > .wc-frag.shown) .ax-demo-words { display: none; }",
             # No fill: once the demo is over the parts are back to their own colour.
-            ".ax-body:has(.ax-gauge.shown):not(:has(.ax-gauge-word > .wc-frag.shown)) .ax-part"
+            ".ax-body:has(.ax-gauge.shown):not(:has(.ax-gauge-word > .wc-frag.shown))"
+            ":not(:has(.ax-fail.shown)) .ax-part"
             f" {{ animation: ax-demo-tone {GAUGE_DEMO_S}s linear 0.6s; }}",
             f"@keyframes ax-demo-tone {{ {tone} }}",
             "@media (max-aspect-ratio: 1/1) { .ax-gauge-demo { transform: scaleX(0); transform-origin: left; }"
@@ -4777,7 +4779,8 @@ class ActsSlide(Slide):
                 )
                 labels.append(
                     f'<span class="ax-case"{until}>'
-                    f'<span class="wc-frag" data-frag="{case["at"] + offset}">{tr(case["label"])}</span></span>'
+                    f'<span class="wc-frag" data-frag="{case["at"] + offset}">'
+                    f'<span class="ax-case-pre">{tr("Scenario:")}</span> {tr(case["label"])}</span></span>'
                 )
             case_label = f'<div class="ax-case-label" data-until="{secured_at}">{"".join(labels)}</div>'
         act = (
