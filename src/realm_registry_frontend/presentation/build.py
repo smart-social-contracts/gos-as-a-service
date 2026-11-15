@@ -3400,14 +3400,26 @@ CSS = (
     .ax-act { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) minmax(0, 1fr); align-items: start; row-gap: 0.4rem; }
     .ax-act.shown, .ax-gauge.shown { transition-delay: 0.35s; }
     /* The case being told, over the act; D watches it from over that. */
-    .ax-case-label { grid-area: 2 / 1 / 3 / -1; display: grid; justify-items: center; margin-bottom: 0.45rem; }
+    .ax-case-label {
+      grid-area: 2 / 1 / 3 / -1;
+      display: grid;
+      justify-items: center;
+      margin: 1.2rem 0 0.7rem;
+      max-height: 4rem;
+      transition: opacity 0.4s ease, max-height 0.5s ease, margin 0.5s ease;
+    }
+    /* The case goes with its lines: once the act is secured, A, B and C stand clean. */
+    .ax-case-label[data-until]:not(.shown) { opacity: 0; max-height: 0; margin: 0; overflow: hidden; }
     .ax-case-label > .ax-case {
       grid-area: 1 / 1;
-      font-size: 1rem;
-      font-weight: 650;
-      letter-spacing: 0.1em;
+      padding: 0.25rem 0.95rem;
+      border-radius: 999px;
+      background: rgba(185, 74, 72, 0.09);
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: 0.09em;
       text-transform: uppercase;
-      color: var(--gray-500);
+      color: #b94a48;
     }
     /* Each case's lines take the place of the one before. */
     .ax-case[data-until]:not(.shown), .ax-case:has(> :not(.shown)) { display: none; }
@@ -4729,7 +4741,7 @@ class ActsSlide(Slide):
                     f'<span class="ax-case"{until}>'
                     f'<span class="wc-frag" data-frag="{case["at"] + offset}">{tr(case["label"])}</span></span>'
                 )
-            case_label = f'<div class="ax-case-label">{"".join(labels)}</div>'
+            case_label = f'<div class="ax-case-label" data-until="{secured_at}">{"".join(labels)}</div>'
         act = (
             f'<div class="ax-act wc-frag" data-frag="{offset}">'
             f'<span class="ax-secured" data-frag="{secured_at}" hidden></span>{case_label}'
