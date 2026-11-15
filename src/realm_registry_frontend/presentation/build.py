@@ -3529,6 +3529,79 @@ CSS = (
     }
 
     .ax-crowd { grid-area: crowd; margin-bottom: 0.9rem; color: #9a9a9a; }
+    /* Once D and E are one, they are a block the act has to pass through: an outline around the
+       crowd, a shelf under it the act moves into, and A's and C's lines going in and out. */
+    .ax-block {
+      border: 1.5px solid transparent;
+      border-radius: 0.9rem;
+      padding: 0.5rem 0.9rem;
+      transition: border-color 0.7s ease, background-color 0.7s ease;
+    }
+    .ax-block.shown { border-color: rgba(107, 163, 163, 0.5); background: rgba(107, 163, 163, 0.05); }
+    .ax-shelf { height: 0; display: grid; place-items: center; transition: height 0.7s cubic-bezier(0.45, 0, 0.2, 1); }
+    .ax-block.shown .ax-shelf { height: 3.4rem; }
+    .ax-inside {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      color: rgb(47, 95, 95);
+      opacity: 0;
+      transform: translateY(5rem);
+      transition: opacity 0.5s ease, transform 0.85s cubic-bezier(0.45, 0, 0.2, 1);
+    }
+    .ax-inside.shown { opacity: 1; transform: none; }
+    .ax-inside-arrow { position: relative; display: block; width: min(26rem, 55%); height: 3px; background: currentColor; }
+    .ax-inside-arrow::after {
+      content: "";
+      position: absolute;
+      right: -0.9rem;
+      top: 50%;
+      transform: translateY(-50%);
+      border: 0.5rem solid transparent;
+      border-left: 0.9rem solid currentColor;
+      border-right: 0;
+    }
+    .ax-inside-b {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      padding: 0.1rem 0.8rem;
+      background: #fff;
+      border: 2px solid currentColor;
+      border-radius: 999px;
+      font-size: 1.7rem;
+      font-weight: 800;
+      line-height: 1.25;
+    }
+    /* The act's own row empties: what was between A and C is now inside the block. */
+    .ax-act:has(.ax-secured.shown) .ax-b { opacity: 0; transition: opacity 0.5s ease; }
+    .ax-leg {
+      position: absolute;
+      left: 50%;
+      bottom: 100%;
+      width: 3px;
+      height: 5rem;
+      margin-left: -1.5px;
+      background: currentColor;
+      opacity: 0;
+      transform: scaleY(0);
+      transition: opacity 0.3s ease, transform 0.5s ease;
+    }
+    .ax-leg-up { transform-origin: bottom; }
+    .ax-leg-down { transform-origin: top; }
+    .ax-leg.shown { opacity: 1; transform: none; }
+    .ax-leg-up.shown { transition-delay: 0.45s; }
+    .ax-leg-down.shown { transition-delay: 0.75s; }
+    .ax-leg::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      margin-left: -0.5rem;
+      border: 0.5rem solid transparent;
+    }
+    .ax-leg-up::after { top: -0.75rem; border-bottom: 0.75rem solid currentColor; border-top: 0; }
+    .ax-leg-down::after { bottom: -0.75rem; border-top: 0.75rem solid currentColor; border-bottom: 0; }
     /* Visible overflow: the servers come in from D's place, outside the crowd. */
     .ax-crowd svg { display: block; width: 100%; max-height: 9rem; overflow: visible; }
     .ax-crowd-labels { display: grid; justify-items: center; margin-top: 0.4rem; }
@@ -4558,6 +4631,14 @@ class ActsSlide(Slide):
 
         def part(key: str) -> str:
             token, role, defect, at = parts[key]
+            # Once the act is secured it runs inside the block: A's line goes up into it, C's
+            # comes out of it, and nothing crosses between them any more.
+            leg = (
+                f'<span class="ax-leg ax-leg-{"up" if key == "a" else "down"}" '
+                f'data-frag="{secured_at}" aria-hidden="true"></span>'
+                if key in ("a", "c") and merge_at is not None
+                else ""
+            )
             defect_html = (
                 f'<span class="ax-gone" data-until="{secured_at}">'
                 f'<span class="ax-fail wc-frag" data-frag="{at + offset}">{tr(defect)}</span></span>'
@@ -4584,7 +4665,7 @@ class ActsSlide(Slide):
                 figure = ACT_PARTS[key]
             intro = f' ax-intro" data-frag="{comes[key]}' if key in comes else ""
             inner = (
-                f'<div class="ax-token">{figure}{rule_tag if key == "b" else ""}'
+                f'<div class="ax-token">{leg}{figure}{rule_tag if key == "b" else ""}'
                 f'<span class="ax-name">{html.escape(token)}</span></div>'
                 f'<span class="ax-role">{tr(role)}</span>{defect_html}'
             )
@@ -4616,9 +4697,19 @@ class ActsSlide(Slide):
                     f'<span class="ax-role">{tr(d_role)} · {tr(role)}</span></div>'
                 )
             e_label = f'<div class="ax-crowd-labels">{e_label}</div>'
+        drawing = f'<div aria-hidden="true">{_crowd(servers_at, spread_at, protest)}</div>'
+        if merge_at is not None:
+            # D and E are one block, and from the click the act is secured it happens inside it:
+            # a shelf opens under the crowd and the act moves in.
+            b_token = html.escape(parts["b"][0])
+            drawing = (
+                f'<div class="ax-block" data-frag="{merge_at}">{drawing}'
+                f'<div class="ax-shelf"><div class="ax-inside" data-frag="{secured_at}" aria-hidden="true">'
+                f'<span class="ax-inside-arrow"><span class="ax-inside-b">{b_token}</span></span>'
+                f"</div></div></div>"
+            )
         crowd = (
-            f'<div class="ax-crowd wc-frag" data-frag="{comes.get("e", offset)}">'
-            f'<div aria-hidden="true">{_crowd(servers_at, spread_at, protest)}</div>{e_label}</div>'
+            f'<div class="ax-crowd wc-frag" data-frag="{comes.get("e", offset)}">{drawing}{e_label}</div>'
         )
         shield = f'<svg viewBox="-16 -28 32 37" aria-hidden="true">{shield_svg()}</svg>'
         # Drawn, not "\u21d2": the deck's font has no such glyph.
