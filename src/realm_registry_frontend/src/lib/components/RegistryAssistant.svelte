@@ -31,6 +31,10 @@
   import {
     assistantPromptRequest,
     assistantPromptContextSection,
+    clearPendingPrompt,
+    newFenceNonce,
+    readPendingPrompt,
+    savePendingPrompt,
     shouldTakePrompt,
   } from '$lib/assistant-prompt.js';
   import { aiFetch } from '$lib/geister/ai-fetch.js';
@@ -107,6 +111,8 @@
   let promptContext = null;
   /** The last `assistant:prompt` acted on, so one request sends once. */
   let takenPromptId = 0;
+  /** The question that came with `promptContext`: its text must not ride on a different one. */
+  let promptMessage = '';
   /** @type {(() => void) | undefined} */
   let unsubFocus;
   /** @type {(() => void) | undefined} */
@@ -478,7 +484,7 @@
    *   (the route, the realm, the extension) is switched off.
    */
   function buildPageContext(context = null) {
-    const promptSection = assistantPromptContextSection(context);
+    const promptSection = assistantPromptContextSection(context, context ? newFenceNonce() : '');
     if (!sharePageContext || !portalSlug) {
       return promptSection ? { description: promptSection } : null;
     }
@@ -672,9 +678,35 @@
     takenPromptId = prompt.id;
     assistantPromptRequest.set(null);
     newMessage = prompt.message;
+    promptMessage = prompt.message;
     promptContext = prompt.context;
+    // Signing in from a realm page leaves the page, so the question is kept
+    // where it survives that and is restored, unsent, on the way back.
+    savePendingPrompt(pendingStore(), prompt);
     setOpen(true);
+    // `autoSend` was already weighed against the user's gesture when the
+    // message arrived (`effectiveAutoSend`). Without one the question waits in
+    // the input, which is the only thing a realm's script can make happen.
     if (prompt.autoSend) await send();
+  }
+
+  /** `sessionStorage`, or nothing where the browser refuses it. */
+  function pendingStore() {
+    try {
+      return typeof sessionStorage === 'undefined' ? null : sessionStorage;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /** A question left waiting by a sign-in, put back in the input for the user to send. */
+  function restorePendingPrompt() {
+    if (newMessage.trim()) return;
+    const waiting = readPendingPrompt(pendingStore());
+    if (!waiting) return;
+    newMessage = waiting.message;
+    promptMessage = waiting.message;
+    promptContext = waiting.context;
   }
 
   function copyText(text, index) {
@@ -776,6 +808,7 @@
     unsubPromptRequest = assistantPromptRequest.subscribe((prompt) => {
       if (prompt) void takePrompt(prompt);
     });
+    restorePendingPrompt();
     unsubToggleRequest = assistantToggleRequest.subscribe((n) => {
       if (n > 0) setOpen(!open);
     });
@@ -1043,9 +1076,15 @@
     const principal = userPrincipal;
     const persona = selectedAssistant?.id || 'ashoka';
     const ctxRealm = contextRealmId || '';
+    // The text belongs to the question it arrived with: once the user replaces
+    // that question with their own, it is not about this chapter any more.
+    if (question !== promptMessage) promptContext = null;
     const pageContext = buildPageContext(promptContext);
-    // This question carries the text; the thread's history covers follow-ups.
+    // This question carries the text. A follow-up in the thread does not: the
+    // assistant's history replays questions and answers, not this context.
     promptContext = null;
+    promptMessage = '';
+    clearPendingPrompt(pendingStore());
     const focus = documentFocus?.uri
       ? { uri: documentFocus.uri, label: documentFocus.label, source: documentFocus.source }
       : null;

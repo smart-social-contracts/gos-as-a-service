@@ -271,7 +271,10 @@
       onAssistantPrompt: (payload) => {
         // The panel opens itself for a question it accepts; the realm also
         // sends assistant:open right after, which older realms send alone.
-        requestAssistantPrompt(payload);
+        // The activation is read here, while the gesture that may have caused
+        // this message is still observable: it decides whether the question
+        // sends itself or waits in the input (`effectiveAutoSend`).
+        requestAssistantPrompt(payload, navigator.userActivation);
       },
       onUiReady: () => {
         markIframeReady();
