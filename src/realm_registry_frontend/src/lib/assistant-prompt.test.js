@@ -30,6 +30,9 @@ const prompt = {
 		uri: 'realms://codex_viewer/codex/eu-data_protection',
 		range: { startLine: 1, endLine: 2 },
 		totalLines: 2,
+		checksum: 'sha256:abababababababababababababababababababababababababababababababab',
+		held: 'realm',
+		url: 'https://raw.githubusercontent.com/org/codices/c0ffee/legislation/eu/data_protection.py',
 	},
 };
 
@@ -67,6 +70,31 @@ test('autoSend is only the boolean true, and unknown fields are dropped', () => 
 	assert.equal(parsed.autoSend, false);
 	assert.deepEqual(Object.keys(parsed).sort(), ['autoSend', 'context', 'message']);
 	assert.deepEqual(Object.keys(parsed.context).sort(), ['text', 'truncated'].sort());
+});
+
+test('a reference with no text is kept: it says where the whole chapter is read', () => {
+	const parsed = parseAssistantPromptContext({ checksum: 'sha256:abababababababababababababababababababababababababababababababab', held: 'realm' });
+	assert.equal(parsed.text, undefined);
+	assert.equal(parsed.checksum, 'sha256:abababababababababababababababababababababababababababababababab');
+	assert.equal(parsed.held, 'realm');
+});
+
+test('a checksum that is not one, a made-up `held` and a non-https url are dropped', () => {
+	const junk = parseAssistantPromptContext({
+		text: 'a line',
+		checksum: 'sha256:not-hex',
+		held: 'somewhere-else',
+		url: 'javascript:alert(1)',
+	});
+	assert.equal(junk.checksum, undefined);
+	assert.equal(junk.held, undefined);
+	assert.equal(junk.url, undefined);
+
+	assert.equal(parseAssistantPromptContext({ checksum: 'sha256:not-hex' }), null);
+	assert.equal(
+		parseAssistantPromptContext({ text: 'a line', url: 'http://plain.example/x.py' }).url,
+		undefined,
+	);
 });
 
 test('the question is cut to size', () => {
@@ -112,10 +140,35 @@ test('the text goes to the model framed as data, not as instructions', () => {
 	assert.equal(assistantPromptContextSection(null), '');
 });
 
-test('a cut text says so', () => {
+test('a cut text says so, and says where the rest is', () => {
 	const section = assistantPromptContextSection({ text: 'half a chapter', truncated: true });
 	assert.match(section, /cut to fit/);
 	assert.doesNotMatch(assistantPromptContextSection({ text: 'all of it' }), /cut to fit/);
+});
+
+test('the reference tells the assistant how to read the whole chapter and check it', () => {
+	const section = assistantPromptContextSection(prompt.context);
+	assert.match(section, new RegExp(`Checksum of the whole chapter: ${prompt.context.checksum}`));
+	assert.match(section, /Read all of it from the realm itself by that checksum \(ggg_legislation_chapter\)/);
+	assert.match(section, /check that what you read has that checksum/);
+	assert.match(section, /Published, unchanging, at: https:\/\/raw\.githubusercontent\.com\/org\/codices\/c0ffee\//);
+});
+
+test('a chapter of a layer the realm does not run says the realm does not hold it', () => {
+	const section = assistantPromptContextSection({
+		text: 'EU_TEXT = 1',
+		checksum: prompt.context.checksum,
+		held: 'published',
+	});
+	assert.match(section, /the realm does not hold it/);
+	assert.doesNotMatch(section, /ggg_legislation_chapter/);
+});
+
+test('a reference with no text says the text is not here', () => {
+	const section = assistantPromptContextSection({ checksum: prompt.context.checksum, held: 'realm' });
+	assert.match(section, /The text itself is not included here/);
+	assert.doesNotMatch(section, /--- text begins ---/);
+	assert.equal(assistantPromptContextSection({}), '');
 });
 
 test('one line is reported as a line, not a range', () => {
