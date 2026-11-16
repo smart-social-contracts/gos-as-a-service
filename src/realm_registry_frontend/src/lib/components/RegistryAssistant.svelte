@@ -28,6 +28,11 @@
   import { portalDocumentFocus } from '$lib/portal-focus.js';
   import { assistantChrome } from '$lib/assistant-chrome.js';
   import { assistantOpenRequest, assistantToggleRequest, assistantCloseRequest } from '$lib/assistant-open.js';
+  import {
+    assistantPromptRequest,
+    assistantPromptContextSection,
+    shouldTakePrompt,
+  } from '$lib/assistant-prompt.js';
   import { aiFetch } from '$lib/geister/ai-fetch.js';
   import { API_URL, CHAT_REQUEST_TIMEOUT_MS, geisterNetwork } from '$lib/geister/constants.js';
   import { SIGN_IN_REQUIRED_MESSAGE } from '$lib/geister/session.js';
@@ -93,8 +98,19 @@
   let frontendCanisterId = null;
   /** @type {{ source?: string, uri?: string, label?: string } | null} */
   let documentFocus = null;
+  /**
+   * The text an embedded realm sent with its question (`assistant:prompt`),
+   * waiting for the send that carries it. One question carries it: follow-ups
+   * rely on the thread's history instead of sending the whole text again.
+   * @type {{ text: string, label?: string } | null}
+   */
+  let promptContext = null;
+  /** The last `assistant:prompt` acted on, so one request sends once. */
+  let takenPromptId = 0;
   /** @type {(() => void) | undefined} */
   let unsubFocus;
+  /** @type {(() => void) | undefined} */
+  let unsubPromptRequest;
   /** @type {(() => void) | undefined} */
   let unsubPage;
   /** @type {(() => void) | undefined} */
@@ -453,8 +469,19 @@
     return m ? m[1] : null;
   }
 
-  function buildPageContext() {
-    if (!sharePageContext || !portalSlug) return null;
+  /**
+   * What the assistant backend is told about the view, as `page_context`.
+   *
+   * @param {{ text: string } | null} [context] the text an embedded realm sent
+   *   with its question. The Explain button is an explicit request about that
+   *   one text, so it is included even when sharing the ambient page context
+   *   (the route, the realm, the extension) is switched off.
+   */
+  function buildPageContext(context = null) {
+    const promptSection = assistantPromptContextSection(context);
+    if (!sharePageContext || !portalSlug) {
+      return promptSection ? { description: promptSection } : null;
+    }
     const extensionId = extensionIdFromPath(inRealmPath);
     const title = extensionId ? `${portalSlug} · ${extensionId}` : `Realm ${portalSlug}`;
     const parts = [`slug=${portalSlug}`];
@@ -465,7 +492,7 @@
     const ctx = {
       pathname: inRealmPath,
       title,
-      description: parts.join('; '),
+      description: promptSection ? `${parts.join('; ')}\n\n${promptSection}` : parts.join('; '),
     };
     if (extensionId) ctx.extensionId = extensionId;
     return ctx;
@@ -629,6 +656,27 @@
     void send();
   }
 
+  /**
+   * A question an embedded realm asked for (`assistant:prompt`): it goes in the
+   * input, the panel opens, and `autoSend` sends it at once. Each request is
+   * taken once — its id guards a re-render, and the store is cleared so a
+   * remount does not send it again.
+   *
+   * Signed out, `send()` shows the sign-in notice and leaves the question (and
+   * its text) in place, so it is still there after signing in.
+   *
+   * @param {{ message: string, autoSend: boolean, context: { text: string } | null, id: number }} prompt
+   */
+  async function takePrompt(prompt) {
+    if (!shouldTakePrompt(prompt, takenPromptId)) return;
+    takenPromptId = prompt.id;
+    assistantPromptRequest.set(null);
+    newMessage = prompt.message;
+    promptContext = prompt.context;
+    setOpen(true);
+    if (prompt.autoSend) await send();
+  }
+
   function copyText(text, index) {
     const markCopied = () => {
       copiedIndex = index;
@@ -725,6 +773,9 @@
     unsubOpenRequest = assistantOpenRequest.subscribe((n) => {
       if (n > 0) setOpen(true);
     });
+    unsubPromptRequest = assistantPromptRequest.subscribe((prompt) => {
+      if (prompt) void takePrompt(prompt);
+    });
     unsubToggleRequest = assistantToggleRequest.subscribe((n) => {
       if (n > 0) setOpen(!open);
     });
@@ -784,6 +835,7 @@
     unsubPage?.();
     unsubFocus?.();
     unsubOpenRequest?.();
+    unsubPromptRequest?.();
     unsubToggleRequest?.();
     unsubCloseRequest?.();
     unsubPrefsFocus?.();
@@ -991,7 +1043,9 @@
     const principal = userPrincipal;
     const persona = selectedAssistant?.id || 'ashoka';
     const ctxRealm = contextRealmId || '';
-    const pageContext = buildPageContext();
+    const pageContext = buildPageContext(promptContext);
+    // This question carries the text; the thread's history covers follow-ups.
+    promptContext = null;
     const focus = documentFocus?.uri
       ? { uri: documentFocus.uri, label: documentFocus.label, source: documentFocus.source }
       : null;

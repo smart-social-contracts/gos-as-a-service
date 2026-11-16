@@ -22,7 +22,7 @@ function platformCanisterIds() {
  * @param {HTMLIFrameElement} iframe
  * @param {{ slug: string, backendCanisterId: string, frontendCanisterId: string, env?: string }} realm
  *   as recorded by the registry.
- * @param {{ onAuthState?: (needsLogin: boolean) => void, onFocus?: (focus: { source: string, uri: string, label?: string } | null) => void, onAssistantOpen?: () => void, onUiReady?: () => void }} [opts]
+ * @param {{ onAuthState?: (needsLogin: boolean) => void, onFocus?: (focus: { source: string, uri: string, label?: string } | null) => void, onAssistantOpen?: () => void, onAssistantPrompt?: (payload: unknown) => void, onUiReady?: () => void }} [opts]
  *   `onAuthState(true)` fires when the iframe asks for a delegation but the
  *   portal has no session. Sign-in itself is `auth:open-login`, which leaves
  *   this embed for the portal `/join` page. `onAuthState(false)` fires once a
@@ -30,6 +30,10 @@ function platformCanisterIds() {
  *   `onFocus` receives document focus pushed from the iframe (`focus:push`);
  *   payload may be null to clear.
  *   `onAssistantOpen` fires when the iframe requests opening the mundus assistant.
+ *   `onAssistantPrompt` receives a question the iframe wants the assistant to
+ *   take (`assistant:prompt`), with the text it is about. The payload comes
+ *   from the realm, so the receiver validates it (see `assistant-prompt.js`).
+ *   An older realm never sends it and only asks to open the panel.
  *   `onUiReady` fires when the embedded realm reports real content on screen
  *   (`ui:ready`); may never fire on older realm builds — callers need a fallback.
  */
@@ -121,6 +125,9 @@ export function attachPortalBridge(iframe, realm, opts = {}) {
 				break;
 			case 'assistant:open':
 				opts.onAssistantOpen?.();
+				break;
+			case 'assistant:prompt':
+				opts.onAssistantPrompt?.(msg.payload);
 				break;
 			case 'ui:ready':
 				opts.onUiReady?.();

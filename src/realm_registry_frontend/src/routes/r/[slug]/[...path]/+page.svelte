@@ -8,6 +8,7 @@
   import { attachPortalBridge } from '$lib/portal-bridge-host.js';
   import { portalDocumentFocus } from '$lib/portal-focus.js';
   import { requestAssistantOpen } from '$lib/assistant-open.js';
+  import { requestAssistantPrompt } from '$lib/assistant-prompt.js';
   import { authSession } from '$lib/stores/authSession.js';
   import { CONFIG } from '$lib/config.js';
   import { fetchRealmInfo } from '$lib/realm-gos-client.js';
@@ -266,6 +267,11 @@
       },
       onAssistantOpen: () => {
         requestAssistantOpen();
+      },
+      onAssistantPrompt: (payload) => {
+        // The panel opens itself for a question it accepts; the realm also
+        // sends assistant:open right after, which older realms send alone.
+        requestAssistantPrompt(payload);
       },
       onUiReady: () => {
         markIframeReady();
