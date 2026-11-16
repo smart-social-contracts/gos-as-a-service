@@ -268,7 +268,7 @@ test('a question sends itself only when the browser reports a live gesture', () 
 	assert.equal(effectiveAutoSend({ autoSend: true }, { isActive: true }), true);
 	// A script in the realm, or a deep link that asks on page load: no gesture.
 	assert.equal(effectiveAutoSend({ autoSend: true }, { isActive: false }), false);
-	// Firefox and Safari report nothing, so nothing proves a gesture there.
+	// A browser too old to report activation proves no gesture either (every current engine reports it).
 	assert.equal(effectiveAutoSend({ autoSend: true }, undefined), false);
 	assert.equal(effectiveAutoSend({ autoSend: true }, null), false);
 	assert.equal(effectiveAutoSend({ autoSend: true }, {}), false);

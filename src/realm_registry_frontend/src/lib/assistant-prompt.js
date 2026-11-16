@@ -129,8 +129,9 @@ export function parseAssistantPrompt(payload) {
  * portal transient activation too, so the Explain button still sends at once;
  * a script in the realm frontend, or a deep link that asks on page load, has
  * no activation and gets the question put in the input instead, for the user
- * to send. Where the browser does not report activation (Firefox, Safari)
- * nothing proves a gesture, so nothing sends itself there either.
+ * to send. Every engine the portal supports reports activation (Chrome 72,
+ * Safari 16.4, Firefox 120), so the button sends at once in all three; an
+ * older browser that does not report it puts the question in the input.
  *
  * @param {{ autoSend?: boolean } | null} prompt
  * @param {{ isActive?: boolean } | null | undefined} activation `navigator.userActivation`
