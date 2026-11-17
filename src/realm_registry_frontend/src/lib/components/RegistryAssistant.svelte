@@ -38,6 +38,7 @@
     shouldTakePrompt,
   } from '$lib/assistant-prompt.js';
   import { aiFetch } from '$lib/geister/ai-fetch.js';
+  import { readAssistantStream } from '$lib/geister/assistant-stream.js';
   import { API_URL, CHAT_REQUEST_TIMEOUT_MS, geisterNetwork } from '$lib/geister/constants.js';
   import { SIGN_IN_REQUIRED_MESSAGE } from '$lib/geister/session.js';
   import { CONFIG } from '$lib/config.js';
@@ -978,60 +979,34 @@
 
       const reader = response.body?.getReader();
       if (!reader) throw new Error('Response body is not readable');
-      const decoder = new TextDecoder();
-      const state = { text: '' };
-
+      let answer = '';
       try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          for (const line of chunk.split('\n')) {
-            if (line.startsWith('data: ')) {
-              const pl = line.slice(6);
-              if (pl === '[DONE]') continue;
-              try {
-                const parsed = JSON.parse(pl);
-                const eventType = typeof parsed.type === 'string' ? parsed.type : parsed.text ? 'text' : '';
-                const piece = typeof parsed.text === 'string' ? parsed.text : '';
-                if (eventType === 'status' && piece && viewing()) {
-                  loadingStatus = piece;
-                  continue;
-                }
-                if (eventType === 'thinking') continue;
-                if (piece) {
-                  state.text += piece;
-                  if (viewing()) {
-                    loadingStatus = '';
-                    appendAssistantToView(state.text);
-                  }
-                }
-              } catch (e) {
-                state.text += pl;
-                if (viewing()) appendAssistantToView(state.text);
-              }
-            } else if (line.trim() && !line.startsWith(':')) {
-              state.text += line;
-              if (viewing()) appendAssistantToView(state.text);
-            }
-          }
-        }
+        answer = await readAssistantStream(reader, {
+          onStatus: (status) => {
+            if (viewing()) loadingStatus = status;
+          },
+          onText: (text) => {
+            if (!viewing()) return;
+            loadingStatus = '';
+            appendAssistantToView(text);
+          },
+        });
       } finally {
         reader.releaseLock();
       }
 
       if (viewing()) {
-        if (!state.text.trim()) {
+        if (!answer.trim()) {
           appendAssistantToView($_('assistant.no_response', { default: 'No response from the assistant.' }));
-        } else if (isLlmBackendError(state.text)) {
-          error = classifyChatError(new Error(state.text), 503);
+        } else if (isLlmBackendError(answer)) {
+          error = classifyChatError(new Error(answer), 503);
         }
         // Not awaited: the answer is done, so its pending state must not wait on these requests.
         void loadSuggestions();
       }
 
       if (principal) {
-        upsertConversationInList(sendConversationId, state.text.trim() ? 2 : 1);
+        upsertConversationInList(sendConversationId, answer.trim() ? 2 : 1);
         if (showHistory) void refreshConversations();
       }
     } catch (err) {
