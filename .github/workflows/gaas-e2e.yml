@@ -1,13 +1,23 @@
 name: GaaS E2E
 
+# QUARANTINED 2026-11-17. This check has failed on 40 consecutive runs since 2026-10-04,
+# every one of them inside `casals up (e2e harness)` in 41-56 s, before any test code runs.
+# It therefore reported nothing about 25 pull requests, and a permanently red check is worse
+# than no check: it teaches everyone to merge over red. Removing the `pull_request` trigger
+# makes that honest rather than hiding it, and loses no coverage that exists today.
+#
+# The cause looks like drift between this repo's sheet and the floating `main` of Casals and
+# realms-gos pinned below (CASALS_VERSION / REALMS_VERSION): since 2026-10-31 it dies on
+# "$orchestra:realms-product/marketplace-backend: no realms-product orchestra in local",
+# before that on "environments.local must be an object". Nobody has bisected it.
+#
+# To restore the PR trigger: make a `workflow_dispatch` run green (it most likely needs a step
+# that deploys realms-product into the local replica first), then add `pull_request` back in the
+# same PR that proves it, together with a run that went red on a deliberate defect. See
+# `.cto/reports/ci-signal-audit-2026-11-17.md` item 10. The nightly `realms-gaas-e2e` in
+# realms-gos builds the same stack and has passed 18 of its last 25 runs, so the stack itself
+# is still exercised somewhere while this sits quarantined.
 on:
-  pull_request:
-    paths:
-      - "casals.json"
-      - "src/**"
-      - "dfx.json"
-      - "tests/e2e/**"
-      - ".github/workflows/gaas-e2e.yml"
   workflow_dispatch:
 
 concurrency:
