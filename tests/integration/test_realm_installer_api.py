@@ -6,8 +6,8 @@ Exercises core query endpoints on a live replica.  The old on-chain
 removed; the queue + ``report_canister_ready`` flow is the supported
 path for full realm deploys.
 
-If ``realm_installer`` is not deployed, the suite skips cleanly with
-exit code 0.
+If ``realm_installer`` is not deployed (or dfx does not answer), the suite
+fails with exit code 1: a suite that skips itself would report a pass.
 """
 
 import json
