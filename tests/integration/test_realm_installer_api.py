@@ -139,9 +139,10 @@ if __name__ == "__main__":
     print("Testing realm_installer API surface:")
 
     if not _dfx_canister_id("realm_installer"):
-        print("  ⚠️  realm_installer not deployed; skipping suite.")
-        print("✅ Skipped (no realm_installer canister in this dfx project)")
-        sys.exit(0)
+        # A suite that skips itself reports a pass. The lookup is also empty when dfx
+        # times out or cannot find the project, so "not deployed" must fail, not skip.
+        print("❌ realm_installer is not deployed, or dfx did not answer: nothing was tested")
+        sys.exit(1)
 
     tests = [
         test_candid_surface_has_core_methods,
