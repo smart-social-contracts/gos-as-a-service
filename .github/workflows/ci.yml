@@ -26,6 +26,8 @@ jobs:
       - name: Black --check
         # Non-blocking, matching realms CI: extracted sources predate black 26.x
         # formatting rules; keep them byte-close to the realms originals.
+        # Red on 57 of 67 files (ci-signal-audit, 2026-11-17): the job is green over it.
+        # Reformatting them is a decision, not a drive-by.
         continue-on-error: true
         run: pip install black && black --check src/ tests/ scripts/
       - name: No principal / canister-id tables outside casals.json
