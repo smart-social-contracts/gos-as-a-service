@@ -1589,6 +1589,86 @@ WCX_FIT_JS = """
     setTimeout(blink, Math.random() * 5000);
   });
 })();
+
+(function () {
+  // Every few seconds one server defects: it turns red and shakes, every other one sends an arc
+  // of its own, and as the arcs land it is itself again. Only where servers are on screen, and
+  // not at all for a reader who asked for less motion.
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const EVERY = 4500, BACK = 2000;
+  // Scattered, but always the same: never the same one twice over, never two neighbours in a row.
+  const ORDER = [4, 0, 7, 2, 8, 5, 1, 6, 3];
+  let turn = 0;
+  const svgNode = (name, attrs) => {
+    const el = document.createElementNS('http://www.w3.org/2000/svg', name);
+    for (const k in attrs) el.setAttribute(k, attrs[k]);
+    return el;
+  };
+  function layerOf(svg) {
+    let g = svg.querySelector('.ax-fx');
+    if (!g) {
+      g = svgNode('g', { class: 'ax-fx' });
+      svg.appendChild(g);
+    }
+    return g;
+  }
+  function clear() {
+    document.querySelectorAll('.ax-fx').forEach((g) => { g.textContent = ''; });
+    document.querySelectorAll('.ax-srv').forEach((g) => g.classList.remove('ax-rogue', 'ax-mend'));
+  }
+  function round() {
+    const crowds = document.querySelectorAll('.page.active .ax-crowd:has(.ax-servers.shown) svg');
+    if (!crowds.length) return;
+    crowds.forEach((svg) => {
+      const servers = [...svg.querySelectorAll('.ax-srv')];
+      const layer = layerOf(svg);
+      if (servers.length < 3 || !layer.getScreenCTM()) return;
+      layer.textContent = '';
+      servers.forEach((g) => g.classList.remove('ax-rogue', 'ax-mend'));
+      const i = ORDER[turn % ORDER.length] % servers.length;
+      const rogue = servers[i];
+      const inv = layer.getScreenCTM().inverse();
+      // Where a server's screen is now, in the drawing's own units: it moves with the clicks.
+      const at = (g) => {
+        const b = g.getBBox(), m = g.getScreenCTM();
+        if (!m) return null;
+        const pt = svg.createSVGPoint();
+        pt.x = b.x + b.width / 2;
+        pt.y = b.y + b.height * 0.25;
+        return pt.matrixTransform(m).matrixTransform(inv);
+      };
+      const r = at(rogue);
+      if (!r) return;
+      rogue.classList.add('ax-rogue');
+      servers.forEach((g, n) => {
+        if (g === rogue) return;
+        const s = at(g);
+        if (!s) return;
+        const up = Math.min(5 + Math.abs(s.x - r.x) * 0.3, 22);
+        const path = svgNode('path', {
+          class: 'ax-vote',
+          d: 'M' + s.x.toFixed(1) + ' ' + s.y.toFixed(1) +
+             ' Q' + ((s.x + r.x) / 2).toFixed(1) + ' ' + (Math.min(s.y, r.y) - up).toFixed(1) +
+             ' ' + r.x.toFixed(1) + ' ' + (r.y - 1).toFixed(1),
+        });
+        layer.appendChild(path);
+        const len = path.getTotalLength();
+        path.style.setProperty('--len', len.toFixed(1));
+        path.style.strokeDasharray = len.toFixed(1);
+        path.style.animationDelay = (0.5 + Math.abs(n - i) * 0.06).toFixed(2) + 's';
+      });
+      setTimeout(() => {
+        if (!rogue.classList.contains('ax-rogue')) return;
+        rogue.classList.remove('ax-rogue');
+        rogue.classList.add('ax-mend');
+        layer.textContent = '';
+      }, BACK);
+    });
+    turn++;
+  }
+  window.addEventListener('deck:scene', clear);
+  setInterval(round, EVERY);
+})();
 """
 
 GLOBE_JS = """
@@ -3242,15 +3322,62 @@ CSS = (
       letter-spacing: -0.01em;
       color: var(--gray-800);
     }
-    .ax-quote::before, .ax-quote::after {
+    .ax-said::before, .ax-said::after {
       font-family: Georgia, "Times New Roman", serif;
       font-size: 2.4em;
       line-height: 0;
       vertical-align: -0.4em;
       color: rgb(107, 163, 163);
     }
-    .ax-quote::before { content: "“"; margin-right: 0.12em; }
-    .ax-quote::after { content: "”"; margin-left: 0.08em; }
+    .ax-said::before { content: "“"; margin-right: 0.12em; }
+    .ax-said::after { content: "”"; margin-left: 0.08em; }
+    /* What the sentence is: it stands outside the quotation marks. */
+    .ax-quote-label { font-size: 0.85em; color: var(--gray-500); font-weight: 600; margin-right: 0.3em; }
+
+    /* The name of the world the act belongs to, and the click where it changes: the old name
+       shrinks and is struck out, the new one arrives beside it, in teal. */
+    .ax-head-stack { display: grid; }
+    .ax-head-title {
+      grid-area: 1 / 1;
+      justify-self: start;
+      display: flex;
+      align-items: baseline;
+      flex-wrap: wrap;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+    .ax-head-title.shown { opacity: 1; }
+    .ax-head-swap.shown { transition: opacity 0.5s ease 0.1s; }
+    /* Once the act is secured the old name has had its say: it goes, and the new one takes its
+       place at the start of the line. */
+    .ax-head-old {
+      display: inline-flex;
+      align-items: baseline;
+      overflow: hidden;
+      max-width: 14rem;
+      transition: max-width 0.95s ease 0.25s, opacity 0.45s ease;
+    }
+    .ax-head-old[data-until]:not(.shown) { max-width: 0; opacity: 0; }
+    .ax-head-was {
+      margin-right: 0.55rem;
+      font-size: 1.15rem;
+      font-weight: 600;
+      color: var(--gray-500);
+      text-decoration: line-through;
+      text-decoration-color: #b94a48;
+      text-decoration-thickness: 2px;
+    }
+    .ax-head-to { margin-right: 0.55rem; }
+    .ax-head-to::before { content: "→"; font-size: 1.35rem; color: var(--gray-400); }
+    .ax-head-now { color: rgb(47, 95, 95); }
+    .ax-head-swap.shown .ax-head-now { animation: ax-head-glow 2.4s ease-in-out 0.2s both; }
+    @keyframes ax-head-glow {
+      0%, 100% { text-shadow: none; }
+      18%, 55% {
+        text-shadow: 0 0 2px #fff, 0 0 10px rgba(107, 163, 163, 0.95),
+          0 0 22px rgba(107, 163, 163, 0.75), 0 0 36px rgba(107, 163, 163, 0.5);
+      }
+    }
 
     /* An acts slide played over the world computer (its :detour: click): an opaque sheet the
        picture waits under, the planet (drawn full-window, under the page) included. */
@@ -3272,11 +3399,35 @@ CSS = (
 
     .ax-act { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) minmax(0, 1fr); align-items: start; row-gap: 0.4rem; }
     .ax-act.shown, .ax-gauge.shown { transition-delay: 0.35s; }
-    /* D watches the act from over it. */
+    /* The case being told, over the act; D watches it from over that. */
+    .ax-case-label {
+      grid-area: 2 / 1 / 3 / -1;
+      display: grid;
+      justify-items: center;
+      margin: 1.2rem 0 0.7rem;
+      max-height: 4rem;
+      transition: opacity 0.4s ease, max-height 0.5s ease, margin 0.5s ease;
+    }
+    /* The case goes with its lines: once the act is secured, A, B and C stand clean. */
+    .ax-case-label[data-until]:not(.shown) { opacity: 0; max-height: 0; margin: 0; overflow: hidden; }
+    .ax-case-label > .ax-case {
+      grid-area: 1 / 1;
+      padding: 0.25rem 0.95rem;
+      border-radius: 999px;
+      background: rgba(185, 74, 72, 0.09);
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      color: #b94a48;
+    }
+    .ax-case-pre { font-weight: 600; opacity: 0.72; }
+    /* Each case's lines take the place of the one before. */
+    .ax-case[data-until]:not(.shown), .ax-case:has(> :not(.shown)) { display: none; }
     .ax-d { grid-area: 1 / 2; margin-bottom: 0.6rem; }
-    .ax-a { grid-area: 2 / 1; }
-    .ax-b { grid-area: 2 / 2; }
-    .ax-c { grid-area: 2 / 3; }
+    .ax-a { grid-area: 3 / 1; }
+    .ax-b { grid-area: 3 / 2; }
+    .ax-c { grid-area: 3 / 3; }
     .ax-part {
       --tone: var(--gray-700);
       display: flex;
@@ -3308,7 +3459,18 @@ CSS = (
     /* Once the defects leave, so does the space they held. */
     .ax-gone:not(.shown) { max-height: 0; opacity: 0; overflow: hidden; }
     .ax-fail { display: block; max-width: 15rem; font-size: 1.15rem; font-weight: 650; line-height: 1.25; color: #b94a48; }
-    .ax-role, .ax-fail { overflow-wrap: anywhere; hyphens: auto; }
+    /* What the part is in the plain example, before any case is told of it. */
+    .ax-ex[data-until]:not(.shown), .ax-ex:has(> :not(.shown)) { display: none; }
+    .ax-ex > span {
+      display: block;
+      max-width: 15rem;
+      font-size: 1.1rem;
+      font-weight: 600;
+      line-height: 1.3;
+      color: var(--gray-800);
+    }
+    .ax-crowd-e .ax-ex > span { max-width: none; }
+    .ax-role, .ax-fail, .ax-ex { overflow-wrap: anywhere; hyphens: auto; }
 
     .ax-b .ax-token { justify-content: center; }
     .ax-arrow {
@@ -3337,6 +3499,11 @@ CSS = (
       opacity: 0.55;
     }
     .ax-b:has(.ax-gone.shown .ax-fail.shown) .ax-name { border-style: dashed; }
+    /* A and C grin while their part of the act is defective; the grin goes when it is secured. */
+    .ax-sly { opacity: 0; transition: opacity 0.45s ease; }
+    .ax-part:has(.ax-gone.shown .ax-fail.shown) .ax-sly { opacity: 1; transition: opacity 0.6s ease 0.3s; }
+    /* C's face mirrors A's (the viewBox is centred on the head), so the two glance at each other. */
+    .ax-c .ax-sly { transform: scaleX(-1); }
     .ax-rule { position: absolute; top: 0.2rem; left: 0; right: 0; display: flex; justify-content: center; }
     .ax-rule-tag {
       padding: 0.1rem 0.6rem;
@@ -3397,6 +3564,79 @@ CSS = (
     }
 
     .ax-crowd { grid-area: crowd; margin-bottom: 0.9rem; color: #9a9a9a; }
+    /* Once D and E are one, they are a block the act has to pass through: an outline around the
+       crowd, a shelf under it the act moves into, and A's and C's lines going in and out. */
+    .ax-block {
+      border: 1.5px solid transparent;
+      border-radius: 0.9rem;
+      padding: 0.5rem 0.9rem;
+      transition: border-color 0.7s ease, background-color 0.7s ease;
+    }
+    .ax-block.shown { border-color: rgba(107, 163, 163, 0.5); background: rgba(107, 163, 163, 0.05); }
+    .ax-shelf { height: 0; display: grid; place-items: center; transition: height 0.7s cubic-bezier(0.45, 0, 0.2, 1); }
+    .ax-block.shown .ax-shelf { height: 3.4rem; }
+    .ax-inside {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      color: rgb(47, 95, 95);
+      opacity: 0;
+      transform: translateY(5rem);
+      transition: opacity 0.5s ease, transform 0.85s cubic-bezier(0.45, 0, 0.2, 1);
+    }
+    .ax-inside.shown { opacity: 1; transform: none; }
+    .ax-inside-arrow { position: relative; display: block; width: min(26rem, 55%); height: 3px; background: currentColor; }
+    .ax-inside-arrow::after {
+      content: "";
+      position: absolute;
+      right: -0.9rem;
+      top: 50%;
+      transform: translateY(-50%);
+      border: 0.5rem solid transparent;
+      border-left: 0.9rem solid currentColor;
+      border-right: 0;
+    }
+    .ax-inside-b {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      padding: 0.1rem 0.8rem;
+      background: #fff;
+      border: 2px solid currentColor;
+      border-radius: 999px;
+      font-size: 1.7rem;
+      font-weight: 800;
+      line-height: 1.25;
+    }
+    /* The act's own row empties: what was between A and C is now inside the block. */
+    .ax-act:has(.ax-secured.shown) .ax-b { opacity: 0; transition: opacity 0.5s ease; }
+    .ax-leg {
+      position: absolute;
+      left: 50%;
+      bottom: 100%;
+      width: 3px;
+      height: 5rem;
+      margin-left: -1.5px;
+      background: currentColor;
+      opacity: 0;
+      transform: scaleY(0);
+      transition: opacity 0.3s ease, transform 0.5s ease;
+    }
+    .ax-leg-up { transform-origin: bottom; }
+    .ax-leg-down { transform-origin: top; }
+    .ax-leg.shown { opacity: 1; transform: none; }
+    .ax-leg-up.shown { transition-delay: 0.45s; }
+    .ax-leg-down.shown { transition-delay: 0.75s; }
+    .ax-leg::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      margin-left: -0.5rem;
+      border: 0.5rem solid transparent;
+    }
+    .ax-leg-up::after { top: -0.75rem; border-bottom: 0.75rem solid currentColor; border-top: 0; }
+    .ax-leg-down::after { bottom: -0.75rem; border-top: 0.75rem solid currentColor; border-bottom: 0; }
     /* Visible overflow: the servers come in from D's place, outside the crowd. */
     .ax-crowd svg { display: block; width: 100%; max-height: 9rem; overflow: visible; }
     .ax-crowd-labels { display: grid; justify-items: center; margin-top: 0.4rem; }
@@ -3434,6 +3674,30 @@ CSS = (
       transition: transform 1.4s cubic-bezier(0.45, 0, 0.2, 1) 0.4s, opacity 1s ease 0.8s;
     }
     .ax-led { animation: ax-led var(--lt) steps(1) var(--ld) infinite; }
+    /* Every few seconds one of them defects: it goes red and shakes, the others each send an arc
+       of their own, and when the arcs land it is itself again (ROGUE_JS). */
+    .ax-srv rect, .ax-srv .ax-pupil, .ax-srv .ax-led { transition: fill 0.5s ease; }
+    .ax-srv.ax-rogue rect:first-of-type { fill: #b94a48; }
+    .ax-srv.ax-rogue rect:nth-of-type(2) { fill: #3d1111; }
+    .ax-srv.ax-rogue .ax-pupil { fill: #ffc9c9; }
+    .ax-srv.ax-rogue .ax-led { fill: #ff8a8a; animation: none; opacity: 1; }
+    .ax-srv-in { transform-box: fill-box; transform-origin: center; }
+    .ax-srv.ax-rogue .ax-srv-in { animation: ax-rogue-shake 0.26s linear 6; }
+    @keyframes ax-rogue-shake { 0%, 100% { transform: translateX(-0.3px); } 50% { transform: translateX(0.3px); } }
+    .ax-srv.ax-mend rect:nth-of-type(2) { animation: ax-mend-flash 0.7s ease-out; }
+    @keyframes ax-mend-flash { 0% { fill: #fff; } 100% { fill: #123332; } }
+    .ax-vote {
+      fill: none;
+      stroke: rgb(107, 163, 163);
+      stroke-width: 0.55;
+      stroke-linecap: round;
+      animation: ax-vote-draw 0.6s ease-in-out both;
+    }
+    @keyframes ax-vote-draw {
+      0% { stroke-dashoffset: var(--len); opacity: 0.2; }
+      60% { opacity: 1; }
+      100% { stroke-dashoffset: 0; opacity: 0; }
+    }
     @keyframes ax-led { 0%, 100% { opacity: 1; } 35% { opacity: 0.25; } 50% { opacity: 1; } 70% { opacity: 0.45; } }
 
     .ax-body {
@@ -3484,6 +3748,9 @@ CSS = (
 
     .ax-point { display: flex; align-items: center; gap: 0.7rem; font-size: 1.6rem; font-weight: 700; letter-spacing: -0.01em; line-height: 1.25; }
     .ax-point > svg { flex: none; height: 2.2rem; width: auto; }
+    /* A point under another: what it leads to, lined up under the words above it. */
+    .ax-point.ax-then { margin-left: 2.9rem; color: rgb(47, 95, 95); }
+    .ax-point > svg.ax-then-mark { height: 1.05rem; }
 
     .lx-stack { display: flex; flex-direction: column; gap: 0.6rem; }
     .lx-stack-head { font-size: 0.85rem; font-weight: 650; letter-spacing: 0.16em; text-transform: uppercase; color: var(--gray-500); }
@@ -3531,6 +3798,7 @@ CSS = (
       .ax-name { font-size: 1.7rem; }
       .ax-fail { font-size: 0.92rem; }
       .ax-point { font-size: 1.15rem; }
+      .ax-point.ax-then { margin-left: 1.9rem; }
       .ax-body { grid-template-columns: minmax(0, 1fr); grid-template-areas: "crowd" "act" "gauge"; }
       .ax-gauge { margin-top: 0.9rem; }
       .ax-gauge { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; row-gap: 0.45rem; }
@@ -3943,12 +4211,15 @@ def cost_level(level: int) -> tuple[str, str]:
     return next((tone, word) for top, tone, word in COST_LEVELS if level < top)
 
 
+
 GAUGE_DEMO_S = 6.0
 
 
 def gauge_demo_css(samples: int = 80) -> str:
     """When the meter comes in, it shows how it reads: up and down twice through every level in
-    GAUGE_DEMO_S seconds, its colour and word (COST_LEVELS) changing with it; then it is empty."""
+    GAUGE_DEMO_S seconds, its colour and word (COST_LEVELS) changing with it; then it is empty.
+    A, B, C and D sweep with it, so the meter is read on the act itself; they are their own colour
+    again by the time the first real level arrives."""
 
     def level(i: int) -> float:
         u = (2 * i / samples) % 1
@@ -3977,6 +4248,13 @@ def gauge_demo_css(samples: int = 80) -> str:
             before = on
         frames.append("100% { opacity: 0; }")
         words.append(f"@keyframes ax-demo-w{b} {{ {' '.join(frames)} }}")
+    # The parts take the demo's colour as it sweeps, and their own back at the end of it.
+    tone = " ".join(
+        f"{100 * i / samples:.2f}% {{ color: "
+        + ("var(--tone)" if i == samples else cost_level(level(i))[0])
+        + "; }"
+        for i in range(samples + 1)
+    )
     return "\n    ".join(
         [
             ".ax-gauge-demo { position: absolute; inset: 0; border-radius: inherit; transform: scaleY(0); transform-origin: bottom; }",
@@ -3985,6 +4263,11 @@ def gauge_demo_css(samples: int = 80) -> str:
             ".ax-demo-words > span { grid-area: 1 / 1; opacity: 0; white-space: nowrap; }",
             f".ax-gauge.shown .ax-demo-words > span {{ animation: var(--w) {GAUGE_DEMO_S}s linear 0.6s both; }}",
             ".ax-gauge:has(.ax-gauge-word > .wc-frag.shown) .ax-demo-words { display: none; }",
+            # No fill: once the demo is over the parts are back to their own colour.
+            ".ax-body:has(.ax-gauge.shown):not(:has(.ax-gauge-word > .wc-frag.shown))"
+            ":not(:has(.ax-fail.shown)) .ax-part"
+            f" {{ animation: ax-demo-tone {GAUGE_DEMO_S}s linear 0.6s; }}",
+            f"@keyframes ax-demo-tone {{ {tone} }}",
             "@media (max-aspect-ratio: 1/1) { .ax-gauge-demo { transform: scaleX(0); transform-origin: left; }"
             " .ax-gauge.shown .ax-gauge-demo { animation-name: ax-gauge-demo-x; } }",
             sweep("Y"),
@@ -3998,9 +4281,20 @@ CSS += "\n    " + gauge_demo_css() + "\n"
 
 
 CAVEAT_SVG = _icon('<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.4v.1"/>')
+# Over a plain head: narrowed eyes, brows down and a one-sided grin. It fades in while the part
+# it belongs to is defective (.ax-sly), so A and C look pleased with what they are doing.
+SLY_SVG = (
+    '<g class="ax-sly">'
+    '<g fill="#fff"><ellipse cx="-1.7" cy="-15.7" rx="0.9" ry="0.6"/>'
+    '<ellipse cx="1.7" cy="-15.7" rx="0.9" ry="0.6"/></g>'
+    '<g fill="#262626"><circle cx="-1.35" cy="-15.7" r="0.4"/><circle cx="2.05" cy="-15.7" r="0.4"/></g>'
+    '<g fill="none" stroke="#fff" stroke-width="0.85" stroke-linecap="round">'
+    '<path d="M-3.2-17.9-0.7-17M3.2-17.9 0.7-17"/>'
+    '<path d="M-2.2-12.9Q0-11 2.3-13.7"/></g></g>'
+)
 AGENT_SVG = (
     '<span class="ax-who"><svg viewBox="-9.5 -20.5 19 20" aria-hidden="true">'
-    f'{person_svg("currentColor")}</svg></span>'
+    f'{person_svg("currentColor")}{SLY_SVG}</svg></span>'
 )
 
 
@@ -4171,8 +4465,9 @@ def _crowd(
             x, y = (spots[a][0] + spots[a + 1][0]) / 2, spots[a][1] + 0.5
             servers.append(
                 f'<g class="ax-srv" data-x="{x:.1f}" data-y="{y - 8.5:.1f}" style="--o:{spots[a][2]:.2f}">'
+                '<g class="ax-srv-in">'
                 + digital_server_svg(x, y, rnd.uniform(2.6, 4.4), rnd.uniform(0, 4), rnd)
-                + "</g>"
+                + "</g></g>"
             )
         servers = "".join(servers)
         layers.append("".join(people))
@@ -4238,15 +4533,27 @@ def detour_page(cls: str, inner: str) -> str:
 class ActsSlide(Slide):
     """Governance as a stream of acts, "A does B to C", away from the globe.
 
-    "title: Title — lead". ":a: A — what A is — defect" (and :b:, :c:, :d:): a part of the act,
-    what it stands for, and how it can make the act defective. A, B and C stand in a row, in that
-    order, and D (who watches) over B; defects come one per click, in the order of the bullets.
-    ":e: E — what E is" names the crowd over them all. ":rule: §" is the rule the act falls under.
-    Any other bullet is a point, one per click.
+    "title: Title — lead" names the slide. A later "title: Name", nested under a cost, renames it
+    at that cost's click: the old name stays beside the new one, struck out, so the change reads as
+    the point (at the top level it takes a click of its own).
+
+    ":a: A — what A is — what it is in the example" (and :b:, :c:, :d:): a part of the act, what
+    it stands for, and what it is in the plain example the slide opens with, which stands until the
+    first case speaks of that part. A, B and C stand in a row, in that order, and D (who watches)
+    over B.
+    ":e: E — what E is" names the crowd over them all. ":rule: §", if there is one, tags the act's
+    arrow with the rule it falls under once the act is secured.
+
+    "case: a river basin" is one act of this kind, named over the parts, with ":a:", ":b:" and
+    ":c:" lines under it saying what each part does in it. The first case comes a line at a time,
+    one per click; every case after it comes in a click of its own, replacing the one before.
+    Any other bullet is a point, one per click; a point nested under another is what that one
+    leads to, and shows as "⇒ …" under it.
 
     "intro: a — sentence" (and b, c, d, e) builds the act up: the first comes with the slide, each
     next one a click later; it brings in its part and puts its sentence (what the act is so far)
-    in place of the lead. Without them, every part is there from the start.
+    in place of the lead. Without them, every part is there from the start. "quote: Act:" names
+    what that sentence is, outside its quotation marks.
 
     "gauge: Name" is a meter that "cost: 10% — Label" bullets fill, one per click (a note after
     another " — " shows beside the label): each sweeps it from the level before to its own, up or
@@ -4267,15 +4574,29 @@ class ActsSlide(Slide):
 
     def _parse(self) -> dict:
         p = {
-            "title": "", "parts": {}, "rule": "", "points": [], "gauge": "", "gauge_at": 0, "costs": [], "scenes": [],
-            "intros": [],
+            "title": "", "titles": [], "quote": "", "parts": {}, "rule": "", "points": [], "gauge": "",
+            "gauge_at": 0, "costs": [], "scenes": [], "intros": [], "cases": [],
         }
         frag = 0
         for depth, text in self.bullets:
-            m = re.match(r"^(?:(title|gauge|cost|intro):|:([\w-]+):)\s*(.*)$", text)
+            m = re.match(r"^(?:(title|quote|gauge|cost|intro|case):|:([\w-]+):)\s*(.*)$", text)
             kind, key, rest = m.groups() if m else (None, None, text)
-            if kind == "title":
-                p["title"] = rest
+            if kind == "quote":
+                p["quote"] = rest
+            elif kind == "title":
+                if not p["titles"]:
+                    p["title"] = rest
+                    at = 0
+                elif depth:
+                    # A title under a cost renames the slide at that cost's own click (a scene
+                    # of its own takes its clicks after it, so the name changes as it comes in).
+                    if not p["costs"]:
+                        raise ValueError(f"acts: a nested title: needs a cost: before it, not {rest!r}")
+                    at = p["costs"][-1][3]
+                else:
+                    frag += 1
+                    at = frag
+                p["titles"].append((rest, at))
             elif kind == "gauge":
                 p["gauge"] = rest
                 if p["intros"]:
@@ -4288,6 +4609,18 @@ class ActsSlide(Slide):
                     raise ValueError(f"acts: intro: takes a part ({[*ACT_PARTS, 'e']}) and a sentence, not {rest!r}")
                 frag += bool(p["intros"])
                 p["intros"].append((key, sentence, frag))
+            elif kind == "case":
+                # A case is one act of the kind the slide is about. The first comes a line at a
+                # time, as the parts take their defects; every one after it comes in one click.
+                if p["cases"]:
+                    frag += 1
+                p["cases"].append({"label": rest, "at": None if not p["cases"] else frag, "lines": {}})
+            elif depth and key in ("a", "b", "c") and p["cases"]:
+                case = p["cases"][-1]
+                if len(p["cases"]) == 1:
+                    frag += 1
+                    case["at"] = case["at"] or frag
+                case["lines"][key] = (rest, frag if len(p["cases"]) == 1 else case["at"])
             elif kind == "cost":
                 level, _, rest = rest.partition(" — ")
                 if not re.fullmatch(r"\d{1,3}%", level):
@@ -4315,18 +4648,21 @@ class ActsSlide(Slide):
                 p["rule"] = rest
             elif key in (*ACT_PARTS, "e"):
                 token, _, rest = rest.partition(" — ")
-                role, _, defect = rest.partition(" — ")
-                if defect:
+                role, _, example = rest.partition(" — ")
+                # What this part is in the plain example: a click of its own, after the sentence
+                # at the top is whole, in the order the bullets are written.
+                if example:
                     frag += 1
-                p["parts"][key] = (token, role, defect, frag)
+                p["parts"][key] = (token, role, example, frag)
             elif key:
                 raise ValueError(f"acts: unknown part :{key}:; expected one of {[*ACT_PARTS, 'e', 'rule']}")
             else:
                 frag += 1
-                p["points"].append((rest, frag))
+                # A point under another point is what that one leads to.
+                p["points"].append((rest, frag, bool(depth)))
         missing = [k for k in ACT_PARTS if k not in p["parts"]] + [
-            f"{k}:" for k in ("rule", "gauge") if not p[k]
-        ] + ["cost:"] * (not p["costs"])
+            "gauge:"
+        ] * (not p["gauge"]) + ["cost:"] * (not p["costs"])
         if missing:
             raise ValueError(f"acts: missing {missing}")
         p["clicks"] = frag
@@ -4340,7 +4676,11 @@ class ActsSlide(Slide):
         parts = p["parts"]
         secured_at = p["costs"][-1][-1] + offset
         rule = html.escape(p["rule"])
-        rule_tag = f'<span class="ax-rule"><span class="ax-rule-tag wc-frag" data-frag="{secured_at}">{rule}</span></span>'
+        rule_tag = (
+            f'<span class="ax-rule"><span class="ax-rule-tag wc-frag" data-frag="{secured_at}">{rule}</span></span>'
+            if rule
+            else ""
+        )
 
         servers_at = next((at + offset for key, at in p["scenes"] if key == "servers"), None)
         protest = next(
@@ -4358,14 +4698,49 @@ class ActsSlide(Slide):
         # When each part comes in: with the slide, or with its intro.
         comes = {key: at + offset for key, _, at in p["intros"]}
 
+        def example_line(key: str) -> str:
+            """What the part is in the plain example the slide opens with: it stands from the
+            part's own click until the first case takes the example's place."""
+            example = parts[key][2]
+            if not example:
+                return ""
+            # Every part's example goes at once, as the first case opens: no part is left saying
+            # what it was in an example the slide has moved on from.
+            until = f' data-until="{p["cases"][0]["at"] + offset}"' if p["cases"] else ""
+            return (
+                f'<span class="ax-ex"{until}><span class="wc-frag" '
+                f'data-frag="{parts[key][3] + offset}">{tr(example)}</span></span>'
+            )
+
+        def case_lines(key: str) -> str:
+            """What this part does in each case: one at a time, the next replacing the one before."""
+            spans = []
+            for i, case in enumerate(p["cases"]):
+                if key not in case["lines"]:
+                    continue
+                text, at = case["lines"][key]
+                until = (
+                    f' data-until="{p["cases"][i + 1]["at"] + offset}"' if i + 1 < len(p["cases"]) else ""
+                )
+                spans.append(
+                    f'<span class="ax-case"{until}>'
+                    f'<span class="ax-fail wc-frag" data-frag="{at + offset}">{tr(text)}</span></span>'
+                )
+            return "".join(spans)
+
         def part(key: str) -> str:
-            token, role, defect, at = parts[key]
-            defect_html = (
-                f'<span class="ax-gone" data-until="{secured_at}">'
-                f'<span class="ax-fail wc-frag" data-frag="{at + offset}">{tr(defect)}</span></span>'
-                if defect
+            token, role, _example, at = parts[key]
+            # Once the act is secured it runs inside the block: A's line goes up into it, C's
+            # comes out of it, and nothing crosses between them any more.
+            leg = (
+                f'<span class="ax-leg ax-leg-{"up" if key == "a" else "down"}" '
+                f'data-frag="{secured_at}" aria-hidden="true"></span>'
+                if key in ("a", "c") and merge_at is not None
                 else ""
             )
+            lines = example_line(key) + case_lines(key)
+            defect_html = f'<span class="ax-gone" data-until="{secured_at}">{lines}</span>' if lines else ""
+
             if key == "d":
                 figure = self._watchers(p, offset)
                 if protest:
@@ -4386,7 +4761,7 @@ class ActsSlide(Slide):
                 figure = ACT_PARTS[key]
             intro = f' ax-intro" data-frag="{comes[key]}' if key in comes else ""
             inner = (
-                f'<div class="ax-token">{figure}{rule_tag if key == "b" else ""}'
+                f'<div class="ax-token">{leg}{figure}{rule_tag if key == "b" else ""}'
                 f'<span class="ax-name">{html.escape(token)}</span></div>'
                 f'<span class="ax-role">{tr(role)}</span>{defect_html}'
             )
@@ -4395,9 +4770,22 @@ class ActsSlide(Slide):
                 inner = f'<div class="ax-d-in" data-until="{merge_at}">{inner}</div>'
             return f'<div class="ax-part ax-{key}{intro}">{inner}</div>'
 
+        case_label = ""
+        if p["cases"]:
+            labels = []
+            for i, case in enumerate(p["cases"]):
+                until = (
+                    f' data-until="{p["cases"][i + 1]["at"] + offset}"' if i + 1 < len(p["cases"]) else ""
+                )
+                labels.append(
+                    f'<span class="ax-case"{until}>'
+                    f'<span class="wc-frag" data-frag="{case["at"] + offset}">'
+                    f'<span class="ax-case-pre">{tr("Scenario:")}</span> {tr(case["label"])}</span></span>'
+                )
+            case_label = f'<div class="ax-case-label" data-until="{secured_at}">{"".join(labels)}</div>'
         act = (
             f'<div class="ax-act wc-frag" data-frag="{offset}">'
-            f'<span class="ax-secured" data-frag="{secured_at}" hidden></span>'
+            f'<span class="ax-secured" data-frag="{secured_at}" hidden></span>{case_label}'
             + "".join(part(k) for k in ACT_PARTS)
             + "</div>"
         )
@@ -4407,7 +4795,7 @@ class ActsSlide(Slide):
             leaves = f' data-until="{merge_at}"' if merge_at is not None else ""
             e_label = (
                 f'<div class="ax-crowd-e"{leaves}><span class="ax-name">{html.escape(token)}</span>'
-                f'<span class="ax-role">{tr(role)}</span></div>'
+                f'<span class="ax-role">{tr(role)}</span>{example_line("e")}</div>'
             )
             if merge_at is not None:
                 # With the servers, D and E are one: the crowd watches, and is named for both.
@@ -4418,16 +4806,33 @@ class ActsSlide(Slide):
                     f'<span class="ax-role">{tr(d_role)} · {tr(role)}</span></div>'
                 )
             e_label = f'<div class="ax-crowd-labels">{e_label}</div>'
+        drawing = f'<div aria-hidden="true">{_crowd(servers_at, spread_at, protest)}</div>'
+        if merge_at is not None:
+            # D and E are one block, and from the click the act is secured it happens inside it:
+            # a shelf opens under the crowd and the act moves in.
+            b_token = html.escape(parts["b"][0])
+            drawing = (
+                f'<div class="ax-block" data-frag="{merge_at}">{drawing}'
+                f'<div class="ax-shelf"><div class="ax-inside" data-frag="{secured_at}" aria-hidden="true">'
+                f'<span class="ax-inside-arrow"><span class="ax-inside-b">{b_token}</span></span>'
+                f"</div></div></div>"
+            )
         crowd = (
-            f'<div class="ax-crowd wc-frag" data-frag="{comes.get("e", offset)}">'
-            f'<div aria-hidden="true">{_crowd(servers_at, spread_at, protest)}</div>{e_label}</div>'
+            f'<div class="ax-crowd wc-frag" data-frag="{comes.get("e", offset)}">{drawing}{e_label}</div>'
         )
         shield = f'<svg viewBox="-16 -28 32 37" aria-hidden="true">{shield_svg()}</svg>'
-        points_html = "".join(
-            f'<p class="ax-point wc-frag" data-frag="{at + offset}">{shield}<span>{tr(text)}</span></p>'
-            for text, at in p["points"]
+        # Drawn, not "\u21d2": the deck's font has no such glyph.
+        then = (
+            '<svg class="ax-then-mark" viewBox="0 0 24 16" aria-hidden="true">'
+            '<path d="M1.4 5.2H13.5M1.4 10.8H13.5" fill="none" stroke="currentColor" stroke-width="2.2" '
+            'stroke-linecap="round"/><path d="M12.4 1.4 22.2 8l-9.8 6.6z" fill="currentColor"/></svg>'
         )
-        header = detour_header(p["title"])
+        points_html = "".join(
+            f'<p class="ax-point wc-frag{" ax-then" if leads else ""}" data-frag="{at + offset}">'
+            f'{then if leads else shield}<span>{tr(text)}</span></p>'
+            for text, at, leads in p["points"]
+        )
+        header = self._header(p, offset, secured_at)
         if p["intros"]:
             # The lead grows with the act: each intro's sentence replaces the one before.
             intros = p["intros"]
@@ -4437,13 +4842,39 @@ class ActsSlide(Slide):
                 + f'><span data-frag="{at + offset}">{tr(sentence)}</span></span>'
                 for i, (_, sentence, at) in enumerate(intros)
             )
-            header += f'<p class="dt-lead wc-title ax-quote">{says}</p>'
+            label = f'<span class="ax-quote-label">{tr(p["quote"])}</span>' if p["quote"] else ""
+            header += f'<p class="dt-lead wc-title ax-quote">{label}<span class="ax-said">{says}</span></p>'
         return detour_section(
             "ax-slide",
             header
             + f'<div class="ax-body">{crowd}{act}{self._gauge(p, offset)}</div>'
             + points_html,
         )
+
+    @staticmethod
+    def _header(p: dict, offset: int, drops_at: int | None = None) -> str:
+        """The slide's name. A second "title:" renames it at its click: the old name stays beside
+        the new one, struck out, because the change is the point; at drops_at (the click the act is
+        secured) the old name goes and the new one slides to the start of the line."""
+        titles = p["titles"] or [(p["title"], 0)]
+        if len(titles) == 1:
+            return detour_header(titles[0][0])
+        spans = []
+        for i, (text, at) in enumerate(titles):
+            if i + 1 < len(titles):
+                spans.append(
+                    f'<span class="ax-head-title" data-until="{titles[i + 1][1] + offset}">{tr(text)}</span>'
+                )
+            else:
+                drops = f' data-until="{drops_at}"' if drops_at is not None else ""
+                spans.append(
+                    f'<span class="ax-head-title ax-head-swap" data-frag="{at + offset}">'
+                    f'<span class="ax-head-old"{drops}>'
+                    f'<span class="ax-head-was">{tr(titles[i - 1][0])}</span>'
+                    f'<span class="ax-head-to" aria-hidden="true"></span></span>'
+                    f'<span class="ax-head-now">{tr(text)}</span></span>'
+                )
+        return f'<header class="box-header wc-title"><h2 class="ax-head-stack">{"".join(spans)}</h2></header>'
 
     @staticmethod
     def _layers(pictures: list[tuple[str, str, int]], offset: int) -> str:

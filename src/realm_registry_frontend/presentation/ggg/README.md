@@ -35,3 +35,6 @@ python3 -I splice_zoom.py ../../static/what-is-this/ggg/index.html .
 
 `splice_zoom.py` replaces the slide and its styles each time it runs. The slide credits the three
 sources, as the CC BY licences require.
+
+The Realms GOS deck (`static/what-is-this/realms-gos/index.html`) shows the same slide, copied with
+its styles. After changing the map here, copy the slide and the zoom map's styles there too.

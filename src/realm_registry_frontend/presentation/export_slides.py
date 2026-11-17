@@ -32,6 +32,7 @@ STATIC = HERE.parent / "static"
 DECKS = [
     ("GosIntro", "what-is-this/index.html", 3500),  # the globe glides for 2.6 s, then fades in 0.7 s
     ("Ggg", "what-is-this/ggg/index.html", 300),
+    ("RealmsGos", "what-is-this/realms-gos/index.html", 300),
 ]
 
 # Hidden: the language picker and the navigation dots. Eyes look ahead and stay open, so that

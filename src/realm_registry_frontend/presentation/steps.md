@@ -32,25 +32,39 @@
 
 ## acts
 
-- title: Governance is a stream of acts
+- title: Legacy System
+- quote: Act:
 - intro: a — **A**
 - intro: b — **A** does **B**
 - intro: c — **A** does **B** to **C**
 - intro: d — **A** does **B** to **C**, watched by **D**
 - intro: e — **A** does **B** to **C**, watched by **D**, affecting **E**.
+- :a: A — who acts — the public office
+- :b: B — the act — the payment for the service
+- :c: C — who it affects — the company it pays
+- :d: D — observer: who watches — an auditor, a court, a journalist
+- :e: E — public: everyone it affects — and whose money it is
 - gauge: Defection cost
-- :a: A — who acts — picks the company in exchange for a bribe
-- :c: C — who it affects — pays the bribe, or overcharges
-- :b: B — the act — the payment goes unrecorded, or the invoice is altered
-- :d: D — observer: who watches
-- :e: E — public: everyone it affects
-- :rule: §
-- cost: 10% — One official decides
+- case: a river basin
+    - :a: votes through the exemption the lobby drafted
+    - :c: gets the basin, and the water under it
+    - :b: the environmental study is written by the applicant
+- case: an emergency
+    - :a: declares an emergency and suspends tendering
+    - :c: three weeks old, and paid in advance
+    - :b: the price is sealed for five years
+- case: a district map
+    - :a: redraws the districts from last election's data
+    - :c: keeps the majority with fewer votes
+    - :b: approved without a single hearing
+- cost: 10% — Decided behind one door
 - cost: 30% — Checks & balances {monkeys}
 - cost: 60% — Community checks & balances {protest}
 - cost: 35% — Impractical, not sustainable
 - cost: 96% — Decentralized digital checks & balances {servers}
+    - title: Governance Operating System
 - Integrity no longer depends on trusted intermediaries
+    - Cooperation is the most profitable behavior
 
 # GOS — single slide
 
