@@ -79,7 +79,8 @@
     "sort_newest": "最新优先",
     "popup_click": "点击探索",
     "popup_influence_zone": "影响区域",
-    "popup_total_users": "共 {count} 位用户"
+    "popup_total_users": "共 {count} 位用户",
+    "sort_label": "排序领域"
   },
   "stats": {
     "showing": "显示 {filtered} / {total} 个领域",

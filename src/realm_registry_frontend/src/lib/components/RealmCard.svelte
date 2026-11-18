@@ -374,27 +374,27 @@
   }
 
   .stage-alpha {
-    color: var(--stage-alpha-color);
+    color: var(--stage-alpha-text);
     background: var(--stage-alpha-bg);
   }
 
   .stage-beta {
-    color: var(--stage-beta-color);
+    color: var(--stage-beta-text);
     background: var(--stage-beta-bg);
   }
 
   .stage-production {
-    color: var(--stage-live-color);
+    color: var(--stage-live-text);
     background: var(--stage-live-bg);
   }
 
   .stage-deprecation {
-    color: var(--stage-winding-color);
+    color: var(--stage-winding-text);
     background: var(--stage-winding-bg);
   }
 
   .stage-terminated {
-    color: var(--stage-archived-color);
+    color: var(--stage-archived-text);
     background: var(--stage-archived-bg);
   }
 

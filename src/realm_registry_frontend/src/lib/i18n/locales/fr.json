@@ -79,7 +79,8 @@
     "sort_newest": "Plus récents",
     "popup_click": "Cliquer pour explorer",
     "popup_influence_zone": "Zone d'influence",
-    "popup_total_users": "{count} utilisateurs au total"
+    "popup_total_users": "{count} utilisateurs au total",
+    "sort_label": "Trier les royaumes"
   },
   "stats": {
     "showing": "Affichage de {filtered} sur {total} royaumes",

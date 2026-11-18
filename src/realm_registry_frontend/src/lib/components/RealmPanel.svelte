@@ -256,14 +256,14 @@
               on:click={() => selectStage(stage.id)}
             >
               <span class="stage-swatch" style="background-color: {stage.color}" aria-hidden="true"></span>
-              <span class="stage-filter-label" style="color: {stage.color}">{stageName(stage, $_)}</span>
+              <span class="stage-filter-label" style="color: {stage.text}">{stageName(stage, $_)}</span>
             </button>
           {/each}
         </div>
       {/if}
     </div>
 
-    <select class="filter-select" bind:value={sortBy} on:change={() => dispatch('filter')}>
+    <select class="filter-select" aria-label={$_('globe.sort_label')} bind:value={sortBy} on:change={() => dispatch('filter')}>
       <option value="users_desc">{$_('globe.sort_users_desc')}</option>
       <option value="name">{$_('globe.sort_name')}</option>
       <option value="users_asc">{$_('globe.sort_users_asc')}</option>

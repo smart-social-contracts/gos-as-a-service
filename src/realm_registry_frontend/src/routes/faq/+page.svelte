@@ -4,6 +4,21 @@
 
   const faqs = [
     {
+      id: 'realms',
+      question: 'What is a Realm?',
+      answer: 'A Realm is a self-governed digital community deployed on the Internet Computer. Each realm has its own governance structure, token economy, and can be customized with various extensions to fit its specific needs.'
+    },
+    {
+      id: 'deployment',
+      question: 'How do I deploy a Realm?',
+      answer: 'You can deploy a realm using our Create Realm wizard. The wizard walks you through platform and deployment choices — codex, treasury token, and branding are configured inside your realm after it launches. A minimum of 5 credits is required for automatic deployment.'
+    },
+    {
+      id: 'extensions',
+      question: 'What are Extensions?',
+      answer: 'Extensions are additional features and capabilities that can be added to your realm. They include governance tools, communication features, AI assistants, and more. Extensions are curated and maintained by the Realms community.'
+    },
+    {
       id: 'credits',
       question: 'What are Credits?',
       answer: `Credits are the internal currency used within the Realms platform. They are used to:
@@ -25,21 +40,6 @@
       id: 'vouchers',
       question: 'What are Voucher Codes?',
       answer: 'Voucher codes are promotional codes that can be redeemed for free credits. They may be distributed during special events, partnerships, or promotional campaigns. Each voucher can typically only be redeemed once per user. During Alpha, access is by invitation: the invitation code we email you when your request is approved includes 50 free credits, added when you redeem it on the Launch a realm page.'
-    },
-    {
-      id: 'realms',
-      question: 'What is a Realm?',
-      answer: 'A Realm is a self-governed digital community deployed on the Internet Computer. Each realm has its own governance structure, token economy, and can be customized with various extensions to fit its specific needs.'
-    },
-    {
-      id: 'deployment',
-      question: 'How do I deploy a Realm?',
-      answer: 'You can deploy a realm using our Create Realm wizard. The wizard walks you through platform and deployment choices — codex, treasury token, and branding are configured inside your realm after it launches. A minimum of 5 credits is required for automatic deployment.'
-    },
-    {
-      id: 'extensions',
-      question: 'What are Extensions?',
-      answer: 'Extensions are additional features and capabilities that can be added to your realm. They include governance tools, communication features, AI assistants, and more. Extensions are curated and maintained by the Realms community.'
     },
     {
       id: 'refunds',

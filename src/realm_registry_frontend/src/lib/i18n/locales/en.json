@@ -66,13 +66,15 @@
     "sort_newest": "Newest first",
     "popup_click": "Click to explore",
     "popup_influence_zone": "Influence zone",
-    "popup_total_users": "{count} users total"
+    "popup_total_users": "{count} users total",
+    "sort_label": "Sort realms"
   },
   "stats": {
     "showing": "Showing {filtered} of {total} realms",
     "users": "{count} users"
   },
   "alpha_access": {
+    "what": "Each dot is a realm: a community that governs itself online, with its own members, rules, votes and treasury.",
     "title": "gos.earth is in Alpha",
     "body": "Tell us what you want to build and we will reply soon. Approved requests get 50 free credits.",
     "request": "Request an invitation",
