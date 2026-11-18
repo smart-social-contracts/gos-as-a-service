@@ -14,6 +14,7 @@ import { isAssistantExperimentalNoticeEnabled } from './assistant-experimental-f
 import {
 	resolveBillingServiceUrl,
 	resolveDeployServiceUrl,
+	resolveInternetIdentityUrl,
 	resolvePortalBaseUrl
 } from './config-resolvers.js';
 
@@ -47,7 +48,7 @@ function resolveCanTestMode() {
 export { resolveBillingServiceUrl, resolveDeployServiceUrl, resolvePortalBaseUrl };
 
 export const CONFIG = {
-	internet_identity_url: viteEnv.VITE_INTERNET_IDENTITY_URL || 'https://identity.ic0.app/',
+	internet_identity_url: resolveInternetIdentityUrl(viteEnv, runtimeIds),
 	/** Federation portal: login on this origin only — no derivationOrigin pinning. */
 	federation_portal: viteEnv.VITE_FEDERATION_PORTAL !== 'false',
 	ii_derivation_origin:

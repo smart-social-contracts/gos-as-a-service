@@ -36,6 +36,28 @@ export function resolvePortalBaseUrl(viteEnvOverride, gaasEnv, runtime) {
 	return '';
 }
 
+/** Where people sign in when a deployment names no Internet Identity of its own. */
+export const MAINNET_INTERNET_IDENTITY_URL = 'https://identity.ic0.app/';
+
+/**
+ * The Internet Identity this deployment signs people in at.
+ *
+ * Order: dev override (`VITE_INTERNET_IDENTITY_URL`), the conductor-written `/canister_ids.js`
+ * (`internet_identity`, the key a realm frontend reads too), then the mainnet one. A local network or a
+ * staging stack with its own Internet Identity names it in the sheet's `files` block, with no rebuild.
+ *
+ * @param {Record<string, string>} viteEnvOverride
+ * @param {{ internet_identity?: string | boolean } | undefined} [runtime] - `/canister_ids.js` payload
+ * @returns {string}
+ */
+export function resolveInternetIdentityUrl(viteEnvOverride, runtime) {
+	if (viteEnvOverride.VITE_INTERNET_IDENTITY_URL) return viteEnvOverride.VITE_INTERNET_IDENTITY_URL;
+	if (runtime && typeof runtime.internet_identity === 'string' && runtime.internet_identity.trim()) {
+		return runtime.internet_identity.trim();
+	}
+	return MAINNET_INTERNET_IDENTITY_URL;
+}
+
 /**
  * @param {Record<string, string>} viteEnvOverride
  * @param {GaasEnv | undefined} gaasEnv
