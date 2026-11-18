@@ -3,8 +3,29 @@ import test from 'node:test';
 import {
 	resolveBillingServiceUrl,
 	resolveDeployServiceUrl,
+	resolveInternetIdentityUrl,
 	resolvePortalBaseUrl
 } from './config-resolvers.js';
+
+test('resolveInternetIdentityUrl is the mainnet one when the deployment names none', () => {
+	assert.equal(resolveInternetIdentityUrl({}, undefined), 'https://identity.ic0.app/');
+	assert.equal(resolveInternetIdentityUrl({}, { network: 'ic', internet_identity: ' ' }), 'https://identity.ic0.app/');
+});
+
+test('resolveInternetIdentityUrl takes the one the conductor wrote in /canister_ids.js', () => {
+	const local = 'http://identity.localhost:8000';
+	assert.equal(resolveInternetIdentityUrl({}, { network: 'local', internet_identity: local }), local);
+});
+
+test('resolveInternetIdentityUrl prefers the VITE override', () => {
+	assert.equal(
+		resolveInternetIdentityUrl(
+			{ VITE_INTERNET_IDENTITY_URL: 'http://localhost:4943/?canisterId=ii' },
+			{ internet_identity: 'http://identity.localhost:8000' }
+		),
+		'http://localhost:4943/?canisterId=ii'
+	);
+});
 
 test('resolveBillingServiceUrl falls back to default without gaas-env', () => {
 	assert.equal(resolveBillingServiceUrl({}, undefined), 'https://billing.realmsgos.dev');
