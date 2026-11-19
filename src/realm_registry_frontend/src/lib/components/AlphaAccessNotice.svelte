@@ -4,11 +4,16 @@
 </script>
 
 <aside class="alpha-notice" aria-label={$_('alpha_access.title')}>
+  <!-- First, what this place is: a stranger sees a globe with dots and no word about either. -->
+  <p class="what">{$_('alpha_access.what')}</p>
   <h2>{$_('alpha_access.title')}</h2>
   <p>{$_('alpha_access.body')}</p>
-  <a class="request" href={ALPHA_INVITE_REQUEST_URL} target="_blank" rel="noopener noreferrer">
-    {$_('alpha_access.request')}
-  </a>
+  <div class="actions">
+    <a class="request" href={ALPHA_INVITE_REQUEST_URL} target="_blank" rel="noopener noreferrer">
+      {$_('alpha_access.request')}
+    </a>
+    <a class="request quiet" href="/what-is-this/index.html">{$_('hub.what_is_this')}</a>
+  </div>
   <p class="privacy">
     {$_('alpha_access.privacy')}
     <a href="/privacy" target="_blank" rel="noopener noreferrer">{$_('alpha_access.privacy_link')}</a>.
@@ -46,6 +51,23 @@
     font-size: 0.9rem;
     font-weight: 500;
     text-decoration: none;
+  }
+
+  .what {
+    color: var(--text-primary);
+    font-size: 0.95rem;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+
+  .request.quiet {
+    border-color: transparent;
+    text-decoration: underline;
   }
 
   .request:hover {

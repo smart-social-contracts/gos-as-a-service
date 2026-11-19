@@ -1,6 +1,8 @@
 <script>
   import { createEventDispatcher } from 'svelte';
-  import { _ } from 'svelte-i18n';
+  import { _, locale } from 'svelte-i18n';
+  import { REALM_STAGES } from '$lib/realm-stages.js';
+  import { formatCount } from '$lib/realm-utils.js';
   import { assistantChrome } from '$lib/assistant-chrome.js';
   import { requestAssistantToggle } from '$lib/assistant-open.js';
   import BrowseEarIcon from '$lib/components/BrowseEarIcon.svelte';
@@ -16,19 +18,10 @@
 
   $: assistantOpen = $assistantChrome.open;
   $: kpis = computeKpis(realms, realmZoneData);
-  $: stageLine = (() => {
-    const labels = {
-      production: 'live',
-      beta: 'beta',
-      alpha: 'alpha',
-      deprecation: 'winding down',
-      terminated: 'archived',
-    };
-    const parts = Object.entries(kpis.stageCounts)
-      .filter(([, count]) => count > 0)
-      .map(([stage, count]) => `${count} ${labels[stage] || stage}`);
-    return parts.length ? parts.join(' · ') : '';
-  })();
+  $: stageParts = REALM_STAGES.filter((stage) => kpis.stageCounts[stage.id] > 0).map((stage) => ({
+    ...stage,
+    count: kpis.stageCounts[stage.id],
+  }));
 
   $: isLocal =
     typeof window !== 'undefined' &&
@@ -72,16 +65,18 @@
     <div class="chrome-center" data-tour="mobile-stats" aria-live="polite">
       <div class="center-kpi">
         <span class="kpi-primary">
-          {$_('globe.kpi_realms', { values: { count: kpis.totalRealms } })}
+          {$_('globe.kpi_realms', { values: { count: formatCount(kpis.totalRealms, $locale) } })}
           ·
-          {$_('globe.kpi_users', { values: { count: kpis.totalUsers } })}
+          {$_('globe.kpi_users', { values: { count: formatCount(kpis.totalUsers, $locale) } })}
           {#if kpis.locationClusters > 0}
             ·
             {$_('globe.kpi_locations', { values: { count: kpis.locationClusters } })}
           {/if}
         </span>
-        {#if stageLine}
-          <span class="kpi-stages">{stageLine}</span>
+        {#if stageParts.length}
+          <span class="kpi-stages">
+            {#each stageParts as stage, i (stage.id)}{#if i > 0}<span aria-hidden="true"> · </span>{/if}<span class="stage-part"><span class="stage-dot" style="background-color: {stage.marker}" aria-hidden="true"></span>{stage.count} {$_(`stages.${stage.id}.label`, { default: stage.label })}</span>{/each}
+          </span>
         {/if}
       </div>
 
@@ -285,5 +280,17 @@
     border-right: none;
     border-color: rgba(38, 38, 38, 0.9);
     border-radius: 12px 0 0 0;
+  }
+
+  .stage-part {
+    white-space: nowrap;
+  }
+
+  .stage-dot {
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-right: 0.3rem;
+    border-radius: 50%;
   }
 </style>

@@ -79,7 +79,8 @@
     "sort_newest": "Più recenti",
     "popup_click": "Clicca per esplorare",
     "popup_influence_zone": "Zona di influenza",
-    "popup_total_users": "{count} utenti totali"
+    "popup_total_users": "{count} utenti totali",
+    "sort_label": "Ordina i regni"
   },
   "stats": {
     "showing": "Visualizzazione di {filtered} su {total} reami",

@@ -79,13 +79,15 @@
     "sort_newest": "Neueste zuerst",
     "popup_click": "Klicken zum Erkunden",
     "popup_influence_zone": "Einflusszone",
-    "popup_total_users": "{count} Benutzer gesamt"
+    "popup_total_users": "{count} Benutzer gesamt",
+    "sort_label": "Realms sortieren"
   },
   "stats": {
     "showing": "Zeige {filtered} von {total} Realms",
     "users": "{count} Benutzer"
   },
   "alpha_access": {
+    "what": "Jeder Punkt ist ein Realm: eine Gemeinschaft, die sich online selbst regiert, mit eigenen Mitgliedern, Regeln, Abstimmungen und eigener Kasse.",
     "title": "gos.earth ist in der Alpha-Phase",
     "body": "Sagen Sie uns, was Sie aufbauen möchten, wir antworten bald. Freigegebene Anfragen erhalten 50 Gratis-Credits.",
     "request": "Einladung anfragen",

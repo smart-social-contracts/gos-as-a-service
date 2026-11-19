@@ -6,16 +6,22 @@
   --text-primary: #171717;
   --text-secondary: #525252;
   --text-tertiary: #737373;
-  --text-faint: #a3a3a3;
+  --text-faint: #767676;
   --stage-alpha-color: #06b6d4;
+  /* *-text: the stage's colour dark enough to read as words (4.5:1 on its tint and on white). */
+  --stage-alpha-text: #0e7490;
   --stage-alpha-bg: rgba(6, 182, 212, 0.14);
   --stage-beta-color: #ca8a04;
+  --stage-beta-text: #a16207;
   --stage-beta-bg: rgba(234, 179, 8, 0.18);
   --stage-live-color: #16a34a;
+  --stage-live-text: #15803d;
   --stage-live-bg: rgba(34, 197, 94, 0.14);
   --stage-winding-color: #ea580c;
+  --stage-winding-text: #c2410c;
   --stage-winding-bg: rgba(249, 115, 22, 0.14);
   --stage-archived-color: #dc2626;
+  --stage-archived-text: #b91c1c;
   --stage-archived-bg: rgba(239, 68, 68, 0.14);
   --gray-300: #d4d4d4;
   --gray-400: #a3a3a3;

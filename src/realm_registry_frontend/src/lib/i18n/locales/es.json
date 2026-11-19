@@ -79,13 +79,15 @@
     "sort_newest": "Más recientes",
     "popup_click": "Clic para explorar",
     "popup_influence_zone": "Zona de influencia",
-    "popup_total_users": "{count} usuarios en total"
+    "popup_total_users": "{count} usuarios en total",
+    "sort_label": "Ordenar reinos"
   },
   "stats": {
     "showing": "Mostrando {filtered} de {total} reinos",
     "users": "{count} usuarios"
   },
   "alpha_access": {
+    "what": "Cada punto es un reino: una comunidad que se gobierna a sí misma en línea, con sus propios miembros, normas, votaciones y tesorería.",
     "title": "gos.earth está en Alpha",
     "body": "Cuéntanos qué quieres crear y te responderemos pronto. Las solicitudes aprobadas reciben 50 créditos gratis.",
     "request": "Solicitar una invitación",
