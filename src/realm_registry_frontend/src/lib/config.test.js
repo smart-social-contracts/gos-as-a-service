@@ -1,11 +1,48 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+	DEFAULT_GEISTER_API_ORIGIN,
 	resolveBillingServiceUrl,
 	resolveDeployServiceUrl,
+	resolveGeisterApiOrigin,
 	resolveInternetIdentityUrl,
 	resolvePortalBaseUrl
 } from './config-resolvers.js';
+
+test('resolveGeisterApiOrigin: a local network has no assistant service unless it names one', () => {
+	assert.equal(resolveGeisterApiOrigin({}, { network: 'local' }, 'local'), '');
+	assert.equal(resolveGeisterApiOrigin({}, undefined, 'local'), '');
+	assert.equal(
+		resolveGeisterApiOrigin({}, { network: 'local', geister_api_url: 'http://geister.localhost:8000/' }, 'local'),
+		'http://geister.localhost:8000'
+	);
+});
+
+test('resolveGeisterApiOrigin: every other deployment keeps the host it has always used', () => {
+	for (const network of ['ic', 'production', 'staging', 'demo', 'test', '']) {
+		assert.equal(resolveGeisterApiOrigin({}, { network }, network), DEFAULT_GEISTER_API_ORIGIN);
+	}
+	assert.equal(resolveGeisterApiOrigin({}, undefined, 'ic'), 'https://geister-api.realmsgos.dev');
+});
+
+test('resolveGeisterApiOrigin: a deployment can declare another host, or none with an empty one', () => {
+	assert.equal(
+		resolveGeisterApiOrigin({}, { geister_api_url: ' https://geister.example.test/ ' }, 'ic'),
+		'https://geister.example.test'
+	);
+	assert.equal(resolveGeisterApiOrigin({}, { geister_api_url: '' }, 'ic'), '');
+});
+
+test('resolveGeisterApiOrigin: the VITE override wins, as for the other services', () => {
+	assert.equal(
+		resolveGeisterApiOrigin(
+			{ VITE_GEISTER_API_ORIGIN: 'http://localhost:9000' },
+			{ geister_api_url: 'https://geister.example.test' },
+			'local'
+		),
+		'http://localhost:9000'
+	);
+});
 
 test('resolveInternetIdentityUrl is the mainnet one when the deployment names none', () => {
 	assert.equal(resolveInternetIdentityUrl({}, undefined), 'https://identity.ic0.app/');

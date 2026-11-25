@@ -14,7 +14,7 @@
   import { _ } from 'svelte-i18n';
 
   import { getIdentity } from '$lib/auth.js';
-  import { GEISTER_API_ORIGIN, MCP_URL } from '$lib/geister/constants.js';
+  import { GEISTER_API_ORIGIN, GEISTER_API_UNAVAILABLE_MESSAGE, MCP_URL } from '$lib/geister/constants.js';
   import { proveChallenge } from '$lib/read-state-proof.js';
 
   // Geister API host — same origin the registry assistant talks to.
@@ -62,7 +62,7 @@
   }
 
   onMount(() => {
-    if (principal) loadTokens();
+    if (principal && GEISTER_API) loadTokens();
     else loadingList = false;
   });
 
@@ -71,6 +71,8 @@
    * needs a challenge of its own, issued for the `operation` (mint, list or revoke) it authorizes.
    */
   async function postProven(operation, path, body = {}) {
+    // An empty origin would turn these into requests to the portal itself.
+    if (!GEISTER_API) throw new Error(GEISTER_API_UNAVAILABLE_MESSAGE);
     const identity = await getIdentity();
     if (!identity) throw new Error('not signed in');
     const { nonce, proof } = await proveChallenge(identity, `${GEISTER_API}/api/mcp/challenge?operation=${operation}`);
