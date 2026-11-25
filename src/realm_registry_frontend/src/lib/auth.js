@@ -222,7 +222,7 @@ export async function login({ identityIndex = null, rememberMe = null } = {}) {
         resolve({ identity: null, principal: null });
       },
     };
-    if (!CONFIG.federation_portal && DERIVATION_ORIGIN) {
+    if (DERIVATION_ORIGIN) {
       loginOpts.derivationOrigin = DERIVATION_ORIGIN;
     }
     client.login(loginOpts);

@@ -11,6 +11,7 @@
       },
       "portal_url": "http://${canister:realm-registry-frontend}.localhost:8000",
       "gos_environment": "local",
+      "derivation_origin": "",
       "casals_url": "http://${canister:casals-frontend}.localhost:8000",
       "principals": {
         "operator": "$deployer",
@@ -39,6 +40,8 @@
       },
       "portal_url": "https://gos.earth",
       "gos_environment": "production",
+      "$comment_derivation_origin": "The portal signs people in with realmsgos.org's principals, so a person is one principal on gos.earth, on realmsgos.org (the marketplace) and on its forum. Needs https://gos.earth in realmsgos.org's /.well-known/ii-alternative-origins (realms-gos, marketplace_frontend) deployed FIRST, or every sign-in here fails with \"Unverified origin\".",
+      "derivation_origin": "https://realmsgos.org",
       "casals_url": "https://casals.gos.earth",
       "principals": {
         "operator": "$deployer",
@@ -359,7 +362,7 @@
               ],
               "content": "frontend/realm-registry-frontend/main",
               "files": {
-                "/canister_ids.js": "globalThis.__CANISTER_IDS={realm_registry_backend:\"$stand.backend\",realm_installer:\"$canister:realm-installer\",file_registry:\"$canister:file-registry\",casals_backend:\"$canister:casals-backend\",network:\"$env.network\",portal_url:\"$env.portal_url\",casals_url:\"$env.casals_url\",gos_environment:\"$env.gos_environment\"};\n"
+                "/canister_ids.js": "globalThis.__CANISTER_IDS={realm_registry_backend:\"$stand.backend\",realm_installer:\"$canister:realm-installer\",file_registry:\"$canister:file-registry\",casals_backend:\"$canister:casals-backend\",network:\"$env.network\",portal_url:\"$env.portal_url\",casals_url:\"$env.casals_url\",gos_environment:\"$env.gos_environment\",derivation_origin:\"$env.derivation_origin\"};\n"
               }
             }
           ]
