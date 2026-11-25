@@ -5,6 +5,9 @@ from __future__ import annotations
 # Fallback retry interval when an enqueue-time kick fails or is missed (~10m observed in prod).
 PROVISION_HEARTBEAT_INTERVAL_S = 600
 
+# A stand-ready re-check this much past due is presumed lost.
+RECHECK_GRACE_S = 60
+
 # Fresh in-progress lock — concurrent kicks within this window are benign skips.
 PROVISION_ACTIVE_STALE_S = 30 * 60
 
@@ -67,6 +70,17 @@ def clear_provision_lock(job) -> None:
     job.provision_active_at = 0
 
 
+def recheck_is_pending(job, *, now_s: int, grace_s: int = RECHECK_GRACE_S) -> bool:
+    """True while the stand-ready re-check the job armed is not yet due, or only just due.
+
+    The heartbeat leaves such a job alone: kicking it too starts a second
+    re-check chain that never ends while the stand is unready. A re-check that
+    stays overdue (its timer was lost to an upgrade) is picked up again.
+    """
+    due_at = int(getattr(job, "provision_recheck_at", 0) or 0)
+    return due_at > 0 and now_s < due_at + grace_s
+
+
 def provisioning_job_ids_for_heartbeat(
     jobs,
     *,
@@ -76,8 +90,9 @@ def provisioning_job_ids_for_heartbeat(
 ) -> list[str]:
     """Return job IDs the heartbeat should re-drive (pending/provisioning only).
 
-    Skips jobs with a fresh ``provision_active_at`` lock; includes jobs whose
-    lock is stale so a crashed pass can be picked up again. Terminal jobs —
+    Skips jobs with a fresh ``provision_active_at`` lock and jobs whose own
+    stand-ready re-check is not overdue; includes jobs whose lock is stale so a
+    crashed pass can be picked up again. Terminal jobs —
     ``failed`` included — are never re-driven here: recovery is an explicit
     ``retry_deployment``, which resumes from the failed step instead of
     replaying the whole bootstrap.
@@ -90,6 +105,8 @@ def provisioning_job_ids_for_heartbeat(
         if status not in HEARTBEAT_RETRY_STATUSES:
             continue
         if provision_lock_is_fresh(job, now_s=now_s, stale_s=stale_s):
+            continue
+        if recheck_is_pending(job, now_s=now_s):
             continue
         job_id = (getattr(job, "name", None) or "").strip()
         if job_id:

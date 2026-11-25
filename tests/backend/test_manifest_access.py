@@ -224,7 +224,7 @@ def test_enqueue_refuses_a_job_id_that_already_exists_right_before_creating_the_
     source = _endpoint_source("enqueue_deployment")
     refused = source.index("if DeploymentJob[job_id] is not None:")
     # No await may sit between the check and the creation, or another enqueue could take the id.
-    assert source.index("_cycles_preflight_gen(") < refused < source.index("DeploymentJob(")
+    assert source.index("_cycles_preflight_gen(") < refused < source.index("_create_job(")
 
 
 def test_two_requesters_with_the_same_realm_name_and_second_get_different_job_ids():

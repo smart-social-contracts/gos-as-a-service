@@ -128,6 +128,8 @@ class SimulatedIC:
         self.settlements = {}  # job_id -> ["failed" | "succeeded" | "retried", ...]; "(refused)" if not accepted
         self.history = {}  # job_id -> [(time, status)] every distinct status a poller would see
         self.traps = []
+        self.observe = True  # record every status a poller would see (reads every job after each event)
+        self.provision_kicks = []  # job ids the installer armed a provision kick for
 
     # -- the ic.* surface the installer uses --------------------------------
     def time(self):
@@ -186,6 +188,8 @@ class SimulatedIC:
         self._observe()
 
     def _observe(self):
+        if not self.observe:
+            return
         for job in self.main.DeploymentJob.instances():
             seen = self.history.setdefault(job.name, [])
             if not seen or seen[-1][1] != job.status:
@@ -244,13 +248,15 @@ class SimulatedIC:
         return json.dumps(reply)
 
 
-def simulate(installer, *, realms, request_gap_s=3, heartbeat_phase_s=None, run_s=900, setup=None):
+def simulate(installer, *, realms, request_gap_s=3, heartbeat_phase_s=None, run_s=900, setup=None, kick_passes=True):
     """Request ``realms`` a few seconds apart and let the installer run; return the simulated IC.
 
     ``heartbeat_phase_s`` places the installer's first provision heartbeat
     (it was armed when the canister last started, so its phase against a
     request is arbitrary). ``setup(sim)`` may schedule extra events with
-    ``sim.at(seconds, action)`` before the run starts.
+    ``sim.at(seconds, action)`` before the run starts. ``kick_passes=False``
+    records the provision kicks the installer arms (``sim.provision_kicks``)
+    without running the passes, to look at the heartbeat alone.
     """
     sim = SimulatedIC(installer)
     installer.ic = sim
@@ -261,6 +267,15 @@ def simulate(installer, *, realms, request_gap_s=3, heartbeat_phase_s=None, run_
     installer._cycles_preflight_gen = lambda manifest, cfg: iter(())  # not under test: no Casals cycles report
     installer.check_cycles_preflight = lambda *args, **kwargs: None
     installer.parse_cycles_report = lambda raw: raw
+    if not hasattr(installer, "_real_schedule_provision_kick"):
+        installer._real_schedule_provision_kick = installer._schedule_provision_kick
+    real_kick = installer._real_schedule_provision_kick  # never the wrapper of an earlier simulation
+    def schedule_kick(job_id, delay_s=0):
+        sim.provision_kicks.append(job_id)
+        if kick_passes:
+            real_kick(job_id, delay_s)
+
+    installer._schedule_provision_kick = schedule_kick
 
     from realm_registry_backend.api import credits
     from realm_registry_backend.core import env_config
