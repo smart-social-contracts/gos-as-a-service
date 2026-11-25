@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Static admin UI for the file_registry canister. Files in dist/ are deployed as-is. The dist/dfinity.js bundle is pre-built (see scripts/build-dfinity-bundle.sh) and checked into the repo so dfx deploy stays trivial — re-run that script when the @dfinity/* deps need bumping.",
+  "description": "Static admin UI for the file_registry canister. Files in dist/ are deployed as-is. The dist/dfinity.js bundle is pre-built (see scripts/build-dfinity-bundle.sh) and checked into the repo so dfx deploy stays trivial — re-run that script when the @icp-sdk/* deps need bumping.",
   "scripts": {
     "build": "node scripts/write-version-file.js",
     "prebuild": "echo 'no prebuild for file_registry_frontend'",
