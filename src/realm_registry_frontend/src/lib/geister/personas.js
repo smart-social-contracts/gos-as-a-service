@@ -1,4 +1,4 @@
-import { ASSISTANTS_API_URL } from './constants.js';
+import { ASSISTANTS_API_URL, GEISTER_API_AVAILABLE, GEISTER_API_UNAVAILABLE_MESSAGE } from './constants.js';
 
 /**
  * @typedef {{ id: string, name: string, emoji?: string, description?: string }} AssistantPersona
@@ -8,6 +8,7 @@ import { ASSISTANTS_API_URL } from './constants.js';
  * @returns {Promise<AssistantPersona[]>}
  */
 export async function fetchAssistants() {
+  if (!GEISTER_API_AVAILABLE) throw new Error(GEISTER_API_UNAVAILABLE_MESSAGE);
   const response = await fetch(ASSISTANTS_API_URL, {
     method: 'GET',
     headers: { 'Content-Type': 'application/json' },
@@ -21,6 +22,7 @@ export async function fetchAssistants() {
  * @returns {Promise<'online'|'offline'>}
  */
 export async function checkApiStatus() {
+  if (!GEISTER_API_AVAILABLE) return 'offline';
   try {
     const res = await fetch(ASSISTANTS_API_URL, {
       method: 'HEAD',

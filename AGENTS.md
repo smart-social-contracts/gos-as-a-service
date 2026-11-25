@@ -21,7 +21,7 @@ casals.json                     # The environments (local, production): every id
 Canister ids, hosts and per-environment behaviour live in `casals.json` only
 (read live ids with `casals export`). Canisters get theirs at runtime —
 `configure` / `set_canister_config_json` for backends, the conductor-written
-`/canister_ids.js` (`network`, `portal_url`, ids) for frontends. Never add a
+`/canister_ids.js` (`network`, `portal_url`, ids; `geister_api_url` for the assistant service, which a local network has none of unless it names one) for frontends. Never add a
 table keyed by network name to code, scripts, workflows or docs; CI rejects id
 literals outside `casals.json`.
 

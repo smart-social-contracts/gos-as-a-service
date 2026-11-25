@@ -39,7 +39,13 @@
   } from '$lib/assistant-prompt.js';
   import { aiFetch } from '$lib/geister/ai-fetch.js';
   import { readAssistantStream } from '$lib/geister/assistant-stream.js';
-  import { API_URL, CHAT_REQUEST_TIMEOUT_MS, geisterNetwork } from '$lib/geister/constants.js';
+  import {
+    API_URL,
+    CHAT_REQUEST_TIMEOUT_MS,
+    GEISTER_API_AVAILABLE,
+    GEISTER_API_UNAVAILABLE_MESSAGE,
+    geisterNetwork,
+  } from '$lib/geister/constants.js';
   import { SIGN_IN_REQUIRED_MESSAGE } from '$lib/geister/session.js';
   import { CONFIG } from '$lib/config.js';
   import { registryRuntimeFlags } from '$lib/stores/registryRuntimeFlags.js';
@@ -819,19 +825,25 @@
 
     await refreshAuth();
 
-    await loadAssistants();
-    applyPrefs();
-    if (showSuggestions) await loadSuggestions();
-    if (userPrincipal) {
-      await refreshConversations();
-      // Restore last thread only when reopening the panel, not after explicit New chat.
-      const lastId = readLastConversation();
-      if (lastId && open && messages.length === 0 && !conversationId) {
-        const lastConv = conversations.find((c) => c.conversation_id === lastId);
-        if (lastConv) await loadConversation(lastConv);
+    if (GEISTER_API_AVAILABLE) {
+      await loadAssistants();
+      applyPrefs();
+      if (showSuggestions) await loadSuggestions();
+      if (userPrincipal) {
+        await refreshConversations();
+        // Restore last thread only when reopening the panel, not after explicit New chat.
+        const lastId = readLastConversation();
+        if (lastId && open && messages.length === 0 && !conversationId) {
+          const lastConv = conversations.find((c) => c.conversation_id === lastId);
+          if (lastConv) await loadConversation(lastConv);
+        }
+      } else if (showHistory) {
+        conversations = [];
       }
-    } else if (showHistory) {
-      conversations = [];
+    } else {
+      // A local stack has no assistant service: ask for nothing, and say so.
+      console.info(`[RegistryAssistant] ${GEISTER_API_UNAVAILABLE_MESSAGE}`);
+      applyPrefs();
     }
 
     // Re-read prefs + auth when returning from settings / login (visibilitychange / focus).
@@ -1185,6 +1197,13 @@
       </div>
     </header>
 
+    {#if !GEISTER_API_AVAILABLE}
+      <p class="assistant-unavailable">
+        {$_('assistant.unavailable', {
+          default: 'The assistant is not available on this deployment: it has no assistant service.',
+        })}
+      </p>
+    {:else}
     {#if experimentalNoticeOn}
       <p class="assistant-experimental-notice">
         {$_('assistant.experimental_notice', { default: ASSISTANT_EXPERIMENTAL_NOTICE })}
@@ -1440,6 +1459,7 @@
       </div>
       </div>
     </div>
+    {/if}
   </section>
 {/if}
 
@@ -2012,7 +2032,8 @@
     align-items: stretch;
     gap: 8px;
   }
-  .sign-in-note {
+  .sign-in-note,
+  .assistant-unavailable {
     margin: 0;
     padding: 0.5rem 0;
     text-align: center;

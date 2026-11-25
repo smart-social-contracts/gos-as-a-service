@@ -58,6 +58,29 @@ export function resolveInternetIdentityUrl(viteEnvOverride, runtime) {
 	return MAINNET_INTERNET_IDENTITY_URL;
 }
 
+/** The Geister API every non-local deployment has used so far. */
+export const DEFAULT_GEISTER_API_ORIGIN = 'https://geister-api.realmsgos.dev';
+
+/**
+ * The Geister API the assistant talks to, or "" when this deployment has none.
+ *
+ * Order: dev override (`VITE_GEISTER_API_ORIGIN`, a local end-to-end build), the conductor-written
+ * `/canister_ids.js` (`geister_api_url`; an empty one declares "none"), then the default host. A local
+ * network has no default: a local stack must not depend on a remote service being up (the assistant
+ * panel says it is off instead).
+ *
+ * @param {Record<string, string>} viteEnvOverride
+ * @param {{ geister_api_url?: string | boolean } | undefined} runtime - `/canister_ids.js` payload
+ * @param {string} network - from `detectNetwork`
+ * @returns {string} an origin without a trailing slash, or ""
+ */
+export function resolveGeisterApiOrigin(viteEnvOverride, runtime, network) {
+	const origin = (value) => value.trim().replace(/\/$/, '');
+	if (viteEnvOverride.VITE_GEISTER_API_ORIGIN) return origin(viteEnvOverride.VITE_GEISTER_API_ORIGIN);
+	if (runtime && typeof runtime.geister_api_url === 'string') return origin(runtime.geister_api_url);
+	return network === 'local' ? '' : DEFAULT_GEISTER_API_ORIGIN;
+}
+
 /**
  * @param {Record<string, string>} viteEnvOverride
  * @param {GaasEnv | undefined} gaasEnv
