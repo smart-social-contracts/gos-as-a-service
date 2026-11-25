@@ -55,7 +55,7 @@ def test_the_kick_runner_does_not_fail_a_job_that_moved_on(installer):
     (job,) = installer.DeploymentJob.instances()
 
     sim.at(sim.t + 1, lambda: sim.run(_kick(installer, job.name)))
-    sim.run_until(sim.t + 2)  # the task is still running: registering starts at 134 s
+    sim.run_until(sim.t + 2)  # the task is still running: registering starts at 137 s
 
     assert job.status == "extensions"
     assert sim.settlements == {}
@@ -82,7 +82,7 @@ def test_a_late_deploy_task_does_not_reopen_a_failed_job(installer):
             assert job.status == "registering"
             installer._fail_job(job, "failed by an operator")
 
-        sim.at(135, operator_fails_the_job)  # registering from 134 s to 139 s
+        sim.at(138, operator_fails_the_job)  # registering from 137 s to 142 s
 
     sim = simulate(installer, realms=1, heartbeat_phase_s=600, setup=fail_during_registration)
 

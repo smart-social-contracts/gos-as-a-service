@@ -186,6 +186,22 @@ def test_setup_install_payload_carries_network_test_mode_and_founder():
     }
 
 
+def test_setup_install_args_name_the_registry_that_lists_the_realm_but_not_the_realm_install_step():
+    """The realm keeps its listing in the registry up to date (realms-gos#736), so it is told which one lists it: with
+    ``host_registry``, after the install step, which refuses a field it does not know."""
+    ext_manifest = _ext_manifest_for_job(_bootstrap_manifest(realm_registry_canister_id="realm-registry-id"))
+    args = setup_install_args(ext_manifest, "backend-principal")
+    assert args["registry"] == "realm-registry-id"
+    assert "registry" not in setup_install_payload(args)
+
+
+def test_setup_install_does_not_take_the_file_registry_for_the_realm_registry():
+    """In a deploy task's manifest ``registry_canister_id`` is the file registry."""
+    ext_manifest = {**_ext_manifest_for_job(_bootstrap_manifest()), "registry_canister_id": "file-registry-id",
+                    "realm_registry_canister_id": ""}
+    assert setup_install_args(ext_manifest, "backend-principal")["registry"] == ""
+
+
 def test_setup_install_founder_beats_requesting_principal():
     """The portal's II principal founds the realm, not the billing caller."""
     manifest = _bootstrap_manifest(
@@ -591,6 +607,14 @@ def test_the_installer_never_launches_the_realm():
 def test_setup_install_step_refuses_a_missing_founder_before_calling():
     body = _section(_installer_source(), "def _execute_setup_install", "def _execute_setup_infrastructure")
     assert body.index("founder_error(") < body.index('_realm_call(backend_id, "setup_step"')
+
+
+def test_the_realm_is_told_its_registry_after_the_install_step_and_its_refusal_is_not_fatal():
+    src = _installer_source()
+    body = _section(src, "def _execute_setup_install", "def _execute_founder_admin")
+    assert body.index('_realm_call(backend_id, "setup_step"') < body.index("_tell_realm_its_registry(")
+    tell = _section(src, "def _tell_realm_its_registry", "def _execute_setup_install")
+    assert '"host_registry"' in tell and "(non-fatal)" in tell and "except Exception" in tell
 
 
 def test_founder_admin_step_refuses_a_missing_founder_before_calling():

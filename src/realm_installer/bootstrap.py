@@ -117,6 +117,9 @@ def setup_install_args(manifest: dict, backend_id: str) -> dict:
         "founder": resolve_founder(manifest),
         "network": (manifest.get("network") or "").strip(),
         "can_test_mode": bool(manifest.get("can_test_mode")),
+        # Not _resolve_realm_registry_canister_id: its fallback, ``registry_canister_id``, is the file registry in a deploy
+        # task's manifest, and the realm would publish its listing to a canister that has no listings.
+        "registry": (manifest.get("realm_registry_canister_id") or "").strip(),
     }
 
 
