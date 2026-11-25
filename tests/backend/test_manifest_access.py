@@ -193,7 +193,7 @@ def test_provisioning_fails_the_job_before_recording_ids_of_a_foreign_stand():
     with open(os.path.join(_REPO_ROOT, "src/realm_installer/main.py"), encoding="utf-8") as fh:
         body = fh.read().split("def _provision_via_casals_body", 1)[1].split("def _provision_ok_for_job", 1)[0]
     check = body.index("canisters_of_other_requesters(")
-    assert check < body.index("_fail_job(job,") < body.index("job.backend_canister_id = backend_id")
+    assert check < body.index("belongs to another requester") < body.index("job.backend_canister_id = backend_id")
     assert "return _provision_ok_for_job(job_id, job)" in body[check:body.index("job.backend_canister_id = backend_id")]
 
 
