@@ -27,6 +27,7 @@ from provision_kick import (
     provision_kick_runner,
     provision_lock_is_fresh,
     provisioning_job_ids_for_heartbeat,
+    HEARTBEAT_RETRY_STATUSES,
     schedule_provision_kick as _schedule_provision_kick_impl,
     should_kick_provision_on_enqueue,
 )
@@ -212,7 +213,8 @@ _CASALS_RESERVED_STATUSES = ("provisioning",)
 class DeploymentJob(Entity, TimestampedMixin):
     __alias__ = "name"
     name = String(max_length=64)
-    status = String(max_length=32, default="pending")
+    # Indexed so the heartbeat can ask for the few jobs in flight instead of loading every job ever run.
+    status = String(max_length=32, default="pending", indexed=True)
     realm_name = String(max_length=128, default="")
     caller_principal = String(max_length=64)
     manifest_json = String(max_length=8192)
@@ -239,6 +241,8 @@ class DeploymentJob(Entity, TimestampedMixin):
     snapshot_taken = Integer(default=0)
     skip_snapshot = Integer(default=0)
     provision_active_at = Integer(default=0)
+    # When the stand-ready re-check this job has armed is due; the heartbeat leaves the job to it until then.
+    provision_recheck_at = Integer(default=0)
     error = String(max_length=2000)
     created_at = Integer(default=0)
     completed_at = Integer(default=0)
@@ -1769,12 +1773,14 @@ def _on_init(config_json: text = "") -> None:
             _log.info(f"init installer config: {installer_config_payload()}")
         except Exception as e:
             _log.error(f"init installer config failed: {e}")
+    _reindex_job_status()
     _arm_provision_heartbeat()
     _log.info("init")
 
 @post_upgrade
 def _on_post_upgrade() -> None:
     _log.info("post_upgrade — resuming in-flight deploys")
+    _reindex_job_status()
     _resume_in_flight()
     _resume_pending_settlements()
     _schedule_job_ref_backfill()
@@ -1942,7 +1948,7 @@ def enqueue_deployment(manifest_json: text) -> Async[ResultEnqueue]:
 
         if preflight_err:
             initial_status = "failed"
-            DeploymentJob(
+            _create_job(
                 name=job_id, status=initial_status, realm_name=realm_name[:128],
                 caller_principal=requester,
                 manifest_json=manifest_json[:8190], network=network,
@@ -1963,7 +1969,7 @@ def enqueue_deployment(manifest_json: text) -> Async[ResultEnqueue]:
             ))
 
         initial_status = "provisioning" if casals_manifest else "pending"
-        DeploymentJob(
+        _create_job(
             name=job_id, status=initial_status, realm_name=realm_name[:128],
             caller_principal=requester,
             manifest_json=manifest_json[:8190], network=network,
@@ -2608,12 +2614,7 @@ def _reconcile_stranded_extension_jobs() -> None:
     truth, and makes an explicit ``retry_deployment`` possible, which resumes.
     """
     try:
-        list(DeployStep.instances())
-        list(DeployTask.instances())
-        list(DeploymentJob.instances())
-        for job in DeploymentJob.instances():
-            if (job.status or "") != "extensions":
-                continue
+        for job in _jobs_with_status("extensions"):
             if provision_lock_is_fresh(job, now_s=now_s()):
                 continue
             recorded = (job.ext_deploy_task_id or "").strip()
@@ -2632,6 +2633,58 @@ def _reconcile_stranded_extension_jobs() -> None:
         _log.error(f"extensions reconcile: {e}")
 
 
+_job_status_index_ready = False
+
+
+def _reindex_job_status() -> bool:
+    """Index the jobs that predate the status index; True once every job is in it.
+
+    Resumable batches, idempotent. Runs at init and after every upgrade, before the heartbeat is armed.
+    """
+    global _job_status_index_ready
+    try:
+        cursor = 1
+        while cursor:
+            cursor = DeploymentJob.rebuild_field_index("status", from_id=cursor)
+        _job_status_index_ready = True
+    except Exception as e:
+        _log.error(f"job status index: {e}")
+    return _job_status_index_ready
+
+
+def _create_job(**fields) -> DeploymentJob:
+    """Store a new job and put it in the status index.
+
+    ic-python-db indexes a property when it changes, and a status equal to the
+    property's default ("pending") is not a change, so the constructor alone
+    would leave a new pending job out of the index the heartbeat reads.
+    """
+    job = DeploymentJob(**fields)
+    DeploymentJob.db().field_index_add(
+        DeploymentJob.get_full_type_name(), "status", str(job.status), job._id,
+    )
+    return job
+
+
+def _jobs_with_status(*statuses: str) -> list:
+    """The jobs whose status is one of ``statuses``.
+
+    Read through the status index, so the cost follows the jobs in flight, not
+    the table: the heartbeat used to load every job, task and step ever run,
+    every 10 minutes, on every environment. If the index cannot be built, fall
+    back to that full scan rather than leave jobs unattended.
+    """
+    if not (_job_status_index_ready or _reindex_job_status()):
+        return [job for job in DeploymentJob.instances() if (job.status or "pending") in statuses]
+    found = []
+    for status in statuses:
+        cursor = 1
+        while cursor:
+            page, cursor = DeploymentJob.find_by("status", status, from_id=cursor, count=50)
+            found.extend(page)
+    return found
+
+
 def _arm_provision_heartbeat(delay_s: int = 0):
     """Periodic fallback: re-kick any job still in ``pending``/``provisioning``."""
     interval = int(delay_s) if delay_s else PROVISION_HEARTBEAT_INTERVAL_S
@@ -2640,9 +2693,8 @@ def _arm_provision_heartbeat(delay_s: int = 0):
         try:
             cfg = _config()
             if int(cfg.provision_via_casals or 0):
-                list(DeploymentJob.instances())
                 for job_id in provisioning_job_ids_for_heartbeat(
-                    DeploymentJob.instances(),
+                    _jobs_with_status(*HEARTBEAT_RETRY_STATUSES),
                     terminal_statuses=_JOB_TERMINAL_STATUSES,
                     now_s=now_s(),
                 ):
@@ -2774,6 +2826,7 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
             f"re-checking in {_STAND_READY_RECHECK_S}s"
         )
         if _set_job_status(job, "provisioning"):
+            job.provision_recheck_at = now_s() + _STAND_READY_RECHECK_S
             _schedule_provision_kick(job_id, _STAND_READY_RECHECK_S)
         return _provision_ok_for_job(job_id, job)
 

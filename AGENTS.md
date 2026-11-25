@@ -211,6 +211,16 @@ stand, so a replay fails every bootstrap step and leaves the realm half-built.
   heartbeat *does* do is reconcile: a job stranded in `extensions` (task gone,
   foreign, or finished without settling it) is failed with the reason, which
   releases the credit hold and stops the card animating.
+- **The heartbeat reads what is in flight, not the table.** Every 10 minutes it
+  used to load every step, task and job the installer had ever stored; it now
+  asks for the pending, provisioning and extensions jobs through the
+  `DeploymentJob.status` index (`_jobs_with_status`; rebuilt at init and after
+  every upgrade, with the full scan as the fallback if that fails). Create jobs
+  with `_create_job`: ic-python-db indexes a property when it changes, and a
+  status equal to the property's default (`"pending"`) is not a change, so the
+  bare constructor would leave the job out of the index. A job waiting on its own
+  30 s stand re-check (`provision_recheck_at`) is not kicked a second time.
+  `tests/backend/test_installer_heartbeat.py` measures the rows a tick reads.
 - **A terminal status is final.** `completed`, `failed`, `failed_verification`
   and `cancelled` never change once a client could have read them: a client that
   trusts `failed` gives up on the realm. Provisioning, the deploy task and
