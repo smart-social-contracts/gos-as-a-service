@@ -23,6 +23,8 @@
   import { assistantChrome } from '$lib/assistant-chrome.js';
   import { mapShellInsets } from '$lib/map-shell-insets.js';
   import { syncAuthSession, authSession } from '$lib/stores/authSession.js';
+  // Static: Internet Identity opens only in the click's own tick (see login()).
+  import { login } from '$lib/auth.js';
   
   let backend;
   let realms = [];
@@ -174,7 +176,6 @@
   }
 
   async function handleLogin() {
-    const { login } = await import('$lib/auth.js');
     const result = await login();
     if (result?.principal) {
       isLoggedIn = true;

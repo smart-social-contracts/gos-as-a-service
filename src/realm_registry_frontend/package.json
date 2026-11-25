@@ -14,11 +14,8 @@
     "format": "prettier --write \"src/**/*.{json,js,jsx,ts,tsx,css,scss}\""
   },
   "dependencies": {
-    "@dfinity/agent": "^3.2.4",
-    "@dfinity/auth-client": "^3.2.4",
-    "@dfinity/candid": "^3.2.4",
-    "@dfinity/identity": "^3.2.4",
-    "@dfinity/principal": "^3.2.4",
+    "@icp-sdk/auth": "11.2.0",
+    "@icp-sdk/core": "6.1.1",
     "@types/qrcode": "^1.5.5",
     "driver.js": "^1.6.0",
     "h3-js": "^4.1.0",

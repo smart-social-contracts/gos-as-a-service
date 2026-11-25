@@ -32,7 +32,7 @@ async function createBackendActor() {
     // Dynamically import to avoid SSR issues
     const { createActor, canisterId: declaredCanisterId } = await import('declarations/realm_registry_backend');
     const { getCanisterId } = await import('$lib/network.js');
-    const { HttpAgent } = await import('@dfinity/agent');
+    const { HttpAgent } = await import('@icp-sdk/core/agent');
 
     const resolvedCanisterId = getCanisterId('realm_registry_backend') || declaredCanisterId;
     if (!resolvedCanisterId) {
@@ -90,7 +90,7 @@ export async function getAuthenticatedRegistryActor() {
     }
     const { createActor, canisterId: declaredCanisterId } = await import('declarations/realm_registry_backend');
     const { getCanisterId } = await import('$lib/network.js');
-    const { HttpAgent } = await import('@dfinity/agent');
+    const { HttpAgent } = await import('@icp-sdk/core/agent');
     const agent = new HttpAgent({ identity });
     if (isLocalDevelopment()) {
         try {

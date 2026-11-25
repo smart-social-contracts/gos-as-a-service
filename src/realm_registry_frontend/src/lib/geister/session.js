@@ -30,7 +30,7 @@ export class SignInRequiredError extends Error {
  * user's principal (ggg-ai/docs/browser-proof.md). This keeps one token per signed-in user and
  * renews it when it expires.
  *
- * @param {{ origin: string, getIdentity: () => Promise<import('@dfinity/agent').SignIdentity | null> }} deps
+ * @param {{ origin: string, getIdentity: () => Promise<import('@icp-sdk/core/agent').SignIdentity | null> }} deps
  */
 export function createAiSession({ origin, getIdentity }) {
   /** @type {{ token: string, principal: string, expiresAt: number } | null} */

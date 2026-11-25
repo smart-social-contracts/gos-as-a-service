@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { Ed25519KeyIdentity } from '@dfinity/identity';
+import { Ed25519KeyIdentity } from '@icp-sdk/core/identity';
 
 import { createAiSession, SIGN_IN_TIMEOUT_MS, SignInRequiredError } from './session.js';
 

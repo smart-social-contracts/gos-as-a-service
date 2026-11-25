@@ -30,7 +30,7 @@ async function createCasalsActor() {
   );
 
   const { createActor } = await import('declarations/casals_backend');
-  const { HttpAgent } = await import('@dfinity/agent');
+  const { HttpAgent } = await import('@icp-sdk/core/agent');
 
   const agent = new HttpAgent();
   if (isLocalDevelopment()) {

@@ -3,7 +3,7 @@ const II_REQUIRED_MESSAGE = 'Log in with Internet Identity to redeem';
 /**
  * Serialize a DelegationIdentity chain for realms-billing II proof (realms-billing#4).
  *
- * @param {import('@dfinity/agent').Identity} identity
+ * @param {import('@icp-sdk/core/agent').Identity} identity
  * @returns {{ publicKey: string, delegations: Array<{ signature: string, delegation: object }> } | null}
  */
 export function serializeDelegationIdentity(identity) {
@@ -22,6 +22,9 @@ export async function buildBillingIdentityPayload() {
 	const { CONFIG, getTestModeIIBypass } = await import('$lib/config.js');
 	const { getIdentity } = await import('$lib/auth.js');
 	const identity = await getIdentity();
+	// Internet Identity delegations last five minutes and are replaced as they
+	// age: send one with life left, since billing checks it has not expired.
+	await identity?.refresh?.();
 	const proof = serializeDelegationIdentity(identity);
 	if (!proof) {
 		if (getTestModeIIBypass()) {

@@ -9,7 +9,8 @@
  * Reference roster (indices 0–9): config/deterministic-test-identity-principals.json
  */
 
-import { Ed25519KeyIdentity, Secp256k1KeyIdentity } from '@dfinity/identity';
+import { Ed25519KeyIdentity } from '@icp-sdk/core/identity';
+import { Secp256k1KeyIdentity } from '@icp-sdk/core/identity/secp256k1';
 
 export const TEST_IDENTITY_SESSION_KEY = 'test_identity_index';
 export const TEST_IDENTITY_MAGIC = [0xed, 0x57];

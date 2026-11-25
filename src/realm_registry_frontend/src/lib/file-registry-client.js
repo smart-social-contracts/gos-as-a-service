@@ -4,10 +4,10 @@
 // Handles uploading images (logo, background) in chunks and publishing
 // the namespace so the realm_installer can later read them on-chain.
 
-import { Actor, HttpAgent } from '@dfinity/agent';
-import { IDL } from '@dfinity/candid';
-import { Principal } from '@dfinity/principal';
-import { initializeAuthClient } from './auth';
+import { Actor, HttpAgent } from '@icp-sdk/core/agent';
+import { IDL } from '@icp-sdk/core/candid';
+import { Principal } from '@icp-sdk/core/principal';
+import { getIdentity } from './auth';
 
 // Match CLI publish limits (extension.py): keep raw chunks at 64 KiB so JSON +
 // base64 decode stays under the WASI Python per-message instruction budget.
@@ -23,8 +23,8 @@ const fileRegistryIdlFactory = ({ IDL: idl }) =>
   });
 
 async function getRegistryActor(canisterId) {
-  const client = await initializeAuthClient();
-  const identity = client.getIdentity();
+  // Anonymous when nobody is signed in, as before.
+  const identity = (await getIdentity()) ?? undefined;
   const agent = new HttpAgent({ identity });
   if (
     typeof window !== 'undefined' &&
