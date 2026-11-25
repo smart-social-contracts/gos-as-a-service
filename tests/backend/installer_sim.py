@@ -7,7 +7,9 @@ loads ``src/realm_installer/main.py`` unchanged, replaces the IC (timers,
 calls the installer makes from a fake Casals conductor, realm backend and
 registry. Nothing in the installer is stubbed except the cycles preflight.
 
-Everything runs in virtual seconds, so a 4-minute provisioning takes
+The registry is the real one: settlement calls reach ``core.env_config`` and
+its credit holds, so a test can follow a realm's credits from request to
+capture. Everything runs in virtual seconds, so a 4-minute provisioning takes
 milliseconds and is deterministic.
 """
 
@@ -22,14 +24,40 @@ _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"
 
 BASE_TIME_S = 1_800_000_000  # any plausible wall clock; only differences matter
 
+INSTALLER_ID = "installer-principal"
 REGISTRY_ID = "registry-principal"
 CASALS_ID = "casals-principal"
 FILE_REGISTRY_ID = "file-registry-principal"
 FOUNDER = "founder-principal"
+STARTING_CREDITS = 20
+DEPLOYMENT_COST = 5
+
+
+_installer = None
 
 
 def load_installer():
-    """Import the installer's main.py as a plain module (Basilisk is only a stub here)."""
+    """The installer's main.py as a plain module (Basilisk is only a stub here), imported once."""
+    global _installer
+    if _installer is None:
+        _installer = _import_installer()
+    return _installer
+
+
+def empty_databases(installer):
+    """Remove every installer and registry row, so a test starts from nothing."""
+    from realm_registry_backend.core import models
+
+    for entity in (
+        installer.DeploymentJob, installer.DeploymentJobRef, installer.DeployTask, installer.DeployStep,
+        installer.InstallerConfig, models.UserCredits, models.DeploymentCreditHold,
+        models.CreditTransaction, models.RegistryConfig,
+    ):
+        for row in list(entity.instances()):
+            row.delete()
+
+
+def _import_installer():
     import basilisk
 
     sys.path.insert(0, _SRC)
@@ -95,7 +123,9 @@ class SimulatedIC:
         self._events = []
         self._seq = 0
         self.stands = {}  # stand -> time it was declared
-        self.settlements = {}  # job_id -> ["failed" | "succeeded", ...]
+        self.caller_id = REGISTRY_ID  # who the installer sees; a test sets it to act as a user
+        self.registry_down = False  # calls to the registry are rejected while True
+        self.settlements = {}  # job_id -> ["failed" | "succeeded" | "retried", ...]; "(refused)" if not accepted
         self.history = {}  # job_id -> [(time, status)] every distinct status a poller would see
         self.traps = []
 
@@ -107,13 +137,13 @@ class SimulatedIC:
         self.at(self.t + int(delay), lambda: self.run(callback()))
 
     def caller(self):
-        return REGISTRY_ID
+        return self.caller_id
 
     def is_controller(self, _principal):
         return False
 
     def id(self):
-        return _FakePrincipal("installer-principal")
+        return _FakePrincipal(INSTALLER_ID)
 
     def call_raw(self, target, method, args, _cycles):
         return Call(target, method, args)
@@ -166,6 +196,8 @@ class SimulatedIC:
         if call.target == CASALS_ID:
             return {"Ok": json.dumps(self._casals(call))}
         if call.target == REGISTRY_ID:
+            if self.registry_down:
+                return {"Err": "IC0508: canister is stopped"}
             return {"Ok": self._registry(call)}
         if call.method == "list_permitted":  # the realm's frontend asset canister
             backend = call.target.replace("-frontend", "-backend")
@@ -196,10 +228,20 @@ class SimulatedIC:
         return {"ok": True, "canisters": members, "stands": [{"name": stand, "built_at": self.t if built else 0}]}
 
     def _registry(self, call):
-        if call.method in ("deployment_failed", "deployment_succeeded"):
-            outcome = "failed" if call.method == "deployment_failed" else "succeeded"
-            self.settlements.setdefault(call.args[0], []).append(outcome)
-        return "ok"
+        from realm_registry_backend.core import env_config
+
+        job_id = call.args[0]
+        settle = {
+            "deployment_failed": ("failed", lambda: env_config.settle_deployment_failed(job_id, call.args[1], INSTALLER_ID)),
+            "deployment_succeeded": ("succeeded", lambda: env_config.settle_deployment_succeeded(job_id, INSTALLER_ID)),
+            "deployment_retried": ("retried", lambda: env_config.settle_deployment_retried(job_id, INSTALLER_ID)),
+        }.get(call.method)
+        if settle is None:
+            return "ok"  # register_realm, claim_slug
+        outcome, run = settle
+        reply = run()
+        self.settlements.setdefault(job_id, []).append(outcome if reply["success"] else f"{outcome} (refused)")
+        return json.dumps(reply)
 
 
 def simulate(installer, *, realms, request_gap_s=3, heartbeat_phase_s=None, run_s=900, setup=None):
@@ -220,6 +262,13 @@ def simulate(installer, *, realms, request_gap_s=3, heartbeat_phase_s=None, run_
     installer.check_cycles_preflight = lambda *args, **kwargs: None
     installer.parse_cycles_report = lambda raw: raw
 
+    from realm_registry_backend.api import credits
+    from realm_registry_backend.core import env_config
+
+    env_config.apply_env_config({"installer_id": INSTALLER_ID, "can_test_mode": False})
+    for number in range(realms):
+        credits.add_user_credits(f"{FOUNDER}-{number}", STARTING_CREDITS)
+
     installer.apply_installer_config({
         "provision_via_casals": True,
         "casals_canister_id": CASALS_ID,
@@ -229,14 +278,18 @@ def simulate(installer, *, realms, request_gap_s=3, heartbeat_phase_s=None, run_
     installer._arm_provision_heartbeat(heartbeat_phase_s or 0)
 
     for number in range(realms):
-        sim.at(number * request_gap_s, lambda number=number: sim.run(_enqueue(installer, number)))
+        sim.at(number * request_gap_s, lambda number=number: sim.run(_request_deployment(installer, number)))
     if setup:
         setup(sim)
     sim.run_until(run_s)
     return sim
 
 
-def _enqueue(installer, number):
+def _request_deployment(installer, number):
+    """What the registry's request_deployment does: enqueue the job, then hold the credits for it."""
+    from realm_registry_backend.api import credits
+
+    founder = f"{FOUNDER}-{number}"
     manifest = {
         "network": "local",
         "realm": {"name": f"realm {number}"},
@@ -246,4 +299,6 @@ def _enqueue(installer, number):
         "requesting_principal": f"{FOUNDER}-{number}",
         "founder": f"{FOUNDER}-{number}",
     }
-    return installer.enqueue_deployment(json.dumps(manifest))
+    result = yield from installer.enqueue_deployment(json.dumps(manifest))
+    held = credits.create_deployment_hold(founder, result["Ok"]["job_id"], DEPLOYMENT_COST, "Realm deployment")
+    assert held["success"], held

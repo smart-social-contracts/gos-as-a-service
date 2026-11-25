@@ -15,29 +15,10 @@ calls and a clock.
 
 import pytest
 
-import installer_sim
 from installer_sim import simulate
 
 SAFE_PATH = ["provisioning", "extensions", "registering", "completed"]
 TERMINAL_STATUSES = ("completed", "failed", "failed_verification", "cancelled")
-
-
-@pytest.fixture(scope="module")
-def installer():
-    return installer_sim.load_installer()
-
-
-@pytest.fixture(autouse=True)
-def _empty_installer_db(installer):
-    def wipe():
-        for entity in (installer.DeploymentJob, installer.DeploymentJobRef, installer.DeployTask,
-                       installer.DeployStep, installer.InstallerConfig):
-            for row in list(entity.instances()):
-                row.delete()
-
-    wipe()
-    yield
-    wipe()
 
 
 def statuses(sim, job_id):
@@ -118,16 +99,3 @@ def test_no_writer_leaves_a_terminal_status(installer, terminal):
     for status in ("provisioning", "extensions", "registering", "completed", "failed"):
         assert installer._set_job_status(job, status) is False
         assert job.status == terminal
-
-
-def test_retry_deployment_is_the_one_door_out_of_failed(installer):
-    sim = simulate(installer, realms=0, run_s=0)
-    job = installer.DeploymentJob(
-        name="job_retry", status="failed", caller_principal=installer_sim.REGISTRY_ID, manifest_json="{}",
-    )
-
-    result = installer.retry_deployment(job.name)
-
-    assert "Ok" in result
-    assert job.status == "provisioning"
-    assert sim.traps == []

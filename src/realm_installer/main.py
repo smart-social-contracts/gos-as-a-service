@@ -154,6 +154,8 @@ class RealmRegistryService(Service):
     def deployment_failed(self, job_id: text, reason: text, caller_principal: text) -> text: ...
     @service_update
     def deployment_succeeded(self, job_id: text, caller_principal: text) -> text: ...
+    @service_update
+    def deployment_retried(self, job_id: text, caller_principal: text) -> text: ...
 
 class FileRegistryService(Service):
     _arg_types = {"latest_version": "text"}
@@ -231,6 +233,8 @@ class DeploymentJob(Entity, TimestampedMixin):
     registry_canister_id = String(max_length=64)
     offchain_deployer_principal = String(max_length=64)
     settlement_notified = Integer(default=0)
+    # Settlements the registry did not accept; reset by retry_deployment.
+    settlement_attempts = Integer(default=0)
     snapshot_id = String(max_length=200, default="")
     snapshot_taken = Integer(default=0)
     skip_snapshot = Integer(default=0)
@@ -520,7 +524,31 @@ def _set_job_status(job, status: str) -> bool:
     return True
 
 
-def schedule_registry_settlement(job_id: str, success: bool, reason: str = ""):
+# A settlement the registry refuses or never answers is retried this many times,
+# 60 s apart and doubling, then reported and left (about 15 minutes in all).
+_SETTLEMENT_MAX_ATTEMPTS = 5
+_SETTLEMENT_RETRY_BASE_S = 60
+
+
+def _registry_accepted(call_result) -> None:
+    """Raise unless the registry answered ``{"success": true}`` to a settlement call.
+
+    The registry reports a refusal ("Hold already released", "Insufficient
+    credits") as a successful call whose JSON says ``success: false``, so a call
+    that returned is not a call that settled.
+    """
+    reply = json.loads(unwrap_call_result(call_result) or "{}")
+    if not (isinstance(reply, dict) and reply.get("success")):
+        raise RuntimeError(str((reply or {}).get("error") or "the registry refused"))
+
+
+def _settlement_pending(job) -> bool:
+    """True while a settlement the registry has not accepted is still being retried."""
+    attempts = int(job.settlement_attempts or 0)
+    return not int(job.settlement_notified or 0) and 0 < attempts < _SETTLEMENT_MAX_ATTEMPTS
+
+
+def schedule_registry_settlement(job_id: str, success: bool, reason: str = "", delay_s: int = 0):
     def _cb():
         try:
             list(DeploymentJob.instances())
@@ -533,10 +561,11 @@ def schedule_registry_settlement(job_id: str, success: bool, reason: str = ""):
             caller = (job.caller_principal or "").strip()
             registry = RealmRegistryService(Principal.from_str(reg_id))
             if success:
-                yield registry.deployment_succeeded(job_id, caller)
+                result = yield registry.deployment_succeeded(job_id, caller)
             else:
                 msg = (reason or job.error or "deployment failed")[:1900]
-                yield registry.deployment_failed(job_id, msg, caller)
+                result = yield registry.deployment_failed(job_id, msg, caller)
+            _registry_accepted(result)
             jlog(job_id).info(f"settlement {'success' if success else 'failure'} callback done")
             job = DeploymentJob[job_id]
             if job:
@@ -544,9 +573,41 @@ def schedule_registry_settlement(job_id: str, success: bool, reason: str = ""):
                 if success and int(job.snapshot_taken or 0) == 1 and (job.snapshot_id or "").strip():
                     _schedule_snapshot_delete(job_id)
         except Exception as e:
-            jlog(job_id).error(f"settlement callback failed: {e}")
+            _settlement_not_accepted(job_id, success, reason, e)
 
-    ic.set_timer(Duration(0), _cb)
+    ic.set_timer(Duration(int(delay_s)), _cb)
+
+
+def _settlement_not_accepted(job_id: str, success: bool, reason: str, error: Exception) -> None:
+    """Count a settlement the registry did not accept, and try again or give up."""
+    try:
+        job = DeploymentJob[job_id]
+        if job is None:
+            return
+        attempts = int(job.settlement_attempts or 0) + 1
+        job.settlement_attempts = attempts
+        if attempts >= _SETTLEMENT_MAX_ATTEMPTS:
+            jlog(job_id).error(f"settlement not accepted after {attempts} attempts; giving up: {error}")
+            return
+        delay = _SETTLEMENT_RETRY_BASE_S * 2 ** (attempts - 1)
+        jlog(job_id).error(
+            f"settlement not accepted ({error}); attempt {attempts} of {_SETTLEMENT_MAX_ATTEMPTS}, "
+            f"trying again in {delay} s"
+        )
+        schedule_registry_settlement(job_id, success, reason, delay_s=delay)
+    except Exception as e:
+        jlog(job_id).error(f"settlement retry could not be scheduled: {e}")
+
+
+def _resume_pending_settlements() -> None:
+    """After an upgrade the retry timers are gone: arm one for every settlement still being retried."""
+    try:
+        list(DeploymentJob.instances())
+        for job in DeploymentJob.instances():
+            if (job.status or "") in _JOB_TERMINAL_STATUSES and _settlement_pending(job):
+                schedule_registry_settlement(job.name, (job.status or "") == "completed", job.error or "")
+    except Exception as e:
+        _log.error(f"_resume_pending_settlements: {e}")
 
 
 def _schedule_snapshot_rollback(job_id: str):
@@ -1715,6 +1776,7 @@ def _on_init(config_json: text = "") -> None:
 def _on_post_upgrade() -> None:
     _log.info("post_upgrade — resuming in-flight deploys")
     _resume_in_flight()
+    _resume_pending_settlements()
     _schedule_job_ref_backfill()
     _arm_provision_heartbeat()
 
@@ -2764,7 +2826,7 @@ def _provision_ok_for_job(job_id: str, job: DeploymentJob) -> ProvisionOk:
 
 
 @update
-def retry_deployment(job_id: text) -> ResultProvision:
+def retry_deployment(job_id: text) -> Async[ResultProvision]:
     """Resume a failed deployment job (owner or controller).
 
     The pass picks up where the job stopped: canisters that exist are reused,
@@ -2772,6 +2834,10 @@ def retry_deployment(job_id: text) -> ResultProvision:
     again. It cannot fix a failure that needs someone else to act first (a
     missing asset-canister permission grant, say) — it will fail the same way,
     which is the honest outcome.
+
+    The failure refunded the credit hold, so the registry takes it again first
+    (and refuses when the balance is short). A retry that succeeds is then
+    charged once, like a first attempt; one that fails is refunded again.
     """
     try:
         caller = str(ic.caller())
@@ -2785,7 +2851,22 @@ def retry_deployment(job_id: text) -> ResultProvision:
         prev = (job.status or "pending").lower()
         if prev != "failed":
             return ResultProvision(Err=ie(f"cannot retry job with status '{prev}'"))
-        # Same job_id; keep last error so the card can show auto/manual retry.
+        if _settlement_pending(job):
+            # The failure's refund may still arrive after the hold is taken again.
+            return ResultProvision(Err=ie("the failure is still being settled with the registry; retry in a few minutes"))
+        reg_id = (job.registry_canister_id or "").strip()
+        if reg_id:
+            registry = RealmRegistryService(Principal.from_str(reg_id))
+            result = yield registry.deployment_retried(job_id, (job.caller_principal or "").strip())
+            _registry_accepted(result)
+        list(DeploymentJob.instances())
+        job = DeploymentJob[job_id]
+        if job is None or (job.status or "").lower() != "failed":
+            return ResultProvision(Err=ie("the job changed while the retry was being settled; look again"))
+        # The next outcome settles again. Same job_id; keep last error so the
+        # card can show auto/manual retry.
+        job.settlement_notified = 0
+        job.settlement_attempts = 0
         job.status = "provisioning"
         _schedule_provision_kick(job_id, 0)
         return ResultProvision(Ok=_provision_ok_for_job(job_id, job))

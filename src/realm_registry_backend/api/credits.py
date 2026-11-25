@@ -164,6 +164,50 @@ def release_deployment_hold(job_id: str, description: str = "Deployment released
         hold.status = "released"
         hold.reason = description
         hold.settled_at = time.time()
+        _log_hold_transaction(hold, "release", hold.amount or 0, description)
         return {"success": True, "hold": hold.to_dict()}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+
+def retake_deployment_hold(job_id: str, description: str = "Deployment retried") -> dict:
+    """Hold the credits again for a failed job that is being retried.
+
+    The failure released the hold, so a retry that succeeds would otherwise
+    complete for free: ``capture_deployment_hold`` refuses a released hold.
+    Idempotent while the hold is held; refuses when the balance is short, so
+    the retry is refused instead of running unpaid.
+    """
+    if not job_id:
+        return {"success": False, "error": "job_id required"}
+    try:
+        hold = DeploymentCreditHold[job_id]
+        if not hold:
+            return {"success": False, "error": f"Hold not found: {job_id}"}
+        if hold.status == "held":
+            return {"success": True, "hold": hold.to_dict(), "idempotent": True}
+        if hold.status == "captured":
+            return {"success": False, "error": "Hold already captured"}
+        uc = UserCredits[hold.principal_id]
+        amount = hold.amount or 0
+        balance = (uc.balance or 0) if uc else 0
+        if balance < amount:
+            return {"success": False, "error": f"Insufficient credits: {balance} < {amount}"}
+        uc.balance = balance - amount
+        hold.status = "held"
+        hold.reason = description
+        hold.settled_at = 0.0
+        _log_hold_transaction(hold, "hold", -amount, description)
+        return {"success": True, "hold": hold.to_dict()}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def _log_hold_transaction(hold, transaction_type: str, amount: int, description: str) -> None:
+    """History line for a hold that moved credits (a hold, or its release)."""
+    CreditTransaction(
+        id=f"tx_{uuid.uuid4().hex[:16]}", principal_id=hold.principal_id,
+        amount=amount, transaction_type=transaction_type,
+        description=f"{description} (job={hold.job_id})",
+        stripe_session_id="", timestamp=time.time(),
+    )
