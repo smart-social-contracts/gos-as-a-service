@@ -255,14 +255,20 @@ export function attachPortalBridge(iframe, realm, opts = {}) {
 	// push a fresh one as soon as the portal's own was replaced. Realm frontends
 	// already deployed only ask again near `expiresAt` (see delegation.js), so the
 	// portal has to be the one that keeps them current.
+	let keepingFresh = false;
 	async function keepEmbedFresh() {
-		if (disposed || !lastSessionKeyDer || document.visibilityState !== 'visible') return;
-		const identity = await getIdentity();
-		// Test identities never rotate, and a signed-out portal has nothing to extend.
-		if (!identity?.refresh) return;
-		// Counts as use, and mints only once the current delegation is nearly spent.
-		await identity.refresh();
-		if (identity.getDelegation() !== deliveredFrom) await sendDelegation(lastSessionKeyDer);
+		if (keepingFresh || disposed || !lastSessionKeyDer || document.visibilityState !== 'visible') return;
+		keepingFresh = true;
+		try {
+			const identity = await getIdentity();
+			// Test identities never rotate, and a signed-out portal has nothing to extend.
+			if (!identity?.refresh) return;
+			// Counts as use, and mints only once the current delegation is nearly spent.
+			await identity.refresh();
+			if (identity.getDelegation() !== deliveredFrom) await sendDelegation(lastSessionKeyDer);
+		} finally {
+			keepingFresh = false;
+		}
 	}
 	const keepFreshTimer = setInterval(() => void keepEmbedFresh(), KEEP_FRESH_INTERVAL_MS);
 
