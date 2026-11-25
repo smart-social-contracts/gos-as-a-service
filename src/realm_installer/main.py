@@ -1004,6 +1004,22 @@ def _finish_realm_step(task, step, error: str, result: dict):
     jlog(task.name).info(f"step {step.idx} ({step.label}) completed OK")
 
 
+def _tell_realm_its_registry(job_id_val: str, backend_id: str, registry: str):
+    """Generator: tell the realm which registry lists it (``host_registry``), so that the realm keeps its listing there
+    (its members, its stage) up to date: the registry lets only the realm change them. Not fatal, as the realm is
+    listed without it: a realm built before the operation existed refuses it."""
+    if not registry:
+        return
+    try:
+        _reply, error = yield from _realm_call(backend_id, "host_registry", {"registry": registry})
+    except Exception as e:
+        error = str(e)
+    if error:
+        jlog(job_id_val).warning(f"host_registry on {backend_id} failed (non-fatal): {error[:300]}")
+    else:
+        jlog(job_id_val).info(f"host_registry: {backend_id} keeps its listing in {registry}")
+
+
 def _execute_setup_install(task, step, args):
     """``setup_step`` install: the realm's network, test-mode permission and founder, set once.
 
@@ -1021,6 +1037,8 @@ def _execute_setup_install(task, step, args):
         f"network={payload['network'] or '–'}, can_test_mode={payload['can_test_mode']}"
     )
     _reply, error = yield from _realm_call(backend_id, "setup_step", payload)
+    if not error:
+        yield from _tell_realm_its_registry(task.name, backend_id, (args.get("registry") or "").strip())
     _finish_realm_step(task, step, error, {k: v for k, v in payload.items() if k != "step"})
 
 

@@ -265,3 +265,27 @@ def test_publishers_config_round_trip():
 def test_list_json_is_serialisable():
     _publish({"id": "harbour", "name": "Harbour"})
     assert json.loads(json.dumps(list_listings(1, 10)))["listings"][0]["id"] == "harbour"
+
+
+def test_a_realm_publishes_its_figures_as_its_backend_sends_them():
+    """The payload realms-gos sends (``api/listing.py``, realms-gos#736): no ``id``, so it is the caller's; the logo only
+    when it is an https URL; no ``last_activity_at`` of the clock, only of a change."""
+    _register_realm()
+    sent = {"name": "Harbour Town", "users_count": 17, "stage": "alpha", "logo": "https://x.icp0.io/harbour/logo.png",
+            "last_activity_at": 1_791_000_000}
+    assert _publish(sent, caller=REALM) == {"success": True, "id": REALM, "revision": 0}
+    (summary,) = list_listings(1, 50)["listings"]
+    assert (summary["users_count"], summary["stage"], summary["logo"], summary["last_activity_at"]) == (
+        17, "alpha", "https://x.icp0.io/harbour/logo.png", 1_791_000_000)
+
+    without_logo = {key: value for key, value in sent.items() if key != "logo"} | {"users_count": 18}
+    assert _publish(without_logo, caller=REALM)["success"]
+    (summary,) = list_listings(1, 50)["listings"]
+    assert (summary["users_count"], summary["logo"]) == (18, "https://x.icp0.io/harbour/logo.png")  # a field left out is kept
+
+
+def test_a_realm_in_setup_cannot_publish_a_stage_the_registry_does_not_have():
+    """So the realm publishes nothing until it has launched: ``setup`` is no stage."""
+    _register_realm()
+    assert not _publish({"stage": "setup", "users_count": 1}, caller=REALM)["success"]
+
