@@ -113,11 +113,16 @@ Deployment billing uses a hold → capture/release pattern in `src/realm_registr
 | `deduct_user_credits(principal, amount, …)` | Admin | Direct spend (non-deploy) |
 | `create_deployment_hold(principal, job_id, amount)` | Registry (`request_deployment`) | Deducts from balance, creates `DeploymentCreditHold` with status `held` |
 | `capture_deployment_hold(job_id)` | Registry (`deployment_succeeded`) | Marks hold `captured`, adds to `total_spent` |
-| `release_deployment_hold(job_id)` | Registry (`deployment_failed`) | Refunds balance, marks hold `released` |
+| `release_deployment_hold(job_id)` | Registry (`deployment_failed`) | Refunds balance, marks hold `released`, writes a `release` transaction |
+| `retake_deployment_hold(job_id)` | Registry (`deployment_retried`) | A retry takes a `released` hold again (refused when the balance is short); a held one is left as is |
 
 **Deploy cost:** `DEPLOYMENT_COST_CREDITS = 5` in `main.py`. `request_deployment` checks balance ≥ 5, enqueues via installer, then creates the hold. If hold creation fails, it cancels the installer job.
 
 Settlement is **installer-driven**: when provisioning completes, the installer calls registry `deployment_succeeded` or `deployment_failed`, which triggers capture or release.
+
+- The installer reads the registry's answer: a refusal reports `"success": false` in a call that itself returned, so only `success: true` marks a job settled (`settlement_notified`). A refused or unanswered settlement is retried 5 times (60 s, doubling) and re-armed after an upgrade; then it is logged and left.
+- **A retry is charged once.** `retry_deployment` first calls `deployment_retried`, which takes the released hold again (so a retry that succeeds is captured, one that fails is released again), then clears `settlement_notified`. It is refused while the previous failure's settlement is still being retried, and when the owner cannot cover the hold.
+- `tests/backend/test_installer_settlement.py` follows a realm's credits through request, failure, retry and capture on the simulated IC against the real registry credit logic.
 
 ## Slug claiming
 

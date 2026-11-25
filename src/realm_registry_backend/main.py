@@ -841,6 +841,16 @@ def deployment_failed(job_id: text, reason: text, caller_principal: text = "") -
 
 
 @update
+def deployment_retried(job_id: text, caller_principal: text = "") -> text:
+    try:
+        from core.env_config import settle_deployment_retried
+
+        return json.dumps(settle_deployment_retried(job_id, str(ic.caller())))
+    except Exception as e:
+        return json.dumps({"success": False, "error": str(e)})
+
+
+@update
 def deployment_succeeded(job_id: text, caller_principal: text = "") -> text:
     try:
         from core.env_config import settle_deployment_succeeded

@@ -210,6 +210,23 @@ def settle_deployment_failed(job_id: str, reason: str, caller: str) -> dict:
     return {"success": False, "error": hold_result.get("error", "release failed")}
 
 
+def settle_deployment_retried(job_id: str, caller: str) -> dict:
+    """The installer is retrying a failed job: take its credit hold again."""
+    from api.credits import retake_deployment_hold
+
+    denied = _require_installer(caller, "report a deployment as retried")
+    if denied:
+        return denied
+
+    hold_result = retake_deployment_hold(job_id, "Deployment retried")
+    if hold_result.get("success"):
+        return {"success": True, "job_id": job_id, "settlement": "held"}
+    if "not found" in (hold_result.get("error") or "").lower():
+        # Never held: a controller enqueued it, or the registry runs in can_test_mode. Nothing to take.
+        return {"success": True, "job_id": job_id, "settlement": "no_hold"}
+    return {"success": False, "error": hold_result.get("error", "hold failed")}
+
+
 def _set_key(key: str, value: str) -> None:
     cfg = RegistryConfig[key]
     if cfg:
