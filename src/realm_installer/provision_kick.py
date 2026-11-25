@@ -17,8 +17,23 @@ PROVISION_ACTIVE_STALE_S = 30 * 60
 HEARTBEAT_RETRY_STATUSES = ("pending", "provisioning")
 
 
-class ProvisionAlreadyInProgress(Exception):
+class ProvisionSkipped(Exception):
+    """A pass that found nothing for it to do. It must never fail the job.
+
+    Two kick chains can exist for one job (the heartbeat re-kicks a job that is
+    waiting on its own 30 s re-check), so a pass often arrives after another one
+    has taken the job on. Failing the job for that overwrote a healthy
+    ``extensions`` with ``failed`` and released the credit hold of a realm that
+    then completed.
+    """
+
+
+class ProvisionAlreadyInProgress(ProvisionSkipped):
     """Raised when another provision pass already holds the job lock."""
+
+
+class JobNotProvisioning(ProvisionSkipped):
+    """Raised when a pass finds the job past ``pending``/``provisioning``."""
 
 
 def should_kick_provision_on_enqueue(*, casals_manifest: bool, provision_via_casals: bool) -> bool:
@@ -83,11 +98,11 @@ def provisioning_job_ids_for_heartbeat(
 
 
 def provision_kick_runner(job_id: str, *, run_gen, mark_failed, log_info, log_error):
-    """Timer/heartbeat wrapper: benign skip on concurrent pass, fail on real errors."""
+    """Timer/heartbeat wrapper: benign skip when there is nothing to do, fail on real errors."""
     try:
         yield from run_gen(job_id)
-    except ProvisionAlreadyInProgress as e:
-        log_info(f"provision already in progress for {job_id}: {e}")
+    except ProvisionSkipped as e:
+        log_info(f"provision pass skipped for {job_id}: {e}")
     except Exception as e:
         mark_failed(job_id, str(e))
         log_error(f"provision kick failed: {e}")

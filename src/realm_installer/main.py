@@ -20,7 +20,8 @@ from cycles_preflight import (
 )
 from provision_kick import (
     PROVISION_HEARTBEAT_INTERVAL_S,
-    ProvisionAlreadyInProgress,
+    JobNotProvisioning,
+    ProvisionSkipped,
     claim_provision_lock,
     clear_provision_lock,
     provision_kick_runner,
@@ -501,6 +502,24 @@ def _realm_setup_step_logged(job_id_val: str, backend_id: str, payload: dict, wh
     return True
 
 
+def _set_job_status(job, status: str) -> bool:
+    """Move ``job`` to ``status``, unless it already reads a terminal one. True when it moved.
+
+    A client stops polling at ``failed``/``completed``/``cancelled``, so a
+    terminal status never changes afterwards. Provisioning, the deploy task and
+    registration each run as async passes that began before the job ended; a late
+    write from one of them used to turn a ``failed`` job into ``registering`` and
+    then ``completed``. ``retry_deployment`` is the one door back, and it is an
+    explicit act that writes its own status.
+    """
+    current = job.status or "pending"
+    if current in _JOB_TERMINAL_STATUSES:
+        jlog(job.name).warning(f"job is already {current}; not moving it to {status}")
+        return False
+    job.status = status
+    return True
+
+
 def schedule_registry_settlement(job_id: str, success: bool, reason: str = ""):
     def _cb():
         try:
@@ -724,8 +743,7 @@ def schedule_registration(job_id_val: str):
                     jlog(job_id_val).warning(f"claim_slug error (non-fatal): {slug_err}")
 
             j = DeploymentJob[job_id_val]
-            if j:
-                j.status = "completed"
+            if j and _set_job_status(j, "completed"):
                 # Dashboard treats any leftover error string as "not finished".
                 j.error = ""
                 j.completed_at = now_s()
@@ -734,11 +752,8 @@ def schedule_registration(job_id_val: str):
             jlog(job_id_val).error(f"registration failed: {e}")
             try:
                 j = DeploymentJob[job_id_val]
-                if j and (j.status or "") not in _JOB_TERMINAL_STATUSES:
-                    j.status = "failed"
-                    j.error = str(e)[:1990]
-                    j.completed_at = now_s()
-                    schedule_registry_settlement(job_id_val, success=False, reason=j.error)
+                if j:
+                    _fail_job(j, str(e))
             except Exception:
                 pass
 
@@ -1190,6 +1205,8 @@ def _check_job_after_extensions(task):
             )
             return
         if task.status in ("completed", "partial") and not broken_bootstrap:
+            if not _set_job_status(job, "registering"):
+                return
             if task.status == "partial":
                 failed_steps = [s for s in task.steps if s.status == "failed"]
                 warnings = "; ".join(
@@ -1197,7 +1214,6 @@ def _check_job_after_extensions(task):
                 )
                 job.error = f"partial extension install ({len(failed_steps)} failed): {warnings}"[:1990]
                 jlog(job.name).warning(job.error)
-            job.status = "registering"
             schedule_registration(job.name)
         else:
             failed_steps = [s for s in task.steps if s.status == "failed"]
@@ -1211,7 +1227,8 @@ def _check_job_after_extensions(task):
 
 
 def _fail_job(job, error: str):
-    job.status = "failed"
+    if not _set_job_status(job, "failed"):
+        return
     job.error = error[:1990]
     job.completed_at = now_s()
     schedule_registry_settlement(job.name, success=False, reason=job.error)
@@ -2490,11 +2507,8 @@ def get_casals_config() -> ResultCasalsConfig:
 def _mark_provision_failed(job_id: str, reason: str):
     try:
         j = DeploymentJob[job_id]
-        if j and (j.status or "") not in _JOB_TERMINAL_STATUSES:
-            j.status = "failed"
-            j.error = (reason or "deployment failed")[:1990]
-            j.completed_at = now_s()
-            schedule_registry_settlement(job_id, success=False, reason=j.error)
+        if j:
+            _fail_job(j, reason or "deployment failed")
     except Exception:
         pass
 
@@ -2596,8 +2610,10 @@ def _provision_via_casals_gen(job_id: str):
     if status not in ("pending", "provisioning"):
         # A failed job stays failed. Reopening it here is what let the
         # heartbeat replay a whole bootstrap against an already-created stand.
-        # ``retry_deployment`` is the one door in, and it resumes.
-        raise RuntimeError(f"job in '{job.status}', expected 'pending' or 'provisioning'")
+        # ``retry_deployment`` is the one door in, and it resumes. A job that
+        # has moved on (extensions, registering, completed) was taken by another
+        # pass; arriving late is not a failure of the job.
+        raise JobNotProvisioning(f"job in '{job.status}', expected 'pending' or 'provisioning'")
 
     claim_provision_lock(job, now_s=now_s())
     try:
@@ -2684,11 +2700,9 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
         gate, detail = stand_build_gate(tree, stand)
         if gate == "failed":
             job.assets_verified = 0
-            job.status = "failed"
-            job.error = f"stand '{stand}' did not finish: {detail}"[:1990]
-            job.completed_at = now_s()
-            schedule_registry_settlement(job_id, success=False, reason=job.error)
-            jlog(job_id).error(job.error)
+            reason = f"stand '{stand}' did not finish: {detail}"
+            _fail_job(job, reason)
+            jlog(job_id).error(reason)
             return _provision_ok_for_job(job_id, job)
         if gate == "waiting":
             missing = [detail]
@@ -2697,8 +2711,8 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
             f"stand '{stand}' not ready yet (waiting for {', '.join(missing)}); "
             f"re-checking in {_STAND_READY_RECHECK_S}s"
         )
-        job.status = "provisioning"
-        _schedule_provision_kick(job_id, _STAND_READY_RECHECK_S)
+        if _set_job_status(job, "provisioning"):
+            _schedule_provision_kick(job_id, _STAND_READY_RECHECK_S)
         return _provision_ok_for_job(job_id, job)
 
     backend_id = ready[f"{stand}-backend"]
@@ -2724,7 +2738,8 @@ def _provision_via_casals_body(job_id: str, job: DeploymentJob, cfg: InstallerCo
     # 3. Domain tail: bootstrap (setup_install, setup_infrastructure with the
     # stand's baton, grant_frontend_access) then optional codex/extension
     # installs, then registration.
-    job.status = "extensions"
+    if not _set_job_status(job, "extensions"):
+        return _provision_ok_for_job(job_id, job)  # ended while the stand was being read
     jlog(job_id).info("entering bootstrap/extensions phase (casals path)")
     yield from _start_extensions_for_job(job, manifest, stand_baton_id(stand, ready), casals_id, stand)
 
@@ -2798,7 +2813,7 @@ def provision_via_casals(job_id: text) -> Async[ResultProvision]:
             return ResultProvision(Err=ie("unauthorized: controller or configured registry only"))
         result = yield from _provision_via_casals_gen(job_id)
         return ResultProvision(Ok=result)
-    except ProvisionAlreadyInProgress as e:
+    except ProvisionSkipped as e:
         return ResultProvision(Err=ie(str(e)))
     except Exception as e:
         _mark_provision_failed(job_id, str(e))

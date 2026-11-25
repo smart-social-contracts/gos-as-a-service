@@ -206,6 +206,16 @@ stand, so a replay fails every bootstrap step and leaves the realm half-built.
   heartbeat *does* do is reconcile: a job stranded in `extensions` (task gone,
   foreign, or finished without settling it) is failed with the reason, which
   releases the credit hold and stops the card animating.
+- **A terminal status is final.** `completed`, `failed`, `failed_verification`
+  and `cancelled` never change once a client could have read them: a client that
+  trusts `failed` gives up on the realm. Provisioning, the deploy task and
+  registration are async passes that outlive the status that started them, so
+  they write status through `_set_job_status`, which refuses to leave a terminal
+  one. A provision kick that finds the job past `provisioning` (the heartbeat can
+  leave two kick chains on one job) is skipped (`JobNotProvisioning`), never a
+  failure. `retry_deployment` is the only door out of `failed`.
+  `tests/backend/test_installer_job_terminal.py` runs the real installer on a
+  simulated IC (`installer_sim.py`) with the heartbeat at every phase.
 - A failed bootstrap step (`enter_setup`, `configure_canister_ids`,
   `grant_frontend_access`) fails the job. It is not a partial success: the
   realm never entered setup or cannot write its own frontend.
