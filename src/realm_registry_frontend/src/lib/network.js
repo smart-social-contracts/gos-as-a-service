@@ -25,13 +25,45 @@ function runtimeGaasEnv() {
 }
 
 /**
- * `/canister_ids.js` as written by the conductor for this deployment.
+ * True for a value that still holds a placeholder the conductor was asked to fill (`$env.portal_url`,
+ * `$canister:x`, `${canister:x}`…). The conductor leaves a token it cannot resolve in place, so the
+ * file then carries the reference itself, which is not a value.
+ *
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+export function isUnresolvedPlaceholder(value) {
+	return typeof value === 'string' && /\$(?:env\.|canister:|stand\.|principal:|\{|self\b|this\b|multisig\b|deployer\b)/.test(value);
+}
+
+/** @type {{ raw: object, usable: RuntimeCanisterIds } | undefined} */
+let usableRuntime;
+
+/**
+ * `/canister_ids.js` as written by the conductor for this deployment, without the entries it left
+ * unresolved: a key with a placeholder for a value is treated as not declared (and said so once),
+ * never taken as a canister id, an origin or a URL.
  *
  * @returns {RuntimeCanisterIds | undefined}
  */
 export function runtimeCanisterIds() {
-	const runtime = typeof globalThis !== 'undefined' ? globalThis.__CANISTER_IDS : undefined;
-	return runtime && typeof runtime === 'object' ? runtime : undefined;
+	const raw = typeof globalThis !== 'undefined' ? globalThis.__CANISTER_IDS : undefined;
+	if (!raw || typeof raw !== 'object') return undefined;
+	if (usableRuntime?.raw !== raw) {
+		const entries = Object.entries(raw);
+		const unresolved = entries.filter(([, value]) => isUnresolvedPlaceholder(value));
+		if (unresolved.length) {
+			console.warn(
+				'/canister_ids.js holds placeholders the conductor did not resolve; ignoring ' +
+					unresolved.map(([key, value]) => `${key}=${JSON.stringify(value)}`).join(', ')
+			);
+		}
+		usableRuntime = {
+			raw,
+			usable: Object.fromEntries(entries.filter(([, value]) => !isUnresolvedPlaceholder(value)))
+		};
+	}
+	return usableRuntime.usable;
 }
 
 /** Keys of `/canister_ids.js` that describe the environment rather than name a canister. */
