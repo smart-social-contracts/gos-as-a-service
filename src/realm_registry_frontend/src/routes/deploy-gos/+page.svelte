@@ -4,6 +4,8 @@
   import { page } from '$app/stores';
   import { _, locale } from 'svelte-i18n';
   import { CONFIG } from '$lib/config.js';
+  // Static: Internet Identity opens only in the click's own tick (see login()).
+  import { login } from '$lib/auth.js';
   import { buildRealmDeploymentManifest, portalUrlForSlug, slugify } from '$lib/deployment-manifest.js';
   import {
     MAX_MANIFEST_ESCAPED_CHARS,
@@ -318,7 +320,6 @@
   }
 
   async function handleLogin() {
-    const { login, getPrincipal } = await import("$lib/auth");
     const result = await login();
     if (result.principal) {
       isLoggedIn = true;

@@ -85,6 +85,13 @@ npm run build --workspace=realm_registry_frontend
 dfx deploy realm_registry_frontend
 ```
 
+Internet Identity sign-in does not work in this dfx setup. The portal signs in with
+`@icp-sdk/auth`, which needs an Internet Identity with revocable sessions (II release-2026-09-11 or
+later), and dfx 0.31's local replica refuses those releases ("imports function
+'msg_caller_info_signer_size' … not exported by the runtime"); the `internet_identity` canister in
+`dfx.json` stays on release-2026-03-09. Use test-mode sign-in here, or a local network from icp-cli
+with its built-in II (`ii: true`). dfx 0.33.1 may run the newer releases; nobody has tried it yet.
+
 Backend unit tests run **without** a replica:
 
 ```bash

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Rebuild the self-hosted @dfinity client bundle (dist/dfinity.js).
+# Rebuild the self-hosted IC client bundle (dist/dfinity.js).
 #
-# We pre-bundle @dfinity/agent + @dfinity/auth-client + their transitive
+# We pre-bundle @icp-sdk/core's agent + @icp-sdk/auth + their transitive
 # deps into a single ES module so the page doesn't pull anything from a
 # CDN. This avoids two real-world problems:
 #
@@ -26,16 +26,15 @@ trap 'rm -rf "$WORK"' EXIT
 echo "==> staging in $WORK"
 cd "$WORK"
 npm init -y >/dev/null 2>&1
+# The same exact versions as the portal (realm_registry_frontend).
+npm pkg set overrides.@icp-sdk/signer=6.1.0
 npm install --silent --no-audit --no-fund \
-    @dfinity/agent@3 \
-    @dfinity/auth-client@3 \
-    @dfinity/identity@3 \
-    @dfinity/principal@3 \
-    @dfinity/candid@3
+    @icp-sdk/core@6.1.1 \
+    @icp-sdk/auth@11.2.0
 
 cat > entry.js <<'EOF'
-export { HttpAgent, Actor } from "@dfinity/agent";
-export { AuthClient } from "@dfinity/auth-client";
+export { HttpAgent, Actor } from "@icp-sdk/core/agent";
+export { AuthClient } from "@icp-sdk/auth/client";
 EOF
 
 echo "==> bundling with esbuild"

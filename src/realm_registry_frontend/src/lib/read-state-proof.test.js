@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { Cbor } from '@dfinity/agent';
-import { Ed25519KeyIdentity } from '@dfinity/identity';
+import { Cbor } from '@icp-sdk/core/agent';
+import { Ed25519KeyIdentity } from '@icp-sdk/core/identity';
 
 import { hexToBytes, proveChallenge, requestIdNonce, signProof } from './read-state-proof.js';
 

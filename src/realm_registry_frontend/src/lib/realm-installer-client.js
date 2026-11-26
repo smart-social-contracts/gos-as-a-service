@@ -4,9 +4,9 @@
 // the registry `enqueue_deployment` flow and `get_deployment_job_status`
 // instead. These stubs remain only for backward compatibility in unused code.
 
-import { Actor, HttpAgent } from '@dfinity/agent';
-import { Principal } from '@dfinity/principal';
-import { initializeAuthClient } from './auth';
+import { Actor, HttpAgent } from '@icp-sdk/core/agent';
+import { Principal } from '@icp-sdk/core/principal';
+import { getIdentity } from './auth';
 
 let _cachedActor = null;
 let _cachedCanisterId = null;
@@ -15,8 +15,8 @@ async function getInstallerActor(canisterId) {
   if (_cachedActor && _cachedCanisterId === canisterId) return _cachedActor;
 
   const { idlFactory } = await import('declarations/realm_installer');
-  const client = await initializeAuthClient();
-  const identity = client.getIdentity();
+  // Anonymous when nobody is signed in, as before.
+  const identity = (await getIdentity()) ?? undefined;
   const agent = new HttpAgent({ identity });
   if (
     typeof window !== 'undefined' &&

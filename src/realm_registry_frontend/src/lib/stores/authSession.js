@@ -1,6 +1,6 @@
 import { writable } from 'svelte/store';
 
-/** @type {import('svelte/store').Writable<{ loading: boolean, isLoggedIn: boolean, principal: import('@dfinity/agent').Principal | null, identityIndex: number }>} */
+/** @type {import('svelte/store').Writable<{ loading: boolean, isLoggedIn: boolean, principal: import('@icp-sdk/core/agent').Principal | null, identityIndex: number }>} */
 export const authSession = writable({
   loading: true,
   isLoggedIn: false,

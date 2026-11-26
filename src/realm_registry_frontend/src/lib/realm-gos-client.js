@@ -11,8 +11,8 @@
  *
  * Imports are static: delegation.js uses this for the iframe auth bridge (see its note).
  */
-import { Actor, HttpAgent } from '@dfinity/agent';
-import { Principal } from '@dfinity/principal';
+import { Actor, HttpAgent } from '@icp-sdk/core/agent';
+import { Principal } from '@icp-sdk/core/principal';
 
 const STAGES = ['Setup', 'Alpha', 'Beta', 'Production', 'Deprecation', 'Terminated'];
 

@@ -30,7 +30,7 @@ function resultOk(raw) {
 
 async function createInstallerActor() {
   const { createActor, canisterId } = await import('declarations/realm_installer');
-  const { HttpAgent } = await import('@dfinity/agent');
+  const { HttpAgent } = await import('@icp-sdk/core/agent');
   const agent = new HttpAgent();
   if (isLocalDevelopment()) {
     try {
@@ -53,7 +53,7 @@ async function createAuthenticatedInstallerActor() {
     throw new Error('Not authenticated');
   }
   const { createActor, canisterId } = await import('declarations/realm_installer');
-  const { HttpAgent } = await import('@dfinity/agent');
+  const { HttpAgent } = await import('@icp-sdk/core/agent');
   const agent = new HttpAgent({ identity });
   if (isLocalDevelopment()) {
     try {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { Principal } from '@dfinity/principal';
-import { Ed25519KeyIdentity } from '@dfinity/identity';
+import { Principal } from '@icp-sdk/core/principal';
+import { Ed25519KeyIdentity } from '@icp-sdk/core/identity';
 
 import { serializeDelegationIdentity } from './ii-proof.js';
 

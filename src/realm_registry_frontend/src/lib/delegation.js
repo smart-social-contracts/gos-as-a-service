@@ -1,5 +1,5 @@
-import { Principal } from '@dfinity/principal';
-import { DelegationChain, Ed25519PublicKey } from '@dfinity/identity';
+import { Principal } from '@icp-sdk/core/principal';
+import { DelegationChain, Ed25519PublicKey } from '@icp-sdk/core/identity';
 
 const DELEGATION_TTL_MS = 55 * 60 * 1000;
 
@@ -16,7 +16,7 @@ const DELEGATION_TTL_MS = 55 * 60 * 1000;
  * chunk hash after a portal redeploy cannot break the auth bridge with
  * "Failed to fetch dynamically imported module".
  *
- * @param {import('@dfinity/agent').Identity} identity
+ * @param {import('@icp-sdk/core/agent').Identity} identity
  * @param {string[]} targetCanisterIds capital + quarter backend canister ids
  * @param {Uint8Array} sessionPublicKeyDer
  */
@@ -36,6 +36,15 @@ export async function createScopedDelegation(identity, targetCanisterIds, sessio
 	return {
 		delegationChain: chain.toJSON(),
 		backendCanisterId: targetCanisterIds[0] || '',
+		// When the hop signed here expires (55 minutes), not when the whole chain
+		// does: the chain also ends with the portal's own Internet Identity
+		// delegation, which @icp-sdk/auth renews every five minutes. Realm
+		// frontends ask for a new delegation five minutes before `expiresAt`, so
+		// reporting the chain's real end (under five minutes away) would have every
+		// realm ask again the moment it receives one, in a loop. The portal keeps
+		// realms current by pushing a fresh delegation instead (keepEmbedFresh in
+		// portal-bridge-host.js). This can report the real end once every realm
+		// frontend in service no longer schedules its own request from it.
 		expiresAt: expiration.getTime()
 	};
 }

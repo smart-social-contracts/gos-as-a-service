@@ -1,6 +1,7 @@
 // IC File Registry browser
 // ----------------------------------------------------------------------
-// Vanilla ES module. No build step. @dfinity/* loaded from esm.sh CDN.
+// Vanilla ES module. No build step. IC client libraries come from the
+// self-hosted ./dfinity.js bundle (scripts/build-dfinity-bundle.sh).
 //
 // Talks to the file_registry canister at FILE_REGISTRY_CANISTER_ID over
 // two channels:
@@ -31,7 +32,6 @@ const _FR_BACKEND_MAP = {
 };
 const _hostCanister = location.hostname.replace(".icp0.io", "").replace(".ic0.app", "");
 const DEFAULT_REGISTRY = _FR_BACKEND_MAP[_hostCanister] || "feqzn-wyaaa-aaaae-ag23q-cai";
-const II_PROVIDER_URL = "https://identity.ic0.app";
 
 const params = new URLSearchParams(location.search);
 const REGISTRY_ID =
@@ -86,7 +86,7 @@ async function boot() {
   qs("#canisterPill").textContent = REGISTRY_ID;
 
   // Render namespaces from the HTTP gateway as soon as possible — this
-  // path needs no auth and no @dfinity packages, so the user sees data
+  // path needs no auth and no IC client packages, so the user sees data
   // even if the agent libs are slow to load (or fail to load entirely).
   refresh().catch((e) => {
     console.error("initial refresh failed:", e);
@@ -106,7 +106,7 @@ async function boot() {
   } catch (e) {
     console.error("failed to load ./dfinity.js:", e);
     toast(
-      "Could not load the @dfinity client libs (./dfinity.js). " +
+      "Could not load the IC client libs (./dfinity.js). " +
         "Read-only browse will still work, but login/upload/delete are disabled. " +
         "Check the browser console for details.",
       "error"
@@ -118,10 +118,10 @@ async function boot() {
     return;
   }
 
-  authClient = await AuthClient.create({ idleOptions: { disableIdle: true } });
-  identity = authClient.getIdentity();
+  authClient = new AuthClient();
+  identity = await heldIdentity();
   await rebuildAgent();
-  if (await authClient.isAuthenticated()) renderLogin(true);
+  if (identity) renderLogin(true);
 
   qs("#loginBtn").addEventListener("click", login);
   qs("#logoutBtn").addEventListener("click", logout);
@@ -134,8 +134,19 @@ function wireReadOnlyHandlers() {
   qs("#nsSearch").addEventListener("input", renderNamespaces);
 }
 
+// The identity this tab can act as, or null: a stored record alone is not a sign-in.
+async function heldIdentity() {
+  try {
+    const held = await authClient.getIdentity();
+    return held.getPrincipal().isAnonymous() ? null : held;
+  } catch (e) {
+    console.warn("stored session is not usable:", e);
+    return null;
+  }
+}
+
 async function rebuildAgent() {
-  agent = await HttpAgent.create({ host: HOST, identity });
+  agent = await HttpAgent.create({ host: HOST, identity: identity ?? undefined });
   if (isLocal) {
     try { await agent.fetchRootKey(); } catch {}
   }
@@ -145,23 +156,23 @@ async function rebuildAgent() {
 // ---- Auth -----------------------------------------------------------
 
 async function login() {
-  await new Promise((resolve, reject) => {
-    authClient.login({
-      identityProvider: II_PROVIDER_URL,
-      maxTimeToLive: BigInt(7 * 24 * 60 * 60 * 1_000_000_000),
-      onSuccess: resolve,
-      onError: reject,
-    });
-  });
-  identity = authClient.getIdentity();
+  // Opens the II window, which @icp-sdk/auth allows only in the click's own
+  // tick: nothing is awaited before it.
+  identity = await authClient.signIn({ maxTimeToLive: BigInt(7 * 24 * 60 * 60 * 1_000_000_000) });
   await rebuildAgent();
   renderLogin(true);
   toast("Logged in as " + shortPrincipal(identity.getPrincipal().toText()), "success");
 }
 
 async function logout() {
-  await authClient.logout();
-  identity = authClient.getIdentity();
+  try {
+    // Ends the session at Internet Identity, not only in this browser.
+    await authClient.signOut();
+  } catch (e) {
+    // This browser is signed out either way; the session at II lasts until it expires.
+    console.error("Internet Identity did not end the session:", e);
+  }
+  identity = null;
   await rebuildAgent();
   renderLogin(false);
   toast("Logged out", "info");

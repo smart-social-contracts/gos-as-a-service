@@ -6,6 +6,9 @@ import { portalPath } from '$lib/federation.js';
 
 const BRIDGE_VERSION = '1';
 
+/** How often an open embed checks whether the portal's own delegation was replaced. */
+const KEEP_FRESH_INTERVAL_MS = 5000;
+
 /** Canisters a realm must never receive the visitor's delegation for. */
 function platformCanisterIds() {
 	return [
@@ -44,10 +47,13 @@ export function attachPortalBridge(iframe, realm, opts = {}) {
 	let authEpoch = 0;
 	/** @type {Uint8Array | null} */
 	let lastSessionKeyDer = null;
+	/** The portal's own delegation that the last one delivered extends. */
+	let deliveredFrom = null;
 
 	const dispose = () => {
 		if (disposed) return;
 		disposed = true;
+		clearInterval(keepFreshTimer);
 		window.removeEventListener('message', onWindowMessage);
 		iframe.removeEventListener('load', handshake);
 		if (port) {
@@ -161,13 +167,19 @@ export function attachPortalBridge(iframe, realm, opts = {}) {
 				realm.backendCanisterId,
 				platformCanisterIds()
 			);
+			// A delegation with life left to extend: this replaces one that is nearly spent.
+			await identity.refresh?.();
 			// One retry: transient net::ERR_NETWORK_CHANGED / chunk-fetch blips
 			// used to surface as a fatal "Login was cancelled" in the iframe.
 			let scoped;
 			let lastErr;
 			for (let attempt = 0; attempt < 2; attempt++) {
 				try {
+					// Read in the same tick createScopedDelegation reads it, so it names
+					// the delegation the realm's actually extends.
+					const from = identity.getDelegation?.();
 					scoped = await createScopedDelegation(identity, targets, sessionPublicKeyDer);
+					deliveredFrom = from;
 					lastErr = null;
 					break;
 				} catch (e) {
@@ -236,6 +248,29 @@ export function attachPortalBridge(iframe, realm, opts = {}) {
 		handshake();
 	};
 	window.addEventListener('message', onWindowMessage);
+
+	// Internet Identity's app delegations last five minutes, and @icp-sdk/auth
+	// replaces the portal's own shortly before it lapses. The realm's delegation
+	// extends the portal's, so it lapses with it: while the realm is on screen,
+	// push a fresh one as soon as the portal's own was replaced. Realm frontends
+	// already deployed only ask again near `expiresAt` (see delegation.js), so the
+	// portal has to be the one that keeps them current.
+	let keepingFresh = false;
+	async function keepEmbedFresh() {
+		if (keepingFresh || disposed || !lastSessionKeyDer || document.visibilityState !== 'visible') return;
+		keepingFresh = true;
+		try {
+			const identity = await getIdentity();
+			// Test identities never rotate, and a signed-out portal has nothing to extend.
+			if (!identity?.refresh) return;
+			// Counts as use, and mints only once the current delegation is nearly spent.
+			await identity.refresh();
+			if (identity.getDelegation() !== deliveredFrom) await sendDelegation(lastSessionKeyDer);
+		} finally {
+			keepingFresh = false;
+		}
+	}
+	const keepFreshTimer = setInterval(() => void keepEmbedFresh(), KEEP_FRESH_INTERVAL_MS);
 
 	iframe.addEventListener('load', handshake);
 	// Parent usually calls attachPortalBridge from a load handler — run handshake now too.

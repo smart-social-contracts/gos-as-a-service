@@ -1,4 +1,4 @@
-import { Actor, HttpAgent } from "@dfinity/agent";
+import { Actor, HttpAgent } from "@icp-sdk/core/agent";
 
 // Imports and re-exports candid interface
 import { idlFactory } from "./casals_backend.did.js";

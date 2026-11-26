@@ -1,4 +1,4 @@
-import { Cbor, Expiry } from '@dfinity/agent';
+import { Cbor, Expiry } from '@icp-sdk/core/agent';
 
 /**
  * A "proof" shows the Geister servers (ggg-mcp, ggg-ai) which principal is asking: a read_state
@@ -15,7 +15,7 @@ import { Cbor, Expiry } from '@dfinity/agent';
 const PROOF_VALIDITY_MS = 4 * 60 * 1000;
 
 /**
- * @param {import('@dfinity/agent').SignIdentity} identity
+ * @param {import('@icp-sdk/core/agent').SignIdentity} identity
  * @param {Uint8Array} nonce the server's challenge, at most 32 bytes
  * @returns {Promise<string>} base64 of the CBOR envelope
  */
@@ -49,7 +49,7 @@ export async function requestIdNonce(requestId) {
 
 /**
  * Fetch a one-use challenge from `challengeUrl` and sign it.
- * @param {import('@dfinity/agent').SignIdentity} identity
+ * @param {import('@icp-sdk/core/agent').SignIdentity} identity
  * @param {string} challengeUrl
  * @returns {Promise<{ nonce: string, proof: string }>} the challenge (hex) and the proof for it
  */
