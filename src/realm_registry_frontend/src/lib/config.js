@@ -14,6 +14,7 @@ import { isAssistantExperimentalNoticeEnabled } from './assistant-experimental-f
 import {
 	resolveBillingServiceUrl,
 	resolveDeployServiceUrl,
+	resolveIiDerivationOrigin,
 	resolveInternetIdentityUrl,
 	resolvePortalBaseUrl
 } from './config-resolvers.js';
@@ -49,11 +50,7 @@ export { resolveBillingServiceUrl, resolveDeployServiceUrl, resolvePortalBaseUrl
 
 export const CONFIG = {
 	internet_identity_url: resolveInternetIdentityUrl(viteEnv, runtimeIds),
-	/** Federation portal: login on this origin only — no derivationOrigin pinning. */
-	federation_portal: viteEnv.VITE_FEDERATION_PORTAL !== 'false',
-	ii_derivation_origin:
-		viteEnv.VITE_II_DERIVATION_ORIGIN ||
-		(viteEnv.VITE_FEDERATION_PORTAL === 'false' ? portalBaseUrl : ''),
+	ii_derivation_origin: resolveIiDerivationOrigin(viteEnv, runtimeIds, portalBaseUrl),
 	portal_base_url: portalBaseUrl,
 	deploy_queue_network: network,
 	billing_service_url: resolveBillingServiceUrl(viteEnv, gaasEnv),

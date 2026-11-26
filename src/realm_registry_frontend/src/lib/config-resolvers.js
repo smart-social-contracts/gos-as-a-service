@@ -58,6 +58,30 @@ export function resolveInternetIdentityUrl(viteEnvOverride, runtime) {
 	return MAINNET_INTERNET_IDENTITY_URL;
 }
 
+/**
+ * The origin whose Internet Identity principals this portal signs people in with, or "" for the portal's
+ * own. II gives one person a different principal per origin; naming another origin here makes the
+ * portal's principals that origin's, which II allows only when that origin lists the portal in its
+ * `/.well-known/ii-alternative-origins` (else every sign-in fails with "Unverified origin"). Realms
+ * created here are told the same origin (`networkInfra`).
+ *
+ * Order: dev override (`VITE_II_DERIVATION_ORIGIN`), the conductor-written `/canister_ids.js`
+ * (`derivation_origin`, the key a realm frontend reads too), then the legacy non-portal build
+ * (`VITE_FEDERATION_PORTAL=false`), where realms signed in directly and pinned the portal's origin.
+ *
+ * @param {Record<string, string>} viteEnvOverride
+ * @param {{ derivation_origin?: string | boolean } | undefined} runtime - `/canister_ids.js` payload
+ * @param {string} portalBaseUrl - from `resolvePortalBaseUrl`
+ * @returns {string} an origin without a trailing slash, or ""
+ */
+export function resolveIiDerivationOrigin(viteEnvOverride, runtime, portalBaseUrl) {
+	if (viteEnvOverride.VITE_II_DERIVATION_ORIGIN) return viteEnvOverride.VITE_II_DERIVATION_ORIGIN;
+	if (runtime && typeof runtime.derivation_origin === 'string' && runtime.derivation_origin.trim()) {
+		return runtime.derivation_origin.trim().replace(/\/$/, '');
+	}
+	return viteEnvOverride.VITE_FEDERATION_PORTAL === 'false' ? portalBaseUrl : '';
+}
+
 /** The Geister API every non-local deployment has used so far. */
 export const DEFAULT_GEISTER_API_ORIGIN = 'https://geister-api.realmsgos.dev';
 

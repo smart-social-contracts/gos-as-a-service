@@ -5,6 +5,7 @@ import {
 	resolveBillingServiceUrl,
 	resolveDeployServiceUrl,
 	resolveGeisterApiOrigin,
+	resolveIiDerivationOrigin,
 	resolveInternetIdentityUrl,
 	resolvePortalBaseUrl
 } from './config-resolvers.js';
@@ -62,6 +63,33 @@ test('resolveInternetIdentityUrl prefers the VITE override', () => {
 		),
 		'http://localhost:4943/?canisterId=ii'
 	);
+});
+
+test('resolveIiDerivationOrigin is the portal’s own origin ("") when the deployment names none', () => {
+	assert.equal(resolveIiDerivationOrigin({}, undefined, 'https://gos.earth'), '');
+	assert.equal(resolveIiDerivationOrigin({}, { network: 'ic', derivation_origin: '' }, 'https://gos.earth'), '');
+});
+
+test('resolveIiDerivationOrigin takes the one the conductor wrote in /canister_ids.js', () => {
+	assert.equal(
+		resolveIiDerivationOrigin({}, { network: 'ic', derivation_origin: 'https://realmsgos.org/' }, 'https://gos.earth'),
+		'https://realmsgos.org'
+	);
+});
+
+test('resolveIiDerivationOrigin prefers the VITE override', () => {
+	assert.equal(
+		resolveIiDerivationOrigin(
+			{ VITE_II_DERIVATION_ORIGIN: 'http://home.localhost:8000' },
+			{ derivation_origin: 'https://realmsgos.org' },
+			'https://gos.earth'
+		),
+		'http://home.localhost:8000'
+	);
+});
+
+test('resolveIiDerivationOrigin keeps the legacy non-portal build pinned to the portal', () => {
+	assert.equal(resolveIiDerivationOrigin({ VITE_FEDERATION_PORTAL: 'false' }, undefined, 'https://gos.earth'), 'https://gos.earth');
 });
 
 test('resolveBillingServiceUrl falls back to default without gaas-env', () => {

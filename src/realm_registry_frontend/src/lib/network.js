@@ -73,6 +73,7 @@ const RUNTIME_META_KEYS = new Set([
 	'casals_url',
 	'gos_environment',
 	'internet_identity',
+	'derivation_origin',
 	'geister_api_url'
 ]);
 
