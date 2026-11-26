@@ -84,7 +84,8 @@ jobs:
           dfx generate realm_registry_backend
           dfx generate realm_installer
           npm run build --workspace=realm_registry_frontend
-          git clone --depth 1 https://github.com/smart-social-contracts/Casals /tmp/casals
+          # At the Casals release the conductors run, not main: the bundle format must not depend on the day of the tag.
+          git clone --depth 1 --branch v0.7.0 https://github.com/smart-social-contracts/Casals /tmp/casals
           (cd /tmp/casals && PYTHONPATH=src python3 -m casals_cli.bundle \
             "$GITHUB_WORKSPACE/src/realm_registry_frontend/dist" \
             -o "$GITHUB_WORKSPACE/realm_registry_frontend.tar.gz" \
