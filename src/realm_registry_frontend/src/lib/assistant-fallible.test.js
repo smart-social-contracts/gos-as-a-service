@@ -14,6 +14,17 @@ test('the fallibility line is the approved wording in English and Spanish', () =
 	assert.equal(locale('es').answers_can_be_wrong, 'Las respuestas pueden ser erróneas.');
 });
 
+test('the fallibility line is the approved wording in the portal\'s other languages', () => {
+	// Approved by the CLFO (via the CTO, 27 Nov 2026), word for word.
+	const approved = {
+		de: 'Antworten können falsch sein.',
+		fr: 'Les réponses peuvent être erronées.',
+		it: 'Le risposte possono essere errate.',
+		'zh-CN': '回答可能有误。',
+	};
+	for (const [name, text] of Object.entries(approved)) assert.equal(locale(name).answers_can_be_wrong, text, name);
+});
+
 test('the panel is labelled as an AI in English and Spanish', () => {
 	assert.equal(locale('en').title, 'AI Assistant');
 	assert.equal(locale('es').title, 'Asistente de IA');

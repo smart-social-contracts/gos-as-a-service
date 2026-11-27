@@ -219,7 +219,8 @@
     "offline_status": "Offline",
     "checking": "Checking…",
     "check_again": "Check again",
-    "history_sign_in": "Sign in with Internet Identity to save and browse conversation history."
+    "history_sign_in": "Sign in with Internet Identity to save and browse conversation history.",
+    "answers_can_be_wrong": "Les réponses peuvent être erronées."
   },
   "stages": {
     "alpha": {
