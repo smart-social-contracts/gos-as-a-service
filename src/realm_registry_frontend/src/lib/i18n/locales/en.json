@@ -87,6 +87,15 @@
     "description": "This application is running in test mode. Some features may behave differently than in production.",
     "dismiss_label": "Dismiss test mode notice"
   },
+  "demo_data_banner": {
+    "title": "Demo with simulated data.",
+    "body": "The cities and realms here are simulated, not services of any real city or public body. Amounts in EUR and all tokens are play money with no value. Please don't enter real personal data.",
+    "privacy": "Privacy",
+    "terms": "Terms",
+    "report": "Report content",
+    "collapse": "Hide details",
+    "expand": "Show details"
+  },
   "legal": {
     "last_updated": "Last updated"
   },

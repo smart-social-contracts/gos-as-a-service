@@ -100,6 +100,15 @@
     "description": "Esta aplicación se ejecuta en modo de prueba. Algunas funciones pueden comportarse de forma diferente a la producción.",
     "dismiss_label": "Descartar aviso de modo de prueba"
   },
+  "demo_data_banner": {
+    "title": "Demo con datos simulados.",
+    "body": "Las ciudades y los realms de aquí son simulados, no servicios de ninguna ciudad ni organismo público real. Los importes en EUR y todos los tokens son dinero de juego sin valor. Por favor, no introduzcas datos personales reales.",
+    "privacy": "Privacidad",
+    "terms": "Condiciones",
+    "report": "Denunciar contenido",
+    "collapse": "Ocultar detalles",
+    "expand": "Mostrar detalles"
+  },
   "legal": {
     "last_updated": "Última actualización"
   },

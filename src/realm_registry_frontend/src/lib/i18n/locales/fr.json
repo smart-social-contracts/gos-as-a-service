@@ -91,6 +91,15 @@
     "description": "Cette application fonctionne en mode test. Certaines fonctionnalités peuvent se comporter différemment qu'en production.",
     "dismiss_label": "Fermer l'avertissement du mode test"
   },
+  "demo_data_banner": {
+    "title": "Demo with simulated data.",
+    "body": "The cities and realms here are simulated, not services of any real city or public body. Amounts in EUR and all tokens are play money with no value. Please don't enter real personal data.",
+    "privacy": "Privacy",
+    "terms": "Terms",
+    "report": "Report content",
+    "collapse": "Hide details",
+    "expand": "Show details"
+  },
   "footer": {
     "built_on_ic": "Construit sur l'Internet Computer",
     "local_deployment": "Déploiement local",

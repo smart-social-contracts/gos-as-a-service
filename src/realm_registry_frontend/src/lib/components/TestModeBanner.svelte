@@ -3,6 +3,7 @@
   import { page } from '$app/stores';
   import { testMode } from '$lib/stores/registryRuntimeFlags.js';
   import { _ } from 'svelte-i18n';
+  import { topBannerInset } from '$lib/top-banner-inset.js';
 
   const STORAGE_KEY = 'gos_test_mode_banner_dismissed';
   let dismissed = false;
@@ -18,37 +19,10 @@
 
   $: viewingRealm = $page.url.pathname.startsWith('/r/');
   $: showBanner = browser && $testMode && !dismissed && !viewingRealm;
-
-  function clearBannerHeight() {
-    if (!browser) return;
-    document.documentElement.style.setProperty('--test-mode-banner-height', '0px');
-    document.documentElement.classList.remove('test-mode-banner-on');
-  }
-
-  function syncBannerHeight(node) {
-    const apply = () => {
-      const height = `${node.getBoundingClientRect().height}px`;
-      document.documentElement.style.setProperty('--test-mode-banner-height', height);
-      document.documentElement.classList.add('test-mode-banner-on');
-    };
-    apply();
-    const ro = new ResizeObserver(apply);
-    ro.observe(node);
-    return {
-      destroy() {
-        ro.disconnect();
-        clearBannerHeight();
-      },
-    };
-  }
-
-  $: if (browser && !showBanner) {
-    clearBannerHeight();
-  }
 </script>
 
 {#if showBanner}
-  <div class="test-mode-banner" use:syncBannerHeight role="status">
+  <div class="test-mode-banner" use:topBannerInset role="status">
     <p class="banner-text">
       <span class="title">{$_('demo_banner.title')}</span> {$_('demo_banner.description')}
     </p>

@@ -7,12 +7,18 @@
   import { ensureRegistryRuntimeFlags } from '$lib/stores/registryRuntimeFlags.js';
   import { syncAuthSession } from '$lib/stores/authSession.js';
   import TestModeBanner from '$lib/components/TestModeBanner.svelte';
+  import DemoDataBanner from '$lib/components/DemoDataBanner.svelte';
+  import { CONFIG } from '$lib/config.js';
+  import { isDemoEnvironment } from '$lib/demo-environment.js';
   import RegistryAssistant from '$lib/components/RegistryAssistant.svelte';
   import DeployProgressModal from '$lib/components/DeployProgressModal.svelte';
   import { assistantChrome } from '$lib/assistant-chrome.js';
   import { deployProgress, closeDeployProgress } from '$lib/stores/deployProgress.js';
   import '../index.scss';
   import '$lib/theme/tokens.css';
+
+  // A demo portal (or staging, which shares its data) always shows the demo notice, never the test-mode one.
+  const demoEnvironment = isDemoEnvironment(CONFIG.gos_environment);
 
   // Flag to track if i18n is ready
   let i18nReady = false;
@@ -49,7 +55,11 @@
 </script>
 
 {#if browser && i18nReady}
-  <TestModeBanner />
+  {#if demoEnvironment}
+    <DemoDataBanner />
+  {:else}
+    <TestModeBanner />
+  {/if}
   <div
     class="app-shell"
     class:full-viewport={pathLocksScroll($page.url.pathname)}
