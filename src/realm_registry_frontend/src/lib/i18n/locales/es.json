@@ -187,8 +187,8 @@
     "processing": "Procesando..."
   },
   "assistant": {
-    "title": "AI Assistant",
-    "toggle": "AI Assistant",
+    "title": "Asistente de IA",
+    "toggle": "Asistente de IA",
     "empty": "",
     "placeholder": "Type your message…",
     "send": "Send",
@@ -236,7 +236,8 @@
     "offline_status": "Offline",
     "checking": "Checking…",
     "check_again": "Check again",
-    "history_sign_in": "Sign in with Internet Identity to save and browse conversation history."
+    "history_sign_in": "Sign in with Internet Identity to save and browse conversation history.",
+    "answers_can_be_wrong": "Las respuestas pueden ser erróneas."
   },
   "stages": {
     "alpha": {
