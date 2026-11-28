@@ -91,6 +91,15 @@
     "description": "此应用正在测试模式下运行。某些功能的行为可能与生产环境不同。",
     "dismiss_label": "关闭测试模式通知"
   },
+  "demo_data_banner": {
+    "title": "Demo with simulated data.",
+    "body": "The cities and realms here are simulated, not services of any real city or public body. Amounts in EUR and all tokens are play money with no value. Please don't enter real personal data.",
+    "privacy": "Privacy",
+    "terms": "Terms",
+    "report": "Report content",
+    "collapse": "Hide details",
+    "expand": "Show details"
+  },
   "footer": {
     "built_on_ic": "基于互联网计算机构建",
     "local_deployment": "本地部署",

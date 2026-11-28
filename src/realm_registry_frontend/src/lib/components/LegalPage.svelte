@@ -21,7 +21,7 @@
       {$_('about.back')}
     </a>
     <h1>{text.title}</h1>
-    <p class="meta">{$_('legal.last_updated')}: {LEGAL_LAST_UPDATED}</p>
+    <p class="meta">{$_('legal.last_updated')}: {text.lastUpdated ?? LEGAL_LAST_UPDATED}</p>
     <p class="alpha-notice">{text.alphaNotice}</p>
     {#each text.sections as section}
       <h2>{section.heading}</h2>

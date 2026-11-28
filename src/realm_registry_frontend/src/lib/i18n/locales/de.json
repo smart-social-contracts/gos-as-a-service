@@ -100,6 +100,15 @@
     "description": "Diese Anwendung läuft im Testmodus. Einige Funktionen können sich anders verhalten als in der Produktion.",
     "dismiss_label": "Hinweis zum Testmodus schließen"
   },
+  "demo_data_banner": {
+    "title": "Demo with simulated data.",
+    "body": "The cities and realms here are simulated, not services of any real city or public body. Amounts in EUR and all tokens are play money with no value. Please don't enter real personal data.",
+    "privacy": "Privacy",
+    "terms": "Terms",
+    "report": "Report content",
+    "collapse": "Hide details",
+    "expand": "Show details"
+  },
   "footer": {
     "built_on_ic": "Aufgebaut auf dem Internet Computer",
     "local_deployment": "Lokale Bereitstellung",

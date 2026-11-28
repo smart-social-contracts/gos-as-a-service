@@ -19,6 +19,7 @@ import test from 'node:test';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const banner = readFileSync(join(here, 'components/TestModeBanner.svelte'), 'utf8');
+const inset = readFileSync(join(here, 'top-banner-inset.js'), 'utf8');
 const header = readFileSync(join(here, 'components/RegistryHeader.svelte'), 'utf8');
 const realmPanel = readFileSync(join(here, 'components/RealmPanel.svelte'), 'utf8');
 const appHtml = readFileSync(join(here, '../app.html'), 'utf8');
@@ -61,8 +62,9 @@ test('globe home insets map shell below the fixed test banner', () => {
 });
 
 test('banner height is measured from the live element, not a hard-coded rem value', () => {
-	assert.match(banner, /ResizeObserver/);
-	assert.match(banner, /getBoundingClientRect\(\)\.height/);
+	assert.match(banner, /use:topBannerInset/);
+	assert.match(inset, /ResizeObserver/);
+	assert.match(inset, /getBoundingClientRect\(\)\.height/);
 	assert.doesNotMatch(banner, /2\.75rem/);
 });
 
