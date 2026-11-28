@@ -288,7 +288,8 @@
     "connect_grok_step1": "In Grok: Settings → Connectors → add a custom MCP server.",
     "connect_grok_step2": "Paste the Realms MCP URL and continue.",
     "connect_grok_step3": "Sign in with Internet Identity and choose read-only or full access.",
-    "experimental_notice": "Experimental. Not official. Not legal advice. Do not enter personal data. Chats may be stored."
+    "experimental_notice": "Experimental. Not official. Not legal advice. Do not enter personal data. Chats may be stored.",
+    "answers_can_be_wrong": "Answers can be wrong."
   },
   "stages": {
     "alpha": {

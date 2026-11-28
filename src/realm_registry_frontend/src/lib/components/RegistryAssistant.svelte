@@ -1456,6 +1456,8 @@
         {:else}
           <p class="sign-in-note">{$_('assistant.sign_in_required', { default: SIGN_IN_REQUIRED_MESSAGE })}</p>
         {/if}
+        <!-- Shown whenever the assistant is: not tied to assistant_experimental_notice, which may be off. -->
+        <p class="assistant-fallible">{$_('assistant.answers_can_be_wrong', { default: 'Answers can be wrong.' })}</p>
       </div>
       </div>
     </div>
@@ -2039,6 +2041,13 @@
     text-align: center;
     font-size: 0.85rem;
     color: #737373;
+  }
+  .assistant-fallible {
+    margin: 0;
+    color: #737373;
+    font-size: 0.72rem;
+    line-height: 1.3;
+    text-align: center;
   }
   .assistant-input textarea {
     flex: 1;
